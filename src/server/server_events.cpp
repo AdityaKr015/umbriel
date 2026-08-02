@@ -301,7 +301,23 @@ namespace umbriel {
   }
 
   void Server::removeView(View* view) {
+    if (view == nullptr) {
+      return;
+    }
+    const bool hadKeyboardFocus = m_seat->wlr()->keyboard_state.focused_surface == view->toplevel()->base->surface;
+    View* replacement = nullptr;
+    if (Workspace* workspace = view->workspace()) {
+      replacement = workspace->removeView(view);
+      view->detachWorkspace();
+    }
     std::erase_if(m_views, [view](const std::unique_ptr<View>& entry) { return entry.get() == view; });
+    if (hadKeyboardFocus) {
+      if (replacement != nullptr) {
+        focusView(replacement);
+      } else {
+        refocus();
+      }
+    }
   }
 
   void Server::removeLayerSurface(LayerSurface* layerSurface, wlr_output* output) {

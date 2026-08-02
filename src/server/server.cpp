@@ -5,6 +5,7 @@
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/surface.h"
+#include "layout/insert_hint.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "view/view.h"
@@ -142,6 +143,7 @@ namespace umbriel {
     wl_list_remove(&m_workspaceCommit.link);
     wl_list_remove(&m_setGamma.link);
 
+    m_insertHint.reset();
     m_sessionLock.reset();
     m_layerSurfaces.clear();
     m_views.clear();
@@ -189,6 +191,19 @@ namespace umbriel {
   void Server::stop() { wl_display_terminate(m_display); }
 
   uint32_t Server::modKey() const { return m_nested ? WLR_MODIFIER_ALT : WLR_MODIFIER_LOGO; }
+
+  InsertHint& Server::insertHint() {
+    if (m_insertHint == nullptr) {
+      m_insertHint = std::make_unique<InsertHint>(*this);
+    }
+    return *m_insertHint;
+  }
+
+  void Server::hideInsertHint() {
+    if (m_insertHint != nullptr) {
+      m_insertHint->hide();
+    }
+  }
 
   wlr_scene_tree* Server::shellLayerTree(uint32_t layer) const {
     if (layer >= kLayerCount) {

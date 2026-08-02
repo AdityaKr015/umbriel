@@ -1,4 +1,6 @@
 #pragma once
+#include "core/animation.h"
+#include "layout/scrolling.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -30,19 +32,41 @@ namespace umbriel {
     [[nodiscard]] const std::string& name() const { return m_name; }
     [[nodiscard]] size_t index() const { return m_index; }
     [[nodiscard]] bool active() const { return m_active; }
+    [[nodiscard]] ScrollingLayout& layout() { return m_layout; }
+    [[nodiscard]] const ScrollingLayout& layout() const { return m_layout; }
+    [[nodiscard]] View* focusedView() const { return m_focusedView; }
+    [[nodiscard]] double visualScroll() const { return m_visualScroll; }
 
     void setActive(bool active);
+    void setFocusedView(View* view);
     void addView(View* view);
-    void removeView(View* view);
+    View* removeView(View* view);
+    void layoutAttach(View* view);
+    void layoutDetach(View* view);
+    void arrange(bool animate = true);
+    [[nodiscard]] View* focusAdjacent(int direction) const;
+    [[nodiscard]] View* focusVertical(int direction) const;
+    bool moveFocusedColumn(int direction);
+    bool consumeFocusedLeft();
+    bool expelFocusedRight();
+    bool moveFocusedVertical(int direction);
+    bool cycleFocusedWidth();
+    bool toggleFocusedFullWidth();
+    void ensureFocusedVisible();
     void applyVisibility();
 
   private:
+    void applyPositions(bool animate);
     WorkspaceGroup* m_group = nullptr;
     wlr_ext_workspace_handle_v1* m_handle = nullptr;
     std::string m_name;
     size_t m_index = 0;
     bool m_active = false;
     std::vector<View*> m_views;
+    ScrollingLayout m_layout;
+    View* m_focusedView = nullptr;
+    double m_visualScroll = 0;
+    AnimId m_scrollAnim = 0;
   };
 
   class WorkspaceGroup {
@@ -56,6 +80,7 @@ namespace umbriel {
     WorkspaceGroup& operator=(const WorkspaceGroup&) = delete;
 
     [[nodiscard]] Output* output() const { return m_output; }
+    [[nodiscard]] Server* server() const { return m_server; }
     [[nodiscard]] wlr_ext_workspace_group_handle_v1* handle() const { return m_handle; }
     [[nodiscard]] Workspace* active() const { return m_active; }
     [[nodiscard]] Workspace* workspaceAt(size_t index) const;

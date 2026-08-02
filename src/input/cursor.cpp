@@ -2,10 +2,19 @@
 
 #include "input/seat.h"
 #include "layer/surface.h"
+#include "layout/insert_hint.h"
+#include "layout/scrolling.h"
 #include "lock/session_lock.h"
+#include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
+// clang-format off
+#include <algorithm>
+#include <cmath>
+#include <linux/input-event-codes.h>
 #include "wlr.h"
+// clang-format on
+#include "workspace/workspace.h"
 
 namespace umbriel {
 
@@ -44,14 +53,39 @@ namespace umbriel {
   void Cursor::attachInputDevice(wlr_input_device* device) { wlr_cursor_attach_input_device(m_cursor, device); }
 
   void Cursor::beginInteractive(View* view, CursorMode mode, uint32_t edges) {
+    if (view == nullptr) {
+      return;
+    }
     setActiveConstraint(nullptr);
     m_grabbedView = view;
     m_mode = mode;
     m_resizeEdges = edges;
 
-    if (mode == CursorMode::Move) {
+    if (mode == CursorMode::ResizeTile) {
+      m_resizeWorkspace = view->workspace();
+      m_resizeColumn = m_resizeWorkspace != nullptr ? m_resizeWorkspace->layout().columnOf(view) : -1;
+      m_resizeStartX = m_cursor->x;
+      m_resizeStartFraction =
+          m_resizeWorkspace != nullptr ? m_resizeWorkspace->layout().widthFraction(m_resizeColumn) : 0;
+      return;
+    }
+
+    if (mode == CursorMode::Move || mode == CursorMode::MoveTile) {
       m_grabX = m_cursor->x - view->sceneTree()->node.x;
       m_grabY = m_cursor->y - view->sceneTree()->node.y;
+      if (mode == CursorMode::MoveTile) {
+        m_dragSourceWorkspace = view->workspace();
+        m_dragSourceColumn = m_dragSourceWorkspace != nullptr ? m_dragSourceWorkspace->layout().columnOf(view) : -1;
+        m_dropWorkspace = m_dragSourceWorkspace;
+        m_dropColumn = std::max(0, m_dragSourceColumn);
+        m_dropRow = -1;
+        view->cancelPositionAnimation();
+        if (m_dragSourceWorkspace != nullptr) {
+          m_dragSourceWorkspace->layoutDetach(view);
+        }
+        wlr_scene_node_raise_to_top(&view->sceneTree()->node);
+        updateDropTarget();
+      }
       return;
     }
 
@@ -67,8 +101,18 @@ namespace umbriel {
   }
 
   void Cursor::resetMode() {
+    m_server->hideInsertHint();
     m_mode = CursorMode::Passthrough;
     m_grabbedView = nullptr;
+    m_dragSourceWorkspace = nullptr;
+    m_dropWorkspace = nullptr;
+    m_dragSourceColumn = -1;
+    m_dropColumn = -1;
+    m_dropRow = -1;
+    m_resizeWorkspace = nullptr;
+    m_resizeColumn = -1;
+    m_resizeStartX = 0;
+    m_resizeStartFraction = 0;
   }
 
   void Cursor::onMotion(wl_listener* listener, void* data) {
@@ -148,18 +192,29 @@ namespace umbriel {
   void Cursor::handleButton(void* data) {
     auto* event = static_cast<wlr_pointer_button_event*>(data);
     m_server->notifyIdleActivity();
-    wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
 
     if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+      if (m_mode == CursorMode::MoveTile) {
+        finishTileMove();
+        return;
+      }
+      if (m_mode == CursorMode::ResizeTile) {
+        resetMode();
+        return;
+      }
+      wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
       resetMode();
       return;
     }
 
+    double sx = 0;
+    double sy = 0;
+    wlr_surface* surface = nullptr;
+    LayerSurface* layer = nullptr;
+    View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+
     if (m_server->sessionLocked()) {
-      double sx = 0;
-      double sy = 0;
-      wlr_surface* surface = nullptr;
-      m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+      wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
       if (surface != nullptr) {
         if (wlr_session_lock_surface_v1* lockSurface = wlr_session_lock_surface_v1_try_from_wlr_surface(surface)) {
           if (auto* node = static_cast<LockSurface*>(lockSurface->data)) {
@@ -170,11 +225,20 @@ namespace umbriel {
       return;
     }
 
-    double sx = 0;
-    double sy = 0;
-    wlr_surface* surface = nullptr;
-    LayerSurface* layer = nullptr;
-    View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+    wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
+    const bool modHeld = keyboard != nullptr && (wlr_keyboard_get_modifiers(keyboard) & m_server->modKey()) != 0;
+    if (event->button == BTN_LEFT && modHeld && view != nullptr) {
+      m_server->focusView(view);
+      beginInteractive(view, view->tiled() ? CursorMode::MoveTile : CursorMode::Move, 0);
+      return;
+    }
+    if (event->button == BTN_RIGHT && modHeld && view != nullptr && view->tiled()) {
+      m_server->focusView(view);
+      beginInteractive(view, CursorMode::ResizeTile, 0);
+      return;
+    }
+
+    wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
     if (layer != nullptr) {
       layer->focus();
     } else if (m_server->exclusiveKeyboardLayer() == nullptr) {
@@ -185,6 +249,23 @@ namespace umbriel {
   void Cursor::handleAxis(void* data) {
     auto* event = static_cast<wlr_pointer_axis_event*>(data);
     m_server->notifyIdleActivity();
+
+    wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
+    if (keyboard != nullptr && (wlr_keyboard_get_modifiers(keyboard) & m_server->modKey()) != 0) {
+      wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
+      Output* output = m_server->outputFromWlr(wlrOutput);
+      Workspace* workspace =
+          output != nullptr && output->workspaceGroup() != nullptr ? output->workspaceGroup()->active() : nullptr;
+      if (workspace != nullptr) {
+        const double delta = event->delta_discrete != 0
+            ? static_cast<double>(event->delta_discrete) / 120.0 * kScrollWheelStep
+            : event->delta * 0.5;
+        workspace->layout().setScroll(workspace->layout().scroll() + delta);
+        workspace->arrange();
+      }
+      return;
+    }
+
     wlr_seat_pointer_notify_axis(
         m_server->seat()->wlr(), event->time_msec, event->orientation, event->delta, event->delta_discrete,
         event->source, event->relative_direction
@@ -194,11 +275,14 @@ namespace umbriel {
   void Cursor::handleFrame() { wlr_seat_pointer_notify_frame(m_server->seat()->wlr()); }
 
   void Cursor::processMotion(uint32_t timeMsec) {
-    if (m_mode == CursorMode::Move) {
+    if (m_mode == CursorMode::Move || m_mode == CursorMode::MoveTile) {
       if (m_server->sessionLocked()) {
         resetMode();
       } else {
         processMove();
+        if (m_mode == CursorMode::MoveTile) {
+          updateDropTarget();
+        }
         return;
       }
     }
@@ -207,6 +291,14 @@ namespace umbriel {
         resetMode();
       } else {
         processResize();
+        return;
+      }
+    }
+    if (m_mode == CursorMode::ResizeTile) {
+      if (m_server->sessionLocked()) {
+        resetMode();
+      } else {
+        processResizeTile();
         return;
       }
     }
@@ -231,6 +323,101 @@ namespace umbriel {
         &m_grabbedView->sceneTree()->node, static_cast<int>(m_cursor->x - m_grabX),
         static_cast<int>(m_cursor->y - m_grabY)
     );
+  }
+
+  void Cursor::updateDropTarget() {
+    if (m_mode != CursorMode::MoveTile || m_grabbedView == nullptr) {
+      return;
+    }
+    wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
+    Output* output = m_server->outputFromWlr(wlrOutput);
+    if (output == nullptr || output->workspaceGroup() == nullptr || output->workspaceGroup()->active() == nullptr) {
+      return;
+    }
+
+    double sx = 0;
+    double sy = 0;
+    wlr_surface* surface = nullptr;
+    LayerSurface* layer = nullptr;
+    m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+    if (layer != nullptr) {
+      return;
+    }
+
+    Workspace* workspace = output->workspaceGroup()->active();
+    const wlr_box usable = output->usableArea();
+    if (usable.width <= 0 || usable.height <= 0) {
+      return;
+    }
+    const int viewportWidth = std::max(1, usable.width - 2 * kGap);
+    const int columnCount = static_cast<int>(workspace->layout().columns().size());
+    const double layoutX = m_cursor->x - usable.x - kGap + workspace->visualScroll();
+
+    for (int columnIndex = 0; columnIndex < columnCount; ++columnIndex) {
+      const int columnX = workspace->layout().columnX(columnIndex, viewportWidth);
+      const int columnWidth = workspace->layout().columnWidth(columnIndex, viewportWidth);
+      if (layoutX < columnX + columnWidth * 0.2 || layoutX > columnX + columnWidth * 0.8) {
+        continue;
+      }
+      const Column& column = workspace->layout().columns()[static_cast<size_t>(columnIndex)];
+      int nearestRow = 0;
+      double rowDistance = std::abs(m_cursor->y - (usable.y + kGap));
+      for (int row = 1; row <= static_cast<int>(column.views.size()); ++row) {
+        const int boundary = row == static_cast<int>(column.views.size())
+            ? usable.y + usable.height - kGap
+            : workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - kGap / 2;
+        const double distance = std::abs(m_cursor->y - boundary);
+        if (distance < rowDistance) {
+          nearestRow = row;
+          rowDistance = distance;
+        }
+      }
+      m_dropWorkspace = workspace;
+      m_dropColumn = columnIndex;
+      m_dropRow = nearestRow;
+      m_server->insertHint().showRow(workspace, columnIndex, nearestRow);
+      wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
+      return;
+    }
+
+    int nearestGap = 0;
+    double nearestDistance = std::abs(layoutX);
+    for (int gap = 1; gap <= columnCount; ++gap) {
+      const int boundary = gap == columnCount ? workspace->layout().columnX(gap, viewportWidth) - kGap
+                                              : workspace->layout().columnX(gap, viewportWidth) - kGap / 2;
+      const double distance = std::abs(layoutX - boundary);
+      if (distance < nearestDistance) {
+        nearestGap = gap;
+        nearestDistance = distance;
+      }
+    }
+
+    m_dropWorkspace = workspace;
+    m_dropColumn = nearestGap;
+    m_dropRow = -1;
+    m_server->insertHint().show(workspace, nearestGap);
+    wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
+  }
+
+  void Cursor::finishTileMove() {
+    m_server->hideInsertHint();
+    View* view = m_grabbedView;
+    Workspace* target = m_dropWorkspace != nullptr ? m_dropWorkspace : m_dragSourceWorkspace;
+    const int column = std::max(0, m_dropColumn);
+    if (view != nullptr && view->mapped() && target != nullptr) {
+      if (view->workspace() != target) {
+        view->setWorkspace(target);
+        target->layoutDetach(view);
+      }
+      if (m_dropRow >= 0) {
+        target->layout().insertViewIntoColumn(view, column, m_dropRow);
+      } else {
+        target->layout().insertView(view, column);
+      }
+      target->arrange();
+      m_server->focusView(view);
+    }
+    resetMode();
   }
 
   void Cursor::processResize() {
@@ -268,6 +455,22 @@ namespace umbriel {
     wlr_box* geo = &m_grabbedView->toplevel()->base->geometry;
     wlr_scene_node_set_position(&m_grabbedView->sceneTree()->node, newLeft - geo->x, newTop - geo->y);
     wlr_xdg_toplevel_set_size(m_grabbedView->toplevel(), newRight - newLeft, newBottom - newTop);
+  }
+
+  void Cursor::processResizeTile() {
+    if (m_resizeWorkspace == nullptr
+        || m_resizeWorkspace->group() == nullptr
+        || m_resizeWorkspace->group()->output() == nullptr
+        || m_resizeColumn < 0) {
+      resetMode();
+      return;
+    }
+    const int viewportWidth = std::max(1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * kGap);
+    const double fraction = m_resizeStartFraction + (m_cursor->x - m_resizeStartX) / viewportWidth;
+    if (m_resizeWorkspace->layout().setWidthFraction(m_resizeColumn, fraction)) {
+      wlr_xdg_toplevel_set_maximized(m_grabbedView->toplevel(), false);
+      m_resizeWorkspace->arrange(false);
+    }
   }
 
 } // namespace umbriel

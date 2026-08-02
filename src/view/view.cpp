@@ -2,12 +2,25 @@
 
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "layout/scrolling.h"
 #include "output/output.h"
 #include "server/server.h"
+// clang-format off
+#include <algorithm>
+#include <cmath>
 #include "wlr.h"
+// clang-format on
 #include "workspace/workspace.h"
 
 namespace umbriel {
+  namespace {
+    bool looksTiled(const wlr_xdg_toplevel* toplevel) {
+      const auto& state = toplevel->current;
+      const bool fixedWidth = state.max_width > 0 && state.min_width == state.max_width;
+      const bool fixedHeight = state.max_height > 0 && state.min_height == state.max_height;
+      return toplevel->parent == nullptr && !fixedWidth && !fixedHeight;
+    }
+  } // namespace
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
       : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
@@ -55,6 +68,7 @@ namespace umbriel {
   }
 
   View::~View() {
+    cancelPositionAnimation();
     setWorkspace(nullptr);
     if (m_map.link.next != nullptr) {
       wl_list_remove(&m_map.link);
@@ -148,6 +162,45 @@ namespace umbriel {
     }
   }
 
+  void View::cancelPositionAnimation() {
+    if (m_posAnim != 0) {
+      m_server->animator().cancel(m_posAnim);
+      m_posAnim = 0;
+    }
+  }
+
+  void View::setPosition(int x, int y) {
+    cancelPositionAnimation();
+    wlr_scene_node_set_position(&m_sceneTree->node, x, y);
+  }
+
+  void View::animateTo(int x, int y) {
+    if (!m_mapped || !m_onActiveWorkspace) {
+      setPosition(x, y);
+      return;
+    }
+    const int fromX = m_sceneTree->node.x;
+    const int fromY = m_sceneTree->node.y;
+    if (fromX == x && fromY == y) {
+      cancelPositionAnimation();
+      return;
+    }
+    cancelPositionAnimation();
+    m_posAnim = m_server->animator().animate(
+        0.0, 1.0, kAnimMs,
+        [this, fromX, fromY, x, y](double progress) {
+          wlr_scene_node_set_position(
+              &m_sceneTree->node, static_cast<int>(std::lround(fromX + (x - fromX) * progress)),
+              static_cast<int>(std::lround(fromY + (y - fromY) * progress))
+          );
+        },
+        [this] { m_posAnim = 0; }
+    );
+    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+      wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
+    }
+  }
+
   void View::onMap(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_map);
     self->handleMap();
@@ -205,25 +258,22 @@ namespace umbriel {
     }
 
     wlr_box* geo = &m_toplevel->base->geometry;
-    int width = geo->width > 0 ? geo->width : usable.width;
-    int height = geo->height > 0 ? geo->height : usable.height;
-    if (width > usable.width) {
-      width = usable.width;
-    }
-    if (height > usable.height) {
-      height = usable.height;
-    }
-
+    const int width = std::clamp(geo->width > 0 ? geo->width : usable.width, 1, usable.width);
+    const int height = std::clamp(geo->height > 0 ? geo->height : usable.height, 1, usable.height);
     if (width != geo->width || height != geo->height) {
       wlr_xdg_toplevel_set_size(m_toplevel, width, height);
     }
-    wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
+    const int x = usable.x + (usable.width - width) / 2;
+    const int y = usable.y + (usable.height - height) / 2;
+    wlr_scene_node_set_position(&m_sceneTree->node, x, y);
   }
 
   void View::handleMap() {
     m_mapped = true;
-    placeInUsableArea();
-    if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
+    m_tiled = looksTiled(m_toplevel);
+    if (m_workspace != nullptr) {
+      m_workspace->layoutAttach(this);
+    } else if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
       if (WorkspaceGroup* group = out->workspaceGroup()) {
         setWorkspace(group->active());
       } else {
@@ -231,6 +281,9 @@ namespace umbriel {
       }
     } else {
       setOnActiveWorkspace(true);
+    }
+    if (!m_tiled) {
+      placeInUsableArea();
     }
     updateForeignIdentity();
     updateForeignState();
@@ -240,7 +293,11 @@ namespace umbriel {
   }
 
   void View::handleUnmap() {
+    cancelPositionAnimation();
     m_mapped = false;
+    if (m_workspace != nullptr) {
+      m_workspace->layoutDetach(this);
+    }
     leaveForeignOutput();
     setForeignActivated(false);
     if (m_server->cursor()->mode() != CursorMode::Passthrough) {
@@ -250,13 +307,22 @@ namespace umbriel {
 
   void View::handleCommit() {
     if (m_toplevel->base->initial_commit) {
-      wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
+      if (looksTiled(m_toplevel)) {
+        const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+        const int viewportWidth = std::max(1, usable.width - 2 * kGap);
+        const int height = std::max(1, usable.height - 2 * kGap);
+        wlr_xdg_toplevel_set_size(
+            m_toplevel, std::max(1, static_cast<int>(std::lround(kDefaultWidthFrac * viewportWidth))), height
+        );
+      } else {
+        wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
+      }
     }
     updateForeignState();
   }
 
   void View::handleDestroy() {
-    setWorkspace(nullptr);
+    cancelPositionAnimation();
     leaveForeignOutput();
     if (m_foreign != nullptr) {
       wl_list_remove(&m_foreignActivate.link);
@@ -289,15 +355,27 @@ namespace umbriel {
     m_server->removeView(this);
   }
 
-  void View::handleRequestMove() { m_server->cursor()->beginInteractive(this, CursorMode::Move, 0); }
+  void View::handleRequestMove() {
+    m_server->cursor()->beginInteractive(this, m_tiled ? CursorMode::MoveTile : CursorMode::Move, 0);
+  }
 
   void View::handleRequestResize(void* data) {
     auto* event = static_cast<wlr_xdg_toplevel_resize_event*>(data);
-    m_server->cursor()->beginInteractive(this, CursorMode::Resize, event->edges);
+    m_server->cursor()->beginInteractive(this, m_tiled ? CursorMode::ResizeTile : CursorMode::Resize, event->edges);
   }
 
   void View::handleRequestMaximize() {
     if (!m_toplevel->base->initialized) {
+      return;
+    }
+
+    if (m_tiled && m_workspace != nullptr) {
+      const int column = m_workspace->layout().columnOf(this);
+      const bool maximized = m_workspace->layout().toggleFullWidth(column);
+      wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+      m_workspace->ensureFocusedVisible();
+      m_workspace->arrange();
+      updateForeignState();
       return;
     }
 
@@ -329,6 +407,9 @@ namespace umbriel {
       }
     }
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
+    if (!fullscreen && m_workspace != nullptr) {
+      m_workspace->arrange();
+    }
     updateForeignState();
   }
 

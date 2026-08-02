@@ -138,6 +138,9 @@ namespace umbriel {
     kLog.debug(
         "{} usable={}x{}+{}+{}", m_output->name, m_usableArea.width, m_usableArea.height, m_usableArea.x, m_usableArea.y
     );
+    if (m_workspaceGroup != nullptr && m_workspaceGroup->active() != nullptr) {
+      m_workspaceGroup->active()->arrange(false);
+    }
   }
 
   void Output::onGammaChanged(wlr_gamma_control_v1* /*control*/) { wlr_output_schedule_frame(m_output); }
@@ -181,8 +184,18 @@ namespace umbriel {
       m_hasDeferredMode = false;
       applyMode(m_deferredWidth, m_deferredHeight);
     }
+    timespec now{};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    const uint64_t nowMsec = static_cast<uint64_t>(now.tv_sec) * 1000 + static_cast<uint64_t>(now.tv_nsec) / 1'000'000;
+    m_server->animator().tick(nowMsec);
 
-    if (!wlr_scene_output_needs_frame(m_sceneOutput) || m_output->width <= 0 || m_output->height <= 0) {
+    if (m_output->width <= 0 || m_output->height <= 0) {
+      return;
+    }
+    if (!wlr_scene_output_needs_frame(m_sceneOutput)) {
+      if (m_server->animator().active()) {
+        wlr_output_schedule_frame(m_output);
+      }
       return;
     }
 
@@ -221,8 +234,9 @@ namespace umbriel {
       return;
     }
 
-    timespec now{};
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (m_server->animator().active()) {
+      wlr_output_schedule_frame(m_output);
+    }
     wlr_scene_output_send_frame_done(m_sceneOutput, &now);
   }
 

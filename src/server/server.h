@@ -1,4 +1,5 @@
 #pragma once
+#include "core/animation.h"
 
 #include <cstdint>
 #include <memory>
@@ -39,6 +40,7 @@ struct wlr_scene_tree;
 namespace umbriel {
 
   class Cursor;
+  class InsertHint;
   class Keyboard;
   class LayerSurface;
   class Output;
@@ -75,6 +77,10 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_output_layout* sceneLayout() const { return m_sceneLayout; }
     [[nodiscard]] Seat* seat() const { return m_seat.get(); }
     [[nodiscard]] Cursor* cursor() const { return m_cursor.get(); }
+    [[nodiscard]] Animator& animator() { return m_animator; }
+    [[nodiscard]] const Animator& animator() const { return m_animator; }
+    [[nodiscard]] InsertHint& insertHint();
+    void hideInsertHint();
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
     [[nodiscard]] bool sessionLocked() const { return m_sessionLocked; }
     [[nodiscard]] wlr_foreign_toplevel_manager_v1* foreignToplevelManager() const { return m_foreignToplevelManager; }
@@ -172,10 +178,12 @@ namespace umbriel {
     wlr_scene_tree* m_lockTree = nullptr;
     wlr_scene_rect* m_lockBlank = nullptr;
     bool m_sessionLocked = false;
+    Animator m_animator;
 
     std::unique_ptr<Seat> m_seat;
     std::unique_ptr<Cursor> m_cursor;
     std::unique_ptr<SessionLock> m_sessionLock;
+    std::unique_ptr<InsertHint> m_insertHint;
 
     bool m_nested = false;
     std::string m_socketName;

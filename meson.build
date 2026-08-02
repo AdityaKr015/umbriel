@@ -43,7 +43,10 @@ layer_shell_protocol_h = custom_target(
 
 sources = files(
   'src/main.cpp',
+  'src/core/animation.cpp',
   'src/core/log.cpp',
+  'src/layout/insert_hint.cpp',
+  'src/layout/scrolling.cpp',
   'src/server/server.cpp',
   'src/server/server_events.cpp',
   'src/server/server_focus.cpp',

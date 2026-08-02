@@ -4,10 +4,12 @@
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
-#include "wlr.h"
-
+// clang-format off
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
+#include "wlr.h"
+// clang-format on
 
 namespace umbriel {
 
@@ -30,7 +32,12 @@ namespace umbriel {
   }
 
   Workspace::~Workspace() {
+    if (m_scrollAnim != 0) {
+      m_group->server()->animator().cancel(m_scrollAnim);
+      m_scrollAnim = 0;
+    }
     for (View* view : m_views) {
+      view->cancelPositionAnimation();
       view->detachWorkspace();
     }
     m_views.clear();
@@ -50,20 +57,240 @@ namespace umbriel {
     m_active = active;
     wlr_ext_workspace_handle_v1_set_active(m_handle, active);
     applyVisibility();
+    if (active) {
+      arrange(false);
+    } else if (m_scrollAnim != 0) {
+      m_group->server()->animator().cancel(m_scrollAnim);
+      m_scrollAnim = 0;
+    }
+  }
+
+  void Workspace::setFocusedView(View* view) {
+    if (view == nullptr || view->workspace() == this) {
+      m_focusedView = view;
+    }
   }
 
   void Workspace::addView(View* view) {
-    if (view == nullptr) {
-      return;
-    }
-    if (std::find(m_views.begin(), m_views.end(), view) != m_views.end()) {
+    if (view == nullptr || std::find(m_views.begin(), m_views.end(), view) != m_views.end()) {
       return;
     }
     m_views.push_back(view);
     applyVisibility();
+    layoutAttach(view);
   }
 
-  void Workspace::removeView(View* view) { std::erase(m_views, view); }
+  View* Workspace::removeView(View* view) {
+    if (view == nullptr) {
+      return nullptr;
+    }
+    const int removedColumn = m_layout.columnOf(view);
+    m_layout.removeView(view);
+    std::erase(m_views, view);
+
+    View* replacement = nullptr;
+    if (m_focusedView == view) {
+      if (!m_layout.columns().empty() && removedColumn >= 0) {
+        const int index = std::min(removedColumn, static_cast<int>(m_layout.columns().size()) - 1);
+        const Column& column = m_layout.columns()[static_cast<size_t>(index)];
+        if (!column.views.empty()) {
+          replacement = column.views.front();
+        }
+      }
+      m_focusedView = replacement;
+    }
+    arrange();
+    return replacement;
+  }
+
+  void Workspace::layoutAttach(View* view) {
+    if (view == nullptr || !view->mapped() || !view->tiled() || m_layout.columnOf(view) >= 0) {
+      return;
+    }
+    const int focusedColumn = m_layout.columnOf(m_focusedView);
+    const int index = focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout.columns().size());
+    m_layout.insertView(view, index);
+    arrange();
+  }
+
+  void Workspace::layoutDetach(View* view) {
+    m_layout.removeView(view);
+    arrange();
+  }
+
+  void Workspace::arrange(bool animate) {
+    if (!m_active || m_group == nullptr || m_group->output() == nullptr) {
+      return;
+    }
+    Output* output = m_group->output();
+    wlr_box usable = output->usableArea();
+    if (usable.width <= 0 || usable.height <= 0) {
+      wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &usable);
+    }
+    if (usable.width <= 0 || usable.height <= 0) {
+      return;
+    }
+
+    m_layout.arrange(usable);
+    for (const Column& column : m_layout.columns()) {
+      for (View* view : column.views) {
+        if (view == nullptr || !view->mapped()) {
+          continue;
+        }
+        const wlr_box target = m_layout.targetBox(view);
+        const wlr_box& geometry = view->toplevel()->base->geometry;
+        if (geometry.width != target.width || geometry.height != target.height) {
+          wlr_xdg_toplevel_set_size(view->toplevel(), target.width, target.height);
+        }
+      }
+    }
+
+    const double targetScroll = m_layout.scroll();
+    const bool scrollChanged = std::abs(targetScroll - m_visualScroll) > 0.01;
+    if (m_scrollAnim != 0) {
+      m_group->server()->animator().cancel(m_scrollAnim);
+      m_scrollAnim = 0;
+    }
+    if (animate && scrollChanged) {
+      for (const Column& column : m_layout.columns()) {
+        for (View* view : column.views) {
+          view->cancelPositionAnimation();
+        }
+      }
+      m_scrollAnim = m_group->server()->animator().animate(
+          m_visualScroll, targetScroll, kAnimMs,
+          [this](double value) {
+            m_visualScroll = value;
+            applyPositions(false);
+          },
+          [this] { m_scrollAnim = 0; }
+      );
+      applyPositions(false);
+      wlr_output_schedule_frame(output->wlr());
+      return;
+    }
+
+    m_visualScroll = targetScroll;
+    applyPositions(animate);
+  }
+
+  void Workspace::applyPositions(bool animate) {
+    if (!m_active || m_group == nullptr || m_group->output() == nullptr) {
+      return;
+    }
+    Output* output = m_group->output();
+    wlr_box outputBox{};
+    wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
+    const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
+    for (const Column& column : m_layout.columns()) {
+      for (View* view : column.views) {
+        if (view == nullptr || !view->mapped()) {
+          continue;
+        }
+        wlr_box target = m_layout.targetBox(view);
+        target.x += scrollOffset;
+        if (animate) {
+          view->animateTo(target.x, target.y);
+        } else {
+          view->setPosition(target.x, target.y);
+        }
+        wlr_box intersection{};
+        const bool visible = wlr_box_intersection(&intersection, &target, &outputBox);
+        wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
+      }
+    }
+  }
+
+  View* Workspace::focusAdjacent(int direction) const {
+    const int current = m_layout.columnOf(m_focusedView);
+    const int target = current + direction;
+    if (current < 0 || target < 0 || target >= static_cast<int>(m_layout.columns().size())) {
+      return nullptr;
+    }
+    const Column& column = m_layout.columns()[static_cast<size_t>(target)];
+    return column.views.empty() ? nullptr : column.views.front();
+  }
+
+  View* Workspace::focusVertical(int direction) const {
+    const int column = m_layout.columnOf(m_focusedView);
+    const int row = m_layout.rowOf(m_focusedView);
+    if (column < 0 || row < 0) {
+      return nullptr;
+    }
+    const auto& views = m_layout.columns()[static_cast<size_t>(column)].views;
+    const int target = row + direction;
+    return target < 0 || target >= static_cast<int>(views.size()) ? nullptr : views[static_cast<size_t>(target)];
+  }
+
+  bool Workspace::moveFocusedColumn(int direction) {
+    const int current = m_layout.columnOf(m_focusedView);
+    const int target = current + direction;
+    if (current < 0 || target < 0 || target >= static_cast<int>(m_layout.columns().size())) {
+      return false;
+    }
+    m_layout.moveColumn(current, target);
+    ensureFocusedVisible();
+    arrange();
+    return true;
+  }
+
+  bool Workspace::consumeFocusedLeft() {
+    if (!m_layout.consumeLeft(m_focusedView)) {
+      return false;
+    }
+    ensureFocusedVisible();
+    arrange();
+    return true;
+  }
+
+  bool Workspace::expelFocusedRight() {
+    if (!m_layout.expelRight(m_focusedView)) {
+      return false;
+    }
+    ensureFocusedVisible();
+    arrange();
+    return true;
+  }
+
+  bool Workspace::moveFocusedVertical(int direction) {
+    if (!m_layout.moveViewVertical(m_focusedView, direction)) {
+      return false;
+    }
+    arrange();
+    return true;
+  }
+
+  bool Workspace::cycleFocusedWidth() {
+    const int column = m_layout.columnOf(m_focusedView);
+    if (!m_layout.cycleWidth(column)) {
+      return false;
+    }
+    wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), false);
+    ensureFocusedVisible();
+    arrange();
+    return true;
+  }
+
+  bool Workspace::toggleFocusedFullWidth() {
+    const int column = m_layout.columnOf(m_focusedView);
+    if (column < 0) {
+      return false;
+    }
+    const bool fullWidth = m_layout.toggleFullWidth(column);
+    wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), fullWidth);
+    ensureFocusedVisible();
+    arrange();
+    return true;
+  }
+
+  void Workspace::ensureFocusedVisible() {
+    if (m_group == nullptr || m_group->output() == nullptr) {
+      return;
+    }
+    const int column = m_layout.columnOf(m_focusedView);
+    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * kGap);
+    m_layout.ensureVisible(column, viewportWidth);
+  }
 
   void Workspace::applyVisibility() {
     for (View* view : m_views) {

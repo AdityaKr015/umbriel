@@ -13,11 +13,14 @@ namespace umbriel {
 
   class Server;
   class View;
+  class Workspace;
 
   enum class CursorMode {
     Passthrough,
     Move,
+    MoveTile,
     Resize,
+    ResizeTile,
   };
 
   class Cursor {
@@ -55,7 +58,10 @@ namespace umbriel {
 
     void processMotion(uint32_t timeMsec);
     void processMove();
+    void updateDropTarget();
+    void finishTileMove();
     void processResize();
+    void processResizeTile();
     void setActiveConstraint(wlr_pointer_constraint_v1* constraint);
     void updateConstraintForSurface(wlr_surface* surface);
     void warpToConstraintHint(wlr_pointer_constraint_v1* constraint);
@@ -75,6 +81,15 @@ namespace umbriel {
     int m_grabGeoWidth = 0;
     int m_grabGeoHeight = 0;
     uint32_t m_resizeEdges = 0;
+    Workspace* m_dragSourceWorkspace = nullptr;
+    Workspace* m_dropWorkspace = nullptr;
+    int m_dragSourceColumn = -1;
+    int m_dropColumn = -1;
+    int m_dropRow = -1;
+    Workspace* m_resizeWorkspace = nullptr;
+    int m_resizeColumn = -1;
+    double m_resizeStartX = 0;
+    double m_resizeStartFraction = 0;
 
     wl_listener m_motion{};
     wl_listener m_motionAbsolute{};

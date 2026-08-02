@@ -47,6 +47,13 @@ namespace umbriel {
     }
 
     view->focus();
+    if (Workspace* workspace = view->workspace()) {
+      workspace->setFocusedView(view);
+      if (view->tiled()) {
+        workspace->ensureFocusedVisible();
+        workspace->arrange();
+      }
+    }
   }
 
   LayerSurface* Server::exclusiveKeyboardLayer() const {
@@ -193,7 +200,83 @@ namespace umbriel {
       return true;
     }
 
+    auto activeWorkspace = [this]() -> Workspace* {
+      Output* output = outputFromWlr(preferredOutput());
+      if (output == nullptr || output->workspaceGroup() == nullptr) {
+        return nullptr;
+      }
+      return output->workspaceGroup()->active();
+    };
+
     switch (keysym) {
+    case XKB_KEY_Left:
+    case XKB_KEY_h:
+    case XKB_KEY_H: {
+      if (Workspace* workspace = activeWorkspace()) {
+        if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
+          workspace->moveFocusedColumn(-1);
+        } else if (View* target = workspace->focusAdjacent(-1)) {
+          focusView(target);
+        }
+      }
+      return true;
+    }
+    case XKB_KEY_Right:
+    case XKB_KEY_l:
+    case XKB_KEY_L: {
+      if (Workspace* workspace = activeWorkspace()) {
+        if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
+          workspace->moveFocusedColumn(1);
+        } else if (View* target = workspace->focusAdjacent(1)) {
+          focusView(target);
+        }
+      }
+      return true;
+    }
+    case XKB_KEY_Up:
+    case XKB_KEY_k:
+    case XKB_KEY_K: {
+      if (Workspace* workspace = activeWorkspace()) {
+        if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
+          workspace->moveFocusedVertical(-1);
+        } else if (View* target = workspace->focusVertical(-1)) {
+          focusView(target);
+        }
+      }
+      return true;
+    }
+    case XKB_KEY_Down:
+    case XKB_KEY_j:
+    case XKB_KEY_J: {
+      if (Workspace* workspace = activeWorkspace()) {
+        if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
+          workspace->moveFocusedVertical(1);
+        } else if (View* target = workspace->focusVertical(1)) {
+          focusView(target);
+        }
+      }
+      return true;
+    }
+    case XKB_KEY_comma:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->consumeFocusedLeft();
+      }
+      return true;
+    case XKB_KEY_period:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->expelFocusedRight();
+      }
+      return true;
+    case XKB_KEY_r:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->cycleFocusedWidth();
+      }
+      return true;
+    case XKB_KEY_f:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->toggleFocusedFullWidth();
+      }
+      return true;
     case XKB_KEY_Escape:
       stop();
       return true;

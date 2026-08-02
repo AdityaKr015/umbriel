@@ -1,5 +1,5 @@
 #pragma once
-
+#include "core/animation.h"
 #include "scene/node.h"
 
 #include <wayland-server-core.h>
@@ -27,12 +27,16 @@ namespace umbriel {
     [[nodiscard]] bool mapped() const { return m_mapped; }
     [[nodiscard]] Workspace* workspace() const { return m_workspace; }
     [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
+    [[nodiscard]] bool tiled() const { return m_tiled; }
 
     void focus();
     void setForeignActivated(bool activated);
     void setWorkspace(Workspace* workspace);
     void detachWorkspace();
     void setOnActiveWorkspace(bool active);
+    void animateTo(int x, int y);
+    void setPosition(int x, int y);
+    void cancelPositionAnimation();
 
   private:
     friend class Cursor;
@@ -78,7 +82,9 @@ namespace umbriel {
     wlr_output* m_foreignOutput = nullptr;
     Workspace* m_workspace = nullptr;
     bool m_mapped = false;
+    bool m_tiled = false;
     bool m_onActiveWorkspace = false;
+    AnimId m_posAnim = 0;
 
     wl_listener m_map{};
     wl_listener m_unmap{};

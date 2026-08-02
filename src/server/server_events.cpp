@@ -121,6 +121,14 @@ namespace umbriel {
     self->handleWorkspaceCommit(data);
   }
 
+  void Server::onSetGamma(wl_listener* listener, void* data) {
+    Server* self = wl_container_of(listener, self, m_setGamma);
+    auto* event = static_cast<wlr_gamma_control_manager_v1_set_gamma_event*>(data);
+    if (Output* out = self->outputFromWlr(event->output)) {
+      out->onGammaChanged(event->control);
+    }
+  }
+
   void Server::handleWorkspaceCommit(void* data) {
     auto* event = static_cast<wlr_ext_workspace_v1_commit_event*>(data);
     wlr_ext_workspace_v1_request* request = nullptr;

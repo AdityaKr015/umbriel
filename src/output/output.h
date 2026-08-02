@@ -4,6 +4,7 @@
 #include <memory>
 #include <wayland-server-core.h>
 
+struct wlr_gamma_control_v1;
 struct wlr_output;
 struct wlr_scene_output;
 struct wlr_scene_tree;
@@ -35,6 +36,7 @@ namespace umbriel {
     [[nodiscard]] WorkspaceGroup* workspaceGroup() const { return m_workspaceGroup.get(); }
 
     void arrangeLayers();
+    void onGammaChanged(wlr_gamma_control_v1* control);
 
   private:
     static void onFrame(wl_listener* listener, void* data);
@@ -46,7 +48,6 @@ namespace umbriel {
     void handleDestroy();
     void applyMode(int width, int height);
     void arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive);
-    void fixSceneOrder();
 
     Server* m_server = nullptr;
     wlr_output* m_output = nullptr;

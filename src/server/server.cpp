@@ -62,13 +62,22 @@ namespace umbriel {
     m_scene = wlr_scene_create();
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
 
-    // Windows sit between per-output bottom and top layer trees.
+    // Fixed global stacking: background < bottom < xdg < top < overlay < lock.
+    // Per-output layer trees are children of these roots so windows cannot raise above panels.
+    m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&m_scene->tree);
+    m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&m_scene->tree);
     m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
+    m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);
+    m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
     const float blankColor[4] = {0.f, 0.f, 0.f, 1.f};
     m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, blankColor);
     wlr_scene_node_set_enabled(&m_lockBlank->node, false);
     wlr_scene_node_set_enabled(&m_lockTree->node, false);
+
+    m_gammaManager = wlr_gamma_control_manager_v1_create(m_display);
+    m_setGamma.notify = onSetGamma;
+    wl_signal_add(&m_gammaManager->events.set_gamma, &m_setGamma);
 
     m_xdgShell = wlr_xdg_shell_create(m_display, 3);
     m_newXdgToplevel.notify = onNewXdgToplevel;
@@ -131,6 +140,7 @@ namespace umbriel {
     wl_list_remove(&m_newIdleInhibitor.link);
     wl_list_remove(&m_requestActivate.link);
     wl_list_remove(&m_workspaceCommit.link);
+    wl_list_remove(&m_setGamma.link);
 
     m_sessionLock.reset();
     m_layerSurfaces.clear();
@@ -179,6 +189,13 @@ namespace umbriel {
   void Server::stop() { wl_display_terminate(m_display); }
 
   uint32_t Server::modKey() const { return m_nested ? WLR_MODIFIER_ALT : WLR_MODIFIER_LOGO; }
+
+  wlr_scene_tree* Server::shellLayerTree(uint32_t layer) const {
+    if (layer >= kLayerCount) {
+      return m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP];
+    }
+    return m_shellLayerTrees[layer];
+  }
 
   void Server::spawn(const char* command) {
     if (m_socketName.empty()) {

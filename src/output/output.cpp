@@ -46,10 +46,9 @@ namespace umbriel {
     wlr_scene_output_layout_add_output(m_server->sceneLayout(), layoutOutput, m_sceneOutput);
 
     for (uint32_t layer = 0; layer < kLayerCount; ++layer) {
-      m_layerTrees[layer] = wlr_scene_tree_create(&m_server->scene()->tree);
+      m_layerTrees[layer] = wlr_scene_tree_create(m_server->shellLayerTree(layer));
     }
-    m_popupTree = wlr_scene_tree_create(&m_server->scene()->tree);
-    fixSceneOrder();
+    m_popupTree = wlr_scene_tree_create(m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY));
 
     arrangeLayers();
     m_workspaceGroup = std::make_unique<WorkspaceGroup>(*m_server, *this);
@@ -71,21 +70,6 @@ namespace umbriel {
       return m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP];
     }
     return m_layerTrees[layer];
-  }
-
-  void Output::fixSceneOrder() {
-    wlr_scene_tree* xdg = m_server->xdgTree();
-    // Bottom stack under windows, top/overlay above windows, popups above overlay.
-    wlr_scene_node_place_below(&m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM]->node, &xdg->node);
-    wlr_scene_node_place_below(
-        &m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND]->node, &m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM]->node
-    );
-    wlr_scene_node_place_above(&m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP]->node, &xdg->node);
-    wlr_scene_node_place_above(
-        &m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]->node, &m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP]->node
-    );
-    wlr_scene_node_place_above(&m_popupTree->node, &m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]->node);
-    m_server->raiseLockTree();
   }
 
   void Output::arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive) {
@@ -156,6 +140,8 @@ namespace umbriel {
     );
   }
 
+  void Output::onGammaChanged(wlr_gamma_control_v1* /*control*/) { wlr_output_schedule_frame(m_output); }
+
   void Output::onFrame(wl_listener* listener, void* /*data*/) {
     Output* self = wl_container_of(listener, self, m_frame);
     self->handleFrame();
@@ -201,7 +187,27 @@ namespace umbriel {
     }
 
     m_inFrame = true;
-    const bool ok = wlr_scene_output_commit(m_sceneOutput, nullptr);
+
+    wlr_output_state state{};
+    wlr_output_state_init(&state);
+    if (!wlr_scene_output_build_state(m_sceneOutput, &state, nullptr)) {
+      wlr_output_state_finish(&state);
+      m_inFrame = false;
+      wlr_output_schedule_frame(m_output);
+      return;
+    }
+
+    // Hardware gamma only (DRM). Nested Wayland has no gamma LUT; leave that alone.
+    if (wlr_gamma_control_v1* control = wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output)) {
+      if (wlr_output_get_gamma_size(m_output) > 0) {
+        if (!wlr_gamma_control_v1_apply(control, &state)) {
+          wlr_gamma_control_v1_send_failed_and_destroy(control);
+        }
+      }
+    }
+
+    const bool ok = wlr_output_commit_state(m_output, &state);
+    wlr_output_state_finish(&state);
     m_inFrame = false;
 
     if (m_hasDeferredMode) {

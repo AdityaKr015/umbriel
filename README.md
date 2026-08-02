@@ -24,6 +24,7 @@ What works today:
 - `xdg_activation_v1` (token-based window activation / focus)
 - `wp_viewporter` / `wp_fractional_scale_v1` (viewport crop + fractional scale; needed for Noctalia panel click shield)
 - `ext_data_control_v1` (+ primary selection) for clipboard managers / history
+- `zwlr_gamma_control_v1` (Noctalia night light / color temperature)
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
 - Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows, mod+1..9 workspaces
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
@@ -37,7 +38,7 @@ Still open / planned:
 | Eyecandy | Blur, shadows, rounded corners, double borders |
 | Config | TOML with includes |
 | Xwayland | Native vs satellite |
-| Shell | Remaining Noctalia polish (gamma, output management, IME, …) |
+| Shell | Remaining Noctalia polish (output management, IME, …) |
 | Overview | Undecided |
 | Protocols | See roadmap below |
 
@@ -150,7 +151,7 @@ Target support:
 - `wp_fractional_scale_v1` (done)
 - `ext_data_control_v1` (done)
 - `wp_primary_selection` / primary selection v1 (done)
-- `zwlr_gamma_control_v1`
+- `zwlr_gamma_control_v1` (done)
 - `zwlr_output_management_v1`
 - `zwp_text_input_v3`
 - `ext_foreign_toplevel_list_v1`

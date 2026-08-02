@@ -32,6 +32,8 @@ struct wlr_xdg_shell;
 struct wlr_ext_workspace_group_handle_v1;
 struct wlr_ext_workspace_handle_v1;
 struct wlr_ext_workspace_manager_v1;
+struct wlr_gamma_control_manager_v1;
+struct wlr_scene_tree;
 
 namespace umbriel {
 
@@ -47,6 +49,8 @@ namespace umbriel {
 
   class Server {
   public:
+    static constexpr uint32_t kLayerCount = 4;
+
     Server();
     ~Server();
 
@@ -64,6 +68,7 @@ namespace umbriel {
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
     [[nodiscard]] wlr_scene_tree* xdgTree() const { return m_xdgTree; }
     [[nodiscard]] wlr_scene_tree* lockTree() const { return m_lockTree; }
+    [[nodiscard]] wlr_scene_tree* shellLayerTree(uint32_t layer) const;
     [[nodiscard]] wlr_output_layout* outputLayout() const { return m_outputLayout; }
     [[nodiscard]] wlr_scene_output_layout* sceneLayout() const { return m_sceneLayout; }
     [[nodiscard]] Seat* seat() const { return m_seat.get(); }
@@ -72,6 +77,7 @@ namespace umbriel {
     [[nodiscard]] bool sessionLocked() const { return m_sessionLocked; }
     [[nodiscard]] wlr_foreign_toplevel_manager_v1* foreignToplevelManager() const { return m_foreignToplevelManager; }
     [[nodiscard]] wlr_ext_workspace_manager_v1* workspaceManager() const { return m_workspaceManager; }
+    [[nodiscard]] wlr_gamma_control_manager_v1* gammaManager() const { return m_gammaManager; }
     [[nodiscard]] wlr_pointer_constraints_v1* pointerConstraints() const { return m_pointerConstraints; }
     [[nodiscard]] wlr_relative_pointer_manager_v1* relativePointerManager() const { return m_relativePointerManager; }
     [[nodiscard]] bool nested() const { return m_nested; }
@@ -118,6 +124,7 @@ namespace umbriel {
     static void onIdleInhibitorDestroy(wl_listener* listener, void* data);
     static void onRequestActivate(wl_listener* listener, void* data);
     static void onWorkspaceCommit(wl_listener* listener, void* data);
+    static void onSetGamma(wl_listener* listener, void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -155,6 +162,8 @@ namespace umbriel {
     wlr_idle_inhibit_manager_v1* m_idleInhibitManager = nullptr;
     wlr_idle_notifier_v1* m_idleNotifier = nullptr;
     wlr_xdg_activation_v1* m_xdgActivation = nullptr;
+    wlr_gamma_control_manager_v1* m_gammaManager = nullptr;
+    wlr_scene_tree* m_shellLayerTrees[kLayerCount]{};
     wlr_scene_tree* m_xdgTree = nullptr;
     wlr_scene_tree* m_lockTree = nullptr;
     wlr_scene_rect* m_lockBlank = nullptr;
@@ -177,6 +186,7 @@ namespace umbriel {
     wl_listener m_newIdleInhibitor{};
     wl_listener m_requestActivate{};
     wl_listener m_workspaceCommit{};
+    wl_listener m_setGamma{};
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;

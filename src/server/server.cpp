@@ -71,6 +71,8 @@ Server::Server() {
   m_newLayerSurface.notify = onNewLayerSurface;
   wl_signal_add(&m_layerShell->events.new_surface, &m_newLayerSurface);
 
+  m_foreignToplevelManager = wlr_foreign_toplevel_manager_v1_create(m_display);
+
   m_cursor = std::make_unique<Cursor>(*this);
   m_seat = std::make_unique<Seat>(*this);
   updateSeatCapabilities();
@@ -147,6 +149,12 @@ uint32_t Server::modKey() const {
 void Server::focusView(View* view) {
   if (view == nullptr) {
     return;
+  }
+
+  for (const auto& entry : m_views) {
+    if (entry.get() != view) {
+      entry->setForeignActivated(false);
+    }
   }
 
   auto it = std::find_if(m_views.begin(), m_views.end(), [view](const std::unique_ptr<View>& entry) {

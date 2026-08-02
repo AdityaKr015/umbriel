@@ -1,11 +1,16 @@
 #include "view/view.h"
 
+#include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "server/server.h"
 #include "wlr.h"
 
 namespace umbriel {
+
+namespace {
+constexpr Logger kLog("view");
+} // namespace
 
 View::View(Server& server, wlr_xdg_toplevel* toplevel)
     : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
@@ -30,6 +35,25 @@ View::View(Server& server, wlr_xdg_toplevel* toplevel)
   wl_signal_add(&m_toplevel->events.request_maximize, &m_requestMaximize);
   m_requestFullscreen.notify = onRequestFullscreen;
   wl_signal_add(&m_toplevel->events.request_fullscreen, &m_requestFullscreen);
+  m_setTitle.notify = onSetTitle;
+  wl_signal_add(&m_toplevel->events.set_title, &m_setTitle);
+  m_setAppId.notify = onSetAppId;
+  wl_signal_add(&m_toplevel->events.set_app_id, &m_setAppId);
+
+  if (wlr_foreign_toplevel_manager_v1* manager = m_server->foreignToplevelManager()) {
+    m_foreign = wlr_foreign_toplevel_handle_v1_create(manager);
+    if (m_foreign != nullptr) {
+      m_foreign->data = this;
+      m_foreignActivate.notify = onForeignActivate;
+      wl_signal_add(&m_foreign->events.request_activate, &m_foreignActivate);
+      m_foreignClose.notify = onForeignClose;
+      wl_signal_add(&m_foreign->events.request_close, &m_foreignClose);
+      m_foreignDestroy.notify = onForeignDestroy;
+      wl_signal_add(&m_foreign->events.destroy, &m_foreignDestroy);
+      updateForeignIdentity();
+      updateForeignState();
+    }
+  }
 }
 
 View::~View() {
@@ -42,7 +66,59 @@ View::~View() {
     wl_list_remove(&m_requestResize.link);
     wl_list_remove(&m_requestMaximize.link);
     wl_list_remove(&m_requestFullscreen.link);
+    wl_list_remove(&m_setTitle.link);
+    wl_list_remove(&m_setAppId.link);
   }
+  if (m_foreign != nullptr) {
+    leaveForeignOutput();
+    wlr_foreign_toplevel_handle_v1_destroy(m_foreign);
+    m_foreign = nullptr;
+  }
+}
+
+void View::setForeignActivated(bool activated) {
+  if (m_foreign != nullptr) {
+    wlr_foreign_toplevel_handle_v1_set_activated(m_foreign, activated);
+  }
+}
+
+void View::updateForeignIdentity() {
+  if (m_foreign == nullptr) {
+    return;
+  }
+  wlr_foreign_toplevel_handle_v1_set_title(
+      m_foreign, m_toplevel->title != nullptr ? m_toplevel->title : "");
+  wlr_foreign_toplevel_handle_v1_set_app_id(
+      m_foreign, m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
+}
+
+void View::updateForeignState() {
+  if (m_foreign == nullptr) {
+    return;
+  }
+  wlr_foreign_toplevel_handle_v1_set_maximized(m_foreign, m_toplevel->current.maximized);
+  wlr_foreign_toplevel_handle_v1_set_fullscreen(m_foreign, m_toplevel->current.fullscreen);
+}
+
+void View::enterForeignOutput() {
+  if (m_foreign == nullptr) {
+    return;
+  }
+  wlr_output* output = m_server->preferredOutput();
+  if (output == nullptr || output == m_foreignOutput) {
+    return;
+  }
+  leaveForeignOutput();
+  wlr_foreign_toplevel_handle_v1_output_enter(m_foreign, output);
+  m_foreignOutput = output;
+}
+
+void View::leaveForeignOutput() {
+  if (m_foreign == nullptr || m_foreignOutput == nullptr) {
+    return;
+  }
+  wlr_foreign_toplevel_handle_v1_output_leave(m_foreign, m_foreignOutput);
+  m_foreignOutput = nullptr;
 }
 
 void View::focus() {
@@ -50,6 +126,7 @@ void View::focus() {
   wlr_surface* surface = m_toplevel->base->surface;
   wlr_surface* prev = seat->keyboard_state.focused_surface;
   if (prev == surface) {
+    setForeignActivated(true);
     return;
   }
 
@@ -61,6 +138,7 @@ void View::focus() {
 
   wlr_scene_node_raise_to_top(&m_sceneTree->node);
   wlr_xdg_toplevel_set_activated(m_toplevel, true);
+  setForeignActivated(true);
 
   if (wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat)) {
     wlr_seat_keyboard_notify_enter(
@@ -108,6 +186,31 @@ void View::onRequestFullscreen(wl_listener* listener, void* /*data*/) {
   self->handleRequestFullscreen();
 }
 
+void View::onSetTitle(wl_listener* listener, void* /*data*/) {
+  View* self = wl_container_of(listener, self, m_setTitle);
+  self->handleSetTitle();
+}
+
+void View::onSetAppId(wl_listener* listener, void* /*data*/) {
+  View* self = wl_container_of(listener, self, m_setAppId);
+  self->handleSetAppId();
+}
+
+void View::onForeignActivate(wl_listener* listener, void* /*data*/) {
+  View* self = wl_container_of(listener, self, m_foreignActivate);
+  self->handleForeignActivate();
+}
+
+void View::onForeignClose(wl_listener* listener, void* /*data*/) {
+  View* self = wl_container_of(listener, self, m_foreignClose);
+  self->handleForeignClose();
+}
+
+void View::onForeignDestroy(wl_listener* listener, void* /*data*/) {
+  View* self = wl_container_of(listener, self, m_foreignDestroy);
+  self->handleForeignDestroy();
+}
+
 void View::placeInUsableArea() {
   wlr_box usable =
       m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
@@ -134,11 +237,16 @@ void View::placeInUsableArea() {
 void View::handleMap() {
   m_mapped = true;
   placeInUsableArea();
-  focus();
+  enterForeignOutput();
+  updateForeignIdentity();
+  updateForeignState();
+  m_server->focusView(this);
 }
 
 void View::handleUnmap() {
   m_mapped = false;
+  leaveForeignOutput();
+  setForeignActivated(false);
   if (m_server->cursor()->mode() != CursorMode::Passthrough) {
     m_server->cursor()->resetMode();
   }
@@ -148,9 +256,19 @@ void View::handleCommit() {
   if (m_toplevel->base->initial_commit) {
     wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
   }
+  updateForeignState();
 }
 
 void View::handleDestroy() {
+  leaveForeignOutput();
+  if (m_foreign != nullptr) {
+    wl_list_remove(&m_foreignActivate.link);
+    wl_list_remove(&m_foreignClose.link);
+    wl_list_remove(&m_foreignDestroy.link);
+    wlr_foreign_toplevel_handle_v1_destroy(m_foreign);
+    m_foreign = nullptr;
+  }
+
   wl_list_remove(&m_map.link);
   wl_list_remove(&m_unmap.link);
   wl_list_remove(&m_commit.link);
@@ -159,6 +277,8 @@ void View::handleDestroy() {
   wl_list_remove(&m_requestResize.link);
   wl_list_remove(&m_requestMaximize.link);
   wl_list_remove(&m_requestFullscreen.link);
+  wl_list_remove(&m_setTitle.link);
+  wl_list_remove(&m_setAppId.link);
   m_map.link.next = nullptr;
   m_unmap.link.next = nullptr;
   m_commit.link.next = nullptr;
@@ -167,6 +287,8 @@ void View::handleDestroy() {
   m_requestResize.link.next = nullptr;
   m_requestMaximize.link.next = nullptr;
   m_requestFullscreen.link.next = nullptr;
+  m_setTitle.link.next = nullptr;
+  m_setAppId.link.next = nullptr;
   m_server->removeView(this);
 }
 
@@ -194,6 +316,7 @@ void View::handleRequestMaximize() {
     }
   }
   wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+  updateForeignState();
 }
 
 void View::handleRequestFullscreen() {
@@ -212,6 +335,38 @@ void View::handleRequestFullscreen() {
     }
   }
   wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
+  updateForeignState();
+}
+
+void View::handleSetTitle() {
+  kLog.debug("title='{}'", m_toplevel->title != nullptr ? m_toplevel->title : "");
+  updateForeignIdentity();
+}
+
+void View::handleSetAppId() {
+  kLog.debug("app_id='{}'", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
+  updateForeignIdentity();
+}
+
+void View::handleForeignActivate() {
+  if (m_mapped) {
+    m_server->focusView(this);
+  }
+}
+
+void View::handleForeignClose() {
+  wlr_xdg_toplevel_send_close(m_toplevel);
+}
+
+void View::handleForeignDestroy() {
+  wl_list_remove(&m_foreignActivate.link);
+  wl_list_remove(&m_foreignClose.link);
+  wl_list_remove(&m_foreignDestroy.link);
+  m_foreignActivate.link.next = nullptr;
+  m_foreignClose.link.next = nullptr;
+  m_foreignDestroy.link.next = nullptr;
+  m_foreign = nullptr;
+  m_foreignOutput = nullptr;
 }
 
 } // namespace umbriel

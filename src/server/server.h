@@ -11,6 +11,7 @@ struct wlr_allocator;
 struct wlr_backend;
 struct wlr_box;
 struct wlr_compositor;
+struct wlr_foreign_toplevel_manager_v1;
 struct wlr_input_device;
 struct wlr_layer_shell_v1;
 struct wlr_output;
@@ -53,6 +54,9 @@ public:
   [[nodiscard]] wlr_scene_output_layout* sceneLayout() const { return m_sceneLayout; }
   [[nodiscard]] Seat* seat() const { return m_seat.get(); }
   [[nodiscard]] Cursor* cursor() const { return m_cursor.get(); }
+  [[nodiscard]] wlr_foreign_toplevel_manager_v1* foreignToplevelManager() const {
+    return m_foreignToplevelManager;
+  }
   [[nodiscard]] bool nested() const { return m_nested; }
   [[nodiscard]] uint32_t modKey() const;
 
@@ -105,6 +109,7 @@ private:
   wlr_scene_output_layout* m_sceneLayout = nullptr;
   wlr_xdg_shell* m_xdgShell = nullptr;
   wlr_layer_shell_v1* m_layerShell = nullptr;
+  wlr_foreign_toplevel_manager_v1* m_foreignToplevelManager = nullptr;
   wlr_scene_tree* m_xdgTree = nullptr;
 
   std::unique_ptr<Seat> m_seat;

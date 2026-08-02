@@ -13,6 +13,7 @@ What works today:
 - Output hotplug, modeset, and SceneFX-backed scene commits
 - Seat, keyboard, pointer/cursor, xdg-shell toplevels and popups
 - `zwlr_layer_shell_v1` (anchors, exclusive zones, keyboard interactivity)
+- `zwlr_foreign_toplevel_manager_v1` (active window / task list for shell clients)
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
 - Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
@@ -120,12 +121,12 @@ nix/
 Target support:
 
 - `zwlr_layer_shell_v1` (done)
+- `zwlr_foreign_toplevel_manager_v1` (done)
 - `zxdg_output_manager_v1`
 - `ext_session_lock_manager_v1`
 - `zwp_pointer_constraints_v1`
 - `zwp_relative_pointer_manager_v1`
 - `wp_cursor_shape_manager_v1`
-- `zwlr_foreign_toplevel_manager_v1`
 - `zwp_idle_inhibit_manager_v1`
 - `zwlr_screencopy_manager_v1`
 - `zwlr_export_dmabuf_manager_v1`

@@ -1,7 +1,9 @@
 #include "core/log.h"
+#include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "workspace/workspace.h"
 
 namespace umbriel {
 
@@ -35,7 +37,12 @@ namespace umbriel {
     if (m_foreign == nullptr) {
       return;
     }
-    wlr_output* output = m_server->preferredOutput();
+    wlr_output* output = nullptr;
+    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+      output = m_workspace->group()->output()->wlr();
+    } else {
+      output = m_server->preferredOutput();
+    }
     if (output == nullptr || output == m_foreignOutput) {
       return;
     }
@@ -78,9 +85,10 @@ namespace umbriel {
   }
 
   void View::handleForeignActivate() {
-    if (m_mapped) {
-      m_server->focusView(this);
+    if (!m_mapped) {
+      return;
     }
+    m_server->focusView(this);
   }
 
   void View::handleForeignClose() { wlr_xdg_toplevel_send_close(m_toplevel); }

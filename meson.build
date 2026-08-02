@@ -57,6 +57,7 @@ sources = files(
   'src/view/popup.cpp',
   'src/layer/surface.cpp',
   'src/lock/session_lock.cpp',
+  'src/workspace/workspace.cpp',
 )
 
 umbriel = executable(

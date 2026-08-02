@@ -6,9 +6,11 @@
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "workspace/workspace.h"
 
 #include <algorithm>
 #include <cstdlib>
+#include <linux/input-event-codes.h>
 
 namespace umbriel {
 
@@ -18,6 +20,14 @@ namespace umbriel {
     }
     // Exclusive layer-shell keyboard grab must not be stolen by window focus.
     if (exclusiveKeyboardLayer() != nullptr) {
+      return;
+    }
+    if (Workspace* workspace = view->workspace()) {
+      if (!workspace->active()) {
+        workspace->group()->activate(workspace);
+      }
+    }
+    if (!view->onActiveWorkspace()) {
       return;
     }
 
@@ -57,9 +67,11 @@ namespace umbriel {
       return;
     }
     // Do not auto-focus on-demand layers; only exclusive grabs keyboard without a click.
-    if (!m_views.empty() && m_views.front()->mapped()) {
-      focusView(m_views.front().get());
-      return;
+    for (const auto& entry : m_views) {
+      if (entry->mapped() && entry->onActiveWorkspace()) {
+        focusView(entry.get());
+        return;
+      }
     }
     wlr_seat_keyboard_notify_clear_focus(m_seat->wlr());
   }
@@ -106,9 +118,53 @@ namespace umbriel {
     return static_cast<View*>(sceneNode);
   }
 
-  bool Server::handleKeybind(uint32_t keysym) {
+  bool Server::handleKeybind(uint32_t keysym, uint32_t modifiers, uint32_t keycode) {
     if (m_sessionLocked) {
       return false;
+    }
+
+    // Use the physical keycode so mod+Shift+1 still resolves to workspace 1
+    // (Shift changes the keysym to '!' / '@' / … depending on layout).
+    auto workspaceIndex = [](uint32_t code, uint32_t sym) -> int {
+      if (code >= KEY_1 && code <= KEY_9) {
+        return static_cast<int>(code - KEY_1);
+      }
+      if (code >= KEY_KP1 && code <= KEY_KP9) {
+        return static_cast<int>(code - KEY_KP1);
+      }
+      if (sym >= XKB_KEY_1 && sym <= XKB_KEY_9) {
+        return static_cast<int>(sym - XKB_KEY_1);
+      }
+      if (sym >= XKB_KEY_KP_1 && sym <= XKB_KEY_KP_9) {
+        return static_cast<int>(sym - XKB_KEY_KP_1);
+      }
+      return -1;
+    };
+
+    if (const int index = workspaceIndex(keycode, keysym); index >= 0) {
+      Output* out = outputFromWlr(preferredOutput());
+      if (out == nullptr || out->workspaceGroup() == nullptr) {
+        return true;
+      }
+      WorkspaceGroup* group = out->workspaceGroup();
+      Workspace* target = group->workspaceAt(static_cast<size_t>(index));
+      if (target == nullptr) {
+        return true;
+      }
+      if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
+        for (const auto& entry : m_views) {
+          if (entry->mapped() && entry->onActiveWorkspace()) {
+            entry->setWorkspace(target);
+            group->activate(target);
+            focusView(entry.get());
+            return true;
+          }
+        }
+        group->activateIndex(static_cast<size_t>(index));
+        return true;
+      }
+      group->activateIndex(static_cast<size_t>(index));
+      return true;
     }
 
     switch (keysym) {
@@ -126,10 +182,15 @@ namespace umbriel {
     }
     case XKB_KEY_F1:
       if (m_views.size() >= 2) {
-        auto current = std::move(m_views.front());
-        m_views.erase(m_views.begin());
-        m_views.push_back(std::move(current));
-        focusView(m_views.front().get());
+        for (size_t n = 0; n < m_views.size(); ++n) {
+          auto current = std::move(m_views.front());
+          m_views.erase(m_views.begin());
+          m_views.push_back(std::move(current));
+          if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
+            focusView(m_views.front().get());
+            break;
+          }
+        }
       }
       return true;
     default:

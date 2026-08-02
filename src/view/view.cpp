@@ -2,8 +2,10 @@
 
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "output/output.h"
 #include "server/server.h"
 #include "wlr.h"
+#include "workspace/workspace.h"
 
 namespace umbriel {
 
@@ -12,6 +14,7 @@ namespace umbriel {
     m_sceneTree = wlr_scene_xdg_surface_create(m_server->xdgTree(), m_toplevel->base);
     m_sceneTree->node.data = this;
     m_toplevel->base->data = m_sceneTree;
+    wlr_scene_node_set_enabled(&m_sceneTree->node, false);
 
     m_map.notify = onMap;
     wl_signal_add(&m_toplevel->base->surface->events.map, &m_map);
@@ -52,6 +55,7 @@ namespace umbriel {
   }
 
   View::~View() {
+    setWorkspace(nullptr);
     if (m_map.link.next != nullptr) {
       wl_list_remove(&m_map.link);
       wl_list_remove(&m_unmap.link);
@@ -71,8 +75,53 @@ namespace umbriel {
     }
   }
 
+  void View::setWorkspace(Workspace* workspace) {
+    if (m_workspace == workspace) {
+      return;
+    }
+    if (m_workspace != nullptr) {
+      m_workspace->removeView(this);
+    }
+    m_workspace = workspace;
+    if (m_workspace != nullptr) {
+      m_workspace->addView(this);
+    } else {
+      setOnActiveWorkspace(true);
+    }
+    if (m_mapped && m_onActiveWorkspace) {
+      enterForeignOutput();
+    }
+  }
+
+  void View::detachWorkspace() {
+    m_workspace = nullptr;
+    setOnActiveWorkspace(true);
+  }
+
+  void View::setOnActiveWorkspace(bool active) {
+    if (m_onActiveWorkspace == active) {
+      return;
+    }
+    m_onActiveWorkspace = active;
+    if (m_sceneTree != nullptr) {
+      wlr_scene_node_set_enabled(&m_sceneTree->node, active);
+    }
+    if (!m_mapped) {
+      return;
+    }
+    if (active) {
+      enterForeignOutput();
+    } else {
+      leaveForeignOutput();
+      setForeignActivated(false);
+    }
+  }
+
   void View::focus() {
     if (m_server->sessionLocked() || m_server->exclusiveKeyboardLayer() != nullptr) {
+      return;
+    }
+    if (!m_onActiveWorkspace) {
       return;
     }
 
@@ -174,10 +223,18 @@ namespace umbriel {
   void View::handleMap() {
     m_mapped = true;
     placeInUsableArea();
-    enterForeignOutput();
+    if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
+      if (WorkspaceGroup* group = out->workspaceGroup()) {
+        setWorkspace(group->active());
+      } else {
+        setOnActiveWorkspace(true);
+      }
+    } else {
+      setOnActiveWorkspace(true);
+    }
     updateForeignIdentity();
     updateForeignState();
-    if (!m_server->sessionLocked()) {
+    if (m_onActiveWorkspace && !m_server->sessionLocked()) {
       m_server->focusView(this);
     }
   }
@@ -199,6 +256,7 @@ namespace umbriel {
   }
 
   void View::handleDestroy() {
+    setWorkspace(nullptr);
     leaveForeignOutput();
     if (m_foreign != nullptr) {
       wl_list_remove(&m_foreignActivate.link);

@@ -5,6 +5,7 @@
 #include "scene/node.h"
 #include "server/server.h"
 #include "wlr.h"
+#include "workspace/workspace.h"
 
 #include <ctime>
 
@@ -51,6 +52,7 @@ namespace umbriel {
     fixSceneOrder();
 
     arrangeLayers();
+    m_workspaceGroup = std::make_unique<WorkspaceGroup>(*m_server, *this);
   }
 
   Output::~Output() {

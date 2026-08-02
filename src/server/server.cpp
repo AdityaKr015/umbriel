@@ -9,6 +9,7 @@
 #include "output/output.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "workspace/workspace.h"
 
 #include <cstdlib>
 #include <stdexcept>
@@ -77,6 +78,10 @@ namespace umbriel {
 
     m_foreignToplevelManager = wlr_foreign_toplevel_manager_v1_create(m_display);
 
+    m_workspaceManager = wlr_ext_workspace_manager_v1_create(m_display, 1);
+    m_workspaceCommit.notify = onWorkspaceCommit;
+    wl_signal_add(&m_workspaceManager->events.commit, &m_workspaceCommit);
+
     m_sessionLockManager = wlr_session_lock_manager_v1_create(m_display);
     m_newSessionLock.notify = onNewSessionLock;
     wl_signal_add(&m_sessionLockManager->events.new_lock, &m_newSessionLock);
@@ -121,6 +126,7 @@ namespace umbriel {
     wl_list_remove(&m_newPointerConstraint.link);
     wl_list_remove(&m_newIdleInhibitor.link);
     wl_list_remove(&m_requestActivate.link);
+    wl_list_remove(&m_workspaceCommit.link);
 
     m_sessionLock.reset();
     m_layerSurfaces.clear();

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <wayland-server-core.h>
 
 struct wlr_output;
@@ -14,6 +15,7 @@ extern "C" {
 namespace umbriel {
 
   class Server;
+  class WorkspaceGroup;
 
   class Output {
   public:
@@ -30,6 +32,7 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* layerTree(uint32_t layer) const;
     [[nodiscard]] wlr_scene_tree* popupTree() const { return m_popupTree; }
     [[nodiscard]] wlr_box usableArea() const { return m_usableArea; }
+    [[nodiscard]] WorkspaceGroup* workspaceGroup() const { return m_workspaceGroup.get(); }
 
     void arrangeLayers();
 
@@ -50,6 +53,7 @@ namespace umbriel {
     wlr_scene_output* m_sceneOutput = nullptr;
     wlr_scene_tree* m_layerTrees[kLayerCount]{};
     wlr_scene_tree* m_popupTree = nullptr;
+    std::unique_ptr<WorkspaceGroup> m_workspaceGroup;
     wlr_box m_usableArea{};
 
     bool m_inFrame = false;

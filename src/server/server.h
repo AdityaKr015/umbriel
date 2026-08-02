@@ -29,6 +29,9 @@ struct wlr_session_lock_v1;
 struct wlr_surface;
 struct wlr_xdg_activation_v1;
 struct wlr_xdg_shell;
+struct wlr_ext_workspace_group_handle_v1;
+struct wlr_ext_workspace_handle_v1;
+struct wlr_ext_workspace_manager_v1;
 
 namespace umbriel {
 
@@ -39,6 +42,8 @@ namespace umbriel {
   class Seat;
   class SessionLock;
   class View;
+  class Workspace;
+  class WorkspaceGroup;
 
   class Server {
   public:
@@ -66,6 +71,7 @@ namespace umbriel {
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
     [[nodiscard]] bool sessionLocked() const { return m_sessionLocked; }
     [[nodiscard]] wlr_foreign_toplevel_manager_v1* foreignToplevelManager() const { return m_foreignToplevelManager; }
+    [[nodiscard]] wlr_ext_workspace_manager_v1* workspaceManager() const { return m_workspaceManager; }
     [[nodiscard]] wlr_pointer_constraints_v1* pointerConstraints() const { return m_pointerConstraints; }
     [[nodiscard]] wlr_relative_pointer_manager_v1* relativePointerManager() const { return m_relativePointerManager; }
     [[nodiscard]] bool nested() const { return m_nested; }
@@ -73,7 +79,7 @@ namespace umbriel {
 
     void focusView(View* view);
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
-    bool handleKeybind(uint32_t keysym);
+    bool handleKeybind(uint32_t keysym, uint32_t modifiers, uint32_t keycode);
     void arrangeLayers(wlr_output* output);
     [[nodiscard]] wlr_output* preferredOutput() const;
     [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
@@ -111,6 +117,7 @@ namespace umbriel {
     static void onNewIdleInhibitor(wl_listener* listener, void* data);
     static void onIdleInhibitorDestroy(wl_listener* listener, void* data);
     static void onRequestActivate(wl_listener* listener, void* data);
+    static void onWorkspaceCommit(wl_listener* listener, void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -121,6 +128,9 @@ namespace umbriel {
     void clearNormalFocus();
     void setLockBlankEnabled(bool enabled);
     void updateIdleInhibit();
+    void handleWorkspaceCommit(void* data);
+    [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
+    [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 
     struct IdleInhibitorWatch {
       Server* server = nullptr;
@@ -138,6 +148,7 @@ namespace umbriel {
     wlr_xdg_shell* m_xdgShell = nullptr;
     wlr_layer_shell_v1* m_layerShell = nullptr;
     wlr_foreign_toplevel_manager_v1* m_foreignToplevelManager = nullptr;
+    wlr_ext_workspace_manager_v1* m_workspaceManager = nullptr;
     wlr_session_lock_manager_v1* m_sessionLockManager = nullptr;
     wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;
     wlr_relative_pointer_manager_v1* m_relativePointerManager = nullptr;
@@ -165,6 +176,7 @@ namespace umbriel {
     wl_listener m_newPointerConstraint{};
     wl_listener m_newIdleInhibitor{};
     wl_listener m_requestActivate{};
+    wl_listener m_workspaceCommit{};
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;

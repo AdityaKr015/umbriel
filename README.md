@@ -99,6 +99,8 @@ Inside the session:
 | mod+Escape | Quit |
 | mod+Return | Spawn `$TERMINAL` |
 | mod+F1 | Cycle window focus |
+| mod+1..9 | Switch workspace on focused monitor |
+| mod+Shift+1..9 | Move focused window to workspace and follow |
 
 Set `TERMINAL` to your terminal binary (`ghostty`, `kitty`, `alacritty`, ...).
 
@@ -116,6 +118,7 @@ src/
   view/       xdg toplevels and popups
   layer/      layer-shell surfaces
   lock/       ext-session-lock surfaces
+  workspace/  per-monitor workspaces (ext-workspace)
 protocols/    vendored Wayland protocol XML
 nix/
   package.nix
@@ -139,4 +142,4 @@ Target support:
 - `zwlr_screencopy_manager_v1` (done)
 - `zwlr_export_dmabuf_manager_v1` (done)
 - `xdg_activation_v1` (done)
-- `ext_workspace_manager_v1`
+- `ext_workspace_manager_v1` (done)

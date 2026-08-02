@@ -9,6 +9,7 @@
 #include "view/popup.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "workspace/workspace.h"
 
 #include <cstdlib>
 
@@ -115,6 +116,59 @@ namespace umbriel {
     }
   }
 
+  void Server::onWorkspaceCommit(wl_listener* listener, void* data) {
+    Server* self = wl_container_of(listener, self, m_workspaceCommit);
+    self->handleWorkspaceCommit(data);
+  }
+
+  void Server::handleWorkspaceCommit(void* data) {
+    auto* event = static_cast<wlr_ext_workspace_v1_commit_event*>(data);
+    wlr_ext_workspace_v1_request* request = nullptr;
+    wl_list_for_each(request, event->requests, link) {
+      switch (request->type) {
+      case WLR_EXT_WORKSPACE_V1_REQUEST_CREATE_WORKSPACE: {
+        WorkspaceGroup* group = workspaceGroupFromHandle(request->create_workspace.group);
+        if (group != nullptr) {
+          group->createWorkspace(request->create_workspace.name);
+        }
+        break;
+      }
+      case WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE: {
+        if (Workspace* workspace = workspaceFromHandle(request->activate.workspace)) {
+          workspace->group()->activate(workspace);
+          refocus();
+        }
+        break;
+      }
+      case WLR_EXT_WORKSPACE_V1_REQUEST_DEACTIVATE: {
+        if (Workspace* workspace = workspaceFromHandle(request->deactivate.workspace)) {
+          workspace->group()->deactivate(workspace);
+        }
+        break;
+      }
+      case WLR_EXT_WORKSPACE_V1_REQUEST_ASSIGN:
+        // Workspaces stay bound to their output group.
+        break;
+      case WLR_EXT_WORKSPACE_V1_REQUEST_REMOVE:
+        break;
+      }
+    }
+  }
+
+  Workspace* Server::workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const {
+    if (handle == nullptr || handle->data == nullptr) {
+      return nullptr;
+    }
+    return static_cast<Workspace*>(handle->data);
+  }
+
+  WorkspaceGroup* Server::workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const {
+    if (handle == nullptr || handle->data == nullptr) {
+      return nullptr;
+    }
+    return static_cast<WorkspaceGroup*>(handle->data);
+  }
+
   void Server::updateIdleInhibit() {
     const bool inhibited = !wl_list_empty(&m_idleInhibitManager->inhibitors);
     wlr_idle_notifier_v1_set_inhibited(m_idleNotifier, inhibited);
@@ -204,6 +258,29 @@ namespace umbriel {
   void Server::addPointer(wlr_input_device* device) { m_cursor->attachInputDevice(device); }
 
   void Server::removeOutput(Output* output) {
+    WorkspaceGroup* dying = output->workspaceGroup();
+    Output* fallback = nullptr;
+    for (const auto& entry : m_outputs) {
+      if (entry.get() != output) {
+        fallback = entry.get();
+        break;
+      }
+    }
+
+    if (dying != nullptr) {
+      Workspace* destination = nullptr;
+      if (fallback != nullptr && fallback->workspaceGroup() != nullptr) {
+        destination = fallback->workspaceGroup()->active();
+      }
+      for (const auto& entry : m_views) {
+        Workspace* workspace = entry->workspace();
+        if (workspace == nullptr || workspace->group() != dying) {
+          continue;
+        }
+        entry->setWorkspace(destination);
+      }
+    }
+
     std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) { return entry.get() == output; });
     if (m_sessionLocked) {
       updateLockBlank();

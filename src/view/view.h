@@ -12,6 +12,7 @@ struct wlr_xdg_toplevel;
 namespace umbriel {
 
   class Server;
+  class Workspace;
 
   class View : public SceneNode {
   public:
@@ -24,9 +25,14 @@ namespace umbriel {
     [[nodiscard]] wlr_xdg_toplevel* toplevel() const { return m_toplevel; }
     [[nodiscard]] wlr_scene_tree* sceneTree() const { return m_sceneTree; }
     [[nodiscard]] bool mapped() const { return m_mapped; }
+    [[nodiscard]] Workspace* workspace() const { return m_workspace; }
+    [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
 
     void focus();
     void setForeignActivated(bool activated);
+    void setWorkspace(Workspace* workspace);
+    void detachWorkspace();
+    void setOnActiveWorkspace(bool active);
 
   private:
     friend class Cursor;
@@ -70,7 +76,9 @@ namespace umbriel {
     wlr_scene_tree* m_sceneTree = nullptr;
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
+    Workspace* m_workspace = nullptr;
     bool m_mapped = false;
+    bool m_onActiveWorkspace = false;
 
     wl_listener m_map{};
     wl_listener m_unmap{};

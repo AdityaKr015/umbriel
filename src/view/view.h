@@ -11,80 +11,80 @@ struct wlr_xdg_toplevel;
 
 namespace umbriel {
 
-class Server;
+  class Server;
 
-class View : public SceneNode {
-public:
-  View(Server& server, wlr_xdg_toplevel* toplevel);
-  ~View();
+  class View : public SceneNode {
+  public:
+    View(Server& server, wlr_xdg_toplevel* toplevel);
+    ~View();
 
-  View(const View&) = delete;
-  View& operator=(const View&) = delete;
+    View(const View&) = delete;
+    View& operator=(const View&) = delete;
 
-  [[nodiscard]] wlr_xdg_toplevel* toplevel() const { return m_toplevel; }
-  [[nodiscard]] wlr_scene_tree* sceneTree() const { return m_sceneTree; }
-  [[nodiscard]] bool mapped() const { return m_mapped; }
+    [[nodiscard]] wlr_xdg_toplevel* toplevel() const { return m_toplevel; }
+    [[nodiscard]] wlr_scene_tree* sceneTree() const { return m_sceneTree; }
+    [[nodiscard]] bool mapped() const { return m_mapped; }
 
-  void focus();
-  void setForeignActivated(bool activated);
+    void focus();
+    void setForeignActivated(bool activated);
 
-private:
-  friend class Cursor;
-  friend class Server;
+  private:
+    friend class Cursor;
+    friend class Server;
 
-  static void onMap(wl_listener* listener, void* data);
-  static void onUnmap(wl_listener* listener, void* data);
-  static void onCommit(wl_listener* listener, void* data);
-  static void onDestroy(wl_listener* listener, void* data);
-  static void onRequestMove(wl_listener* listener, void* data);
-  static void onRequestResize(wl_listener* listener, void* data);
-  static void onRequestMaximize(wl_listener* listener, void* data);
-  static void onRequestFullscreen(wl_listener* listener, void* data);
-  static void onSetTitle(wl_listener* listener, void* data);
-  static void onSetAppId(wl_listener* listener, void* data);
-  static void onForeignActivate(wl_listener* listener, void* data);
-  static void onForeignClose(wl_listener* listener, void* data);
-  static void onForeignDestroy(wl_listener* listener, void* data);
+    static void onMap(wl_listener* listener, void* data);
+    static void onUnmap(wl_listener* listener, void* data);
+    static void onCommit(wl_listener* listener, void* data);
+    static void onDestroy(wl_listener* listener, void* data);
+    static void onRequestMove(wl_listener* listener, void* data);
+    static void onRequestResize(wl_listener* listener, void* data);
+    static void onRequestMaximize(wl_listener* listener, void* data);
+    static void onRequestFullscreen(wl_listener* listener, void* data);
+    static void onSetTitle(wl_listener* listener, void* data);
+    static void onSetAppId(wl_listener* listener, void* data);
+    static void onForeignActivate(wl_listener* listener, void* data);
+    static void onForeignClose(wl_listener* listener, void* data);
+    static void onForeignDestroy(wl_listener* listener, void* data);
 
-  void handleMap();
-  void handleUnmap();
-  void handleCommit();
-  void handleDestroy();
-  void handleRequestMove();
-  void handleRequestResize(void* data);
-  void handleRequestMaximize();
-  void handleRequestFullscreen();
-  void handleSetTitle();
-  void handleSetAppId();
-  void handleForeignActivate();
-  void handleForeignClose();
-  void handleForeignDestroy();
-  void placeInUsableArea();
-  void updateForeignIdentity();
-  void updateForeignState();
-  void enterForeignOutput();
-  void leaveForeignOutput();
+    void handleMap();
+    void handleUnmap();
+    void handleCommit();
+    void handleDestroy();
+    void handleRequestMove();
+    void handleRequestResize(void* data);
+    void handleRequestMaximize();
+    void handleRequestFullscreen();
+    void handleSetTitle();
+    void handleSetAppId();
+    void handleForeignActivate();
+    void handleForeignClose();
+    void handleForeignDestroy();
+    void placeInUsableArea();
+    void updateForeignIdentity();
+    void updateForeignState();
+    void enterForeignOutput();
+    void leaveForeignOutput();
 
-  Server* m_server = nullptr;
-  wlr_xdg_toplevel* m_toplevel = nullptr;
-  wlr_scene_tree* m_sceneTree = nullptr;
-  wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
-  wlr_output* m_foreignOutput = nullptr;
-  bool m_mapped = false;
+    Server* m_server = nullptr;
+    wlr_xdg_toplevel* m_toplevel = nullptr;
+    wlr_scene_tree* m_sceneTree = nullptr;
+    wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
+    wlr_output* m_foreignOutput = nullptr;
+    bool m_mapped = false;
 
-  wl_listener m_map{};
-  wl_listener m_unmap{};
-  wl_listener m_commit{};
-  wl_listener m_destroy{};
-  wl_listener m_requestMove{};
-  wl_listener m_requestResize{};
-  wl_listener m_requestMaximize{};
-  wl_listener m_requestFullscreen{};
-  wl_listener m_setTitle{};
-  wl_listener m_setAppId{};
-  wl_listener m_foreignActivate{};
-  wl_listener m_foreignClose{};
-  wl_listener m_foreignDestroy{};
-};
+    wl_listener m_map{};
+    wl_listener m_unmap{};
+    wl_listener m_commit{};
+    wl_listener m_destroy{};
+    wl_listener m_requestMove{};
+    wl_listener m_requestResize{};
+    wl_listener m_requestMaximize{};
+    wl_listener m_requestFullscreen{};
+    wl_listener m_setTitle{};
+    wl_listener m_setAppId{};
+    wl_listener m_foreignActivate{};
+    wl_listener m_foreignClose{};
+    wl_listener m_foreignDestroy{};
+  };
 
 } // namespace umbriel

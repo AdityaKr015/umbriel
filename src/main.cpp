@@ -1,6 +1,5 @@
-#include "server/server.h"
-
 #include "core/log.h"
+#include "server/server.h"
 #include "wlr.h"
 
 #include <csignal>
@@ -9,18 +8,16 @@
 #include <exception>
 
 namespace {
-umbriel::Server* g_server = nullptr;
-constexpr Logger kLog("main");
+  umbriel::Server* g_server = nullptr;
+  constexpr Logger kLog("main");
 
-void onSignal(int /*signal*/) {
-  if (g_server != nullptr) {
-    g_server->stop();
+  void onSignal(int /*signal*/) {
+    if (g_server != nullptr) {
+      g_server->stop();
+    }
   }
-}
 
-void printUsage(const char* argv0) {
-  kLog.error("Usage: {} [-s startup_command]", argv0);
-}
+  void printUsage(const char* argv0) { kLog.error("Usage: {} [-s startup_command]", argv0); }
 } // namespace
 
 int main(int argc, char** argv) {

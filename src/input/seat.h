@@ -2,6 +2,7 @@
 
 #include <wayland-server-core.h>
 
+struct wlr_cursor_shape_manager_v1;
 struct wlr_seat;
 
 namespace umbriel {
@@ -22,17 +23,21 @@ public:
 
 private:
   static void onRequestCursor(wl_listener* listener, void* data);
+  static void onRequestSetShape(wl_listener* listener, void* data);
   static void onPointerFocusChange(wl_listener* listener, void* data);
   static void onRequestSetSelection(wl_listener* listener, void* data);
 
   void handleRequestCursor(void* data);
+  void handleRequestSetShape(void* data);
   void handlePointerFocusChange(void* data);
   void handleRequestSetSelection(void* data);
 
   Server* m_server = nullptr;
   wlr_seat* m_seat = nullptr;
+  wlr_cursor_shape_manager_v1* m_cursorShapeManager = nullptr;
 
   wl_listener m_requestCursor{};
+  wl_listener m_requestSetShape{};
   wl_listener m_pointerFocusChange{};
   wl_listener m_requestSetSelection{};
 };

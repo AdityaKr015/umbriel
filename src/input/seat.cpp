@@ -9,6 +9,10 @@ namespace umbriel {
 Seat::Seat(Server& server) : m_server(&server) {
   m_seat = wlr_seat_create(m_server->display(), "seat0");
 
+  m_cursorShapeManager = wlr_cursor_shape_manager_v1_create(m_server->display(), 2);
+  m_requestSetShape.notify = onRequestSetShape;
+  wl_signal_add(&m_cursorShapeManager->events.request_set_shape, &m_requestSetShape);
+
   m_requestCursor.notify = onRequestCursor;
   wl_signal_add(&m_seat->events.request_set_cursor, &m_requestCursor);
 
@@ -21,6 +25,7 @@ Seat::Seat(Server& server) : m_server(&server) {
 
 Seat::~Seat() {
   wl_list_remove(&m_requestCursor.link);
+  wl_list_remove(&m_requestSetShape.link);
   wl_list_remove(&m_pointerFocusChange.link);
   wl_list_remove(&m_requestSetSelection.link);
 }
@@ -38,6 +43,11 @@ void Seat::onRequestCursor(wl_listener* listener, void* data) {
   self->handleRequestCursor(data);
 }
 
+void Seat::onRequestSetShape(wl_listener* listener, void* data) {
+  Seat* self = wl_container_of(listener, self, m_requestSetShape);
+  self->handleRequestSetShape(data);
+}
+
 void Seat::onPointerFocusChange(wl_listener* listener, void* data) {
   Seat* self = wl_container_of(listener, self, m_pointerFocusChange);
   self->handlePointerFocusChange(data);
@@ -53,6 +63,22 @@ void Seat::handleRequestCursor(void* data) {
   if (m_seat->pointer_state.focused_client == event->seat_client) {
     wlr_cursor_set_surface(m_server->cursor()->wlr(), event->surface, event->hotspot_x, event->hotspot_y);
   }
+}
+
+void Seat::handleRequestSetShape(void* data) {
+  auto* event = static_cast<wlr_cursor_shape_manager_v1_request_set_shape_event*>(data);
+  if (event->device_type != WLR_CURSOR_SHAPE_MANAGER_V1_DEVICE_TYPE_POINTER) {
+    return;
+  }
+  if (m_seat->pointer_state.focused_client != event->seat_client) {
+    return;
+  }
+
+  const char* name = wlr_cursor_shape_v1_name(event->shape);
+  if (name == nullptr) {
+    return;
+  }
+  wlr_cursor_set_xcursor(m_server->cursor()->wlr(), m_server->cursor()->xcursorManager(), name);
 }
 
 void Seat::handlePointerFocusChange(void* data) {

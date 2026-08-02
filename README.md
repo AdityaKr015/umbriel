@@ -16,6 +16,7 @@ What works today:
 - `zwlr_foreign_toplevel_manager_v1` (active window / task list for shell clients)
 - `zxdg_output_manager_v1` (logical size/position for shell clients)
 - `ext_session_lock_manager_v1` (session lock / lock screen)
+- `wp_cursor_shape_manager_v1` (named cursor shapes from clients)
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
 - Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
@@ -129,7 +130,7 @@ Target support:
 - `ext_session_lock_manager_v1` (done)
 - `zwp_pointer_constraints_v1`
 - `zwp_relative_pointer_manager_v1`
-- `wp_cursor_shape_manager_v1`
+- `wp_cursor_shape_manager_v1` (done)
 - `zwp_idle_inhibit_manager_v1`
 - `zwlr_screencopy_manager_v1`
 - `zwlr_export_dmabuf_manager_v1`

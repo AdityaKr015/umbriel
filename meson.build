@@ -17,11 +17,20 @@ add_project_arguments(
 )
 
 wayland_server_dep = dependency('wayland-server')
+wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')
 scenefx_dep = dependency('scenefx-0.5')
 xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput')
 pixman_dep = dependency('pixman-1')
+
+# wlroots cursor-shape header pulls enum defs from wayland-protocols.
+wayland_protocols_enums = declare_dependency(
+  include_directories: include_directories(
+    wayland_protocols_dep.get_variable(pkgconfig: 'includedir'),
+    is_system: true,
+  ),
+)
 
 wayland_scanner = find_program('wayland-scanner')
 
@@ -54,6 +63,7 @@ umbriel = executable(
     scenefx_dep,
     wlroots_dep,
     wayland_server_dep,
+    wayland_protocols_enums,
     xkbcommon_dep,
     libinput_dep,
     pixman_dep,

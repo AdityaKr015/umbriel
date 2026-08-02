@@ -33,7 +33,7 @@ namespace umbriel {
       throw std::runtime_error("failed to create wl_display");
     }
 
-    m_backend = wlr_backend_autocreate(wl_display_get_event_loop(m_display), nullptr);
+    m_backend = wlr_backend_autocreate(wl_display_get_event_loop(m_display), &m_session);
     if (m_backend == nullptr) {
       throw std::runtime_error("failed to create wlr_backend");
     }

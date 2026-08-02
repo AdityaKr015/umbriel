@@ -24,6 +24,7 @@ struct wlr_scene;
 struct wlr_scene_output_layout;
 struct wlr_scene_rect;
 struct wlr_scene_tree;
+struct wlr_session;
 struct wlr_session_lock_manager_v1;
 struct wlr_session_lock_v1;
 struct wlr_surface;
@@ -63,6 +64,7 @@ namespace umbriel {
 
     [[nodiscard]] wl_display* display() const { return m_display; }
     [[nodiscard]] wlr_backend* backend() const { return m_backend; }
+    [[nodiscard]] wlr_session* session() const { return m_session; }
     [[nodiscard]] wlr_renderer* renderer() const { return m_renderer; }
     [[nodiscard]] wlr_allocator* allocator() const { return m_allocator; }
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
@@ -86,6 +88,7 @@ namespace umbriel {
     void focusView(View* view);
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
     bool handleKeybind(uint32_t keysym, uint32_t modifiers, uint32_t keycode);
+    bool handleVtSwitch(uint32_t keysym, uint32_t modifiers);
     void arrangeLayers(wlr_output* output);
     [[nodiscard]] wlr_output* preferredOutput() const;
     [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
@@ -146,6 +149,7 @@ namespace umbriel {
 
     wl_display* m_display = nullptr;
     wlr_backend* m_backend = nullptr;
+    wlr_session* m_session = nullptr;
     wlr_renderer* m_renderer = nullptr;
     wlr_allocator* m_allocator = nullptr;
     wlr_compositor* m_compositor = nullptr;

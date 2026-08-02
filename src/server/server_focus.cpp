@@ -118,6 +118,32 @@ namespace umbriel {
     return static_cast<View*>(sceneNode);
   }
 
+  bool Server::handleVtSwitch(uint32_t keysym, uint32_t modifiers) {
+    if (m_session == nullptr) {
+      return false;
+    }
+
+    unsigned vt = 0;
+    if (keysym >= XKB_KEY_XF86Switch_VT_1 && keysym <= XKB_KEY_XF86Switch_VT_12) {
+      vt = 1 + (keysym - XKB_KEY_XF86Switch_VT_1);
+    } else if (
+        (modifiers & (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)) == (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)
+        && keysym >= XKB_KEY_F1
+        && keysym <= XKB_KEY_F12
+    ) {
+      vt = 1 + (keysym - XKB_KEY_F1);
+    }
+
+    if (vt == 0) {
+      return false;
+    }
+
+    if (!wlr_session_change_vt(m_session, vt)) {
+      wlr_log(WLR_ERROR, "failed to switch to VT %u", vt);
+    }
+    return true;
+  }
+
   bool Server::handleKeybind(uint32_t keysym, uint32_t modifiers, uint32_t keycode) {
     if (m_sessionLocked) {
       return false;

@@ -66,9 +66,14 @@ namespace umbriel {
 
     bool handled = false;
     uint32_t modifiers = wlr_keyboard_get_modifiers(m_keyboard);
-    if ((modifiers & m_server->modKey()) != 0 && event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+    if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
       for (int i = 0; i < nsyms; ++i) {
-        handled = m_server->handleKeybind(syms[i], modifiers, event->keycode) || handled;
+        handled = m_server->handleVtSwitch(syms[i], modifiers) || handled;
+      }
+      if ((modifiers & m_server->modKey()) != 0) {
+        for (int i = 0; i < nsyms; ++i) {
+          handled = m_server->handleKeybind(syms[i], modifiers, event->keycode) || handled;
+        }
       }
     }
 

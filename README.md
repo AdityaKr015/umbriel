@@ -27,6 +27,7 @@ What works today:
 - `zwlr_gamma_control_v1` (Noctalia night light / color temperature)
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
 - Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows, mod+1..9 workspaces
+- Native DRM: Ctrl+Alt+F1..F12 switches VT
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
 - Noctalia shell runs against the protocols above
 

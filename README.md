@@ -12,6 +12,7 @@ What works today:
 - Nestable / DRM backend startup via wlroots + SceneFX renderer
 - Output hotplug, modeset, and SceneFX-backed scene commits
 - Seat, keyboard, pointer/cursor, xdg-shell toplevels and popups
+- Per-monitor workspaces via `ext_workspace_manager_v1` (9 workspaces each, isolated per output)
 - `zwlr_layer_shell_v1` (anchors, exclusive zones, keyboard interactivity)
 - `zwlr_foreign_toplevel_manager_v1` (active window / task list for shell clients)
 - `zxdg_output_manager_v1` (logical size/position for shell clients)
@@ -21,9 +22,12 @@ What works today:
 - `zwp_idle_inhibit_manager_v1` (+ `ext_idle_notifier_v1` for idle timers)
 - `zwlr_screencopy_manager_v1` / `zwlr_export_dmabuf_manager_v1` (screenshots / capture)
 - `xdg_activation_v1` (token-based window activation / focus)
+- `wp_viewporter` / `wp_fractional_scale_v1` (viewport crop + fractional scale; needed for Noctalia panel click shield)
+- `ext_data_control_v1` (+ primary selection) for clipboard managers / history
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
-- Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows
+- Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows, mod+1..9 workspaces
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
+- Noctalia shell runs against the protocols above
 
 Still open / planned:
 
@@ -31,10 +35,9 @@ Still open / planned:
 |------|-----------|
 | Layouts | Scrolling (H/V), dwindle, master |
 | Eyecandy | Blur, shadows, rounded corners, double borders |
-| Workspaces | Tags vs workspaces, per monitor |
 | Config | TOML with includes |
 | Xwayland | Native vs satellite |
-| Shell | Full Noctalia support without Noctalia logic changes |
+| Shell | Remaining Noctalia polish (gamma, output management, IME, …) |
 | Overview | Undecided |
 | Protocols | See roadmap below |
 
@@ -143,3 +146,11 @@ Target support:
 - `zwlr_export_dmabuf_manager_v1` (done)
 - `xdg_activation_v1` (done)
 - `ext_workspace_manager_v1` (done)
+- `wp_viewporter` (done)
+- `wp_fractional_scale_v1` (done)
+- `ext_data_control_v1` (done)
+- `wp_primary_selection` / primary selection v1 (done)
+- `zwlr_gamma_control_v1`
+- `zwlr_output_management_v1`
+- `zwp_text_input_v3`
+- `ext_foreign_toplevel_list_v1`

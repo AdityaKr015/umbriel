@@ -52,6 +52,10 @@ namespace umbriel {
     m_compositor = wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
     wlr_data_device_manager_create(m_display);
+    wlr_primary_selection_v1_device_manager_create(m_display);
+    wlr_viewporter_create(m_display);
+    wlr_fractional_scale_manager_v1_create(m_display, 1);
+    wlr_ext_data_control_manager_v1_create(m_display, 1);
 
     m_outputLayout = wlr_output_layout_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_outputLayout);

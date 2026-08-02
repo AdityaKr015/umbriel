@@ -94,6 +94,9 @@ Server::Server() {
   m_newIdleInhibitor.notify = onNewIdleInhibitor;
   wl_signal_add(&m_idleInhibitManager->events.new_inhibitor, &m_newIdleInhibitor);
 
+  wlr_screencopy_manager_v1_create(m_display);
+  wlr_export_dmabuf_manager_v1_create(m_display);
+
   m_cursor = std::make_unique<Cursor>(*this);
   m_seat = std::make_unique<Seat>(*this);
   updateSeatCapabilities();

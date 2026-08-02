@@ -19,6 +19,7 @@ What works today:
 - `wp_cursor_shape_manager_v1` (named cursor shapes from clients)
 - `zwp_pointer_constraints_v1` / `zwp_relative_pointer_manager_v1` (pointer lock/confine)
 - `zwp_idle_inhibit_manager_v1` (+ `ext_idle_notifier_v1` for idle timers)
+- `zwlr_screencopy_manager_v1` / `zwlr_export_dmabuf_manager_v1` (screenshots / capture)
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
 - Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
@@ -134,7 +135,7 @@ Target support:
 - `zwp_relative_pointer_manager_v1` (done)
 - `wp_cursor_shape_manager_v1` (done)
 - `zwp_idle_inhibit_manager_v1` (done)
-- `zwlr_screencopy_manager_v1`
-- `zwlr_export_dmabuf_manager_v1`
+- `zwlr_screencopy_manager_v1` (done)
+- `zwlr_export_dmabuf_manager_v1` (done)
 - `xdg_activation_v1`
 - `ext_workspace_manager_v1`

@@ -27,6 +27,11 @@ sources = files(
   'src/main.cpp',
   'src/server/server.cpp',
   'src/output/output.cpp',
+  'src/input/seat.cpp',
+  'src/input/keyboard.cpp',
+  'src/input/cursor.cpp',
+  'src/view/view.cpp',
+  'src/view/popup.cpp',
 )
 
 umbriel = executable(

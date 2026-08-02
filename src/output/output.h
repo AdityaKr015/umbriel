@@ -27,10 +27,16 @@ private:
   void handleFrame();
   void handleRequestState(void* data);
   void handleDestroy();
+  void applyMode(int width, int height);
 
   Server* m_server = nullptr;
   wlr_output* m_output = nullptr;
   wlr_scene_output* m_sceneOutput = nullptr;
+
+  bool m_inFrame = false;
+  bool m_hasDeferredMode = false;
+  int m_deferredWidth = 0;
+  int m_deferredHeight = 0;
 
   wl_listener m_frame{};
   wl_listener m_requestState{};

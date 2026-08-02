@@ -22,8 +22,12 @@ Output::Output(Server& server, wlr_output* output) : m_server(&server), m_output
   wlr_output_state state{};
   wlr_output_state_init(&state);
   wlr_output_state_set_enabled(&state, true);
-  if (wlr_output_mode* mode = wlr_output_preferred_mode(m_output)) {
-    wlr_output_state_set_mode(&state, mode);
+  // Nested Wayland outputs get their real size from the parent configure
+  // (request_state). Setting preferred mode here races that path.
+  if (!wlr_output_is_wl(m_output)) {
+    if (wlr_output_mode* mode = wlr_output_preferred_mode(m_output)) {
+      wlr_output_state_set_mode(&state, mode);
+    }
   }
   wlr_output_commit_state(m_output, &state);
   wlr_output_state_finish(&state);
@@ -56,8 +60,43 @@ void Output::onDestroy(wl_listener* listener, void* /*data*/) {
   self->handleDestroy();
 }
 
+void Output::applyMode(int width, int height) {
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  wlr_output_state state{};
+  wlr_output_state_init(&state);
+  wlr_output_state_set_custom_mode(&state, width, height, 0);
+  if (!wlr_output_commit_state(m_output, &state)) {
+    wlr_log(WLR_ERROR, "failed to commit output mode %dx%d for '%s'", width, height, m_output->name);
+  }
+  wlr_output_state_finish(&state);
+  wlr_output_schedule_frame(m_output);
+}
+
 void Output::handleFrame() {
-  if (!wlr_scene_output_commit(m_sceneOutput, nullptr)) {
+  if (m_hasDeferredMode) {
+    m_hasDeferredMode = false;
+    applyMode(m_deferredWidth, m_deferredHeight);
+  }
+
+  if (!wlr_scene_output_needs_frame(m_sceneOutput) || m_output->width <= 0 || m_output->height <= 0) {
+    return;
+  }
+
+  m_inFrame = true;
+  const bool ok = wlr_scene_output_commit(m_sceneOutput, nullptr);
+  m_inFrame = false;
+
+  if (m_hasDeferredMode) {
+    m_hasDeferredMode = false;
+    applyMode(m_deferredWidth, m_deferredHeight);
+    return;
+  }
+
+  if (!ok) {
+    wlr_output_schedule_frame(m_output);
     return;
   }
 
@@ -68,7 +107,22 @@ void Output::handleFrame() {
 
 void Output::handleRequestState(void* data) {
   auto* event = static_cast<wlr_output_event_request_state*>(data);
-  wlr_output_commit_state(m_output, event->state);
+
+  // Parent configure can arrive while we are flushing a frame commit. Applying a
+  // mode change mid-frame makes the wayland backend reject the primary buffer.
+  if (m_inFrame && (event->state->committed & WLR_OUTPUT_STATE_MODE) != 0
+      && event->state->mode_type == WLR_OUTPUT_STATE_MODE_CUSTOM) {
+    m_deferredWidth = event->state->custom_mode.width;
+    m_deferredHeight = event->state->custom_mode.height;
+    m_hasDeferredMode = true;
+    return;
+  }
+
+  if (!wlr_output_commit_state(m_output, event->state)) {
+    wlr_log(WLR_ERROR, "failed to commit requested output state for '%s'", m_output->name);
+    return;
+  }
+  wlr_output_schedule_frame(m_output);
 }
 
 void Output::handleDestroy() {

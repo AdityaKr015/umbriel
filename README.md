@@ -3,15 +3,18 @@
 A Wayland compositor built on [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) 0.20 and
 [SceneFX](https://github.com/wlrfx/scenefx).
 
-Early stage. Right now the goal is a clean modular C++23 skeleton that launches and owns outputs.
+Early stage. Clean modular C++23 compositor that launches, accepts input, and maps xdg-shell windows.
 
 ## Status
 
 What works today:
 
-- Nestable / DRM backend startup via wlroots
+- Nestable / DRM backend startup via wlroots + SceneFX renderer
 - Output hotplug, modeset, and SceneFX-backed scene commits
-- Clean shutdown on `SIGINT` / `SIGTERM`
+- Seat, keyboard, pointer/cursor, xdg-shell toplevels and popups
+- Nested sessions use **Alt** as mod, native DRM uses **Super**
+- Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows
+- Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
 
 Still open / planned:
 
@@ -65,23 +68,37 @@ just debug
 
 ## Running
 
-From an existing Wayland or X11 session, Umbriel opens a nested window. From a TTY it takes over the seat.
+From an existing Wayland or X11 session, Umbriel opens a nested window (mod = Alt).
+From a TTY it takes over the seat (mod = Super).
 
 ```sh
 just run
-# then in another terminal:
-WAYLAND_DISPLAY=<socket from logs> weston-terminal
+# or:
+TERMINAL=ghostty ./build-debug/umbriel -s ghostty
 ```
 
-Stop with `Ctrl+C`.
+Inside the session:
+
+| Shortcut | Action |
+|----------|--------|
+| mod+Escape | Quit |
+| mod+Return | Spawn `$TERMINAL` |
+| mod+F1 | Cycle window focus |
+
+Set `TERMINAL` to your terminal binary (`ghostty`, `kitty`, `alacritty`, ...).
+
+Stop with mod+Escape or `Ctrl+C` from the parent terminal.
 
 ## Project layout
 
 ```text
 src/
   main.cpp
-  server/     display, backend, renderer, scene
+  wlr.h
+  server/     display, backend, scene, xdg wiring
   output/     per-output lifecycle and frame commits
+  input/      seat, keyboard, cursor
+  view/       xdg toplevels and popups
 nix/
   package.nix
   devshell.nix

@@ -35,7 +35,13 @@ debug: (build "debug")
 release: (build "release")
 
 run m=mode: (build m)
-    ./build-{{m}}/umbriel
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -z "${TERMINAL:-}" ]]; then
+        echo "error: set TERMINAL to your terminal (ghostty, kitty, alacritty, ...)" >&2
+        exit 1
+    fi
+    ./build-{{m}}/umbriel -s "$TERMINAL"
 
 format:
     find src \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 clang-format -i

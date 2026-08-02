@@ -2,6 +2,7 @@
 
 #include "input/seat.h"
 #include "layer/surface.h"
+#include "lock/session_lock.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -112,6 +113,22 @@ void Cursor::handleButton(void* data) {
     return;
   }
 
+  if (m_server->sessionLocked()) {
+    double sx = 0;
+    double sy = 0;
+    wlr_surface* surface = nullptr;
+    m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+    if (surface != nullptr) {
+      if (wlr_session_lock_surface_v1* lockSurface =
+              wlr_session_lock_surface_v1_try_from_wlr_surface(surface)) {
+        if (auto* node = static_cast<LockSurface*>(lockSurface->data)) {
+          node->focus();
+        }
+      }
+    }
+    return;
+  }
+
   double sx = 0;
   double sy = 0;
   wlr_surface* surface = nullptr;
@@ -140,12 +157,20 @@ void Cursor::handleFrame() { wlr_seat_pointer_notify_frame(m_server->seat()->wlr
 
 void Cursor::processMotion(uint32_t timeMsec) {
   if (m_mode == CursorMode::Move) {
-    processMove();
-    return;
+    if (m_server->sessionLocked()) {
+      resetMode();
+    } else {
+      processMove();
+      return;
+    }
   }
   if (m_mode == CursorMode::Resize) {
-    processResize();
-    return;
+    if (m_server->sessionLocked()) {
+      resetMode();
+    } else {
+      processResize();
+      return;
+    }
   }
 
   double sx = 0;

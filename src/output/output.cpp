@@ -83,6 +83,7 @@ void Output::fixSceneOrder() {
       &m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]->node,
       &m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP]->node);
   wlr_scene_node_place_above(&m_popupTree->node, &m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]->node);
+  m_server->raiseLockTree();
 }
 
 void Output::arrangeLayer(
@@ -186,6 +187,9 @@ void Output::applyMode(int width, int height) {
   }
   wlr_output_state_finish(&state);
   arrangeLayers();
+  if (m_server->sessionLocked()) {
+    m_server->updateLockBlank();
+  }
   wlr_output_schedule_frame(m_output);
 }
 

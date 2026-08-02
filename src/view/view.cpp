@@ -122,6 +122,10 @@ void View::leaveForeignOutput() {
 }
 
 void View::focus() {
+  if (m_server->sessionLocked()) {
+    return;
+  }
+
   wlr_seat* seat = m_server->seat()->wlr();
   wlr_surface* surface = m_toplevel->base->surface;
   wlr_surface* prev = seat->keyboard_state.focused_surface;
@@ -240,7 +244,9 @@ void View::handleMap() {
   enterForeignOutput();
   updateForeignIdentity();
   updateForeignState();
-  m_server->focusView(this);
+  if (!m_server->sessionLocked()) {
+    m_server->focusView(this);
+  }
 }
 
 void View::handleUnmap() {

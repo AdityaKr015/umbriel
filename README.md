@@ -15,6 +15,7 @@ What works today:
 - `zwlr_layer_shell_v1` (anchors, exclusive zones, keyboard interactivity)
 - `zwlr_foreign_toplevel_manager_v1` (active window / task list for shell clients)
 - `zxdg_output_manager_v1` (logical size/position for shell clients)
+- `ext_session_lock_manager_v1` (session lock / lock screen)
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
 - Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
@@ -104,11 +105,12 @@ Stop with mod+Escape or `Ctrl+C` from the parent terminal.
 src/
   main.cpp
   wlr.h
-  server/     display, backend, scene, xdg/layer wiring
+  server/     display, backend, scene, xdg/layer/lock wiring
   output/     per-output lifecycle and frame commits
   input/      seat, keyboard, cursor
   view/       xdg toplevels and popups
   layer/      layer-shell surfaces
+  lock/       ext-session-lock surfaces
 protocols/    vendored Wayland protocol XML
 nix/
   package.nix
@@ -124,7 +126,7 @@ Target support:
 - `zwlr_layer_shell_v1` (done)
 - `zwlr_foreign_toplevel_manager_v1` (done)
 - `zxdg_output_manager_v1` (done)
-- `ext_session_lock_manager_v1`
+- `ext_session_lock_manager_v1` (done)
 - `zwp_pointer_constraints_v1`
 - `zwp_relative_pointer_manager_v1`
 - `wp_cursor_shape_manager_v1`

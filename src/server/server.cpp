@@ -5,6 +5,7 @@
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/surface.h"
+#include "lock/session_lock.h"
 #include "output/output.h"
 #include "scene/node.h"
 #include "view/popup.h"
@@ -61,6 +62,11 @@ Server::Server() {
 
   // Windows sit between per-output bottom and top layer trees.
   m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
+  m_lockTree = wlr_scene_tree_create(&m_scene->tree);
+  const float blankColor[4] = {0.f, 0.f, 0.f, 1.f};
+  m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, blankColor);
+  wlr_scene_node_set_enabled(&m_lockBlank->node, false);
+  wlr_scene_node_set_enabled(&m_lockTree->node, false);
 
   m_xdgShell = wlr_xdg_shell_create(m_display, 3);
   m_newXdgToplevel.notify = onNewXdgToplevel;
@@ -73,6 +79,10 @@ Server::Server() {
   wl_signal_add(&m_layerShell->events.new_surface, &m_newLayerSurface);
 
   m_foreignToplevelManager = wlr_foreign_toplevel_manager_v1_create(m_display);
+
+  m_sessionLockManager = wlr_session_lock_manager_v1_create(m_display);
+  m_newSessionLock.notify = onNewSessionLock;
+  wl_signal_add(&m_sessionLockManager->events.new_lock, &m_newSessionLock);
 
   m_cursor = std::make_unique<Cursor>(*this);
   m_seat = std::make_unique<Seat>(*this);
@@ -97,7 +107,9 @@ Server::~Server() {
   wl_list_remove(&m_newXdgToplevel.link);
   wl_list_remove(&m_newXdgPopup.link);
   wl_list_remove(&m_newLayerSurface.link);
+  wl_list_remove(&m_newSessionLock.link);
 
+  m_sessionLock.reset();
   m_layerSurfaces.clear();
   m_views.clear();
   m_keyboards.clear();
@@ -148,7 +160,7 @@ uint32_t Server::modKey() const {
 }
 
 void Server::focusView(View* view) {
-  if (view == nullptr) {
+  if (view == nullptr || m_sessionLocked) {
     return;
   }
 
@@ -197,6 +209,13 @@ View* Server::viewAt(
   }
 
   auto* sceneNode = static_cast<SceneNode*>(tree->node.data);
+  if (sceneNode->kind == SceneNodeKind::LockSurface) {
+    return nullptr;
+  }
+  if (m_sessionLocked) {
+    *surface = nullptr;
+    return nullptr;
+  }
   if (sceneNode->kind == SceneNodeKind::LayerSurface) {
     if (layer != nullptr) {
       *layer = static_cast<LayerSurface*>(sceneNode);
@@ -207,6 +226,10 @@ View* Server::viewAt(
 }
 
 bool Server::handleKeybind(uint32_t keysym) {
+  if (m_sessionLocked) {
+    return false;
+  }
+
   switch (keysym) {
   case XKB_KEY_Escape:
     stop();
@@ -356,8 +379,85 @@ void Server::onNewLayerSurface(wl_listener* listener, void* data) {
   self->m_layerSurfaces.push_back(std::move(surface));
 }
 
+void Server::onNewSessionLock(wl_listener* listener, void* data) {
+  Server* self = wl_container_of(listener, self, m_newSessionLock);
+  self->beginSessionLock(static_cast<wlr_session_lock_v1*>(data));
+}
+
+void Server::beginSessionLock(wlr_session_lock_v1* lock) {
+  if (m_sessionLock != nullptr) {
+    kLog.info("denying session lock; one is already active");
+    wlr_session_lock_v1_destroy(lock);
+    return;
+  }
+
+  m_sessionLocked = true;
+  m_cursor->resetMode();
+  clearNormalFocus();
+  updateLockBlank();
+  setLockBlankEnabled(true);
+  raiseLockTree();
+  m_sessionLock = std::make_unique<SessionLock>(*this, lock);
+}
+
+void Server::unlockSession() {
+  m_sessionLocked = false;
+  wlr_scene_node_set_enabled(&m_lockBlank->node, false);
+  if (!m_views.empty()) {
+    focusView(m_views.front().get());
+  }
+}
+
+void Server::removeSessionLock(SessionLock* lock) {
+  if (m_sessionLock.get() != lock) {
+    return;
+  }
+  m_sessionLock.reset();
+  if (!m_sessionLocked) {
+    wlr_scene_node_set_enabled(&m_lockTree->node, false);
+  }
+}
+
+void Server::clearNormalFocus() {
+  wlr_seat* seat = m_seat->wlr();
+  wlr_seat_keyboard_notify_clear_focus(seat);
+  wlr_seat_pointer_clear_focus(seat);
+  for (const auto& entry : m_views) {
+    if (entry->mapped()) {
+      wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
+      entry->setForeignActivated(false);
+    }
+  }
+}
+
+void Server::setLockBlankEnabled(bool enabled) {
+  wlr_scene_node_set_enabled(&m_lockTree->node, enabled);
+  wlr_scene_node_set_enabled(&m_lockBlank->node, enabled);
+  if (enabled) {
+    raiseLockTree();
+  }
+}
+
+void Server::updateLockBlank() {
+  wlr_box layoutBox{};
+  wlr_output_layout_get_box(m_outputLayout, nullptr, &layoutBox);
+  if (layoutBox.width <= 0 || layoutBox.height <= 0) {
+    return;
+  }
+  wlr_scene_rect_set_size(m_lockBlank, layoutBox.width, layoutBox.height);
+  wlr_scene_node_set_position(&m_lockBlank->node, layoutBox.x, layoutBox.y);
+}
+
+void Server::raiseLockTree() {
+  wlr_scene_node_raise_to_top(&m_lockTree->node);
+}
+
 void Server::addOutput(wlr_output* output) {
   m_outputs.push_back(std::make_unique<Output>(*this, output));
+  if (m_sessionLocked) {
+    updateLockBlank();
+    raiseLockTree();
+  }
 }
 
 void Server::addKeyboard(wlr_input_device* device) {
@@ -372,6 +472,9 @@ void Server::removeOutput(Output* output) {
   std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) {
     return entry.get() == output;
   });
+  if (m_sessionLocked) {
+    updateLockBlank();
+  }
 }
 
 void Server::removeKeyboard(Keyboard* keyboard) {

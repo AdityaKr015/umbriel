@@ -88,6 +88,10 @@ void LayerSurface::reparentToLayer(uint32_t layer) {
 }
 
 void LayerSurface::focus() {
+  if (m_server->sessionLocked()) {
+    return;
+  }
+
   const auto interactivity = m_layerSurface->current.keyboard_interactive;
   if (interactivity == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE) {
     return;

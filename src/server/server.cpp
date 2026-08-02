@@ -10,192 +10,189 @@
 #include "view/view.h"
 #include "wlr.h"
 
-#include <unistd.h>
-
 #include <cstdlib>
 #include <stdexcept>
+#include <unistd.h>
 
 namespace umbriel {
 
-namespace {
+  namespace {
 
-constexpr Logger kLog("server");
+    constexpr Logger kLog("server");
 
-} // namespace
+  } // namespace
 
-Server::Server() {
-  m_nested = std::getenv("WAYLAND_DISPLAY") != nullptr || std::getenv("WAYLAND_SOCKET") != nullptr
-      || std::getenv("DISPLAY") != nullptr;
+  Server::Server() {
+    m_nested = std::getenv("WAYLAND_DISPLAY") != nullptr
+        || std::getenv("WAYLAND_SOCKET") != nullptr
+        || std::getenv("DISPLAY") != nullptr;
 
-  m_display = wl_display_create();
-  if (m_display == nullptr) {
-    throw std::runtime_error("failed to create wl_display");
+    m_display = wl_display_create();
+    if (m_display == nullptr) {
+      throw std::runtime_error("failed to create wl_display");
+    }
+
+    m_backend = wlr_backend_autocreate(wl_display_get_event_loop(m_display), nullptr);
+    if (m_backend == nullptr) {
+      throw std::runtime_error("failed to create wlr_backend");
+    }
+
+    m_renderer = fx_renderer_create(m_backend);
+    if (m_renderer == nullptr) {
+      throw std::runtime_error("failed to create fx_renderer");
+    }
+    wlr_renderer_init_wl_display(m_renderer, m_display);
+
+    m_allocator = wlr_allocator_autocreate(m_backend, m_renderer);
+    if (m_allocator == nullptr) {
+      throw std::runtime_error("failed to create wlr_allocator");
+    }
+
+    m_compositor = wlr_compositor_create(m_display, 5, m_renderer);
+    wlr_subcompositor_create(m_display);
+    wlr_data_device_manager_create(m_display);
+
+    m_outputLayout = wlr_output_layout_create(m_display);
+    wlr_xdg_output_manager_v1_create(m_display, m_outputLayout);
+    m_scene = wlr_scene_create();
+    m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
+
+    // Windows sit between per-output bottom and top layer trees.
+    m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
+    m_lockTree = wlr_scene_tree_create(&m_scene->tree);
+    const float blankColor[4] = {0.f, 0.f, 0.f, 1.f};
+    m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, blankColor);
+    wlr_scene_node_set_enabled(&m_lockBlank->node, false);
+    wlr_scene_node_set_enabled(&m_lockTree->node, false);
+
+    m_xdgShell = wlr_xdg_shell_create(m_display, 3);
+    m_newXdgToplevel.notify = onNewXdgToplevel;
+    wl_signal_add(&m_xdgShell->events.new_toplevel, &m_newXdgToplevel);
+    m_newXdgPopup.notify = onNewXdgPopup;
+    wl_signal_add(&m_xdgShell->events.new_popup, &m_newXdgPopup);
+
+    m_layerShell = wlr_layer_shell_v1_create(m_display, 4);
+    m_newLayerSurface.notify = onNewLayerSurface;
+    wl_signal_add(&m_layerShell->events.new_surface, &m_newLayerSurface);
+
+    m_foreignToplevelManager = wlr_foreign_toplevel_manager_v1_create(m_display);
+
+    m_sessionLockManager = wlr_session_lock_manager_v1_create(m_display);
+    m_newSessionLock.notify = onNewSessionLock;
+    wl_signal_add(&m_sessionLockManager->events.new_lock, &m_newSessionLock);
+
+    m_relativePointerManager = wlr_relative_pointer_manager_v1_create(m_display);
+    m_pointerConstraints = wlr_pointer_constraints_v1_create(m_display);
+    m_newPointerConstraint.notify = onNewPointerConstraint;
+    wl_signal_add(&m_pointerConstraints->events.new_constraint, &m_newPointerConstraint);
+
+    m_idleNotifier = wlr_idle_notifier_v1_create(m_display);
+    m_idleInhibitManager = wlr_idle_inhibit_v1_create(m_display);
+    m_newIdleInhibitor.notify = onNewIdleInhibitor;
+    wl_signal_add(&m_idleInhibitManager->events.new_inhibitor, &m_newIdleInhibitor);
+
+    wlr_screencopy_manager_v1_create(m_display);
+    wlr_export_dmabuf_manager_v1_create(m_display);
+
+    m_xdgActivation = wlr_xdg_activation_v1_create(m_display);
+    m_requestActivate.notify = onRequestActivate;
+    wl_signal_add(&m_xdgActivation->events.request_activate, &m_requestActivate);
+
+    m_cursor = std::make_unique<Cursor>(*this);
+    m_seat = std::make_unique<Seat>(*this);
+    updateSeatCapabilities();
+
+    m_newOutput.notify = onNewOutput;
+    wl_signal_add(&m_backend->events.new_output, &m_newOutput);
+    m_newInput.notify = onNewInput;
+    wl_signal_add(&m_backend->events.new_input, &m_newInput);
+
+    wlr_log(WLR_INFO, "mod key: %s (%s session)", m_nested ? "Alt" : "Super", m_nested ? "nested" : "native");
+    kLog.info("mod key: {} ({} session)", m_nested ? "Alt" : "Super", m_nested ? "nested" : "native");
   }
 
-  m_backend = wlr_backend_autocreate(wl_display_get_event_loop(m_display), nullptr);
-  if (m_backend == nullptr) {
-    throw std::runtime_error("failed to create wlr_backend");
+  Server::~Server() {
+    wl_list_remove(&m_newOutput.link);
+    wl_list_remove(&m_newInput.link);
+    wl_list_remove(&m_newXdgToplevel.link);
+    wl_list_remove(&m_newXdgPopup.link);
+    wl_list_remove(&m_newLayerSurface.link);
+    wl_list_remove(&m_newSessionLock.link);
+    wl_list_remove(&m_newPointerConstraint.link);
+    wl_list_remove(&m_newIdleInhibitor.link);
+    wl_list_remove(&m_requestActivate.link);
+
+    m_sessionLock.reset();
+    m_layerSurfaces.clear();
+    m_views.clear();
+    m_keyboards.clear();
+    m_outputs.clear();
+    m_seat.reset();
+    m_cursor.reset();
+
+    wl_display_destroy_clients(m_display);
+    wlr_scene_node_destroy(&m_scene->tree.node);
+    wlr_allocator_destroy(m_allocator);
+    wlr_renderer_destroy(m_renderer);
+    wlr_backend_destroy(m_backend);
+    wl_display_destroy(m_display);
   }
 
-  m_renderer = fx_renderer_create(m_backend);
-  if (m_renderer == nullptr) {
-    throw std::runtime_error("failed to create fx_renderer");
-  }
-  wlr_renderer_init_wl_display(m_renderer, m_display);
+  bool Server::start(const char* startupCmd) {
+    const char* socket = wl_display_add_socket_auto(m_display);
+    if (socket == nullptr) {
+      wlr_log(WLR_ERROR, "failed to add Wayland socket");
+      return false;
+    }
+    m_socketName = socket;
 
-  m_allocator = wlr_allocator_autocreate(m_backend, m_renderer);
-  if (m_allocator == nullptr) {
-    throw std::runtime_error("failed to create wlr_allocator");
-  }
+    if (!wlr_backend_start(m_backend)) {
+      wlr_log(WLR_ERROR, "failed to start backend");
+      return false;
+    }
 
-  m_compositor = wlr_compositor_create(m_display, 5, m_renderer);
-  wlr_subcompositor_create(m_display);
-  wlr_data_device_manager_create(m_display);
-
-  m_outputLayout = wlr_output_layout_create(m_display);
-  wlr_xdg_output_manager_v1_create(m_display, m_outputLayout);
-  m_scene = wlr_scene_create();
-  m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
-
-  // Windows sit between per-output bottom and top layer trees.
-  m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
-  m_lockTree = wlr_scene_tree_create(&m_scene->tree);
-  const float blankColor[4] = {0.f, 0.f, 0.f, 1.f};
-  m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, blankColor);
-  wlr_scene_node_set_enabled(&m_lockBlank->node, false);
-  wlr_scene_node_set_enabled(&m_lockTree->node, false);
-
-  m_xdgShell = wlr_xdg_shell_create(m_display, 3);
-  m_newXdgToplevel.notify = onNewXdgToplevel;
-  wl_signal_add(&m_xdgShell->events.new_toplevel, &m_newXdgToplevel);
-  m_newXdgPopup.notify = onNewXdgPopup;
-  wl_signal_add(&m_xdgShell->events.new_popup, &m_newXdgPopup);
-
-  m_layerShell = wlr_layer_shell_v1_create(m_display, 4);
-  m_newLayerSurface.notify = onNewLayerSurface;
-  wl_signal_add(&m_layerShell->events.new_surface, &m_newLayerSurface);
-
-  m_foreignToplevelManager = wlr_foreign_toplevel_manager_v1_create(m_display);
-
-  m_sessionLockManager = wlr_session_lock_manager_v1_create(m_display);
-  m_newSessionLock.notify = onNewSessionLock;
-  wl_signal_add(&m_sessionLockManager->events.new_lock, &m_newSessionLock);
-
-  m_relativePointerManager = wlr_relative_pointer_manager_v1_create(m_display);
-  m_pointerConstraints = wlr_pointer_constraints_v1_create(m_display);
-  m_newPointerConstraint.notify = onNewPointerConstraint;
-  wl_signal_add(&m_pointerConstraints->events.new_constraint, &m_newPointerConstraint);
-
-  m_idleNotifier = wlr_idle_notifier_v1_create(m_display);
-  m_idleInhibitManager = wlr_idle_inhibit_v1_create(m_display);
-  m_newIdleInhibitor.notify = onNewIdleInhibitor;
-  wl_signal_add(&m_idleInhibitManager->events.new_inhibitor, &m_newIdleInhibitor);
-
-  wlr_screencopy_manager_v1_create(m_display);
-  wlr_export_dmabuf_manager_v1_create(m_display);
-
-  m_cursor = std::make_unique<Cursor>(*this);
-  m_seat = std::make_unique<Seat>(*this);
-  updateSeatCapabilities();
-
-  m_newOutput.notify = onNewOutput;
-  wl_signal_add(&m_backend->events.new_output, &m_newOutput);
-  m_newInput.notify = onNewInput;
-  wl_signal_add(&m_backend->events.new_input, &m_newInput);
-
-  wlr_log(
-      WLR_INFO,
-      "mod key: %s (%s session)",
-      m_nested ? "Alt" : "Super",
-      m_nested ? "nested" : "native");
-  kLog.info("mod key: {} ({} session)", m_nested ? "Alt" : "Super", m_nested ? "nested" : "native");
-}
-
-Server::~Server() {
-  wl_list_remove(&m_newOutput.link);
-  wl_list_remove(&m_newInput.link);
-  wl_list_remove(&m_newXdgToplevel.link);
-  wl_list_remove(&m_newXdgPopup.link);
-  wl_list_remove(&m_newLayerSurface.link);
-  wl_list_remove(&m_newSessionLock.link);
-  wl_list_remove(&m_newPointerConstraint.link);
-  wl_list_remove(&m_newIdleInhibitor.link);
-
-  m_sessionLock.reset();
-  m_layerSurfaces.clear();
-  m_views.clear();
-  m_keyboards.clear();
-  m_outputs.clear();
-  m_seat.reset();
-  m_cursor.reset();
-
-  wl_display_destroy_clients(m_display);
-  wlr_scene_node_destroy(&m_scene->tree.node);
-  wlr_allocator_destroy(m_allocator);
-  wlr_renderer_destroy(m_renderer);
-  wlr_backend_destroy(m_backend);
-  wl_display_destroy(m_display);
-}
-
-bool Server::start(const char* startupCmd) {
-  const char* socket = wl_display_add_socket_auto(m_display);
-  if (socket == nullptr) {
-    wlr_log(WLR_ERROR, "failed to add Wayland socket");
-    return false;
-  }
-  m_socketName = socket;
-
-  if (!wlr_backend_start(m_backend)) {
-    wlr_log(WLR_ERROR, "failed to start backend");
-    return false;
-  }
-
-  // Point new clients at us. Drop WAYLAND_SOCKET so children do not keep the
-  // parent compositor connection (libwayland prefers it over WAYLAND_DISPLAY).
-  setenv("WAYLAND_DISPLAY", m_socketName.c_str(), true);
-  unsetenv("WAYLAND_SOCKET");
-  kLog.info("running on WAYLAND_DISPLAY={}", m_socketName);
-  wlr_log(WLR_INFO, "running on WAYLAND_DISPLAY=%s", m_socketName.c_str());
-
-  if (startupCmd != nullptr) {
-    spawn(startupCmd);
-  }
-  return true;
-}
-
-void Server::run() { wl_display_run(m_display); }
-
-void Server::stop() { wl_display_terminate(m_display); }
-
-uint32_t Server::modKey() const {
-  return m_nested ? WLR_MODIFIER_ALT : WLR_MODIFIER_LOGO;
-}
-
-void Server::spawn(const char* command) {
-  if (m_socketName.empty()) {
-    wlr_log(WLR_ERROR, "cannot spawn before the Wayland socket exists");
-    return;
-  }
-
-  pid_t pid = fork();
-  if (pid < 0) {
-    wlr_log(WLR_ERROR, "fork failed");
-    return;
-  }
-  if (pid == 0) {
-    setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
+    // Point new clients at us. Drop WAYLAND_SOCKET so children do not keep the
+    // parent compositor connection (libwayland prefers it over WAYLAND_DISPLAY).
+    setenv("WAYLAND_DISPLAY", m_socketName.c_str(), true);
     unsetenv("WAYLAND_SOCKET");
-    // Avoid X11/XWayland fallback into the parent session.
-    unsetenv("DISPLAY");
-    execl("/bin/sh", "/bin/sh", "-c", command, nullptr);
-    _exit(1);
+    kLog.info("running on WAYLAND_DISPLAY={}", m_socketName);
+    wlr_log(WLR_INFO, "running on WAYLAND_DISPLAY=%s", m_socketName.c_str());
+
+    if (startupCmd != nullptr) {
+      spawn(startupCmd);
+    }
+    return true;
   }
 
-  wlr_log(WLR_INFO, "spawned '%s' on WAYLAND_DISPLAY=%s", command, m_socketName.c_str());
-}
+  void Server::run() { wl_display_run(m_display); }
 
-void Server::updateSeatCapabilities() {
-  m_seat->updateCapabilities(!m_keyboards.empty());
-}
+  void Server::stop() { wl_display_terminate(m_display); }
+
+  uint32_t Server::modKey() const { return m_nested ? WLR_MODIFIER_ALT : WLR_MODIFIER_LOGO; }
+
+  void Server::spawn(const char* command) {
+    if (m_socketName.empty()) {
+      wlr_log(WLR_ERROR, "cannot spawn before the Wayland socket exists");
+      return;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+      wlr_log(WLR_ERROR, "fork failed");
+      return;
+    }
+    if (pid == 0) {
+      setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
+      unsetenv("WAYLAND_SOCKET");
+      // Avoid X11/XWayland fallback into the parent session.
+      unsetenv("DISPLAY");
+      execl("/bin/sh", "/bin/sh", "-c", command, nullptr);
+      _exit(1);
+    }
+
+    wlr_log(WLR_INFO, "spawned '%s' on WAYLAND_DISPLAY=%s", command, m_socketName.c_str());
+  }
+
+  void Server::updateSeatCapabilities() { m_seat->updateCapabilities(!m_keyboards.empty()); }
 
 } // namespace umbriel

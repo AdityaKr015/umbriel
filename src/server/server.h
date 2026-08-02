@@ -12,6 +12,8 @@ struct wlr_backend;
 struct wlr_box;
 struct wlr_compositor;
 struct wlr_foreign_toplevel_manager_v1;
+struct wlr_idle_inhibit_manager_v1;
+struct wlr_idle_notifier_v1;
 struct wlr_input_device;
 struct wlr_layer_shell_v1;
 struct wlr_output;
@@ -97,6 +99,7 @@ public:
   void unlockSession();
   void raiseLockTree();
   void updateLockBlank();
+  void notifyIdleActivity();
 
 private:
   friend class Output;
@@ -115,6 +118,8 @@ private:
   static void onNewLayerSurface(wl_listener* listener, void* data);
   static void onNewSessionLock(wl_listener* listener, void* data);
   static void onNewPointerConstraint(wl_listener* listener, void* data);
+  static void onNewIdleInhibitor(wl_listener* listener, void* data);
+  static void onIdleInhibitorDestroy(wl_listener* listener, void* data);
 
   void addOutput(wlr_output* output);
   void addKeyboard(wlr_input_device* device);
@@ -124,6 +129,12 @@ private:
   void beginSessionLock(wlr_session_lock_v1* lock);
   void clearNormalFocus();
   void setLockBlankEnabled(bool enabled);
+  void updateIdleInhibit();
+
+  struct IdleInhibitorWatch {
+    Server* server = nullptr;
+    wl_listener destroy{};
+  };
 
   wl_display* m_display = nullptr;
   wlr_backend* m_backend = nullptr;
@@ -139,6 +150,8 @@ private:
   wlr_session_lock_manager_v1* m_sessionLockManager = nullptr;
   wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;
   wlr_relative_pointer_manager_v1* m_relativePointerManager = nullptr;
+  wlr_idle_inhibit_manager_v1* m_idleInhibitManager = nullptr;
+  wlr_idle_notifier_v1* m_idleNotifier = nullptr;
   wlr_scene_tree* m_xdgTree = nullptr;
   wlr_scene_tree* m_lockTree = nullptr;
   wlr_scene_rect* m_lockBlank = nullptr;
@@ -158,6 +171,7 @@ private:
   wl_listener m_newLayerSurface{};
   wl_listener m_newSessionLock{};
   wl_listener m_newPointerConstraint{};
+  wl_listener m_newIdleInhibitor{};
 
   std::vector<std::unique_ptr<Output>> m_outputs;
   std::vector<std::unique_ptr<Keyboard>> m_keyboards;

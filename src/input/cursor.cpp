@@ -114,6 +114,7 @@ void Cursor::onConstraintDestroy(wl_listener* listener, void* /*data*/) {
 
 void Cursor::handleMotion(void* data) {
   auto* event = static_cast<wlr_pointer_motion_event*>(data);
+  m_server->notifyIdleActivity();
 
   wlr_relative_pointer_manager_v1_send_relative_motion(
       m_server->relativePointerManager(),
@@ -144,6 +145,7 @@ void Cursor::handleMotion(void* data) {
 
 void Cursor::handleMotionAbsolute(void* data) {
   auto* event = static_cast<wlr_pointer_motion_absolute_event*>(data);
+  m_server->notifyIdleActivity();
   if (m_activeConstraint != nullptr
       && m_activeConstraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
     return;
@@ -169,6 +171,7 @@ void Cursor::handleMotionAbsolute(void* data) {
 
 void Cursor::handleButton(void* data) {
   auto* event = static_cast<wlr_pointer_button_event*>(data);
+  m_server->notifyIdleActivity();
   wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
 
   if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
@@ -206,6 +209,7 @@ void Cursor::handleButton(void* data) {
 
 void Cursor::handleAxis(void* data) {
   auto* event = static_cast<wlr_pointer_axis_event*>(data);
+  m_server->notifyIdleActivity();
   wlr_seat_pointer_notify_axis(
       m_server->seat()->wlr(),
       event->time_msec,

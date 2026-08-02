@@ -89,6 +89,11 @@ Server::Server() {
   m_newPointerConstraint.notify = onNewPointerConstraint;
   wl_signal_add(&m_pointerConstraints->events.new_constraint, &m_newPointerConstraint);
 
+  m_idleNotifier = wlr_idle_notifier_v1_create(m_display);
+  m_idleInhibitManager = wlr_idle_inhibit_v1_create(m_display);
+  m_newIdleInhibitor.notify = onNewIdleInhibitor;
+  wl_signal_add(&m_idleInhibitManager->events.new_inhibitor, &m_newIdleInhibitor);
+
   m_cursor = std::make_unique<Cursor>(*this);
   m_seat = std::make_unique<Seat>(*this);
   updateSeatCapabilities();
@@ -114,6 +119,7 @@ Server::~Server() {
   wl_list_remove(&m_newLayerSurface.link);
   wl_list_remove(&m_newSessionLock.link);
   wl_list_remove(&m_newPointerConstraint.link);
+  wl_list_remove(&m_newIdleInhibitor.link);
 
   m_sessionLock.reset();
   m_layerSurfaces.clear();
@@ -393,6 +399,35 @@ void Server::onNewSessionLock(wl_listener* listener, void* data) {
 void Server::onNewPointerConstraint(wl_listener* listener, void* data) {
   Server* self = wl_container_of(listener, self, m_newPointerConstraint);
   self->m_cursor->handleNewConstraint(static_cast<wlr_pointer_constraint_v1*>(data));
+}
+
+void Server::onNewIdleInhibitor(wl_listener* listener, void* data) {
+  Server* self = wl_container_of(listener, self, m_newIdleInhibitor);
+  auto* inhibitor = static_cast<wlr_idle_inhibitor_v1*>(data);
+  auto* watch = new IdleInhibitorWatch();
+  watch->server = self;
+  watch->destroy.notify = onIdleInhibitorDestroy;
+  wl_signal_add(&inhibitor->events.destroy, &watch->destroy);
+  self->updateIdleInhibit();
+  kLog.debug("idle inhibitor added");
+}
+
+void Server::onIdleInhibitorDestroy(wl_listener* listener, void* /*data*/) {
+  IdleInhibitorWatch* watch = wl_container_of(listener, watch, destroy);
+  Server* server = watch->server;
+  wl_list_remove(&watch->destroy.link);
+  delete watch;
+  server->updateIdleInhibit();
+  kLog.debug("idle inhibitor removed");
+}
+
+void Server::updateIdleInhibit() {
+  const bool inhibited = !wl_list_empty(&m_idleInhibitManager->inhibitors);
+  wlr_idle_notifier_v1_set_inhibited(m_idleNotifier, inhibited);
+}
+
+void Server::notifyIdleActivity() {
+  wlr_idle_notifier_v1_notify_activity(m_idleNotifier, m_seat->wlr());
 }
 
 void Server::beginSessionLock(wlr_session_lock_v1* lock) {

@@ -79,6 +79,28 @@ Output* LayerSurface::output() const {
   return static_cast<Output*>(m_layerSurface->output->data);
 }
 
+bool LayerSurface::exclusiveKeyboard() const {
+  return m_mapped && m_layerSurface != nullptr
+      && m_layerSurface->current.keyboard_interactive
+      == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE;
+}
+
+bool LayerSurface::acceptsKeyboard() const {
+  if (!m_mapped || m_layerSurface == nullptr) {
+    return false;
+  }
+  const auto interactivity = m_layerSurface->current.keyboard_interactive;
+  return interactivity == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE
+      || interactivity == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND;
+}
+
+bool LayerSurface::hasKeyboardFocus() const {
+  if (m_layerSurface == nullptr) {
+    return false;
+  }
+  return m_server->seat()->wlr()->keyboard_state.focused_surface == m_layerSurface->surface;
+}
+
 void LayerSurface::reparentToLayer(uint32_t layer) {
   Output* out = output();
   if (out == nullptr || m_scene == nullptr) {
@@ -88,12 +110,7 @@ void LayerSurface::reparentToLayer(uint32_t layer) {
 }
 
 void LayerSurface::focus() {
-  if (m_server->sessionLocked()) {
-    return;
-  }
-
-  const auto interactivity = m_layerSurface->current.keyboard_interactive;
-  if (interactivity == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE) {
+  if (m_server->sessionLocked() || !acceptsKeyboard()) {
     return;
   }
 
@@ -110,9 +127,12 @@ void LayerSurface::focus() {
     }
   }
 
+  // Give the layer seat keyboard focus so clients (e.g. Noctalia) receive Escape.
   if (wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat)) {
     wlr_seat_keyboard_notify_enter(
         seat, surface, keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+  } else {
+    wlr_seat_keyboard_notify_enter(seat, surface, nullptr, 0, nullptr);
   }
 }
 
@@ -166,13 +186,14 @@ void LayerSurface::handleMap() {
   if (Output* out = output()) {
     out->arrangeLayers();
   }
-  if (m_layerSurface->current.keyboard_interactive
-      == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
+  // Protocol: exclusive must receive keyboard focus. On-demand is click-to-focus.
+  if (exclusiveKeyboard()) {
     focus();
   }
 }
 
 void LayerSurface::handleUnmap() {
+  const bool hadFocus = hasKeyboardFocus();
   m_mapped = false;
   // Avoid sending configures while unmapping (wrong serial / client abort).
   m_arrangingOut = true;
@@ -180,6 +201,9 @@ void LayerSurface::handleUnmap() {
     out->arrangeLayers();
   }
   m_arrangingOut = false;
+  if (hadFocus) {
+    m_server->refocus();
+  }
 }
 
 void LayerSurface::handleCommit() {
@@ -192,6 +216,15 @@ void LayerSurface::handleCommit() {
 
   if ((m_layerSurface->current.committed & WLR_LAYER_SURFACE_V1_STATE_LAYER) != 0) {
     reparentToLayer(m_layerSurface->current.layer);
+  }
+
+  if ((m_layerSurface->current.committed & WLR_LAYER_SURFACE_V1_STATE_KEYBOARD_INTERACTIVITY)
+      != 0) {
+    if (exclusiveKeyboard()) {
+      focus();
+    } else if (hasKeyboardFocus() && !acceptsKeyboard()) {
+      m_server->refocus();
+    }
   }
 
   if (m_layerSurface->current.committed != 0) {

@@ -73,15 +73,6 @@ void Cursor::resetMode() {
   m_grabbedView = nullptr;
 }
 
-void Cursor::handleNewConstraint(wlr_pointer_constraint_v1* constraint) {
-  wlr_surface* focused = m_server->seat()->wlr()->pointer_state.focused_surface;
-  if (focused != nullptr && focused == constraint->surface) {
-    setActiveConstraint(constraint);
-  }
-}
-
-void Cursor::clearConstraint() { setActiveConstraint(nullptr); }
-
 void Cursor::onMotion(wl_listener* listener, void* data) {
   Cursor* self = wl_container_of(listener, self, m_motion);
   self->handleMotion(data);
@@ -105,11 +96,6 @@ void Cursor::onAxis(wl_listener* listener, void* data) {
 void Cursor::onFrame(wl_listener* listener, void* /*data*/) {
   Cursor* self = wl_container_of(listener, self, m_frame);
   self->handleFrame();
-}
-
-void Cursor::onConstraintDestroy(wl_listener* listener, void* /*data*/) {
-  Cursor* self = wl_container_of(listener, self, m_constraintDestroy);
-  self->handleConstraintDestroy();
 }
 
 void Cursor::handleMotion(void* data) {
@@ -202,7 +188,7 @@ void Cursor::handleButton(void* data) {
   View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
   if (layer != nullptr) {
     layer->focus();
-  } else {
+  } else if (m_server->exclusiveKeyboardLayer() == nullptr) {
     m_server->focusView(view);
   }
 }
@@ -221,12 +207,6 @@ void Cursor::handleAxis(void* data) {
 }
 
 void Cursor::handleFrame() { wlr_seat_pointer_notify_frame(m_server->seat()->wlr()); }
-
-void Cursor::handleConstraintDestroy() {
-  wl_list_remove(&m_constraintDestroy.link);
-  m_constraintDestroy.link.next = nullptr;
-  m_activeConstraint = nullptr;
-}
 
 void Cursor::processMotion(uint32_t timeMsec) {
   if (m_mode == CursorMode::Move) {
@@ -303,104 +283,6 @@ void Cursor::processResize() {
   wlr_box* geo = &m_grabbedView->toplevel()->base->geometry;
   wlr_scene_node_set_position(&m_grabbedView->sceneTree()->node, newLeft - geo->x, newTop - geo->y);
   wlr_xdg_toplevel_set_size(m_grabbedView->toplevel(), newRight - newLeft, newBottom - newTop);
-}
-
-void Cursor::setActiveConstraint(wlr_pointer_constraint_v1* constraint) {
-  if (m_activeConstraint == constraint) {
-    return;
-  }
-
-  if (m_activeConstraint != nullptr) {
-    wlr_pointer_constraint_v1* previous = m_activeConstraint;
-    m_activeConstraint = nullptr;
-    if (m_constraintDestroy.link.next != nullptr) {
-      wl_list_remove(&m_constraintDestroy.link);
-      m_constraintDestroy.link.next = nullptr;
-    }
-    warpToConstraintHint(previous);
-    wlr_pointer_constraint_v1_send_deactivated(previous);
-  }
-
-  m_activeConstraint = constraint;
-  if (constraint == nullptr) {
-    return;
-  }
-
-  m_constraintDestroy.notify = onConstraintDestroy;
-  wl_signal_add(&constraint->events.destroy, &m_constraintDestroy);
-  wlr_pointer_constraint_v1_send_activated(constraint);
-}
-
-void Cursor::updateConstraintForSurface(wlr_surface* surface) {
-  if (m_server->sessionLocked() || m_mode != CursorMode::Passthrough) {
-    setActiveConstraint(nullptr);
-    return;
-  }
-
-  wlr_pointer_constraint_v1* constraint = nullptr;
-  if (surface != nullptr) {
-    constraint = wlr_pointer_constraints_v1_constraint_for_surface(
-        m_server->pointerConstraints(), surface, m_server->seat()->wlr());
-  }
-  setActiveConstraint(constraint);
-}
-
-void Cursor::warpToConstraintHint(wlr_pointer_constraint_v1* constraint) {
-  if (constraint == nullptr || constraint->type != WLR_POINTER_CONSTRAINT_V1_LOCKED) {
-    return;
-  }
-  if (!constraint->current.cursor_hint.enabled) {
-    return;
-  }
-
-  wlr_seat* seat = m_server->seat()->wlr();
-  if (seat->pointer_state.focused_surface != constraint->surface) {
-    return;
-  }
-
-  double sx = seat->pointer_state.sx;
-  double sy = seat->pointer_state.sy;
-  double lx = m_cursor->x + (constraint->current.cursor_hint.x - sx);
-  double ly = m_cursor->y + (constraint->current.cursor_hint.y - sy);
-  wlr_cursor_warp(m_cursor, nullptr, lx, ly);
-}
-
-bool Cursor::confineDelta(double* dx, double* dy) const {
-  if (m_activeConstraint == nullptr) {
-    return true;
-  }
-
-  wlr_seat* seat = m_server->seat()->wlr();
-  if (seat->pointer_state.focused_surface != m_activeConstraint->surface) {
-    return true;
-  }
-
-  double sx = seat->pointer_state.sx;
-  double sy = seat->pointer_state.sy;
-
-  pixman_region32_t* region = &m_activeConstraint->region;
-  pixman_box32_t* extents = pixman_region32_extents(region);
-  pixman_region32_t fullSurface{};
-  if (extents->x2 - extents->x1 == 0 || extents->y2 - extents->y1 == 0) {
-    // Empty region means the whole surface.
-    wlr_surface* surface = m_activeConstraint->surface;
-    pixman_region32_init_rect(&fullSurface, 0, 0, surface->current.width, surface->current.height);
-    region = &fullSurface;
-  }
-
-  double confinedX = 0;
-  double confinedY = 0;
-  const bool ok = wlr_region_confine(region, sx, sy, sx + *dx, sy + *dy, &confinedX, &confinedY);
-  if (region == &fullSurface) {
-    pixman_region32_fini(&fullSurface);
-  }
-  if (!ok) {
-    return false;
-  }
-
-  *dx = confinedX - sx;
-  *dy = confinedY - sy;
-  return true;
 }
 
 } // namespace umbriel

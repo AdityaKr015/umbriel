@@ -100,6 +100,8 @@ public:
   void raiseLockTree();
   void updateLockBlank();
   void notifyIdleActivity();
+  void refocus();
+  [[nodiscard]] LayerSurface* exclusiveKeyboardLayer() const;
 
 private:
   friend class Output;

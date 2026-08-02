@@ -1,16 +1,11 @@
 #include "view/view.h"
 
-#include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "server/server.h"
 #include "wlr.h"
 
 namespace umbriel {
-
-namespace {
-constexpr Logger kLog("view");
-} // namespace
 
 View::View(Server& server, wlr_xdg_toplevel* toplevel)
     : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
@@ -76,53 +71,8 @@ View::~View() {
   }
 }
 
-void View::setForeignActivated(bool activated) {
-  if (m_foreign != nullptr) {
-    wlr_foreign_toplevel_handle_v1_set_activated(m_foreign, activated);
-  }
-}
-
-void View::updateForeignIdentity() {
-  if (m_foreign == nullptr) {
-    return;
-  }
-  wlr_foreign_toplevel_handle_v1_set_title(
-      m_foreign, m_toplevel->title != nullptr ? m_toplevel->title : "");
-  wlr_foreign_toplevel_handle_v1_set_app_id(
-      m_foreign, m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
-}
-
-void View::updateForeignState() {
-  if (m_foreign == nullptr) {
-    return;
-  }
-  wlr_foreign_toplevel_handle_v1_set_maximized(m_foreign, m_toplevel->current.maximized);
-  wlr_foreign_toplevel_handle_v1_set_fullscreen(m_foreign, m_toplevel->current.fullscreen);
-}
-
-void View::enterForeignOutput() {
-  if (m_foreign == nullptr) {
-    return;
-  }
-  wlr_output* output = m_server->preferredOutput();
-  if (output == nullptr || output == m_foreignOutput) {
-    return;
-  }
-  leaveForeignOutput();
-  wlr_foreign_toplevel_handle_v1_output_enter(m_foreign, output);
-  m_foreignOutput = output;
-}
-
-void View::leaveForeignOutput() {
-  if (m_foreign == nullptr || m_foreignOutput == nullptr) {
-    return;
-  }
-  wlr_foreign_toplevel_handle_v1_output_leave(m_foreign, m_foreignOutput);
-  m_foreignOutput = nullptr;
-}
-
 void View::focus() {
-  if (m_server->sessionLocked()) {
+  if (m_server->sessionLocked() || m_server->exclusiveKeyboardLayer() != nullptr) {
     return;
   }
 
@@ -198,21 +148,6 @@ void View::onSetTitle(wl_listener* listener, void* /*data*/) {
 void View::onSetAppId(wl_listener* listener, void* /*data*/) {
   View* self = wl_container_of(listener, self, m_setAppId);
   self->handleSetAppId();
-}
-
-void View::onForeignActivate(wl_listener* listener, void* /*data*/) {
-  View* self = wl_container_of(listener, self, m_foreignActivate);
-  self->handleForeignActivate();
-}
-
-void View::onForeignClose(wl_listener* listener, void* /*data*/) {
-  View* self = wl_container_of(listener, self, m_foreignClose);
-  self->handleForeignClose();
-}
-
-void View::onForeignDestroy(wl_listener* listener, void* /*data*/) {
-  View* self = wl_container_of(listener, self, m_foreignDestroy);
-  self->handleForeignDestroy();
 }
 
 void View::placeInUsableArea() {
@@ -342,37 +277,6 @@ void View::handleRequestFullscreen() {
   }
   wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
   updateForeignState();
-}
-
-void View::handleSetTitle() {
-  kLog.debug("title='{}'", m_toplevel->title != nullptr ? m_toplevel->title : "");
-  updateForeignIdentity();
-}
-
-void View::handleSetAppId() {
-  kLog.debug("app_id='{}'", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
-  updateForeignIdentity();
-}
-
-void View::handleForeignActivate() {
-  if (m_mapped) {
-    m_server->focusView(this);
-  }
-}
-
-void View::handleForeignClose() {
-  wlr_xdg_toplevel_send_close(m_toplevel);
-}
-
-void View::handleForeignDestroy() {
-  wl_list_remove(&m_foreignActivate.link);
-  wl_list_remove(&m_foreignClose.link);
-  wl_list_remove(&m_foreignDestroy.link);
-  m_foreignActivate.link.next = nullptr;
-  m_foreignClose.link.next = nullptr;
-  m_foreignDestroy.link.next = nullptr;
-  m_foreign = nullptr;
-  m_foreignOutput = nullptr;
 }
 
 } // namespace umbriel

@@ -6,6 +6,8 @@
 
 struct wlr_cursor;
 struct wlr_input_device;
+struct wlr_pointer_constraint_v1;
+struct wlr_surface;
 struct wlr_xcursor_manager;
 
 namespace umbriel {
@@ -34,6 +36,8 @@ public:
   void attachInputDevice(wlr_input_device* device);
   void beginInteractive(View* view, CursorMode mode, uint32_t edges);
   void resetMode();
+  void handleNewConstraint(wlr_pointer_constraint_v1* constraint);
+  void clearConstraint();
 
 private:
   static void onMotion(wl_listener* listener, void* data);
@@ -41,20 +45,27 @@ private:
   static void onButton(wl_listener* listener, void* data);
   static void onAxis(wl_listener* listener, void* data);
   static void onFrame(wl_listener* listener, void* data);
+  static void onConstraintDestroy(wl_listener* listener, void* data);
 
   void handleMotion(void* data);
   void handleMotionAbsolute(void* data);
   void handleButton(void* data);
   void handleAxis(void* data);
   void handleFrame();
+  void handleConstraintDestroy();
 
   void processMotion(uint32_t timeMsec);
   void processMove();
   void processResize();
+  void setActiveConstraint(wlr_pointer_constraint_v1* constraint);
+  void updateConstraintForSurface(wlr_surface* surface);
+  void warpToConstraintHint(wlr_pointer_constraint_v1* constraint);
+  [[nodiscard]] bool confineDelta(double* dx, double* dy) const;
 
   Server* m_server = nullptr;
   wlr_cursor* m_cursor = nullptr;
   wlr_xcursor_manager* m_xcursorManager = nullptr;
+  wlr_pointer_constraint_v1* m_activeConstraint = nullptr;
 
   CursorMode m_mode = CursorMode::Passthrough;
   View* m_grabbedView = nullptr;
@@ -71,6 +82,7 @@ private:
   wl_listener m_button{};
   wl_listener m_axis{};
   wl_listener m_frame{};
+  wl_listener m_constraintDestroy{};
 };
 
 } // namespace umbriel

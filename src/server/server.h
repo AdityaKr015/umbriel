@@ -16,6 +16,8 @@ struct wlr_input_device;
 struct wlr_layer_shell_v1;
 struct wlr_output;
 struct wlr_output_layout;
+struct wlr_pointer_constraints_v1;
+struct wlr_relative_pointer_manager_v1;
 struct wlr_renderer;
 struct wlr_scene;
 struct wlr_scene_output_layout;
@@ -64,6 +66,12 @@ public:
   [[nodiscard]] wlr_foreign_toplevel_manager_v1* foreignToplevelManager() const {
     return m_foreignToplevelManager;
   }
+  [[nodiscard]] wlr_pointer_constraints_v1* pointerConstraints() const {
+    return m_pointerConstraints;
+  }
+  [[nodiscard]] wlr_relative_pointer_manager_v1* relativePointerManager() const {
+    return m_relativePointerManager;
+  }
   [[nodiscard]] bool nested() const { return m_nested; }
   [[nodiscard]] uint32_t modKey() const;
 
@@ -106,6 +114,7 @@ private:
   static void onNewXdgPopup(wl_listener* listener, void* data);
   static void onNewLayerSurface(wl_listener* listener, void* data);
   static void onNewSessionLock(wl_listener* listener, void* data);
+  static void onNewPointerConstraint(wl_listener* listener, void* data);
 
   void addOutput(wlr_output* output);
   void addKeyboard(wlr_input_device* device);
@@ -128,6 +137,8 @@ private:
   wlr_layer_shell_v1* m_layerShell = nullptr;
   wlr_foreign_toplevel_manager_v1* m_foreignToplevelManager = nullptr;
   wlr_session_lock_manager_v1* m_sessionLockManager = nullptr;
+  wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;
+  wlr_relative_pointer_manager_v1* m_relativePointerManager = nullptr;
   wlr_scene_tree* m_xdgTree = nullptr;
   wlr_scene_tree* m_lockTree = nullptr;
   wlr_scene_rect* m_lockBlank = nullptr;
@@ -146,6 +157,7 @@ private:
   wl_listener m_newXdgPopup{};
   wl_listener m_newLayerSurface{};
   wl_listener m_newSessionLock{};
+  wl_listener m_newPointerConstraint{};
 
   std::vector<std::unique_ptr<Output>> m_outputs;
   std::vector<std::unique_ptr<Keyboard>> m_keyboards;

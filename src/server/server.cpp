@@ -84,6 +84,11 @@ Server::Server() {
   m_newSessionLock.notify = onNewSessionLock;
   wl_signal_add(&m_sessionLockManager->events.new_lock, &m_newSessionLock);
 
+  m_relativePointerManager = wlr_relative_pointer_manager_v1_create(m_display);
+  m_pointerConstraints = wlr_pointer_constraints_v1_create(m_display);
+  m_newPointerConstraint.notify = onNewPointerConstraint;
+  wl_signal_add(&m_pointerConstraints->events.new_constraint, &m_newPointerConstraint);
+
   m_cursor = std::make_unique<Cursor>(*this);
   m_seat = std::make_unique<Seat>(*this);
   updateSeatCapabilities();
@@ -108,6 +113,7 @@ Server::~Server() {
   wl_list_remove(&m_newXdgPopup.link);
   wl_list_remove(&m_newLayerSurface.link);
   wl_list_remove(&m_newSessionLock.link);
+  wl_list_remove(&m_newPointerConstraint.link);
 
   m_sessionLock.reset();
   m_layerSurfaces.clear();
@@ -384,6 +390,11 @@ void Server::onNewSessionLock(wl_listener* listener, void* data) {
   self->beginSessionLock(static_cast<wlr_session_lock_v1*>(data));
 }
 
+void Server::onNewPointerConstraint(wl_listener* listener, void* data) {
+  Server* self = wl_container_of(listener, self, m_newPointerConstraint);
+  self->m_cursor->handleNewConstraint(static_cast<wlr_pointer_constraint_v1*>(data));
+}
+
 void Server::beginSessionLock(wlr_session_lock_v1* lock) {
   if (m_sessionLock != nullptr) {
     kLog.info("denying session lock; one is already active");
@@ -393,6 +404,7 @@ void Server::beginSessionLock(wlr_session_lock_v1* lock) {
 
   m_sessionLocked = true;
   m_cursor->resetMode();
+  m_cursor->clearConstraint();
   clearNormalFocus();
   updateLockBlank();
   setLockBlankEnabled(true);

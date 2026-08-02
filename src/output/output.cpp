@@ -1,7 +1,7 @@
-#include "output/output.hpp"
+#include "output/output.h"
 
-#include "server/server.hpp"
-#include "wlr.hpp"
+#include "server/server.h"
+#include "wlr.h"
 
 #include <ctime>
 

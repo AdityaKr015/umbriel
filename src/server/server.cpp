@@ -1,7 +1,7 @@
-#include "server/server.hpp"
+#include "server/server.h"
 
-#include "output/output.hpp"
-#include "wlr.hpp"
+#include "output/output.h"
+#include "wlr.h"
 
 #include <cstdlib>
 #include <stdexcept>

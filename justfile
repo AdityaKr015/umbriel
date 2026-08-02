@@ -38,7 +38,7 @@ run m=mode: (build m)
     ./build-{{m}}/umbriel
 
 format:
-    find src \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' \) -print0 | xargs -0 clang-format -i
+    find src \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 clang-format -i
 
 _clang_tidy m=mode *args:
     #!/usr/bin/env bash

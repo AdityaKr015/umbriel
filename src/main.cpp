@@ -1,6 +1,6 @@
-#include "server/server.hpp"
+#include "server/server.h"
 
-#include "wlr.hpp"
+#include "wlr.h"
 
 #include <csignal>
 #include <cstdlib>

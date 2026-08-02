@@ -55,6 +55,7 @@ Server::Server() {
   wlr_data_device_manager_create(m_display);
 
   m_outputLayout = wlr_output_layout_create(m_display);
+  wlr_xdg_output_manager_v1_create(m_display, m_outputLayout);
   m_scene = wlr_scene_create();
   m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
 

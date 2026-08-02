@@ -24,5 +24,9 @@ extern "C" {
 #include <wlr/util/box.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
+
+#define namespace namespace_
+#include <wlr/types/wlr_layer_shell_v1.h>
+#undef namespace
 #undef static
 }

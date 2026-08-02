@@ -1,6 +1,7 @@
 #include "input/cursor.h"
 
 #include "input/seat.h"
+#include "layer/surface.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -114,8 +115,13 @@ void Cursor::handleButton(void* data) {
   double sx = 0;
   double sy = 0;
   wlr_surface* surface = nullptr;
-  View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
-  m_server->focusView(view);
+  LayerSurface* layer = nullptr;
+  View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+  if (layer != nullptr) {
+    layer->focus();
+  } else {
+    m_server->focusView(view);
+  }
 }
 
 void Cursor::handleAxis(void* data) {

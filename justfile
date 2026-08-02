@@ -11,12 +11,22 @@ default:
 configure m=mode install_prefix=prefix:
     #!/usr/bin/env bash
     set -euo pipefail
-    args=(--buildtype={{ if m == "release" { "release" } else { "debug" } }} -Dcpp_std={{cpp-std}})
-    [[ "{{m}}" == "release" ]] && args+=(-Db_lto=true)
+    args=(-Dcpp_std={{cpp-std}} --prefix "{{install_prefix}}")
+    case "{{m}}" in
+      release)
+        args+=(--buildtype=release -Db_lto=true)
+        ;;
+      asan)
+        args+=(--buildtype=debug -Db_sanitize=address)
+        ;;
+      debug|*)
+        args+=(--buildtype=debug)
+        ;;
+    esac
     if [[ -d "build-{{m}}" ]]; then
-        meson setup "build-{{m}}" "${args[@]}" --prefix "{{install_prefix}}" --reconfigure
+        meson setup "build-{{m}}" "${args[@]}" --reconfigure
     else
-        meson setup "build-{{m}}" "${args[@]}" --prefix "{{install_prefix}}"
+        meson setup "build-{{m}}" "${args[@]}"
     fi
     ln -sfn "build-{{m}}/compile_commands.json" compile_commands.json
 
@@ -32,6 +42,8 @@ build m=mode: (_ensure-configured m)
 
 debug: (build "debug")
 
+asan: (build "asan")
+
 release: (build "release")
 
 run m=mode: (build m)
@@ -40,6 +52,9 @@ run m=mode: (build m)
     if [[ -z "${TERMINAL:-}" ]]; then
         echo "error: set TERMINAL to your terminal (ghostty, kitty, alacritty, ...)" >&2
         exit 1
+    fi
+    if [[ "{{m}}" == "asan" ]]; then
+        export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:detect_leaks=0:halt_on_error=1}"
     fi
     ./build-{{m}}/umbriel -s "$TERMINAL"
 

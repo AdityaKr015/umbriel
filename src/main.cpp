@@ -1,5 +1,6 @@
 #include "server/server.h"
 
+#include "core/log.h"
 #include "wlr.h"
 
 #include <csignal>
@@ -9,6 +10,7 @@
 
 namespace {
 umbriel::Server* g_server = nullptr;
+constexpr Logger kLog("main");
 
 void onSignal(int /*signal*/) {
   if (g_server != nullptr) {
@@ -17,12 +19,17 @@ void onSignal(int /*signal*/) {
 }
 
 void printUsage(const char* argv0) {
-  wlr_log(WLR_ERROR, "Usage: %s [-s startup_command]", argv0);
+  kLog.error("Usage: {} [-s startup_command]", argv0);
 }
 } // namespace
 
 int main(int argc, char** argv) {
+  initLogFile();
+#ifdef NDEBUG
   wlr_log_init(WLR_INFO, nullptr);
+#else
+  wlr_log_init(WLR_DEBUG, nullptr);
+#endif
 
   const char* startupCmd = nullptr;
   for (int i = 1; i < argc; ++i) {
@@ -35,6 +42,7 @@ int main(int argc, char** argv) {
   }
 
   try {
+    kLog.info("starting umbriel");
     umbriel::Server server;
     g_server = &server;
 
@@ -42,14 +50,16 @@ int main(int argc, char** argv) {
     std::signal(SIGTERM, onSignal);
 
     if (!server.start(startupCmd)) {
+      kLog.error("failed to start server");
       return EXIT_FAILURE;
     }
 
     server.run();
     g_server = nullptr;
+    kLog.info("shutting down");
     return EXIT_SUCCESS;
   } catch (const std::exception& ex) {
-    wlr_log(WLR_ERROR, "%s", ex.what());
+    kLog.error("{}", ex.what());
     return EXIT_FAILURE;
   }
 }

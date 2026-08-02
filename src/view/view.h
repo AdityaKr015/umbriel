@@ -1,5 +1,7 @@
 #pragma once
 
+#include "scene/node.h"
+
 #include <wayland-server-core.h>
 
 struct wlr_scene_tree;
@@ -9,7 +11,7 @@ namespace umbriel {
 
 class Server;
 
-class View {
+class View : public SceneNode {
 public:
   View(Server& server, wlr_xdg_toplevel* toplevel);
   ~View();
@@ -41,7 +43,9 @@ private:
   void handleDestroy();
   void handleRequestMove();
   void handleRequestResize(void* data);
-  void handleRequestConfigure();
+  void handleRequestMaximize();
+  void handleRequestFullscreen();
+  void placeInUsableArea();
 
   Server* m_server = nullptr;
   wlr_xdg_toplevel* m_toplevel = nullptr;

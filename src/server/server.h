@@ -9,13 +9,16 @@
 
 struct wlr_allocator;
 struct wlr_backend;
+struct wlr_box;
 struct wlr_compositor;
 struct wlr_input_device;
+struct wlr_layer_shell_v1;
 struct wlr_output;
 struct wlr_output_layout;
 struct wlr_renderer;
 struct wlr_scene;
 struct wlr_scene_output_layout;
+struct wlr_scene_tree;
 struct wlr_surface;
 struct wlr_xdg_shell;
 
@@ -23,6 +26,7 @@ namespace umbriel {
 
 class Cursor;
 class Keyboard;
+class LayerSurface;
 class Output;
 class Seat;
 class View;
@@ -44,6 +48,7 @@ public:
   [[nodiscard]] wlr_renderer* renderer() const { return m_renderer; }
   [[nodiscard]] wlr_allocator* allocator() const { return m_allocator; }
   [[nodiscard]] wlr_scene* scene() const { return m_scene; }
+  [[nodiscard]] wlr_scene_tree* xdgTree() const { return m_xdgTree; }
   [[nodiscard]] wlr_output_layout* outputLayout() const { return m_outputLayout; }
   [[nodiscard]] wlr_scene_output_layout* sceneLayout() const { return m_sceneLayout; }
   [[nodiscard]] Seat* seat() const { return m_seat.get(); }
@@ -52,12 +57,23 @@ public:
   [[nodiscard]] uint32_t modKey() const;
 
   void focusView(View* view);
-  View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy);
+  View* viewAt(
+      double lx,
+      double ly,
+      wlr_surface** surface,
+      double* sx,
+      double* sy,
+      LayerSurface** layer = nullptr);
   bool handleKeybind(uint32_t keysym);
+  void arrangeLayers(wlr_output* output);
+  [[nodiscard]] wlr_output* preferredOutput() const;
+  [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
+  [[nodiscard]] wlr_box usableAreaAt(double lx, double ly) const;
 
   void removeOutput(Output* output);
   void removeKeyboard(Keyboard* keyboard);
   void removeView(View* view);
+  void removeLayerSurface(LayerSurface* layerSurface, wlr_output* output);
 
 private:
   friend class Output;
@@ -65,11 +81,13 @@ private:
   friend class Cursor;
   friend class View;
   friend class Seat;
+  friend class LayerSurface;
 
   static void onNewOutput(wl_listener* listener, void* data);
   static void onNewInput(wl_listener* listener, void* data);
   static void onNewXdgToplevel(wl_listener* listener, void* data);
   static void onNewXdgPopup(wl_listener* listener, void* data);
+  static void onNewLayerSurface(wl_listener* listener, void* data);
 
   void addOutput(wlr_output* output);
   void addKeyboard(wlr_input_device* device);
@@ -86,6 +104,8 @@ private:
   wlr_scene* m_scene = nullptr;
   wlr_scene_output_layout* m_sceneLayout = nullptr;
   wlr_xdg_shell* m_xdgShell = nullptr;
+  wlr_layer_shell_v1* m_layerShell = nullptr;
+  wlr_scene_tree* m_xdgTree = nullptr;
 
   std::unique_ptr<Seat> m_seat;
   std::unique_ptr<Cursor> m_cursor;
@@ -97,10 +117,12 @@ private:
   wl_listener m_newInput{};
   wl_listener m_newXdgToplevel{};
   wl_listener m_newXdgPopup{};
+  wl_listener m_newLayerSurface{};
 
   std::vector<std::unique_ptr<Output>> m_outputs;
   std::vector<std::unique_ptr<Keyboard>> m_keyboards;
   std::vector<std::unique_ptr<View>> m_views;
+  std::vector<std::unique_ptr<LayerSurface>> m_layerSurfaces;
 };
 
 } // namespace umbriel

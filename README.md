@@ -3,7 +3,7 @@
 A Wayland compositor built on [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) 0.20 and
 [SceneFX](https://github.com/wlrfx/scenefx).
 
-Early stage. Clean modular C++23 compositor that launches, accepts input, and maps xdg-shell windows.
+Early stage. Clean modular C++23 compositor that launches, accepts input, maps xdg-shell windows, and hosts layer-shell surfaces.
 
 ## Status
 
@@ -12,6 +12,7 @@ What works today:
 - Nestable / DRM backend startup via wlroots + SceneFX renderer
 - Output hotplug, modeset, and SceneFX-backed scene commits
 - Seat, keyboard, pointer/cursor, xdg-shell toplevels and popups
+- `zwlr_layer_shell_v1` (anchors, exclusive zones, keyboard interactivity)
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
 - Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
@@ -42,8 +43,10 @@ Still open / planned:
 ```sh
 nix develop
 just debug          # debug build -> build-debug/umbriel
+just asan           # AddressSanitizer build -> build-asan/umbriel
 just release        # release build -> build-release/umbriel
-just run            # build debug and run (nested session)
+just run debug      # build debug and run (nested session)
+just run asan       # build ASan and run
 just lint
 just clean
 ```
@@ -72,10 +75,14 @@ From an existing Wayland or X11 session, Umbriel opens a nested window (mod = Al
 From a TTY it takes over the seat (mod = Super).
 
 ```sh
-just run
+TERMINAL=ghostty just run debug
+TERMINAL=ghostty just run asan
 # or:
 TERMINAL=ghostty ./build-debug/umbriel -s ghostty
 ```
+
+Debug/ASan builds log at debug to stderr and `$XDG_CACHE_HOME/umbriel/umbriel.log`
+(fallback `~/.cache/umbriel/umbriel.log`).
 
 Inside the session:
 
@@ -95,10 +102,12 @@ Stop with mod+Escape or `Ctrl+C` from the parent terminal.
 src/
   main.cpp
   wlr.h
-  server/     display, backend, scene, xdg wiring
+  server/     display, backend, scene, xdg/layer wiring
   output/     per-output lifecycle and frame commits
   input/      seat, keyboard, cursor
   view/       xdg toplevels and popups
+  layer/      layer-shell surfaces
+protocols/    vendored Wayland protocol XML
 nix/
   package.nix
   devshell.nix
@@ -108,10 +117,10 @@ nix/
 
 ## Protocol roadmap
 
-Target support (not implemented yet):
+Target support:
 
+- `zwlr_layer_shell_v1` (done)
 - `zxdg_output_manager_v1`
-- `zwlr_layer_shell_v1`
 - `ext_session_lock_manager_v1`
 - `zwp_pointer_constraints_v1`
 - `zwp_relative_pointer_manager_v1`

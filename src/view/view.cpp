@@ -7,8 +7,9 @@
 
 namespace umbriel {
 
-View::View(Server& server, wlr_xdg_toplevel* toplevel) : m_server(&server), m_toplevel(toplevel) {
-  m_sceneTree = wlr_scene_xdg_surface_create(&m_server->scene()->tree, m_toplevel->base);
+View::View(Server& server, wlr_xdg_toplevel* toplevel)
+    : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
+  m_sceneTree = wlr_scene_xdg_surface_create(m_server->xdgTree(), m_toplevel->base);
   m_sceneTree->node.data = this;
   m_toplevel->base->data = m_sceneTree;
 
@@ -99,16 +100,40 @@ void View::onRequestResize(wl_listener* listener, void* data) {
 
 void View::onRequestMaximize(wl_listener* listener, void* /*data*/) {
   View* self = wl_container_of(listener, self, m_requestMaximize);
-  self->handleRequestConfigure();
+  self->handleRequestMaximize();
 }
 
 void View::onRequestFullscreen(wl_listener* listener, void* /*data*/) {
   View* self = wl_container_of(listener, self, m_requestFullscreen);
-  self->handleRequestConfigure();
+  self->handleRequestFullscreen();
+}
+
+void View::placeInUsableArea() {
+  wlr_box usable =
+      m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+  if (usable.width <= 0 || usable.height <= 0) {
+    return;
+  }
+
+  wlr_box* geo = &m_toplevel->base->geometry;
+  int width = geo->width > 0 ? geo->width : usable.width;
+  int height = geo->height > 0 ? geo->height : usable.height;
+  if (width > usable.width) {
+    width = usable.width;
+  }
+  if (height > usable.height) {
+    height = usable.height;
+  }
+
+  if (width != geo->width || height != geo->height) {
+    wlr_xdg_toplevel_set_size(m_toplevel, width, height);
+  }
+  wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
 }
 
 void View::handleMap() {
   m_mapped = true;
+  placeInUsableArea();
   focus();
 }
 
@@ -154,10 +179,39 @@ void View::handleRequestResize(void* data) {
   m_server->cursor()->beginInteractive(this, CursorMode::Resize, event->edges);
 }
 
-void View::handleRequestConfigure() {
-  if (m_toplevel->base->initialized) {
-    wlr_xdg_surface_schedule_configure(m_toplevel->base);
+void View::handleRequestMaximize() {
+  if (!m_toplevel->base->initialized) {
+    return;
   }
+
+  const bool maximized = !m_toplevel->current.maximized;
+  if (maximized) {
+    wlr_box usable =
+        m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+    if (usable.width > 0 && usable.height > 0) {
+      wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
+      wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
+    }
+  }
+  wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+}
+
+void View::handleRequestFullscreen() {
+  if (!m_toplevel->base->initialized) {
+    return;
+  }
+
+  const bool fullscreen = !m_toplevel->current.fullscreen;
+  if (fullscreen) {
+    wlr_output* output = m_server->preferredOutput();
+    wlr_box fullArea{};
+    wlr_output_layout_get_box(m_server->outputLayout(), output, &fullArea);
+    if (fullArea.width > 0 && fullArea.height > 0) {
+      wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
+      wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
+    }
+  }
+  wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
 }
 
 } // namespace umbriel

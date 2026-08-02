@@ -23,8 +23,18 @@ xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput')
 pixman_dep = dependency('pixman-1')
 
+wayland_scanner = find_program('wayland-scanner')
+
+layer_shell_protocol_h = custom_target(
+  'wlr-layer-shell-unstable-v1-protocol.h',
+  input: 'protocols/wlr-layer-shell-unstable-v1.xml',
+  output: 'wlr-layer-shell-unstable-v1-protocol.h',
+  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+
 sources = files(
   'src/main.cpp',
+  'src/core/log.cpp',
   'src/server/server.cpp',
   'src/output/output.cpp',
   'src/input/seat.cpp',
@@ -32,11 +42,12 @@ sources = files(
   'src/input/cursor.cpp',
   'src/view/view.cpp',
   'src/view/popup.cpp',
+  'src/layer/surface.cpp',
 )
 
 umbriel = executable(
   'umbriel',
-  sources,
+  sources + [layer_shell_protocol_h],
   include_directories: include_directories('src'),
   dependencies: [
     scenefx_dep,

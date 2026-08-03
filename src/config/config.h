@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "config/config_diag.h"
+
 namespace umbriel {
   enum class KeybindAction {
     None,
@@ -137,5 +139,7 @@ namespace umbriel {
   void loadConfig(const char* explicitPath);
   [[nodiscard]] bool reloadConfig();
   [[nodiscard]] const std::vector<std::filesystem::path>& configWatchPaths();
+  [[nodiscard]] const std::vector<ConfigDiagnostic>& configDiagnostics();
+  [[nodiscard]] const std::filesystem::path& configRootPath();
 
 } // namespace umbriel

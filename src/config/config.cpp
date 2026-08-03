@@ -1,5 +1,6 @@
 #include "config/config.h"
 
+#include "config/config_diag.h"
 #include "config/config_merge.h"
 #include "core/log.h"
 
@@ -15,7 +16,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <initializer_list>
+#include <iterator>
 #include <string_view>
 #include <utility>
 
@@ -28,6 +31,37 @@ namespace umbriel {
     std::filesystem::path g_rootPath;
     bool g_explicitPath = false;
     std::vector<std::filesystem::path> g_watchPaths;
+    std::vector<ConfigDiagnostic> g_diagnostics;
+
+    void emitDiag(ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
+      ConfigDiagnostic diag;
+      diag.severity = severity;
+      diag.message = msg;
+      if (src != nullptr) {
+        diag.line = src->begin.line;
+        diag.column = src->begin.column;
+        if (src->path != nullptr) {
+          diag.file = *src->path;
+        }
+      }
+      const std::string loc = diag.location();
+      if (severity == ConfigDiagnostic::Severity::Error) {
+        kLog.error("{}{}", loc.empty() ? "" : loc + ": ", msg);
+      } else {
+        kLog.warn("{}{}", loc.empty() ? "" : loc + ": ", msg);
+      }
+      g_diagnostics.push_back(std::move(diag));
+    }
+
+    template <typename... A>
+    void warnAt(const toml::source_region& src, std::format_string<A...> fmt, A&&... args) {
+      emitDiag(ConfigDiagnostic::Severity::Warning, &src, std::format(fmt, std::forward<A>(args)...));
+    }
+
+    template <typename... A>
+    void warnNoSrc(std::format_string<A...> fmt, A&&... args) {
+      emitDiag(ConfigDiagnostic::Severity::Warning, nullptr, std::format(fmt, std::forward<A>(args)...));
+    }
 
     std::vector<Keybind> defaultKeybinds() {
       std::vector<Keybind> keybinds;
@@ -263,7 +297,7 @@ namespace umbriel {
       for (const auto& [key, value] : section) {
         (void)value;
         if (!knownKey(key.str(), known)) {
-          kLog.warn("config: unknown key {}.{}", sectionName, key.str());
+          warnAt(key.source(), "unknown key {}.{}", sectionName, key.str());
         }
       }
     }
@@ -278,13 +312,13 @@ namespace umbriel {
       }
       const auto value = node->value<std::int64_t>();
       if (!value) {
-        kLog.warn("config: ignoring {} (expected integer)", fullName);
+        warnAt(node->source(), "ignoring {} (expected integer)", fullName);
         return;
       }
       const std::int64_t used =
           std::clamp(*value, static_cast<std::int64_t>(minimum), static_cast<std::int64_t>(maximum));
       if (used != *value) {
-        kLog.warn("config: {} = {} out of range, clamped to {}", fullName, *value, used);
+        warnAt(node->source(), "{} = {} out of range, clamped to {}", fullName, *value, used);
       }
       target = static_cast<int>(used);
     }
@@ -299,12 +333,12 @@ namespace umbriel {
       }
       const auto value = node->value<double>();
       if (!value || std::isnan(*value)) {
-        kLog.warn("config: ignoring {} (expected number)", fullName);
+        warnAt(node->source(), "ignoring {} (expected number)", fullName);
         return;
       }
       const double used = std::clamp(*value, minimum, maximum);
       if (used != *value) {
-        kLog.warn("config: {} = {} out of range, clamped to {}", fullName, *value, used);
+        warnAt(node->source(), "{} = {} out of range, clamped to {}", fullName, *value, used);
       }
       target = used;
     }
@@ -316,7 +350,7 @@ namespace umbriel {
       }
       const auto value = node->value<std::string>();
       if (!value) {
-        kLog.warn("config: ignoring {} (expected string)", fullName);
+        warnAt(node->source(), "ignoring {} (expected string)", fullName);
         return;
       }
       target = *value;
@@ -330,7 +364,7 @@ namespace umbriel {
         return;
       }
       if (!node->is_boolean()) {
-        kLog.warn("config: ignoring {} (expected boolean)", fullName);
+        warnAt(node->source(), "ignoring {} (expected boolean)", fullName);
         return;
       }
       target = node->value<bool>().value();
@@ -375,12 +409,12 @@ namespace umbriel {
       }
       const auto value = node->value<std::string>();
       if (!value) {
-        kLog.warn("config: ignoring {} (expected color string)", fullName);
+        warnAt(node->source(), "ignoring {} (expected color string)", fullName);
         return;
       }
       std::array<float, 4> parsed;
       if (!parseColor(*value, parsed)) {
-        kLog.warn("config: ignoring {} (invalid color '{}')", fullName, *value);
+        warnAt(node->source(), "ignoring {} (invalid color '{}')", fullName, *value);
         return;
       }
       target = parsed;
@@ -393,7 +427,7 @@ namespace umbriel {
       }
       const auto* array = node->as_array();
       if (array == nullptr || array->empty()) {
-        kLog.warn("config: ignoring layout.width_presets (expected non-empty array of numbers)");
+        warnAt(node->source(), "ignoring layout.width_presets (expected non-empty array of numbers)");
         return;
       }
 
@@ -402,12 +436,12 @@ namespace umbriel {
       for (const auto& entry : *array) {
         const auto value = entry.value<double>();
         if (!value || std::isnan(*value)) {
-          kLog.warn("config: ignoring layout.width_presets (expected non-empty array of numbers)");
+          warnAt(node->source(), "ignoring layout.width_presets (expected non-empty array of numbers)");
           return;
         }
         const double used = std::clamp(*value, 0.1, 1.0);
         if (used != *value) {
-          kLog.warn("config: layout.width_presets = {} out of range, clamped to {}", *value, used);
+          warnAt(entry.source(), "layout.width_presets = {} out of range, clamped to {}", *value, used);
         }
         parsed.push_back(used);
       }
@@ -421,7 +455,7 @@ namespace umbriel {
       }
       const auto* section = node->as_table();
       if (section == nullptr) {
-        kLog.warn("config: ignoring appearance (expected table)");
+        warnAt(node->source(), "ignoring appearance (expected table)");
         return;
       }
       warnUnknownKeys(
@@ -450,7 +484,7 @@ namespace umbriel {
             if (enabledNode->is_boolean()) {
               loaded.appearance.blur.enabled = enabledNode->value<bool>().value();
             } else {
-              kLog.warn("config: ignoring appearance.blur.enabled (expected boolean)");
+              warnAt(enabledNode->source(), "ignoring appearance.blur.enabled (expected boolean)");
             }
           }
           readInteger(*blur, "passes", "appearance.blur.passes", 0, 8, loaded.appearance.blur.passes);
@@ -463,7 +497,7 @@ namespace umbriel {
               *blur, "ignore_alpha", "appearance.blur.ignore_alpha", 0.0, 1.0, loaded.appearance.blur.ignoreAlpha
           );
         } else {
-          kLog.warn("config: ignoring appearance.blur (expected table)");
+          warnAt(blurNode->source(), "ignoring appearance.blur (expected table)");
         }
       }
     }
@@ -475,7 +509,7 @@ namespace umbriel {
       }
       const auto* section = node->as_table();
       if (section == nullptr) {
-        kLog.warn("config: ignoring layout (expected table)");
+        warnAt(node->source(), "ignoring layout (expected table)");
         return;
       }
       warnUnknownKeys(*section, "layout", {"gap", "default_width_fraction", "width_presets", "scroll_wheel_step"});
@@ -495,7 +529,7 @@ namespace umbriel {
       }
       const auto* section = node->as_table();
       if (section == nullptr) {
-        kLog.warn("config: ignoring general (expected table)");
+        warnAt(node->source(), "ignoring general (expected table)");
         return;
       }
       warnUnknownKeys(
@@ -504,7 +538,7 @@ namespace umbriel {
       if (const toml::node* terminal = section->get("terminal")) {
         const auto value = terminal->value<std::string>();
         if (!value) {
-          kLog.warn("config: ignoring general.terminal (expected string)");
+          warnAt(terminal->source(), "ignoring general.terminal (expected string)");
         } else {
           loaded.general.terminal = *value;
         }
@@ -513,21 +547,21 @@ namespace umbriel {
         if (const auto value = preferNoCsd->value<bool>()) {
           loaded.general.preferNoCsd = *value;
         } else {
-          kLog.warn("config: ignoring general.prefer_no_csd (expected boolean)");
+          warnAt(preferNoCsd->source(), "ignoring general.prefer_no_csd (expected boolean)");
         }
       }
       if (const toml::node* backAndForth = section->get("workspace_back_and_forth")) {
         if (const auto value = backAndForth->value<bool>()) {
           loaded.general.workspaceBackAndForth = *value;
         } else {
-          kLog.warn("config: ignoring general.workspace_back_and_forth (expected boolean)");
+          warnAt(backAndForth->source(), "ignoring general.workspace_back_and_forth (expected boolean)");
         }
       }
       if (const toml::node* xwayland = section->get("xwayland")) {
         if (const auto value = xwayland->value<bool>()) {
           loaded.general.xwayland = *value;
         } else {
-          kLog.warn("config: ignoring general.xwayland (expected boolean)");
+          warnAt(xwayland->source(), "ignoring general.xwayland (expected boolean)");
         }
       }
 
@@ -537,7 +571,7 @@ namespace umbriel {
       }
       const auto* array = autostart->as_array();
       if (array == nullptr) {
-        kLog.warn("config: ignoring general.autostart (expected array of strings)");
+        warnAt(autostart->source(), "ignoring general.autostart (expected array of strings)");
         return;
       }
       std::vector<std::string> parsed;
@@ -545,11 +579,11 @@ namespace umbriel {
       for (const auto& entry : *array) {
         const auto value = entry.value<std::string>();
         if (!value) {
-          kLog.warn("config: ignoring general.autostart (expected array of strings)");
+          warnAt(entry.source(), "ignoring general.autostart (expected array of strings)");
           return;
         }
         if (value->empty()) {
-          kLog.warn("config: ignoring empty general.autostart entry");
+          warnAt(entry.source(), "ignoring empty general.autostart entry");
           continue;
         }
         parsed.push_back(*value);
@@ -557,13 +591,13 @@ namespace umbriel {
       loaded.general.autostart = std::move(parsed);
     }
 
-    void validateKeyboardInput(Config::Input::Keyboard& keyboard) {
+    void validateKeyboardInput(Config::Input::Keyboard& keyboard, const toml::source_region& source) {
       if (keyboard.layout.empty() && keyboard.variant.empty()) {
         return;
       }
       xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
       if (context == nullptr) {
-        kLog.warn("config: unable to validate input.keyboard XKB configuration");
+        warnAt(source, "unable to validate input.keyboard XKB configuration");
         keyboard.layout.clear();
         keyboard.variant.clear();
         return;
@@ -577,8 +611,8 @@ namespace umbriel {
       };
       xkb_keymap* keymap = xkb_keymap_new_from_names(context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
       if (keymap == nullptr) {
-        kLog.warn(
-            "config: ignoring input.keyboard layout='{}' variant='{}' (invalid XKB configuration)", keyboard.layout,
+        warnAt(
+            source, "ignoring input.keyboard layout='{}' variant='{}' (invalid XKB configuration)", keyboard.layout,
             keyboard.variant
         );
         keyboard.layout.clear();
@@ -596,7 +630,7 @@ namespace umbriel {
       }
       const auto* input = node->as_table();
       if (input == nullptr) {
-        kLog.warn("config: ignoring input (expected table)");
+        warnAt(node->source(), "ignoring input (expected table)");
         return;
       }
       warnUnknownKeys(*input, "input", {"keyboard", "touchpad", "mouse", "cursor", "focus"});
@@ -612,9 +646,9 @@ namespace umbriel {
           readInteger(
               *keyboard, "repeat_delay", "input.keyboard.repeat_delay", 0, 10000, loaded.input.keyboard.repeatDelay
           );
-          validateKeyboardInput(loaded.input.keyboard);
+          validateKeyboardInput(loaded.input.keyboard, keyboardNode->source());
         } else {
-          kLog.warn("config: ignoring input.keyboard (expected table)");
+          warnAt(keyboardNode->source(), "ignoring input.keyboard (expected table)");
         }
       }
 
@@ -626,7 +660,7 @@ namespace umbriel {
               *touchpad, "natural_scroll", "input.touchpad.natural_scroll", loaded.input.touchpad.naturalScroll
           );
         } else {
-          kLog.warn("config: ignoring input.touchpad (expected table)");
+          warnAt(touchpadNode->source(), "ignoring input.touchpad (expected table)");
         }
       }
 
@@ -635,7 +669,7 @@ namespace umbriel {
           warnUnknownKeys(*mouse, "input.mouse", {"natural_scroll"});
           readBoolean(*mouse, "natural_scroll", "input.mouse.natural_scroll", loaded.input.mouse.naturalScroll);
         } else {
-          kLog.warn("config: ignoring input.mouse (expected table)");
+          warnAt(mouseNode->source(), "ignoring input.mouse (expected table)");
         }
       }
 
@@ -645,7 +679,7 @@ namespace umbriel {
           readString(*cursor, "theme", "input.cursor.theme", loaded.input.cursor.theme);
           readInteger(*cursor, "size", "input.cursor.size", 1, 512, loaded.input.cursor.size);
         } else {
-          kLog.warn("config: ignoring input.cursor (expected table)");
+          warnAt(cursorNode->source(), "ignoring input.cursor (expected table)");
         }
       }
 
@@ -656,18 +690,18 @@ namespace umbriel {
             if (const auto value = followsMouse->value<bool>()) {
               loaded.input.focus.followsMouse = *value;
             } else {
-              kLog.warn("config: ignoring input.focus.follows_mouse (expected boolean)");
+              warnAt(followsMouse->source(), "ignoring input.focus.follows_mouse (expected boolean)");
             }
           }
           if (const toml::node* maxScroll = focus->get("follows_mouse_max_scroll")) {
             if (const auto value = maxScroll->value<double>(); value && !std::isnan(*value)) {
               loaded.input.focus.followsMouseMaxScroll = std::clamp(*value, 0.0, 1.0);
             } else {
-              kLog.warn("config: ignoring input.focus.follows_mouse_max_scroll (expected number 0.0-1.0)");
+              warnAt(maxScroll->source(), "ignoring input.focus.follows_mouse_max_scroll (expected number 0.0-1.0)");
             }
           }
         } else {
-          kLog.warn("config: ignoring input.focus (expected table)");
+          warnAt(focusNode->source(), "ignoring input.focus (expected table)");
         }
       }
     }
@@ -679,7 +713,7 @@ namespace umbriel {
       }
       const auto* outputs = node->as_table();
       if (outputs == nullptr) {
-        kLog.warn("config: ignoring output (expected table)");
+        warnAt(node->source(), "ignoring output (expected table)");
         return;
       }
 
@@ -687,13 +721,13 @@ namespace umbriel {
         const std::string name(key.str());
         const auto* section = entry.as_table();
         if (section == nullptr) {
-          kLog.warn("config: ignoring output.{} (expected table)", name);
+          warnAt(entry.source(), "ignoring output.{} (expected table)", name);
           continue;
         }
         warnUnknownKeys(*section, std::string("output.") + name, {"mode", "position", "scale", "transform"});
 
         if (std::ranges::any_of(loaded.outputs, [&](const OutputRule& rule) { return rule.name == name; })) {
-          kLog.warn("config: duplicate output section '{}'", name);
+          warnAt(key.source(), "duplicate output section '{}'", name);
           std::erase_if(loaded.outputs, [&](const OutputRule& rule) { return rule.name == name; });
         }
         OutputRule rule;
@@ -703,7 +737,7 @@ namespace umbriel {
           const auto value = modeNode->value<std::string>();
           OutputMode mode;
           if (!value || !parseOutputMode(*value, mode)) {
-            kLog.warn("config: ignoring output.{}.mode (expected \"WIDTHxHEIGHT\" or \"WIDTHxHEIGHT@HZ\")", name);
+            warnAt(modeNode->source(), "ignoring output.{}.mode (expected \"WIDTHxHEIGHT\" or \"WIDTHxHEIGHT@HZ\")", name);
           } else {
             rule.mode = mode;
           }
@@ -726,7 +760,7 @@ namespace umbriel {
             }
           }
           if (!valid) {
-            kLog.warn("config: ignoring output.{}.position (expected [x, y] integers)", name);
+            warnAt(positionNode->source(), "ignoring output.{}.position (expected [x, y] integers)", name);
           } else {
             rule.position = parsed;
           }
@@ -735,7 +769,7 @@ namespace umbriel {
         if (const toml::node* scaleNode = section->get("scale")) {
           const auto value = scaleNode->value<double>();
           if (!value || std::isnan(*value)) {
-            kLog.warn("config: ignoring output.{}.scale (expected number)", name);
+            warnAt(scaleNode->source(), "ignoring output.{}.scale (expected number)", name);
           } else {
             double scale = *value;
             readDouble(*section, "scale", std::string("output.") + name + ".scale", 0.25, 4.0, scale);
@@ -753,8 +787,9 @@ namespace umbriel {
               ? std::ranges::find_if(transforms, [&](const auto& candidate) { return candidate.first == *value; })
               : std::end(transforms);
           if (match == std::end(transforms)) {
-            kLog.warn(
-                "config: ignoring output.{}.transform (expected "
+            warnAt(
+                transformNode->source(),
+                "ignoring output.{}.transform (expected "
                 "normal|90|180|270|flipped|flipped-90|flipped-180|flipped-270)",
                 name
             );
@@ -775,7 +810,7 @@ namespace umbriel {
       }
       const auto* section = node->as_table();
       if (section == nullptr) {
-        kLog.warn("config: ignoring keybinds (expected table)");
+        warnAt(node->source(), "ignoring keybinds (expected table)");
         return;
       }
 
@@ -787,26 +822,26 @@ namespace umbriel {
         const std::string chord(key.str());
         const auto value = entry.value<std::string>();
         if (!value) {
-          kLog.warn("config: ignoring keybind '{}' (expected string)", chord);
+          warnAt(entry.source(), "ignoring keybind '{}' (expected string)", chord);
           continue;
         }
 
         Keybind binding;
         if (!parseChord(chord, binding)) {
           if (binding.keysym != XKB_KEY_NoSymbol && binding.modifiers == 0 && !binding.useMod) {
-            kLog.warn("config: ignoring keybind '{}' (needs at least one modifier)", chord);
+            warnAt(key.source(), "ignoring keybind '{}' (needs at least one modifier)", chord);
           } else {
-            kLog.warn("config: ignoring keybind '{}' (bad chord)", chord);
+            warnAt(key.source(), "ignoring keybind '{}' (bad chord)", chord);
           }
           continue;
         }
         if (!parseAction(*value, binding)) {
-          kLog.warn("config: ignoring keybind '{}' (unknown action '{}')", chord, *value);
+          warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, *value);
           continue;
         }
 
         if (std::ranges::any_of(configured, [&](const Keybind& existing) { return sameChord(existing, binding); })) {
-          kLog.warn("config: duplicate keybind {}", chord);
+          warnAt(key.source(), "duplicate keybind {}", chord);
         }
         std::erase_if(configured, [&](const Keybind& existing) { return sameChord(existing, binding); });
         configured.push_back(binding);
@@ -821,11 +856,12 @@ namespace umbriel {
       for (const auto& [key, value] : table) {
         (void)value;
         if (!knownKey(key.str(), {"appearance", "layout", "general", "input", "keybinds", "output"})) {
-          kLog.warn("config: unknown key {}", key.str());
+          warnAt(key.source(), "unknown key {}", key.str());
         }
       }
     }
     bool parseInto(Config& out) {
+      g_diagnostics.clear();
       g_watchPaths.clear();
       g_watchPaths.push_back(g_rootPath);
 
@@ -836,6 +872,10 @@ namespace umbriel {
 
       try {
         auto result = configmerge::mergeWithIncludes(g_rootPath);
+        g_diagnostics.insert(
+            g_diagnostics.end(), std::make_move_iterator(result.diagnostics.begin()),
+            std::make_move_iterator(result.diagnostics.end())
+        );
         for (const auto& path : result.loadedFiles) {
           if (std::ranges::find(g_watchPaths, path) == g_watchPaths.end()) {
             g_watchPaths.push_back(path);
@@ -857,9 +897,9 @@ namespace umbriel {
         out = std::move(loaded);
         return true;
       } catch (const std::exception& exception) {
-        kLog.error("config load error: {}", exception.what());
+        emitDiag(ConfigDiagnostic::Severity::Error, nullptr, std::format("config load error: {}", exception.what()));
       } catch (...) {
-        kLog.error("config load error: unknown error");
+        emitDiag(ConfigDiagnostic::Severity::Error, nullptr, "config load error: unknown error");
       }
       return false;
     }
@@ -867,6 +907,10 @@ namespace umbriel {
   } // namespace
 
   const Config& config() { return g_config; }
+
+  const std::vector<ConfigDiagnostic>& configDiagnostics() { return g_diagnostics; }
+
+  const std::filesystem::path& configRootPath() { return g_rootPath; }
 
   void loadConfig(const char* explicitPath) {
     g_rootPath = explicitPath == nullptr ? defaultConfigPath() : std::filesystem::path(explicitPath);
@@ -878,7 +922,10 @@ namespace umbriel {
       std::error_code error;
       if (!std::filesystem::is_regular_file(g_rootPath, error) || error) {
         if (g_explicitPath) {
-          kLog.error("config file not found: {}", g_rootPath.string());
+          emitDiag(
+              ConfigDiagnostic::Severity::Error, nullptr,
+              std::format("config file not found: {}", g_rootPath.string())
+          );
         } else {
           kLog.info("no config file found: {}, using defaults", g_rootPath.string());
         }

@@ -59,6 +59,9 @@ xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput')
 pixman_dep = dependency('pixman-1')
 tomlplusplus_dep = dependency('tomlplusplus')
+cairo_dep = dependency('cairo')
+pangocairo_dep = dependency('pangocairo')
+libdrm_dep = dependency('libdrm')
 
 # wlroots cursor-shape header pulls enum defs from wayland-protocols.
 wayland_protocols_enums = declare_dependency(
@@ -99,6 +102,8 @@ sources = files(
   'src/view/popup.cpp',
   'src/layer/surface.cpp',
   'src/scene/surface_blur.cpp',
+  'src/scene/config_banner.cpp',
+  'src/scene/text_buffer.cpp',
   'src/lock/session_lock.cpp',
   'src/workspace/workspace.cpp',
 )
@@ -116,6 +121,9 @@ umbriel = executable(
     libinput_dep,
     pixman_dep,
     tomlplusplus_dep,
+    cairo_dep,
+    pangocairo_dep,
+    libdrm_dep,
   ],
   install: true,
 )

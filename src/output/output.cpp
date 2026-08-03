@@ -126,6 +126,7 @@ namespace umbriel {
     applyConfiguredState();
     addToLayout();
     arrangeLayers();
+    m_server->relayoutBanner();
     if (m_server->sessionLocked()) {
       m_server->updateLockBlank();
     }
@@ -258,6 +259,7 @@ namespace umbriel {
     }
     wlr_output_state_finish(&state);
     arrangeLayers();
+    m_server->relayoutBanner();
     if (m_server->sessionLocked()) {
       m_server->updateLockBlank();
     }
@@ -364,6 +366,7 @@ namespace umbriel {
     }
     if ((event->state->committed & (WLR_OUTPUT_STATE_MODE | WLR_OUTPUT_STATE_ENABLED)) != 0) {
       arrangeLayers();
+      m_server->relayoutBanner();
       m_gammaDirty = true;
     }
     wlr_output_schedule_frame(m_output);

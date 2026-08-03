@@ -1,4 +1,5 @@
 #include "config/config_merge.h"
+#include "config/config_diag.h"
 
 #include "core/log.h"
 
@@ -6,15 +7,39 @@
 #include <cctype>
 #include <cstdlib>
 #include <format>
+#include <memory>
 #include <set>
 #include <string_view>
 #include <system_error>
+#include <utility>
 
 namespace umbriel::configmerge {
 
   namespace {
 
     constexpr Logger kLog("config");
+
+    void emit(
+        MergeResult& result, ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg
+    ) {
+      ConfigDiagnostic diag;
+      diag.severity = severity;
+      diag.message = msg;
+      if (src != nullptr) {
+        diag.line = src->begin.line;
+        diag.column = src->begin.column;
+        if (src->path != nullptr) {
+          diag.file = *src->path;
+        }
+      }
+      const std::string loc = diag.location();
+      if (severity == ConfigDiagnostic::Severity::Error) {
+        kLog.error("{}{}", loc.empty() ? "" : loc + ": ", msg);
+      } else {
+        kLog.warn("{}{}", loc.empty() ? "" : loc + ": ", msg);
+      }
+      result.diagnostics.push_back(std::move(diag));
+    }
 
     std::filesystem::path canonicalKey(const std::filesystem::path& path) {
       std::error_code error;
@@ -91,10 +116,14 @@ namespace umbriel::configmerge {
     }
 
     struct IncludeDirective {
-      std::vector<std::string> files;
+      struct Entry {
+        std::string path;
+        toml::source_region source;
+      };
+      std::vector<Entry> entries;
     };
 
-    IncludeDirective readInclude(const toml::table& table) {
+    IncludeDirective readInclude(const toml::table& table, MergeResult& result) {
       IncludeDirective directive;
       const toml::node* node = table.get("include");
       if (node == nullptr) {
@@ -102,7 +131,7 @@ namespace umbriel::configmerge {
       }
       const auto* include = node->as_table();
       if (include == nullptr) {
-        kLog.warn("config: ignoring include (expected table)");
+        emit(result, ConfigDiagnostic::Severity::Warning, &node->source(), "ignoring include (expected table)");
         return directive;
       }
       const toml::node* filesNode = include->get("files");
@@ -111,16 +140,25 @@ namespace umbriel::configmerge {
       }
       const auto* files = filesNode->as_array();
       if (files == nullptr) {
-        kLog.warn("config: ignoring include.files (expected array of strings)");
+        emit(
+            result, ConfigDiagnostic::Severity::Warning, &filesNode->source(),
+            "ignoring include.files (expected array of strings)"
+        );
         return directive;
       }
       for (const auto& entry : *files) {
         if (!entry.is_string()) {
-          kLog.warn("config: ignoring include.files (expected array of strings)");
-          directive.files.clear();
+          emit(
+              result, ConfigDiagnostic::Severity::Warning, &entry.source(),
+              "ignoring include.files (expected array of strings)"
+          );
+          directive.entries.clear();
           return directive;
         }
-        directive.files.push_back(*entry.value<std::string>());
+        directive.entries.push_back({
+            .path = *entry.value<std::string>(),
+            .source = entry.source(),
+        });
       }
       return directive;
     }
@@ -129,36 +167,44 @@ namespace umbriel::configmerge {
     loadAndExpand(const std::filesystem::path& path, std::set<std::filesystem::path>& visited, MergeResult& result);
 
     toml::table expandFile(
-        const std::filesystem::path& path, const toml::table& parsed, std::set<std::filesystem::path>& visited,
+        const std::filesystem::path& path, toml::table parsed, std::set<std::filesystem::path>& visited,
         MergeResult& result
     ) {
       const auto key = canonicalKey(path);
       if (visited.contains(key)) {
-        kLog.warn("config include cycle or duplicate skipped: {}", key.string());
+        emit(
+            result, ConfigDiagnostic::Severity::Warning, nullptr,
+            std::format("include cycle or duplicate skipped: {}", key.string())
+        );
         return {};
       }
       visited.insert(key);
       result.loadedFiles.push_back(key);
 
+      IncludeDirective directive = readInclude(parsed, result);
+      parsed.erase("include");
+
+      if (directive.entries.empty()) {
+        // No includes — return parsed directly, preserving toml++ source regions
+        // (copies lose them; only moves keep line/column/path).
+        return parsed;
+      }
+
       toml::table base;
-      const IncludeDirective directive = readInclude(parsed);
-      for (const auto& entry : directive.files) {
-        const auto target = expandPath(entry, path.parent_path());
+      for (const auto& entry : directive.entries) {
+        const auto target = expandPath(entry.path, path.parent_path());
         std::error_code error;
         if (std::filesystem::is_regular_file(target, error) && !error) {
           deepMerge(base, loadAndExpand(target, visited, result));
           continue;
         }
-        if (result.firstError.empty()) {
-          result.firstError = std::format("include not found: {} (from {})", entry, path.string());
-        }
-        kLog.warn("config include not found: {} (from {})", target.string(), path.string());
+        emit(
+            result, ConfigDiagnostic::Severity::Warning, &entry.source,
+            std::format("include not found: {} (from {})", target.string(), path.string())
+        );
         result.loadedFiles.push_back(canonicalKey(target));
       }
-
-      toml::table body = parsed;
-      body.erase("include");
-      deepMerge(base, body);
+      deepMerge(base, std::move(parsed));
       return base;
     }
 
@@ -173,17 +219,14 @@ namespace umbriel::configmerge {
         if (std::ranges::find(result.loadedFiles, key) == result.loadedFiles.end()) {
           result.loadedFiles.push_back(key);
         }
-        const auto& source = error.source();
-        const std::string message = std::format(
-            "{} line {}, column {}: {}", path.string(), source.begin.line, source.begin.column, error.description()
-        );
-        if (result.firstError.empty()) {
-          result.firstError = message;
+        auto source = error.source();
+        if (source.path == nullptr) {
+          source.path = std::make_shared<const std::string>(path.string());
         }
-        kLog.error("config parse error: {}", message);
+        emit(result, ConfigDiagnostic::Severity::Error, &source, std::string(error.description()));
         return {};
       }
-      return expandFile(path, parsed, visited, result);
+      return expandFile(path, std::move(parsed), visited, result);
     }
 
   } // namespace
@@ -199,6 +242,24 @@ namespace umbriel::configmerge {
         }
       }
       base.insert_or_assign(key, value);
+    }
+  }
+
+  void deepMerge(toml::table& base, toml::table&& overlay) {
+    for (auto&& [key, value] : overlay) {
+      if (auto* overlayTable = value.as_table()) {
+        if (auto* baseNode = base.get(key)) {
+          if (auto* baseTable = baseNode->as_table()) {
+            deepMerge(*baseTable, std::move(*overlayTable));
+            continue;
+          }
+        }
+      }
+      // Move via visit to preserve toml++ source regions (copies reset them).
+      value.visit([&](auto&& val) {
+        using T = std::decay_t<decltype(val)>;
+        base.insert_or_assign(std::string(key.str()), T(std::move(val)));
+      });
     }
   }
 

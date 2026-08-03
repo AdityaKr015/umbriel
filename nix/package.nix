@@ -11,6 +11,8 @@
   libxkbcommon,
   libinput,
   pixman,
+  cairo,
+  pango,
   libGL,
   libdrm,
   scenefx,
@@ -55,6 +57,8 @@ stdenv.mkDerivation {
     tomlplusplus
     libGL
     libdrm
+    cairo
+    pango
   ];
 
   mesonBuildType = "release";

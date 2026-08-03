@@ -98,7 +98,9 @@ namespace umbriel {
     [[nodiscard]] bool nested() const { return m_nested; }
     [[nodiscard]] uint32_t modKey() const;
 
-    void focusView(View* view);
+    // bringIntoView scrolls the focused tiled column on-screen.
+    // animate controls whether that scroll is animated (false for pointer-driven focus).
+    void focusView(View* view, bool bringIntoView = true, bool animate = true);
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
     bool handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
     bool handleVtSwitch(uint32_t keysym, uint32_t modifiers);

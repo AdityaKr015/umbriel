@@ -182,8 +182,10 @@ namespace umbriel {
       }
     }
 
+    const double oldX = m_cursor->x;
+    const double oldY = m_cursor->y;
     wlr_cursor_move(m_cursor, &event->pointer->base, dx, dy);
-    processMotion(event->time_msec);
+    processMotion(event->time_msec, oldX, oldY);
   }
 
   void Cursor::handleMotionAbsolute(void* data) {
@@ -197,6 +199,8 @@ namespace umbriel {
     double ly = 0;
     wlr_cursor_absolute_to_layout_coords(m_cursor, &event->pointer->base, event->x, event->y, &lx, &ly);
 
+    const double oldX = m_cursor->x;
+    const double oldY = m_cursor->y;
     if (m_activeConstraint != nullptr && m_activeConstraint->type == WLR_POINTER_CONSTRAINT_V1_CONFINED) {
       double dx = lx - m_cursor->x;
       double dy = ly - m_cursor->y;
@@ -207,7 +211,7 @@ namespace umbriel {
     } else {
       wlr_cursor_warp_absolute(m_cursor, &event->pointer->base, event->x, event->y);
     }
-    processMotion(event->time_msec);
+    processMotion(event->time_msec, oldX, oldY);
   }
 
   void Cursor::handleButton(void* data) {
@@ -295,7 +299,7 @@ namespace umbriel {
 
   void Cursor::handleFrame() { wlr_seat_pointer_notify_frame(m_server->seat()->wlr()); }
 
-  void Cursor::processMotion(uint32_t timeMsec) {
+  void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY) {
     if (m_mode == CursorMode::Move || m_mode == CursorMode::MoveTile) {
       if (m_server->sessionLocked()) {
         resetMode();
@@ -327,7 +331,49 @@ namespace umbriel {
     double sx = 0;
     double sy = 0;
     wlr_surface* surface = nullptr;
-    m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+    LayerSurface* layer = nullptr;
+    View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+
+    if (config().general.focusFollowsMouse
+        && !m_server->sessionLocked()
+        && layer == nullptr
+        && view != nullptr
+        && view->mapped()) {
+      // niri: only activate when the pointer enters a different window (under old pos
+      // != under new pos). Do not warp the pointer with scroll — that re-arms enters
+      // during a swipe and cascades across columns (e.g. 6 → 5 → … → 1).
+      wlr_surface* oldSurface = nullptr;
+      double oldSx = 0;
+      double oldSy = 0;
+      View* oldView = m_server->viewAt(oldX, oldY, &oldSurface, &oldSx, &oldSy);
+      const bool entered = view != oldView;
+      const bool alreadyFocused = view->workspace() != nullptr && view->workspace()->focusedView() == view;
+      if (entered && !alreadyFocused) {
+        bool allow = true;
+        Workspace* workspace = view->workspace();
+        if (workspace != nullptr
+            && view->tiled()
+            && workspace->group() != nullptr
+            && workspace->group()->output() != nullptr) {
+          const int column = workspace->layout().columnOf(view);
+          const int viewportWidth =
+              std::max(1, workspace->group()->output()->usableArea().width - 2 * config().layout.gap);
+          const double amount = workspace->layout().scrollAmountToEnsureVisible(column, viewportWidth);
+          if (const auto& maxScroll = config().general.focusFollowsMouseMaxScroll) {
+            if (amount > *maxScroll) {
+              allow = false;
+            }
+          }
+        }
+        if (allow) {
+          m_server->focusView(view, true);
+          // Scroll may have moved another surface under the cursor; refresh hit-test for
+          // pointer notify only. Keyboard focus stays on the entered view until a real enter.
+          view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+        }
+      }
+    }
+
     wlr_seat* seat = m_server->seat()->wlr();
     if (surface != nullptr) {
       wlr_seat_pointer_notify_enter(seat, surface, sx, sy);

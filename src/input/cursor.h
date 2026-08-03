@@ -58,7 +58,7 @@ namespace umbriel {
     void handleFrame();
     void handleConstraintDestroy();
 
-    void processMotion(uint32_t timeMsec);
+    void processMotion(uint32_t timeMsec, double oldX, double oldY);
     void processMove();
     void clipGrabbedViewToOutput();
     void updateDropTarget();

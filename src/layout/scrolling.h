@@ -39,6 +39,8 @@ namespace umbriel {
     void setInsertGap(int gapIndex);
     void clearInsertGap();
     void ensureVisible(int columnIndex, int viewportWidth);
+    // Fraction of viewport width that ensureVisible would scroll.
+    [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportWidth) const;
     void arrange(const wlr_box& usable);
     [[nodiscard]] wlr_box targetBox(const View* view) const;
 
@@ -57,6 +59,7 @@ namespace umbriel {
     };
 
     [[nodiscard]] int totalWidth(int viewportWidth) const;
+    [[nodiscard]] double targetScrollForEnsureVisible(int columnIndex, int viewportWidth) const;
 
     std::vector<Column> m_columns;
     std::vector<Target> m_targets;

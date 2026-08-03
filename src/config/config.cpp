@@ -490,7 +490,10 @@ namespace umbriel {
         kLog.warn("config: ignoring general (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "general", {"terminal", "autostart", "prefer_no_csd"});
+      warnUnknownKeys(
+          *section, "general",
+          {"terminal", "autostart", "prefer_no_csd", "focus_follows_mouse", "focus_follows_mouse_max_scroll"}
+      );
       if (const toml::node* terminal = section->get("terminal")) {
         const auto value = terminal->value<std::string>();
         if (!value) {
@@ -504,6 +507,20 @@ namespace umbriel {
           loaded.general.preferNoCsd = *value;
         } else {
           kLog.warn("config: ignoring general.prefer_no_csd (expected boolean)");
+        }
+      }
+      if (const toml::node* focusFollowsMouse = section->get("focus_follows_mouse")) {
+        if (const auto value = focusFollowsMouse->value<bool>()) {
+          loaded.general.focusFollowsMouse = *value;
+        } else {
+          kLog.warn("config: ignoring general.focus_follows_mouse (expected boolean)");
+        }
+      }
+      if (const toml::node* maxScroll = section->get("focus_follows_mouse_max_scroll")) {
+        if (const auto value = maxScroll->value<double>(); value && !std::isnan(*value)) {
+          loaded.general.focusFollowsMouseMaxScroll = std::clamp(*value, 0.0, 1.0);
+        } else {
+          kLog.warn("config: ignoring general.focus_follows_mouse_max_scroll (expected number 0.0-1.0)");
         }
       }
 

@@ -159,14 +159,54 @@ namespace umbriel {
 
   void ScrollingLayout::setScroll(double scroll) { m_scroll = std::max(0.0, scroll); }
 
-  void ScrollingLayout::ensureVisible(int columnIndex, int viewportWidth) {
+  double ScrollingLayout::targetScrollForEnsureVisible(int columnIndex, int viewportWidth) const {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size()) || viewportWidth <= 0) {
-      return;
+      return m_scroll;
     }
     const int x = columnX(columnIndex, viewportWidth);
     const int width = columnWidth(columnIndex, viewportWidth);
-    m_scroll = std::max(std::min(m_scroll, static_cast<double>(x)), static_cast<double>(x + width - viewportWidth));
-    m_scroll = std::clamp(m_scroll, 0.0, static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth)));
+    // Leave a strip of each neighbor on-screen so the pointer can reach it.
+    const int peek = std::max(config().layout.gap * 2, 32);
+    const bool hasPrev = columnIndex > 0;
+    const bool hasNext = columnIndex + 1 < static_cast<int>(m_columns.size());
+
+    double minScroll = static_cast<double>(x + width - viewportWidth);
+    double maxScroll = static_cast<double>(x);
+    if (hasNext) {
+      minScroll += static_cast<double>(peek);
+    }
+    if (hasPrev) {
+      maxScroll -= static_cast<double>(peek);
+    }
+
+    double scroll = m_scroll;
+    if (minScroll > maxScroll) {
+      if (hasPrev && !hasNext) {
+        scroll = maxScroll;
+      } else if (hasNext && !hasPrev) {
+        scroll = minScroll;
+      } else if (hasPrev && hasNext) {
+        scroll = m_scroll <= static_cast<double>(x) ? maxScroll : minScroll;
+      } else {
+        scroll = std::clamp(m_scroll, static_cast<double>(x + width - viewportWidth), static_cast<double>(x));
+      }
+    } else {
+      scroll = std::clamp(m_scroll, minScroll, maxScroll);
+    }
+    const double max = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
+    return std::clamp(scroll, 0.0, max);
+  }
+
+  double ScrollingLayout::scrollAmountToEnsureVisible(int columnIndex, int viewportWidth) const {
+    if (viewportWidth <= 0) {
+      return 0.0;
+    }
+    return std::abs(targetScrollForEnsureVisible(columnIndex, viewportWidth) - m_scroll)
+        / static_cast<double>(viewportWidth);
+  }
+
+  void ScrollingLayout::ensureVisible(int columnIndex, int viewportWidth) {
+    m_scroll = targetScrollForEnsureVisible(columnIndex, viewportWidth);
   }
 
   void ScrollingLayout::arrange(const wlr_box& usable) {

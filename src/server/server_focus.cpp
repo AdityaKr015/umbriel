@@ -14,7 +14,7 @@
 
 namespace umbriel {
 
-  void Server::focusView(View* view) {
+  void Server::focusView(View* view, bool bringIntoView, bool animate) {
     if (view == nullptr || m_sessionLocked) {
       return;
     }
@@ -49,9 +49,9 @@ namespace umbriel {
     view->focus();
     if (Workspace* workspace = view->workspace()) {
       workspace->setFocusedView(view);
-      if (view->tiled()) {
+      if (bringIntoView && view->tiled()) {
         workspace->ensureFocusedVisible();
-        workspace->arrange();
+        workspace->arrange(animate);
       }
     }
   }

@@ -221,6 +221,15 @@ namespace umbriel {
     kLog.info("running on WAYLAND_DISPLAY={}", m_socketName);
     wlr_log(WLR_INFO, "running on WAYLAND_DISPLAY=%s", m_socketName.c_str());
 
+    // Export cursor settings so X11 clients (via xwayland-satellite) and
+    // toolkit clients pick up the compositor's configured cursor.
+    const auto& cursorCfg = config().input.cursor;
+    const std::string cursorSize = std::to_string(cursorCfg.size);
+    setenv("XCURSOR_SIZE", cursorSize.c_str(), 1);
+    if (!cursorCfg.theme.empty()) {
+      setenv("XCURSOR_THEME", cursorCfg.theme.c_str(), 1);
+    }
+
     // Start xwayland-satellite before autostart so X11 apps in autostart can
     // connect (there is still a small race against satellite's socket bind).
     if (config().general.xwayland) {

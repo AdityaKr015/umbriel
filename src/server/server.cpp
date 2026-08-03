@@ -97,6 +97,17 @@ namespace umbriel {
     m_newXdgPopup.notify = onNewXdgPopup;
     wl_signal_add(&m_xdgShell->events.new_popup, &m_newXdgPopup);
 
+    m_xdgDecorationManager = wlr_xdg_decoration_manager_v1_create(m_display);
+    m_newXdgDecoration.notify = onNewXdgDecoration;
+    wl_signal_add(&m_xdgDecorationManager->events.new_toplevel_decoration, &m_newXdgDecoration);
+
+    m_serverDecorationManager = wlr_server_decoration_manager_create(m_display);
+    wlr_server_decoration_manager_set_default_mode(
+        m_serverDecorationManager,
+        config().general.preferNoCsd ? WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
+                                     : WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT
+    );
+
     m_layerShell = wlr_layer_shell_v1_create(m_display, 4);
     m_newLayerSurface.notify = onNewLayerSurface;
     wl_signal_add(&m_layerShell->events.new_surface, &m_newLayerSurface);
@@ -146,6 +157,7 @@ namespace umbriel {
     wl_list_remove(&m_newInput.link);
     wl_list_remove(&m_newXdgToplevel.link);
     wl_list_remove(&m_newXdgPopup.link);
+    wl_list_remove(&m_newXdgDecoration.link);
     wl_list_remove(&m_newLayerSurface.link);
     wl_list_remove(&m_newSessionLock.link);
     wl_list_remove(&m_newPointerConstraint.link);

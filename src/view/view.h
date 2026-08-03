@@ -42,6 +42,8 @@ namespace umbriel {
     void setPosition(int x, int y);
     void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
     void cancelPositionAnimation();
+    // Size/position to the full output and drop tile clips (exclusive zones do not apply).
+    void applyFullscreenLayout();
 
   private:
     friend class Cursor;

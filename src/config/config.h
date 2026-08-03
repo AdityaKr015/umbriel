@@ -83,6 +83,7 @@ namespace umbriel {
     struct General {
       std::string terminal;
       std::vector<std::string> autostart;
+      bool preferNoCsd = false;
     } general;
 
     struct Input {

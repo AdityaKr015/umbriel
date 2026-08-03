@@ -389,11 +389,37 @@ namespace umbriel {
   }
 
   void View::clearOutputClip() {
-    const wlr_box* clip = m_tiled ? &m_toplevel->base->geometry : nullptr;
+    // Fullscreen must not keep a copied tile clip (that freezes usable-area size and
+    // leaves a bar-sized gap). Use scheduled (not current): on leave, scheduled clears
+    // immediately while current lags until the client acks.
+    const bool fullscreen = m_toplevel->scheduled.fullscreen;
+    const wlr_box* clip = (!fullscreen && m_tiled) ? &m_toplevel->base->geometry : nullptr;
     wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, clip);
     if (m_borderTree != nullptr) {
       updateBorderGeometry();
     }
+    updateBlur();
+  }
+
+  void View::applyFullscreenLayout() {
+    Output* output = nullptr;
+    if (m_workspace != nullptr && m_workspace->group() != nullptr) {
+      output = m_workspace->group()->output();
+    }
+    if (output == nullptr) {
+      output = m_server->outputFromWlr(m_server->preferredOutput());
+    }
+    wlr_output* wlrOutput = output != nullptr ? output->wlr() : m_server->preferredOutput();
+    wlr_box fullArea{};
+    wlr_output_layout_get_box(m_server->outputLayout(), wlrOutput, &fullArea);
+    if (fullArea.width <= 0 || fullArea.height <= 0) {
+      return;
+    }
+    if (m_toplevel->scheduled.width != fullArea.width || m_toplevel->scheduled.height != fullArea.height) {
+      wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
+    }
+    wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
+    wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
     updateBlur();
   }
 
@@ -715,35 +741,29 @@ namespace umbriel {
       return;
     }
 
-    const bool fullscreen = !m_toplevel->current.fullscreen;
+    // Honor the client's requested state (not a blind toggle).
+    const bool fullscreen = m_toplevel->requested.fullscreen;
+    wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     if (fullscreen) {
-      clearOutputClip();
-      Output* output = nullptr;
-      if (m_workspace != nullptr && m_workspace->group() != nullptr) {
-        output = m_workspace->group()->output();
-      }
-      if (output == nullptr) {
-        output = m_server->outputFromWlr(m_server->preferredOutput());
-      }
-      wlr_output* wlrOutput = output != nullptr ? output->wlr() : m_server->preferredOutput();
-      wlr_box fullArea{};
-      wlr_output_layout_get_box(m_server->outputLayout(), wlrOutput, &fullArea);
-      if (fullArea.width > 0 && fullArea.height > 0) {
-        wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
-        wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
-      }
+      // scheduled.fullscreen is set; drop any tile clip and cover the full output
+      // (exclusive zones / usable area do not apply to fullscreen).
+      applyFullscreenLayout();
       wlr_scene_node_reparent(&m_sceneTree->node, m_server->fullscreenTree());
       wlr_scene_node_raise_to_top(&m_sceneTree->node);
     } else {
       wlr_scene_node_reparent(&m_sceneTree->node, m_server->xdgTree());
     }
-    wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     if (m_borderTree != nullptr) {
       wlr_scene_node_set_enabled(&m_borderTree->node, !fullscreen);
     }
     applyCornerRadius();
-    if (!fullscreen && m_workspace != nullptr) {
-      m_workspace->arrange();
+    if (!fullscreen) {
+      // scheduled.fullscreen is already false; arrange into usable area (exclusive zones).
+      if (m_workspace != nullptr) {
+        m_workspace->arrange(false);
+      } else {
+        placeInUsableArea();
+      }
     }
     updateForeignState();
   }

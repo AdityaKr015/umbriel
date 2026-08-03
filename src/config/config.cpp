@@ -490,13 +490,20 @@ namespace umbriel {
         kLog.warn("config: ignoring general (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "general", {"terminal", "autostart"});
+      warnUnknownKeys(*section, "general", {"terminal", "autostart", "prefer_no_csd"});
       if (const toml::node* terminal = section->get("terminal")) {
         const auto value = terminal->value<std::string>();
         if (!value) {
           kLog.warn("config: ignoring general.terminal (expected string)");
         } else {
           loaded.general.terminal = *value;
+        }
+      }
+      if (const toml::node* preferNoCsd = section->get("prefer_no_csd")) {
+        if (const auto value = preferNoCsd->value<bool>()) {
+          loaded.general.preferNoCsd = *value;
+        } else {
+          kLog.warn("config: ignoring general.prefer_no_csd (expected boolean)");
         }
       }
 

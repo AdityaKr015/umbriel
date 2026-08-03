@@ -22,6 +22,90 @@ namespace umbriel {
       return device->name != nullptr ? device->name : "unknown";
     }
 
+    wlr_xdg_toplevel_decoration_v1_mode resolvedDecorationMode(wlr_xdg_toplevel_decoration_v1* decoration) {
+      // Honor an explicit client request; otherwise prefer SSD when configured.
+      wlr_xdg_toplevel_decoration_v1_mode mode = decoration->requested_mode;
+      if (mode == WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_NONE) {
+        mode = config().general.preferNoCsd ? WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
+                                            : WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE;
+      }
+      return mode;
+    }
+
+    struct XdgDecorationWatch {
+      wlr_xdg_toplevel_decoration_v1* decoration = nullptr;
+      wlr_xdg_toplevel_decoration_v1_mode pendingMode = WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE;
+      wl_listener requestMode{};
+      wl_listener surfaceCommit{};
+      wl_listener destroy{};
+    };
+
+    void clearDecorationCommit(XdgDecorationWatch* watch) {
+      if (watch->surfaceCommit.notify == nullptr) {
+        return;
+      }
+      wl_list_remove(&watch->surfaceCommit.link);
+      watch->surfaceCommit.notify = nullptr;
+    }
+
+    void onDecorationSurfaceCommit(wl_listener* listener, void* /*data*/) {
+      XdgDecorationWatch* watch = wl_container_of(listener, watch, surfaceCommit);
+      if (watch->decoration == nullptr
+          || watch->decoration->toplevel == nullptr
+          || !watch->decoration->toplevel->base->initial_commit) {
+        return;
+      }
+      wlr_xdg_toplevel_decoration_v1_set_mode(watch->decoration, watch->pendingMode);
+      clearDecorationCommit(watch);
+    }
+
+    void applyXdgDecorationMode(XdgDecorationWatch* watch) {
+      if (watch == nullptr || watch->decoration == nullptr || watch->decoration->toplevel == nullptr) {
+        return;
+      }
+      wlr_xdg_surface* surface = watch->decoration->toplevel->base;
+      if (surface == nullptr) {
+        return;
+      }
+      watch->pendingMode = resolvedDecorationMode(watch->decoration);
+      // set_mode schedules a configure; that asserts unless the xdg_surface is ready.
+      if (surface->initialized) {
+        clearDecorationCommit(watch);
+        wlr_xdg_toplevel_decoration_v1_set_mode(watch->decoration, watch->pendingMode);
+        return;
+      }
+      if (watch->surfaceCommit.notify != nullptr) {
+        return;
+      }
+      watch->surfaceCommit.notify = onDecorationSurfaceCommit;
+      wl_signal_add(&surface->surface->events.commit, &watch->surfaceCommit);
+    }
+
+    void applyKdeDecorationDefault(wlr_server_decoration_manager* manager) {
+      if (manager == nullptr) {
+        return;
+      }
+      const uint32_t mode = config().general.preferNoCsd ? WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
+                                                         : WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT;
+      wlr_server_decoration_manager_set_default_mode(manager, mode);
+    }
+
+    void onDecorationRequestMode(wl_listener* listener, void* /*data*/) {
+      XdgDecorationWatch* watch = wl_container_of(listener, watch, requestMode);
+      applyXdgDecorationMode(watch);
+    }
+
+    void onDecorationDestroy(wl_listener* listener, void* /*data*/) {
+      XdgDecorationWatch* watch = wl_container_of(listener, watch, destroy);
+      if (watch->decoration != nullptr) {
+        watch->decoration->data = nullptr;
+      }
+      wl_list_remove(&watch->requestMode.link);
+      clearDecorationCommit(watch);
+      wl_list_remove(&watch->destroy.link);
+      delete watch;
+    }
+
     void applyNaturalScroll(
         libinput_device* libinputDevice, const wlr_input_device* device, const std::optional<bool>& enabled,
         std::string_view setting
@@ -94,6 +178,15 @@ namespace umbriel {
         layer->updateBlur();
       }
     }
+    applyKdeDecorationDefault(m_serverDecorationManager);
+    if (m_xdgDecorationManager != nullptr) {
+      wlr_xdg_toplevel_decoration_v1* decoration = nullptr;
+      wl_list_for_each(decoration, &m_xdgDecorationManager->decorations, link) {
+        if (auto* watch = static_cast<XdgDecorationWatch*>(decoration->data)) {
+          applyXdgDecorationMode(watch);
+        }
+      }
+    }
     refocus();
     if (m_sessionLocked) {
       updateLockBlank();
@@ -144,6 +237,19 @@ namespace umbriel {
       return;
     }
     new Popup(popup);
+  }
+
+  void Server::onNewXdgDecoration(wl_listener* listener, void* data) {
+    Server* self = wl_container_of(listener, self, m_newXdgDecoration);
+    auto* decoration = static_cast<wlr_xdg_toplevel_decoration_v1*>(data);
+    auto* watch = new XdgDecorationWatch{.decoration = decoration};
+    decoration->data = watch;
+    watch->requestMode.notify = onDecorationRequestMode;
+    wl_signal_add(&decoration->events.request_mode, &watch->requestMode);
+    watch->destroy.notify = onDecorationDestroy;
+    wl_signal_add(&decoration->events.destroy, &watch->destroy);
+    applyXdgDecorationMode(watch);
+    (void)self;
   }
 
   void Server::onNewLayerSurface(wl_listener* listener, void* data) {

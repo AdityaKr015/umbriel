@@ -14,6 +14,10 @@ files = []
 terminal = ""
 # Shell commands run once after startup; they are never re-run on config reload.
 autostart = []
+# Ask clients to omit client-side decorations (xdg-decoration server-side).
+# Clients that explicitly request CSD are still honored. Restart apps after
+# changing this for full effect.
+prefer_no_csd = false
 
 [appearance]
 border_width = 2          # 0-100

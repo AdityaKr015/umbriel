@@ -139,7 +139,7 @@ namespace umbriel {
         if (view == nullptr || !view->mapped()) {
           continue;
         }
-        if (view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen) {
+        if (view->toplevel()->scheduled.fullscreen) {
           continue;
         }
         const wlr_box target = m_layout.targetBox(view);
@@ -183,8 +183,9 @@ namespace umbriel {
     if (!m_active || view == nullptr || !view->mapped() || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
-    if (view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen) {
+    if (view->toplevel()->scheduled.fullscreen) {
       wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
+      view->applyFullscreenLayout();
       return;
     }
     if (m_layout.columnOf(view) < 0) {
@@ -222,8 +223,9 @@ namespace umbriel {
         if (view == nullptr || !view->mapped()) {
           continue;
         }
-        if (view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen) {
+        if (view->toplevel()->scheduled.fullscreen) {
           wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
+          view->applyFullscreenLayout();
           continue;
         }
         wlr_box target = m_layout.targetBox(view);

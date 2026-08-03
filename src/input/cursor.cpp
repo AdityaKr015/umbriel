@@ -100,6 +100,7 @@ namespace umbriel {
           m_dragSourceWorkspace->layoutDetach(view);
         }
         wlr_scene_node_raise_to_top(&view->sceneTree()->node);
+        clipGrabbedViewToOutput();
         updateDropTarget();
       }
       return;
@@ -119,7 +120,7 @@ namespace umbriel {
   void Cursor::resetMode() {
     if (m_dropWorkspace != nullptr && m_dropWorkspace->layout().insertGap() >= 0) {
       m_dropWorkspace->layout().clearInsertGap();
-      m_dropWorkspace->arrange(true);
+      m_dropWorkspace->arrange(false);
     }
     m_server->hideInsertHint();
     m_mode = CursorMode::Passthrough;
@@ -343,6 +344,42 @@ namespace umbriel {
         &m_grabbedView->sceneTree()->node, static_cast<int>(m_cursor->x - m_grabX),
         static_cast<int>(m_cursor->y - m_grabY)
     );
+    if (m_mode == CursorMode::MoveTile) {
+      clipGrabbedViewToOutput();
+    }
+  }
+
+  void Cursor::clipGrabbedViewToOutput() {
+    if (m_grabbedView == nullptr) {
+      return;
+    }
+    const wlr_box& geometry = m_grabbedView->toplevel()->base->geometry;
+    const wlr_box target{
+        .x = m_grabbedView->sceneTree()->node.x,
+        .y = m_grabbedView->sceneTree()->node.y,
+        .width = geometry.width,
+        .height = geometry.height,
+    };
+    wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
+    Output* output = m_server->outputFromWlr(wlrOutput);
+    if (output == nullptr) {
+      return;
+    }
+    wlr_box outputBox{};
+    wlr_output_layout_get_box(m_server->outputLayout(), output->wlr(), &outputBox);
+    const int border = m_grabbedView->tiled() ? config().appearance.borderWidth : 0;
+    wlr_box decorated = target;
+    decorated.x -= border;
+    decorated.y -= border;
+    decorated.width += 2 * border;
+    decorated.height += 2 * border;
+    wlr_box intersection{};
+    if (!wlr_box_intersection(&intersection, &decorated, &outputBox)) {
+      wlr_scene_node_set_enabled(&m_grabbedView->sceneTree()->node, false);
+      return;
+    }
+    wlr_scene_node_set_enabled(&m_grabbedView->sceneTree()->node, true);
+    m_grabbedView->setOutputClip(&intersection, target, outputBox);
   }
 
   void Cursor::updateDropTarget() {
@@ -369,9 +406,13 @@ namespace umbriel {
     if (usable.width <= 0 || usable.height <= 0) {
       return;
     }
-    if (m_dropWorkspace != nullptr && m_dropWorkspace != workspace) {
+    if (m_dropWorkspace != nullptr && m_dropWorkspace != workspace && m_dropWorkspace->layout().insertGap() >= 0) {
       m_dropWorkspace->layout().clearInsertGap();
-      m_dropWorkspace->arrange(true);
+      m_dropWorkspace->arrange(false);
+    }
+    if (workspace->layout().insertGap() >= 0) {
+      workspace->layout().clearInsertGap();
+      workspace->arrange(false);
     }
     const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
@@ -396,10 +437,6 @@ namespace umbriel {
           rowDistance = distance;
         }
       }
-      if (workspace->layout().insertGap() >= 0) {
-        workspace->layout().clearInsertGap();
-        workspace->arrange(true);
-      }
       m_dropWorkspace = workspace;
       m_dropColumn = columnIndex;
       m_dropRow = nearestRow;
@@ -419,10 +456,6 @@ namespace umbriel {
         nearestGap = gap;
         nearestDistance = distance;
       }
-    }
-    if (workspace->layout().insertGap() != nearestGap) {
-      workspace->layout().setInsertGap(nearestGap);
-      workspace->arrange(true);
     }
 
     m_dropWorkspace = workspace;

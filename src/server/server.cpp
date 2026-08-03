@@ -71,11 +71,12 @@ namespace umbriel {
     );
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
 
-    // Fixed global stacking: background < bottom < xdg < top < overlay < lock.
+    // Fixed global stacking: background < bottom < xdg < drag < top < overlay < lock.
     // Per-output layer trees are children of these roots so windows cannot raise above panels.
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&m_scene->tree);
     m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
+    m_dragTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);

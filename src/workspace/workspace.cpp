@@ -116,7 +116,8 @@ namespace umbriel {
 
   void Workspace::layoutDetach(View* view) {
     m_layout.removeView(view);
-    arrange();
+    // Instant reflow so remaining tiles do not animate under the grabbed window.
+    arrange(false);
   }
 
   void Workspace::arrange(bool animate) {
@@ -175,6 +176,31 @@ namespace umbriel {
     applyPositions(animate);
   }
 
+  void Workspace::syncViewPresentation(View* view) {
+    if (!m_active || view == nullptr || !view->mapped() || m_group == nullptr || m_group->output() == nullptr) {
+      return;
+    }
+    if (m_layout.columnOf(view) < 0) {
+      return;
+    }
+    Output* output = m_group->output();
+    wlr_box outputBox{};
+    wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
+    const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
+    wlr_box target = m_layout.targetBox(view);
+    target.x += scrollOffset;
+    const int border = config().appearance.borderWidth;
+    wlr_box decorated = target;
+    decorated.x -= border;
+    decorated.y -= border;
+    decorated.width += 2 * border;
+    decorated.height += 2 * border;
+    wlr_box intersection{};
+    const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
+    wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
+    view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
+  }
+
   void Workspace::applyPositions(bool animate) {
     if (!m_active || m_group == nullptr || m_group->output() == nullptr) {
       return;
@@ -183,6 +209,7 @@ namespace umbriel {
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
     const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
+    const int border = config().appearance.borderWidth;
     for (const Column& column : m_layout.columns()) {
       for (View* view : column.views) {
         if (view == nullptr || !view->mapped()) {
@@ -195,8 +222,14 @@ namespace umbriel {
         } else {
           view->setPosition(target.x, target.y);
         }
+        // Include borders so near-edge windows stay clipped to this output.
+        wlr_box decorated = target;
+        decorated.x -= border;
+        decorated.y -= border;
+        decorated.width += 2 * border;
+        decorated.height += 2 * border;
         wlr_box intersection{};
-        const bool visible = wlr_box_intersection(&intersection, &target, &outputBox);
+        const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
         wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
         view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
       }
@@ -281,7 +314,8 @@ namespace umbriel {
     const bool fullWidth = m_layout.toggleFullWidth(column);
     wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), fullWidth);
     ensureFocusedVisible();
-    arrange();
+    // Snap layout immediately; client size catches up on configure ack.
+    arrange(false);
     return true;
   }
 

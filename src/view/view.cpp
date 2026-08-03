@@ -393,67 +393,154 @@ namespace umbriel {
     if (m_borderTree != nullptr) {
       updateBorderGeometry();
     }
+    updateBlur();
   }
 
   void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
-    if (screenIntersection == nullptr || wlr_box_equal(screenIntersection, &target)) {
-      clearOutputClip();
-      return;
-    }
-
     const wlr_box& geometry = m_toplevel->base->geometry;
-    const wlr_box surfaceClip{
-        .x = geometry.x + screenIntersection->x - target.x,
-        .y = geometry.y + screenIntersection->y - target.y,
-        .width = screenIntersection->width,
-        .height = screenIntersection->height,
-    };
-    // This also reaches popup subsurface trees, whose popup-local clip coordinates
-    // can be wrong while the parent is partially off-output. This rare case is accepted.
-    wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, &surfaceClip);
+    const int border = m_tiled ? config().appearance.borderWidth : 0;
+    wlr_box decorated = target;
+    decorated.x -= border;
+    decorated.y -= border;
+    decorated.width += 2 * border;
+    decorated.height += 2 * border;
 
-    if (m_borderTree == nullptr) {
+    wlr_box decoratedVisible{};
+    if (screenIntersection == nullptr
+        || !wlr_box_intersection(&decoratedVisible, &decorated, &outputBox)
+        || decoratedVisible.width <= 0
+        || decoratedVisible.height <= 0) {
+      wlr_scene_node_set_enabled(&m_sceneTree->node, false);
       return;
     }
 
-    const auto edges = borderEdges();
-    for (size_t i = 0; i < edges.size(); ++i) {
-      wlr_scene_rect* rect = m_borderRects[i];
-      const BorderEdge& edge = edges[i];
-      wlr_box screenBox = edge.box;
-      screenBox.x += target.x;
-      screenBox.y += target.y;
+    wlr_box contentVisible{};
+    const bool contentOnOutput = wlr_box_intersection(&contentVisible, &target, &outputBox);
+    const bool decoratedFullyVisible = wlr_box_equal(&decoratedVisible, &decorated);
 
-      wlr_box visible{};
-      if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
-        wlr_scene_rect_set_size(rect, 0, 0);
-        continue;
-      }
-
-      wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
-      wlr_scene_rect_set_size(rect, visible.width, visible.height);
-
-      const bool trimLeft = visible.x > screenBox.x;
-      const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
-      const bool trimTop = visible.y > screenBox.y;
-      const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
-      const auto trimCorners = [&](fx_corner_radii corners) {
-        return corner_radii_new(
-            trimLeft || trimTop ? 0 : corners.top_left, trimRight || trimTop ? 0 : corners.top_right,
-            trimRight || trimBottom ? 0 : corners.bottom_right, trimLeft || trimBottom ? 0 : corners.bottom_left
-        );
+    if (contentOnOutput) {
+      wlr_box surfaceClip{
+          .x = geometry.x + contentVisible.x - target.x,
+          .y = geometry.y + contentVisible.y - target.y,
+          .width = contentVisible.width,
+          .height = contentVisible.height,
       };
+      // SceneFX is happier with even clip edges near output boundaries.
+      if ((surfaceClip.x & 1) != 0) {
+        --surfaceClip.x;
+        ++surfaceClip.width;
+      }
+      if ((surfaceClip.width & 1) != 0) {
+        ++surfaceClip.width;
+      }
+      // This also reaches popup subsurface trees, whose popup-local clip coordinates
+      // can be wrong while the parent is partially off-output. This rare case is accepted.
+      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, &surfaceClip);
+    } else {
+      // Only the border/decoration remains on this output.
+      const wlr_box empty{geometry.x, geometry.y, 0, 0};
+      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, &empty);
+    }
 
-      wlr_scene_rect_set_corner_radii(rect, trimCorners(edge.outer));
-      if (edge.hasHole) {
-        wlr_box hole = edge.hole;
-        hole.x += screenBox.x - visible.x;
-        hole.y += screenBox.y - visible.y;
-        wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = hole, .corners = trimCorners(edge.holeCorners)});
+    if (m_borderTree != nullptr) {
+      if (decoratedFullyVisible) {
+        updateBorderGeometry();
       } else {
-        wlr_scene_rect_set_clipped_region(rect, clipped_region_get_default());
+        const auto edges = borderEdges();
+        for (size_t i = 0; i < edges.size(); ++i) {
+          wlr_scene_rect* rect = m_borderRects[i];
+          const BorderEdge& edge = edges[i];
+          wlr_box screenBox = edge.box;
+          screenBox.x += target.x;
+          screenBox.y += target.y;
+
+          wlr_box visible{};
+          if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
+            wlr_scene_rect_set_size(rect, 0, 0);
+            continue;
+          }
+
+          wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
+          wlr_scene_rect_set_size(rect, visible.width, visible.height);
+
+          const bool trimLeft = visible.x > screenBox.x;
+          const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
+          const bool trimTop = visible.y > screenBox.y;
+          const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
+          const auto trimCorners = [&](fx_corner_radii corners) {
+            return corner_radii_new(
+                trimLeft || trimTop ? 0 : corners.top_left, trimRight || trimTop ? 0 : corners.top_right,
+                trimRight || trimBottom ? 0 : corners.bottom_right, trimLeft || trimBottom ? 0 : corners.bottom_left
+            );
+          };
+
+          wlr_scene_rect_set_corner_radii(rect, trimCorners(edge.outer));
+          if (edge.hasHole) {
+            wlr_box hole = edge.hole;
+            hole.x += screenBox.x - visible.x;
+            hole.y += screenBox.y - visible.y;
+            wlr_scene_rect_set_clipped_region(
+                rect, clipped_region{.area = hole, .corners = trimCorners(edge.holeCorners)}
+            );
+          } else {
+            wlr_scene_rect_set_clipped_region(rect, clipped_region_get_default());
+          }
+        }
       }
     }
+
+    const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
+    const bool rounded = m_tiled && !m_toplevel->scheduled.fullscreen;
+    if (!contentOnOutput) {
+      m_blur.hide();
+      return;
+    }
+
+    // Always clip blur to this output. SceneFX blur sampling can extend past the
+    // node, so inset from output edges by the blur kernel to avoid neighbor bleed.
+    const wlr_box outputLocal{
+        .x = outputBox.x - target.x,
+        .y = outputBox.y - target.y,
+        .width = outputBox.width,
+        .height = outputBox.height,
+    };
+    const wlr_box contentLocal{
+        .x = contentVisible.x - target.x,
+        .y = contentVisible.y - target.y,
+        .width = contentVisible.width,
+        .height = contentVisible.height,
+    };
+    wlr_box blurClip{};
+    if (!wlr_box_intersection(&blurClip, &nodeBox, &contentLocal)
+        || !wlr_box_intersection(&blurClip, &blurClip, &outputLocal)) {
+      m_blur.hide();
+      return;
+    }
+    const int bleed = std::max(0, config().appearance.blur.radius) * std::max(1, config().appearance.blur.passes);
+    if (bleed > 0) {
+      if (blurClip.x <= outputLocal.x) {
+        blurClip.x += bleed;
+        blurClip.width -= bleed;
+      }
+      if (blurClip.y <= outputLocal.y) {
+        blurClip.y += bleed;
+        blurClip.height -= bleed;
+      }
+      if (blurClip.x + blurClip.width >= outputLocal.x + outputLocal.width) {
+        blurClip.width -= bleed;
+      }
+      if (blurClip.y + blurClip.height >= outputLocal.y + outputLocal.height) {
+        blurClip.height -= bleed;
+      }
+    }
+    if (blurClip.width <= 0 || blurClip.height <= 0) {
+      m_blur.hide();
+      return;
+    }
+    m_blur.update(
+        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0,
+        &blurClip
+    );
   }
 
   void View::handleMap() {
@@ -537,7 +624,13 @@ namespace umbriel {
       }
     }
     applyCornerRadius();
-    updateBlur();
+    // Re-apply output clip after configure ack so Super+F / resize sizes show
+    // without needing a workspace switch (clip boxes are copied, not live).
+    if (m_mapped && m_tiled && m_workspace != nullptr && m_workspace->active()) {
+      m_workspace->syncViewPresentation(this);
+    } else {
+      updateBlur();
+    }
     updateForeignState();
   }
 
@@ -596,7 +689,7 @@ namespace umbriel {
       const bool maximized = m_workspace->layout().toggleFullWidth(column);
       wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
       m_workspace->ensureFocusedVisible();
-      m_workspace->arrange();
+      m_workspace->arrange(false);
       updateForeignState();
       return;
     }

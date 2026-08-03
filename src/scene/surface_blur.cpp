@@ -44,10 +44,20 @@ namespace umbriel {
   } // namespace
 
   void SurfaceBlur::update(
-      wlr_scene_tree* parent, wlr_surface* surface, const wlr_box& nodeBox, const wlr_box& surfaceBox, int cornerRadius
+      wlr_scene_tree* parent, wlr_surface* surface, const wlr_box& nodeBox, const wlr_box& surfaceBox, int cornerRadius,
+      const wlr_box* clipBox
   ) {
     const Config::Appearance::Blur& cfg = config().appearance.blur;
-    const bool want = cfg.enabled && nodeBox.width > 0 && nodeBox.height > 0 && isTransparent(surface, surfaceBox);
+    wlr_box drawBox = nodeBox;
+    if (clipBox != nullptr) {
+      if (!wlr_box_intersection(&drawBox, &nodeBox, clipBox) || drawBox.width <= 0 || drawBox.height <= 0) {
+        if (m_node != nullptr) {
+          wlr_scene_node_set_enabled(&m_node->node, false);
+        }
+        return;
+      }
+    }
+    const bool want = cfg.enabled && drawBox.width > 0 && drawBox.height > 0 && isTransparent(surface, surfaceBox);
     if (!want) {
       if (m_node != nullptr) {
         wlr_scene_node_set_enabled(&m_node->node, false);
@@ -61,7 +71,7 @@ namespace umbriel {
     }
 
     if (m_node == nullptr) {
-      m_node = wlr_scene_blur_create(parent, nodeBox.width, nodeBox.height);
+      m_node = wlr_scene_blur_create(parent, drawBox.width, drawBox.height);
       if (m_node == nullptr) {
         return;
       }
@@ -81,9 +91,9 @@ namespace umbriel {
     }
 
     wlr_scene_node_set_enabled(&m_node->node, true);
-    wlr_scene_node_set_position(&m_node->node, nodeBox.x, nodeBox.y);
-    if (m_node->width != nodeBox.width || m_node->height != nodeBox.height) {
-      wlr_scene_blur_set_size(m_node, nodeBox.width, nodeBox.height);
+    wlr_scene_node_set_position(&m_node->node, drawBox.x, drawBox.y);
+    if (m_node->width != drawBox.width || m_node->height != drawBox.height) {
+      wlr_scene_blur_set_size(m_node, drawBox.width, drawBox.height);
     }
     if (m_node->corners.top_left != cornerRadius) {
       wlr_scene_blur_set_corner_radius(m_node, cornerRadius);

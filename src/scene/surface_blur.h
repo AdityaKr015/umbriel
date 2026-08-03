@@ -15,9 +15,10 @@ namespace umbriel {
     // Creates/updates/disables the node to match config and surface state.
     // nodeBox: content box in `parent` coordinates (position + size of the node).
     // surfaceBox: content box in surface-local coordinates (opaque-region test).
+    // clipBox: optional visible subset in `parent` coordinates; nullptr = full nodeBox.
     void update(
         wlr_scene_tree* parent, wlr_surface* surface, const wlr_box& nodeBox, const wlr_box& surfaceBox,
-        int cornerRadius
+        int cornerRadius, const wlr_box* clipBox = nullptr
     );
     // Disable the node (unmap path); update() re-enables.
     void hide();

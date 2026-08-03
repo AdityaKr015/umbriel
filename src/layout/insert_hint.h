@@ -34,7 +34,6 @@ namespace umbriel {
     wlr_scene_tree* m_tree = nullptr;
     wlr_scene_shadow* m_shadow = nullptr;
     wlr_scene_rect* m_rect = nullptr;
-    AnimId m_positionAnim = 0;
     AnimId m_fadeAnim = 0;
     bool m_visible = false;
   };

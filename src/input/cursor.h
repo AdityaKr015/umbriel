@@ -34,6 +34,7 @@ namespace umbriel {
     [[nodiscard]] wlr_cursor* wlr() const { return m_cursor; }
     [[nodiscard]] wlr_xcursor_manager* xcursorManager() const { return m_xcursorManager; }
     [[nodiscard]] CursorMode mode() const { return m_mode; }
+    [[nodiscard]] View* grabbedView() const { return m_grabbedView; }
 
     void attachInputDevice(wlr_input_device* device);
     void applyConfig();
@@ -59,6 +60,7 @@ namespace umbriel {
 
     void processMotion(uint32_t timeMsec);
     void processMove();
+    void clipGrabbedViewToOutput();
     void updateDropTarget();
     void finishTileMove();
     void processResize();

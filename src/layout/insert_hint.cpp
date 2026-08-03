@@ -17,8 +17,17 @@ namespace umbriel {
     constexpr float kHintRed = 0.48F;
     constexpr float kHintGreen = 0.64F;
     constexpr float kHintBlue = 1.0F;
-    constexpr float kHintAlpha = 0.45F;
-    constexpr float kShadowAlpha = 0.35F;
+    constexpr float kHintAlpha = 0.28F;
+    constexpr float kShadowAlpha = 0.10F;
+    constexpr int kHintFadeMs = 80;
+
+    // SceneFX rect/shadow colors are premultiplied.
+    void premultiplied(float out[4], float alpha) {
+      out[0] = kHintRed * alpha;
+      out[1] = kHintGreen * alpha;
+      out[2] = kHintBlue * alpha;
+      out[3] = alpha;
+    }
   } // namespace
 
   InsertHint::InsertHint(Server& server) : m_server(&server) {}
@@ -37,17 +46,21 @@ namespace umbriel {
     if (m_tree != nullptr) {
       return;
     }
-    m_tree = wlr_scene_tree_create(m_server->xdgTree());
-    const float shadowColor[4] = {kHintRed, kHintGreen, kHintBlue, kShadowAlpha};
+    // dragTree sits above xdg windows so the hint is never covered by them.
+    m_tree = wlr_scene_tree_create(m_server->dragTree());
+    float shadowColor[4]{};
+    premultiplied(shadowColor, kShadowAlpha);
     m_shadow = wlr_scene_shadow_create(m_tree, kHintWidth, 1, kHintWidth / 2, 18.0F, shadowColor);
-    const float rectColor[4] = {kHintRed, kHintGreen, kHintBlue, 0.0F};
+    float rectColor[4]{};
+    premultiplied(rectColor, 0.0F);
     m_rect = wlr_scene_rect_create(m_tree, kHintWidth, 1, rectColor);
     wlr_scene_rect_set_corner_radius(m_rect, kHintWidth / 2);
     wlr_scene_node_set_enabled(&m_tree->node, false);
   }
 
   void InsertHint::setAlpha(float alpha) {
-    const float color[4] = {kHintRed, kHintGreen, kHintBlue, alpha};
+    float color[4]{};
+    premultiplied(color, alpha);
     wlr_scene_rect_set_color(m_rect, color);
   }
 
@@ -69,9 +82,23 @@ namespace umbriel {
     const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
     const int gap = std::clamp(gapIndex, 0, columnCount);
-    const int hintX = workspace->layout().columnX(gap, viewportWidth) - config().layout.gap - kHintWidth;
-    const int targetX =
-        usable.x + config().layout.gap + hintX - static_cast<int>(std::lround(workspace->visualScroll()));
+    // Paint onto the column boundary (overlay), do not open a layout gap.
+    int boundaryX = 0;
+    if (columnCount == 0) {
+      boundaryX = 0;
+    } else if (gap <= 0) {
+      boundaryX = 0;
+    } else if (gap >= columnCount) {
+      boundaryX = workspace->layout().columnX(columnCount - 1, viewportWidth)
+          + workspace->layout().columnWidth(columnCount - 1, viewportWidth);
+    } else {
+      boundaryX = workspace->layout().columnX(gap, viewportWidth) - config().layout.gap / 2;
+    }
+    const int targetX = usable.x
+        + config().layout.gap
+        + boundaryX
+        - kHintWidth / 2
+        - static_cast<int>(std::lround(workspace->visualScroll()));
     showGeometry(
         workspace, targetX, usable.y + config().layout.gap, kHintWidth,
         std::max(1, usable.height - 2 * config().layout.gap)
@@ -113,46 +140,28 @@ namespace umbriel {
     wlr_scene_rect_set_corner_radius(m_rect, radius);
     wlr_scene_shadow_set_corner_radius(m_shadow, radius);
 
-    if (m_positionAnim != 0) {
-      m_server->animator().cancel(m_positionAnim);
-      m_positionAnim = 0;
-    }
+    // Snap to the drop target; animating the indicator lags behind the cursor.
+    wlr_scene_node_set_position(&m_tree->node, x, y);
+    wlr_scene_node_raise_to_top(&m_tree->node);
+
     if (!m_visible) {
-      wlr_scene_node_set_position(&m_tree->node, x, y);
       wlr_scene_node_set_enabled(&m_tree->node, true);
       setAlpha(0.0F);
       if (m_fadeAnim != 0) {
         m_server->animator().cancel(m_fadeAnim);
       }
       m_fadeAnim = m_server->animator().animate(
-          0.0, kHintAlpha, config().appearance.animationMs,
-          [this](double alpha) { setAlpha(static_cast<float>(alpha)); }, [this] { m_fadeAnim = 0; }
+          0.0, kHintAlpha, kHintFadeMs, [this](double alpha) { setAlpha(static_cast<float>(alpha)); },
+          [this] { m_fadeAnim = 0; }
       );
       m_visible = true;
-    } else if (m_tree->node.x != x || m_tree->node.y != y) {
-      const int fromX = m_tree->node.x;
-      const int fromY = m_tree->node.y;
-      m_positionAnim = m_server->animator().animate(
-          0.0, 1.0, config().appearance.animationMs,
-          [this, fromX, fromY, x, y](double progress) {
-            wlr_scene_node_set_position(
-                &m_tree->node, static_cast<int>(std::lround(fromX + (x - fromX) * progress)),
-                static_cast<int>(std::lround(fromY + (y - fromY) * progress))
-            );
-          },
-          [this] { m_positionAnim = 0; }
-      );
     } else {
-      wlr_scene_node_set_position(&m_tree->node, x, y);
+      setAlpha(kHintAlpha);
     }
     scheduleFrame(workspace);
   }
 
   void InsertHint::hide() {
-    if (m_positionAnim != 0) {
-      m_server->animator().cancel(m_positionAnim);
-      m_positionAnim = 0;
-    }
     if (m_fadeAnim != 0) {
       m_server->animator().cancel(m_fadeAnim);
       m_fadeAnim = 0;

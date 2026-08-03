@@ -10,7 +10,7 @@ namespace umbriel {
 
   class View;
 
-  inline constexpr int kHintWidth = 20;
+  inline constexpr int kHintWidth = 14;
 
   struct Column {
     std::vector<View*> views;

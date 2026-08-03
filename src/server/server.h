@@ -72,6 +72,8 @@ namespace umbriel {
     [[nodiscard]] wlr_allocator* allocator() const { return m_allocator; }
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
     [[nodiscard]] wlr_scene_tree* xdgTree() const { return m_xdgTree; }
+    // Above xdg windows, below layer-shell top/overlay (drag/drop insert hint).
+    [[nodiscard]] wlr_scene_tree* dragTree() const { return m_dragTree; }
     [[nodiscard]] wlr_scene_tree* lockTree() const { return m_lockTree; }
     [[nodiscard]] wlr_scene_tree* shellLayerTree(uint32_t layer) const;
     [[nodiscard]] wlr_output_layout* outputLayout() const { return m_outputLayout; }
@@ -112,6 +114,10 @@ namespace umbriel {
     void notifyIdleActivity();
     void refocus();
     [[nodiscard]] LayerSurface* exclusiveKeyboardLayer() const;
+    // Hide foreign-output views for this pass so shared scene nodes cannot bleed.
+    void prepareSceneForOutput(Output* rendering);
+    // Re-enable home-output visibility after a render pass (for hit-testing).
+    void restoreSceneVisibility();
 
   private:
     friend class Output;
@@ -184,6 +190,7 @@ namespace umbriel {
     wlr_gamma_control_manager_v1* m_gammaManager = nullptr;
     wlr_scene_tree* m_shellLayerTrees[kLayerCount]{};
     wlr_scene_tree* m_xdgTree = nullptr;
+    wlr_scene_tree* m_dragTree = nullptr;
     wlr_scene_tree* m_lockTree = nullptr;
     wlr_scene_rect* m_lockBlank = nullptr;
     bool m_sessionLocked = false;

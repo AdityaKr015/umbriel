@@ -44,6 +44,7 @@ namespace umbriel {
     void layoutAttach(View* view);
     void layoutDetach(View* view);
     void arrange(bool animate = true);
+    void syncViewPresentation(View* view);
     [[nodiscard]] View* focusAdjacent(int direction) const;
     [[nodiscard]] View* focusVertical(int direction) const;
     bool moveFocusedColumn(int direction);

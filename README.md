@@ -3,7 +3,7 @@
 A Wayland compositor built on [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) 0.20 and
 [SceneFX](https://github.com/wlrfx/scenefx).
 
-Early stage. Clean modular C++23 compositor that launches, accepts input, maps xdg-shell windows, and hosts layer-shell surfaces.
+Early stage. Clean modular C++23 compositor with a scrolling layout, workspaces, shell protocols, and TOML configuration.
 
 ## Status
 
@@ -13,6 +13,7 @@ What works today:
 - Output hotplug, modeset, and SceneFX-backed scene commits
 - Seat, keyboard, pointer/cursor, xdg-shell toplevels and popups
 - Per-monitor workspaces via `ext_workspace_manager_v1` (9 workspaces each, isolated per output)
+- Scrolling column layout with keyboard/mouse focus, movement, width presets, and animated transitions
 - `zwlr_layer_shell_v1` (anchors, exclusive zones, keyboard interactivity)
 - `zwlr_foreign_toplevel_manager_v1` (active window / task list for shell clients)
 - `zxdg_output_manager_v1` (logical size/position for shell clients)
@@ -26,7 +27,7 @@ What works today:
 - `ext_data_control_v1` (+ primary selection) for clipboard managers / history
 - `zwlr_gamma_control_v1` (Noctalia night light / color temperature)
 - Nested sessions use **Alt** as mod, native DRM uses **Super**
-- Keybinds: mod+Escape quit, mod+Return terminal, mod+F1 cycle windows, mod+1..9 workspaces
+- Configurable keybinds with compiled defaults for focus/move, layout actions, applications, and workspaces
 - Native DRM: Ctrl+Alt+F1..F12 switches VT
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
 - Noctalia shell runs against the protocols above
@@ -35,9 +36,8 @@ Still open / planned:
 
 | Area | Direction |
 |------|-----------|
-| Layouts | Scrolling (H/V), dwindle, master |
+| Layouts | Vertical scrolling, dwindle, master |
 | Eyecandy | Blur, shadows, rounded corners, double borders |
-| Config | TOML with includes |
 | Xwayland | Native vs satellite |
 | Shell | Remaining Noctalia polish (output management, IME, …) |
 | Overview | Undecided |
@@ -102,14 +102,44 @@ Inside the session:
 | Shortcut | Action |
 |----------|--------|
 | mod+Escape | Quit |
-| mod+Return | Spawn `$TERMINAL` |
+| mod+Return | Spawn the configured terminal |
 | mod+F1 | Cycle window focus |
+| mod+H/J/K/L or arrows | Focus adjacent window |
+| mod+Shift+H/J/K/L or arrows | Move focused window |
+| mod+comma / mod+period | Consume left / expel right |
+| mod+R / mod+F | Cycle width / toggle full width |
 | mod+1..9 | Switch workspace on focused monitor |
 | mod+Shift+1..9 | Move focused window to workspace and follow |
 
 Set `TERMINAL` to your terminal binary (`ghostty`, `kitty`, `alacritty`, ...).
 
 Stop with mod+Escape or `Ctrl+C` from the parent terminal.
+
+## Configuration
+
+Umbriel loads `$XDG_CONFIG_HOME/umbriel/config.toml` (normally `~/.config/umbriel/config.toml`) at startup.
+Pass `-c path/to/config.toml` to use another file. Config files can include other TOML files with
+`[include] files = ["theme.toml", "keybinds.toml"]`; later files and the main file override earlier values.
+
+```toml
+[general]
+terminal = "kitty"
+
+[layout]
+gap = 8
+width_presets = [0.333, 0.5, 0.667]
+
+[keybinds]
+"Mod+T" = "spawn-terminal"
+"Mod+Shift+Q" = "close"
+"Mod+R" = "spawn:noctalia msg panel-toggle launcher"
+"Mod+Escape" = "none" # remove a compiled default
+```
+
+The `appearance`, `layout`, `general`, and `keybinds` sections overlay compiled defaults, so a config file is optional.
+Key names and modifiers are case-insensitive. `Mod` resolves to Alt in nested sessions and Super on DRM.
+Bindings support compositor actions, `workspace:N`, `move-to-workspace:N`, and arbitrary shell commands with
+`spawn:command`. Configuration is currently startup-only.
 
 ## Project layout
 

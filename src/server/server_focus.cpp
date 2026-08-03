@@ -206,14 +206,7 @@ namespace umbriel {
     return true;
   }
 
-  bool Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {
-    if (m_sessionLocked) {
-      return false;
-    }
-
-    const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
-    const uint32_t lowered = xkb_keysym_to_lower(keysym);
-
+  bool Server::executeKeybindAction(const Keybind& bind) {
     auto activeWorkspace = [this]() -> Workspace* {
       Output* output = outputFromWlr(preferredOutput());
       if (output == nullptr || output->workspaceGroup() == nullptr) {
@@ -222,153 +215,197 @@ namespace umbriel {
       return output->workspaceGroup()->active();
     };
 
+    switch (bind.action) {
+    case KeybindAction::None:
+      return true;
+    case KeybindAction::Spawn:
+      spawn(bind.spawnCommand.c_str());
+      return true;
+    case KeybindAction::TerminalSpawn: {
+      const std::string& configured = config().general.terminal;
+      const char* terminal = !configured.empty() ? configured.c_str() : std::getenv("TERMINAL");
+      if (terminal == nullptr || terminal[0] == '\0') {
+        wlr_log(WLR_ERROR, "mod+Return: set [general].terminal or $TERMINAL");
+        return true;
+      }
+      spawn(terminal);
+      return true;
+    }
+    case KeybindAction::WindowClose:
+      if (Workspace* workspace = activeWorkspace()) {
+        if (View* view = workspace->focusedView()) {
+          wlr_xdg_toplevel_send_close(view->toplevel());
+        }
+      }
+      return true;
+    case KeybindAction::SessionQuit:
+      stop();
+      return true;
+    case KeybindAction::ConfigReload:
+      handleConfigReload();
+      return true;
+    case KeybindAction::WindowFocusLeft:
+      if (Workspace* workspace = activeWorkspace()) {
+        if (View* target = workspace->focusAdjacent(-1)) {
+          focusView(target);
+        }
+      }
+      return true;
+    case KeybindAction::WindowFocusRight:
+      if (Workspace* workspace = activeWorkspace()) {
+        if (View* target = workspace->focusAdjacent(1)) {
+          focusView(target);
+        }
+      }
+      return true;
+    case KeybindAction::WindowFocusUp:
+      if (Workspace* workspace = activeWorkspace()) {
+        if (View* target = workspace->focusVertical(-1)) {
+          focusView(target);
+        }
+      }
+      return true;
+    case KeybindAction::WindowFocusDown:
+      if (Workspace* workspace = activeWorkspace()) {
+        if (View* target = workspace->focusVertical(1)) {
+          focusView(target);
+        }
+      }
+      return true;
+    case KeybindAction::ColumnMoveLeft:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->moveFocusedColumn(-1);
+      }
+      return true;
+    case KeybindAction::ColumnMoveRight:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->moveFocusedColumn(1);
+      }
+      return true;
+    case KeybindAction::WindowMoveUp:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->moveFocusedVertical(-1);
+      }
+      return true;
+    case KeybindAction::WindowMoveDown:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->moveFocusedVertical(1);
+      }
+      return true;
+    case KeybindAction::WindowConsumeLeft:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->consumeFocusedLeft();
+      }
+      return true;
+    case KeybindAction::WindowExpelRight:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->expelFocusedRight();
+      }
+      return true;
+    case KeybindAction::WindowCycleWidth:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->cycleFocusedWidth();
+      }
+      return true;
+    case KeybindAction::ToggleMaximize:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->toggleFocusedFullWidth();
+      }
+      return true;
+    case KeybindAction::ToggleFullscreen:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->toggleFocusedFullscreen();
+      }
+      return true;
+    case KeybindAction::WindowFocusNext:
+      if (m_views.size() >= 2) {
+        for (size_t n = 0; n < m_views.size(); ++n) {
+          auto current = std::move(m_views.front());
+          m_views.erase(m_views.begin());
+          m_views.push_back(std::move(current));
+          if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
+            focusView(m_views.front().get());
+            break;
+          }
+        }
+      }
+      return true;
+    case KeybindAction::WorkspaceSwitch:
+    case KeybindAction::WindowMoveToWorkspace: {
+      Output* output = outputFromWlr(preferredOutput());
+      if (output == nullptr || output->workspaceGroup() == nullptr) {
+        return true;
+      }
+      WorkspaceGroup* group = output->workspaceGroup();
+      const size_t index = static_cast<size_t>(bind.workspace);
+      Workspace* target = group->workspaceAt(index);
+      if (target == nullptr) {
+        return true;
+      }
+      if (bind.action == KeybindAction::WindowMoveToWorkspace) {
+        for (const auto& entry : m_views) {
+          if (entry->mapped() && entry->onActiveWorkspace()) {
+            entry->setWorkspace(target);
+            group->activate(target);
+            focusView(entry.get());
+            return true;
+          }
+        }
+      }
+      group->activateIndex(index);
+      return true;
+    }
+    case KeybindAction::LayoutScrollLeft:
+    case KeybindAction::LayoutScrollRight:
+      if (Workspace* workspace = activeWorkspace()) {
+        const double step = static_cast<double>(config().layout.scrollWheelStep);
+        const double delta = bind.action == KeybindAction::LayoutScrollLeft ? -step : step;
+        workspace->layout().setScroll(workspace->layout().scroll() + delta);
+        workspace->arrange();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  bool Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {
+    if (m_sessionLocked) {
+      return false;
+    }
+
+    const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
+    const uint32_t lowered = xkb_keysym_to_lower(keysym);
+
     for (const Keybind& bind : config().keybinds) {
+      if (bind.wheel != WheelDirection::None) {
+        continue;
+      }
       const uint32_t expected = bind.modifiers | (bind.useMod ? modKey() : 0);
       if (effective != expected || (lowered != bind.keysym && rawKeysym != bind.keysym)) {
         continue;
       }
+      return executeKeybindAction(bind);
+    }
 
-      switch (bind.action) {
-      case KeybindAction::None:
-        return true;
-      case KeybindAction::Spawn:
-        spawn(bind.spawnCommand.c_str());
-        return true;
-      case KeybindAction::TerminalSpawn: {
-        const std::string& configured = config().general.terminal;
-        const char* terminal = !configured.empty() ? configured.c_str() : std::getenv("TERMINAL");
-        if (terminal == nullptr || terminal[0] == '\0') {
-          wlr_log(WLR_ERROR, "mod+Return: set [general].terminal or $TERMINAL");
-          return true;
-        }
-        spawn(terminal);
-        return true;
+    return false;
+  }
+
+  bool Server::handleWheelBind(WheelDirection direction, uint32_t modifiers) {
+    if (m_sessionLocked) {
+      return false;
+    }
+
+    const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
+
+    for (const Keybind& bind : config().keybinds) {
+      if (bind.wheel != direction) {
+        continue;
       }
-      case KeybindAction::WindowClose:
-        if (Workspace* workspace = activeWorkspace()) {
-          if (View* view = workspace->focusedView()) {
-            wlr_xdg_toplevel_send_close(view->toplevel());
-          }
-        }
-        return true;
-      case KeybindAction::SessionQuit:
-        stop();
-        return true;
-      case KeybindAction::ConfigReload:
-        handleConfigReload();
-        return true;
-      case KeybindAction::WindowFocusLeft:
-        if (Workspace* workspace = activeWorkspace()) {
-          if (View* target = workspace->focusAdjacent(-1)) {
-            focusView(target);
-          }
-        }
-        return true;
-      case KeybindAction::WindowFocusRight:
-        if (Workspace* workspace = activeWorkspace()) {
-          if (View* target = workspace->focusAdjacent(1)) {
-            focusView(target);
-          }
-        }
-        return true;
-      case KeybindAction::WindowFocusUp:
-        if (Workspace* workspace = activeWorkspace()) {
-          if (View* target = workspace->focusVertical(-1)) {
-            focusView(target);
-          }
-        }
-        return true;
-      case KeybindAction::WindowFocusDown:
-        if (Workspace* workspace = activeWorkspace()) {
-          if (View* target = workspace->focusVertical(1)) {
-            focusView(target);
-          }
-        }
-        return true;
-      case KeybindAction::ColumnMoveLeft:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->moveFocusedColumn(-1);
-        }
-        return true;
-      case KeybindAction::ColumnMoveRight:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->moveFocusedColumn(1);
-        }
-        return true;
-      case KeybindAction::WindowMoveUp:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->moveFocusedVertical(-1);
-        }
-        return true;
-      case KeybindAction::WindowMoveDown:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->moveFocusedVertical(1);
-        }
-        return true;
-      case KeybindAction::WindowConsumeLeft:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->consumeFocusedLeft();
-        }
-        return true;
-      case KeybindAction::WindowExpelRight:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->expelFocusedRight();
-        }
-        return true;
-      case KeybindAction::WindowCycleWidth:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->cycleFocusedWidth();
-        }
-        return true;
-      case KeybindAction::ToggleMaximize:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->toggleFocusedFullWidth();
-        }
-        return true;
-      case KeybindAction::ToggleFullscreen:
-        if (Workspace* workspace = activeWorkspace()) {
-          workspace->toggleFocusedFullscreen();
-        }
-        return true;
-      case KeybindAction::WindowFocusNext:
-        if (m_views.size() >= 2) {
-          for (size_t n = 0; n < m_views.size(); ++n) {
-            auto current = std::move(m_views.front());
-            m_views.erase(m_views.begin());
-            m_views.push_back(std::move(current));
-            if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
-              focusView(m_views.front().get());
-              break;
-            }
-          }
-        }
-        return true;
-      case KeybindAction::WorkspaceSwitch:
-      case KeybindAction::WindowMoveToWorkspace: {
-        Output* output = outputFromWlr(preferredOutput());
-        if (output == nullptr || output->workspaceGroup() == nullptr) {
-          return true;
-        }
-        WorkspaceGroup* group = output->workspaceGroup();
-        const size_t index = static_cast<size_t>(bind.workspace);
-        Workspace* target = group->workspaceAt(index);
-        if (target == nullptr) {
-          return true;
-        }
-        if (bind.action == KeybindAction::WindowMoveToWorkspace) {
-          for (const auto& entry : m_views) {
-            if (entry->mapped() && entry->onActiveWorkspace()) {
-              entry->setWorkspace(target);
-              group->activate(target);
-              focusView(entry.get());
-              return true;
-            }
-          }
-        }
-        group->activateIndex(index);
-        return true;
+      const uint32_t expected = bind.modifiers | (bind.useMod ? modKey() : 0);
+      if (effective != expected) {
+        continue;
       }
-      }
+      return executeKeybindAction(bind);
     }
 
     return false;

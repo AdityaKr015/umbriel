@@ -112,6 +112,7 @@ namespace umbriel {
     bool m_resizeSoloHorizontal = false;
     // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
     wlr_output* m_pointerOutput = nullptr;
+    double m_wheelAccum[2]{};
 
     wl_listener m_motion{};
     wl_listener m_motionAbsolute{};

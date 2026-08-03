@@ -122,6 +122,26 @@ namespace umbriel {
         addWorkspace(KeybindAction::WindowMoveToWorkspace, keypad, WLR_MODIFIER_SHIFT);
       }
 
+      // Default wheel binds: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
+      keybinds.push_back(
+          {.modifiers = 0,
+           .useMod = true,
+           .keysym = 0,
+           .wheel = WheelDirection::Up,
+           .action = KeybindAction::WindowFocusLeft,
+           .spawnCommand = {},
+           .workspace = 0}
+      );
+      keybinds.push_back(
+          {.modifiers = 0,
+           .useMod = true,
+           .keysym = 0,
+           .wheel = WheelDirection::Down,
+           .action = KeybindAction::WindowFocusRight,
+           .spawnCommand = {},
+           .workspace = 0}
+      );
+
       return keybinds;
     }
 
@@ -145,6 +165,50 @@ namespace umbriel {
       }
       if (tokens.empty()) {
         return false;
+      }
+
+      // Check if the last token is a wheel direction.
+      std::string lastLower(tokens.back());
+      std::ranges::transform(lastLower, lastLower.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
+      WheelDirection wheelDir = WheelDirection::None;
+      if (lastLower == "wheelup") {
+        wheelDir = WheelDirection::Up;
+      } else if (lastLower == "wheeldown") {
+        wheelDir = WheelDirection::Down;
+      } else if (lastLower == "wheelleft") {
+        wheelDir = WheelDirection::Left;
+      } else if (lastLower == "wheelright") {
+        wheelDir = WheelDirection::Right;
+      }
+
+      if (wheelDir != WheelDirection::None) {
+        // A bare wheel bind (no modifier) would hijack all client scrolling.
+        if (tokens.size() < 2) {
+          return false;
+        }
+        for (size_t index = 0; index + 1 < tokens.size(); ++index) {
+          std::string modifier(tokens[index]);
+          std::ranges::transform(modifier, modifier.begin(), [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+          });
+          if (modifier == "mod") {
+            output.useMod = true;
+          } else if (modifier == "shift") {
+            output.modifiers |= WLR_MODIFIER_SHIFT;
+          } else if (modifier == "ctrl" || modifier == "control") {
+            output.modifiers |= WLR_MODIFIER_CTRL;
+          } else if (modifier == "alt") {
+            output.modifiers |= WLR_MODIFIER_ALT;
+          } else if (modifier == "super" || modifier == "logo" || modifier == "win") {
+            output.modifiers |= WLR_MODIFIER_LOGO;
+          } else {
+            return false;
+          }
+        }
+        output.wheel = wheelDir;
+        return true;
       }
 
       const std::string keyName(tokens.back());
@@ -198,6 +262,8 @@ namespace umbriel {
           {"column-move-left", KeybindAction::ColumnMoveLeft},
           {"column-move-right", KeybindAction::ColumnMoveRight},
           {"config-reload", KeybindAction::ConfigReload},
+          {"layout-scroll-left", KeybindAction::LayoutScrollLeft},
+          {"layout-scroll-right", KeybindAction::LayoutScrollRight},
       };
       for (const auto& [name, action] : actions) {
         if (value == name) {
@@ -816,7 +882,10 @@ namespace umbriel {
 
       std::vector<Keybind> configured;
       auto sameChord = [](const Keybind& left, const Keybind& right) {
-        return left.modifiers == right.modifiers && left.useMod == right.useMod && left.keysym == right.keysym;
+        return left.modifiers == right.modifiers
+            && left.useMod == right.useMod
+            && left.keysym == right.keysym
+            && left.wheel == right.wheel;
       };
       for (const auto& [key, entry] : *section) {
         const std::string chord(key.str());

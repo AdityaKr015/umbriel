@@ -10,6 +10,14 @@
 #include <vector>
 
 namespace umbriel {
+  enum class WheelDirection {
+    None,
+    Up,
+    Down,
+    Left,
+    Right,
+  };
+
   enum class KeybindAction {
     None,
     Spawn,
@@ -33,12 +41,15 @@ namespace umbriel {
     WorkspaceSwitch,
     WindowMoveToWorkspace,
     ConfigReload,
+    LayoutScrollLeft,
+    LayoutScrollRight,
   };
 
   struct Keybind {
     uint32_t modifiers = 0;
     bool useMod = false;
     uint32_t keysym = 0;
+    WheelDirection wheel = WheelDirection::None;
     KeybindAction action = KeybindAction::None;
     std::string spawnCommand;
     int workspace = 0;

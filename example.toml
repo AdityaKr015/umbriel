@@ -57,6 +57,7 @@ gap = 8                         # 0-500
 default_width_fraction = 0.5    # 0.1-1.0
 # Widths visited by `window-cycle-width`.
 width_presets = [0.333, 0.5, 0.667]
+# Pixel step used by the `layout-scroll-left` and `layout-scroll-right` actions.
 scroll_wheel_step = 60           # 1-1000
 # Output names must exactly match connector names such as DP-1 or HDMI-A-1.
 # Nested outputs use WL-1; headless outputs use HEADLESS-1. Mode is ignored in
@@ -102,6 +103,7 @@ follows_mouse = false
 # Chords are case-insensitive. Supported modifiers: Mod, Shift, Ctrl/Control,
 # Alt, and Super/Logo/Win (`Mod` is Alt nested / Super on DRM). Bare keys are
 # allowed (e.g. XF86AudioMute).
+# Scroll-wheel chords: WheelUp, WheelDown, WheelLeft, WheelRight (need >=1 modifier).
 #
 # A configured chord replaces its compiled default. `none` removes a binding.
 # Values may be any of:
@@ -110,8 +112,10 @@ follows_mouse = false
 #   column-move-left, column-move-right, window-move-up, window-move-down,
 #   window-consume-left, window-expel-right, window-cycle-width,
 #   window-toggle-maximize, window-toggle-fullscreen, window-focus-next, config-reload,
+#   layout-scroll-left, layout-scroll-right,
 #   workspace-switch:N, window-move-to-workspace:N (N is 1-9),
 #   spawn:<shell command>
+# Defaults: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
 "Mod+T" = "terminal-spawn"
 "Mod+Shift+Q" = "window-close"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"

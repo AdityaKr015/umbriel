@@ -382,25 +382,58 @@ namespace umbriel {
     m_server->notifyIdleActivity();
 
     wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
-    if (keyboard != nullptr && (wlr_keyboard_get_modifiers(keyboard) & m_server->modKey()) != 0) {
-      wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
-      Output* output = m_server->outputFromWlr(wlrOutput);
-      Workspace* workspace =
-          output != nullptr && output->workspaceGroup() != nullptr ? output->workspaceGroup()->active() : nullptr;
-      if (workspace != nullptr) {
-        const double delta = event->delta_discrete != 0
-            ? static_cast<double>(event->delta_discrete) / 120.0 * config().layout.scrollWheelStep
-            : event->delta * 0.5;
-        workspace->layout().setScroll(workspace->layout().scroll() + delta);
-        workspace->arrange();
+    const uint32_t modifiers = keyboard != nullptr ? wlr_keyboard_get_modifiers(keyboard) : 0;
+    const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
+
+    // Determine this event's signed wheel direction from delta and orientation.
+    const bool isVertical = event->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL;
+    const double rawDelta = event->delta_discrete != 0 ? static_cast<double>(event->delta_discrete) : event->delta;
+    WheelDirection eventDir;
+    if (isVertical) {
+      eventDir = rawDelta < 0 ? WheelDirection::Up : WheelDirection::Down;
+    } else {
+      eventDir = rawDelta < 0 ? WheelDirection::Left : WheelDirection::Right;
+    }
+
+    // Arm only when a bind matches this exact direction and modifier set.
+    bool armed = false;
+    for (const Keybind& bind : config().keybinds) {
+      if (bind.wheel != eventDir) {
+        continue;
       }
+      const uint32_t expected = bind.modifiers | (bind.useMod ? m_server->modKey() : 0);
+      if (effective == expected) {
+        armed = true;
+        break;
+      }
+    }
+
+    const int orientation = isVertical ? 0 : 1;
+    if (!armed) {
+      m_wheelAccum[orientation] = 0;
+      wlr_seat_pointer_notify_axis(
+          m_server->seat()->wlr(), event->time_msec, event->orientation, event->delta, event->delta_discrete,
+          event->source, event->relative_direction
+      );
       return;
     }
 
-    wlr_seat_pointer_notify_axis(
-        m_server->seat()->wlr(), event->time_msec, event->orientation, event->delta, event->delta_discrete,
-        event->source, event->relative_direction
-    );
+    // Accumulate normalized notches.
+    const double notches =
+        event->delta_discrete != 0 ? static_cast<double>(event->delta_discrete) / 120.0 : event->delta / 15.0;
+    m_wheelAccum[orientation] += notches;
+
+    double& acc = m_wheelAccum[orientation];
+    while (std::abs(acc) >= 1.0) {
+      WheelDirection direction;
+      if (isVertical) {
+        direction = acc < 0 ? WheelDirection::Up : WheelDirection::Down;
+      } else {
+        direction = acc < 0 ? WheelDirection::Left : WheelDirection::Right;
+      }
+      m_server->handleWheelBind(direction, modifiers);
+      acc -= std::copysign(1.0, acc);
+    }
   }
 
   void Cursor::handleFrame() { wlr_seat_pointer_notify_frame(m_server->seat()->wlr()); }

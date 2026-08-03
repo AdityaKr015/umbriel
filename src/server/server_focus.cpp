@@ -126,9 +126,14 @@ namespace umbriel {
         wlr_xdg_toplevel_set_activated(prevToplevel, false);
         auto* prevTree = static_cast<wlr_scene_tree*>(prevToplevel->base->data);
         if (prevTree != nullptr && prevTree->node.data != nullptr) {
-          static_cast<View*>(prevTree->node.data)->setBorderFocused(false);
+          auto* view = static_cast<View*>(prevTree->node.data);
+          view->setBorderFocused(false);
+          view->setForeignActivated(false);
         }
       }
+    }
+    for (const auto& entry : m_views) {
+      entry->setForeignActivated(false);
     }
     wlr_seat_keyboard_notify_clear_focus(seat);
   }

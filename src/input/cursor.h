@@ -5,6 +5,7 @@
 
 struct wlr_cursor;
 struct wlr_input_device;
+struct wlr_output;
 struct wlr_pointer_constraint_v1;
 struct wlr_surface;
 struct wlr_xcursor_manager;
@@ -106,6 +107,8 @@ namespace umbriel {
     double m_resizeStartLowerWeight = 0;
     int m_resizeUpperRow = -1;
     bool m_resizeSoloHorizontal = false;
+    // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
+    wlr_output* m_pointerOutput = nullptr;
 
     wl_listener m_motion{};
     wl_listener m_motionAbsolute{};

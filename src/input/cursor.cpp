@@ -356,7 +356,12 @@ namespace umbriel {
     } else if (m_server->exclusiveKeyboardLayer() == nullptr) {
       // Do not ensureVisible/scroll on click. Peek adjustment would move the
       // surface under the cursor and break link clicks and in-window drags.
-      m_server->focusView(view, false);
+      if (view != nullptr) {
+        m_server->focusView(view, false);
+      } else {
+        wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
+        m_server->refocus(m_server->outputFromWlr(wlrOutput));
+      }
     }
   }
 
@@ -421,6 +426,16 @@ namespace umbriel {
       } else {
         processResizeTile();
         return;
+      }
+    }
+
+    // Crossing outputs updates keyboard / foreign-toplevel focus so clients that follow the
+    // focused screen match preferredOutput() / workspace-switch behavior.
+    wlr_output* pointerOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
+    if (pointerOutput != m_pointerOutput) {
+      m_pointerOutput = pointerOutput;
+      if (!m_server->sessionLocked() && m_server->exclusiveKeyboardLayer() == nullptr) {
+        m_server->refocus(m_server->outputFromWlr(pointerOutput));
       }
     }
 

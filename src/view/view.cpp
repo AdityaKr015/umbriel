@@ -326,16 +326,25 @@ namespace umbriel {
 
   std::array<View::BorderEdge, 4> View::borderEdges() const {
     const wlr_box& geometry = m_toplevel->base->geometry;
+    return borderEdges(geometry.width, geometry.height);
+  }
+
+  std::array<View::BorderEdge, 4> View::borderEdges(int contentWidth, int contentHeight) const {
     return makeBorderRing(
-        geometry.width, geometry.height, config().appearance.cornerRadius, config().appearance.borderWidth
+        contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.borderWidth
     );
   }
 
   void View::updateBorderGeometry() {
+    const wlr_box& geometry = m_toplevel->base->geometry;
+    updateBorderGeometry(geometry.width, geometry.height);
+  }
+
+  void View::updateBorderGeometry(int contentWidth, int contentHeight) {
     if (m_borderTree == nullptr) {
       return;
     }
-    const auto edges = borderEdges();
+    const auto edges = borderEdges(contentWidth, contentHeight);
     for (size_t i = 0; i < edges.size(); ++i) {
       wlr_scene_rect* rect = m_borderRects[i];
       if (rect == nullptr) {
@@ -358,11 +367,10 @@ namespace umbriel {
       if (outer <= 0) {
         wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
       } else {
-        const wlr_box& geometry = m_toplevel->base->geometry;
         // Fill the full decoration bounds; hole is only the window surface so the
         // outer color tucks under the inner border (no gap between the two rings).
         wlr_scene_node_set_position(&m_outerBorderRect->node, -total, -total);
-        wlr_scene_rect_set_size(m_outerBorderRect, geometry.width + 2 * total, geometry.height + 2 * total);
+        wlr_scene_rect_set_size(m_outerBorderRect, contentWidth + 2 * total, contentHeight + 2 * total);
         wlr_scene_rect_set_corner_radii(
             m_outerBorderRect, corner_radii_new(radius + total, radius + total, radius + total, radius + total)
         );
@@ -370,7 +378,7 @@ namespace umbriel {
         wlr_scene_rect_set_clipped_region(
             m_outerBorderRect,
             clipped_region{
-                .area = {total, total, geometry.width, geometry.height},
+                .area = {total, total, contentWidth, contentHeight},
                 .corners = corner_radii_new(radius, radius, radius, radius),
             }
         );
@@ -401,7 +409,8 @@ namespace umbriel {
     }
   }
 
-  void View::applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox) {
+  void
+  View::applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight) {
     if (m_outerBorderRect == nullptr || config().appearance.outerBorderWidth <= 0) {
       if (m_outerBorderRect != nullptr) {
         wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
@@ -410,12 +419,11 @@ namespace umbriel {
     }
     const int total = config().appearance.totalBorderWidth();
     const int radius = config().appearance.cornerRadius;
-    const wlr_box& geometry = m_toplevel->base->geometry;
     const wlr_box screenBox{
         .x = target.x - total,
         .y = target.y - total,
-        .width = geometry.width + 2 * total,
-        .height = geometry.height + 2 * total,
+        .width = contentWidth + 2 * total,
+        .height = contentHeight + 2 * total,
     };
     wlr_box visible{};
     if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
@@ -443,8 +451,8 @@ namespace umbriel {
     wlr_box hole{
         .x = screenBox.x + total - visible.x,
         .y = screenBox.y + total - visible.y,
-        .width = geometry.width,
-        .height = geometry.height,
+        .width = contentWidth,
+        .height = contentHeight,
     };
     wlr_scene_rect_set_clipped_region(
         m_outerBorderRect,
@@ -567,12 +575,12 @@ namespace umbriel {
 
   void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
     const wlr_box& geometry = m_toplevel->base->geometry;
-    // Size clip/decoration from xdg geometry at tile origin; layout target can shrink first.
+    // Stay inside the tile while geometry lags configure (Electron often stays wide).
     const wlr_box content{
         .x = target.x,
         .y = target.y,
-        .width = geometry.width,
-        .height = geometry.height,
+        .width = std::min(geometry.width, target.width),
+        .height = std::min(geometry.height, target.height),
     };
     const int border = m_tiled ? config().appearance.totalBorderWidth() : 0;
     wlr_box decorated = content;
@@ -620,10 +628,10 @@ namespace umbriel {
 
     if (m_borderTree != nullptr) {
       if (decoratedFullyVisible) {
-        updateBorderGeometry();
+        updateBorderGeometry(content.width, content.height);
       } else {
-        applyOuterBorderClip(target, outputBox);
-        applyBorderClip(m_borderRects, borderEdges(), target, outputBox);
+        applyOuterBorderClip(target, outputBox, content.width, content.height);
+        applyBorderClip(m_borderRects, borderEdges(content.width, content.height), target, outputBox);
         for (wlr_scene_rect* rect : m_borderRects) {
           if (rect != nullptr) {
             wlr_scene_node_raise_to_top(&rect->node);
@@ -632,7 +640,7 @@ namespace umbriel {
       }
     }
 
-    const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
+    const wlr_box nodeBox{0, 0, content.width, content.height};
     const bool rounded = m_tiled && !m_toplevel->scheduled.fullscreen;
     if (!contentOnOutput) {
       m_blur.hide();

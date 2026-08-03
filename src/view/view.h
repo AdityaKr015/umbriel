@@ -82,13 +82,15 @@ namespace umbriel {
     struct BorderEdge;
     static std::array<BorderEdge, 4> makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness);
     [[nodiscard]] std::array<BorderEdge, 4> borderEdges() const;
+    [[nodiscard]] std::array<BorderEdge, 4> borderEdges(int contentWidth, int contentHeight) const;
     void updateBorderGeometry();
+    void updateBorderGeometry(int contentWidth, int contentHeight);
     void setBorderFocused(bool focused);
     void applyBorderClip(
         wlr_scene_rect* const rects[4], const std::array<BorderEdge, 4>& edges, const wlr_box& target,
         const wlr_box& outputBox
     );
-    void applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox);
+    void applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight);
     void applyCornerRadius();
     void updateBlur();
     void clearOutputClip();

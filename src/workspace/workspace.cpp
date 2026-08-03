@@ -197,6 +197,7 @@ namespace umbriel {
         wlr_box intersection{};
         const bool visible = wlr_box_intersection(&intersection, &target, &outputBox);
         wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
+        view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
       }
     }
   }

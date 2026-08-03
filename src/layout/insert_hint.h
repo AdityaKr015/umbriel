@@ -11,8 +11,6 @@ namespace umbriel {
   class Server;
   class Workspace;
 
-  inline constexpr int kHintWidth = 20;
-
   class InsertHint {
   public:
     explicit InsertHint(Server& server);

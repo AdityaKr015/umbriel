@@ -2,11 +2,14 @@
 #include "core/animation.h"
 #include "scene/node.h"
 
+#include <array>
 #include <wayland-server-core.h>
 
+struct wlr_box;
 struct wlr_foreign_toplevel_handle_v1;
 struct wlr_output;
 struct wlr_scene_tree;
+struct wlr_scene_rect;
 struct wlr_xdg_toplevel;
 
 namespace umbriel {
@@ -36,6 +39,7 @@ namespace umbriel {
     void setOnActiveWorkspace(bool active);
     void animateTo(int x, int y);
     void setPosition(int x, int y);
+    void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
     void cancelPositionAnimation();
 
   private:
@@ -69,6 +73,12 @@ namespace umbriel {
     void handleForeignActivate();
     void handleForeignClose();
     void handleForeignDestroy();
+    struct BorderEdge;
+    [[nodiscard]] std::array<BorderEdge, 4> borderEdges() const;
+    void updateBorderGeometry();
+    void setBorderFocused(bool focused);
+    void applyCornerRadius();
+    void clearOutputClip();
     void placeInUsableArea();
     void updateForeignIdentity();
     void updateForeignState();
@@ -78,6 +88,8 @@ namespace umbriel {
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
     wlr_scene_tree* m_sceneTree = nullptr;
+    wlr_scene_tree* m_borderTree = nullptr;
+    wlr_scene_rect* m_borderRects[4] = {}; // top, bottom, left, right
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
     Workspace* m_workspace = nullptr;

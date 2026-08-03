@@ -101,6 +101,10 @@ namespace umbriel {
   }
 
   void Cursor::resetMode() {
+    if (m_dropWorkspace != nullptr && m_dropWorkspace->layout().insertGap() >= 0) {
+      m_dropWorkspace->layout().clearInsertGap();
+      m_dropWorkspace->arrange(true);
+    }
     m_server->hideInsertHint();
     m_mode = CursorMode::Passthrough;
     m_grabbedView = nullptr;
@@ -349,6 +353,10 @@ namespace umbriel {
     if (usable.width <= 0 || usable.height <= 0) {
       return;
     }
+    if (m_dropWorkspace != nullptr && m_dropWorkspace != workspace) {
+      m_dropWorkspace->layout().clearInsertGap();
+      m_dropWorkspace->arrange(true);
+    }
     const int viewportWidth = std::max(1, usable.width - 2 * kGap);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
     const double layoutX = m_cursor->x - usable.x - kGap + workspace->visualScroll();
@@ -372,6 +380,10 @@ namespace umbriel {
           rowDistance = distance;
         }
       }
+      if (workspace->layout().insertGap() >= 0) {
+        workspace->layout().clearInsertGap();
+        workspace->arrange(true);
+      }
       m_dropWorkspace = workspace;
       m_dropColumn = columnIndex;
       m_dropRow = nearestRow;
@@ -391,6 +403,10 @@ namespace umbriel {
         nearestDistance = distance;
       }
     }
+    if (workspace->layout().insertGap() != nearestGap) {
+      workspace->layout().setInsertGap(nearestGap);
+      workspace->arrange(true);
+    }
 
     m_dropWorkspace = workspace;
     m_dropColumn = nearestGap;
@@ -404,6 +420,9 @@ namespace umbriel {
     View* view = m_grabbedView;
     Workspace* target = m_dropWorkspace != nullptr ? m_dropWorkspace : m_dragSourceWorkspace;
     const int column = std::max(0, m_dropColumn);
+    if (target != nullptr) {
+      target->layout().clearInsertGap();
+    }
     if (view != nullptr && view->mapped() && target != nullptr) {
       if (view->workspace() != target) {
         view->setWorkspace(target);

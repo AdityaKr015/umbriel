@@ -68,14 +68,8 @@ namespace umbriel {
     const int viewportWidth = std::max(1, usable.width - 2 * kGap);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
     const int gap = std::clamp(gapIndex, 0, columnCount);
-    int boundary = 0;
-    if (gap == columnCount && gap > 0) {
-      boundary = workspace->layout().columnX(gap, viewportWidth) - kGap;
-    } else if (gap > 0) {
-      boundary = workspace->layout().columnX(gap, viewportWidth) - kGap / 2;
-    }
-    const int targetX =
-        usable.x + kGap + boundary - static_cast<int>(std::lround(workspace->visualScroll())) - kHintWidth / 2;
+    const int hintX = workspace->layout().columnX(gap, viewportWidth) - kGap - kHintWidth;
+    const int targetX = usable.x + kGap + hintX - static_cast<int>(std::lround(workspace->visualScroll()));
     showGeometry(workspace, targetX, usable.y + kGap, kHintWidth, std::max(1, usable.height - 2 * kGap));
   }
 

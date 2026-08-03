@@ -9,6 +9,12 @@ namespace umbriel {
   class View;
 
   inline constexpr int kGap = 8;
+  inline constexpr int kBorderPx = 2;
+  inline constexpr int kCornerRadius = 10;
+  inline constexpr float kBorderFocused[4] = {0.48F, 0.64F, 1.0F, 1.0F};
+  inline constexpr float kBorderUnfocused[4] = {0.16F, 0.16F, 0.20F, 1.0F};
+  inline constexpr int kHintWidth = 20;
+  inline constexpr int kInsertGapWidth = kHintWidth + kGap;
   inline constexpr double kWidthPresets[] = {1.0 / 3, 0.5, 2.0 / 3};
   inline constexpr double kDefaultWidthFrac = 0.5;
   inline constexpr int kScrollWheelStep = 60;
@@ -25,6 +31,7 @@ namespace umbriel {
     [[nodiscard]] int columnOf(const View* view) const;
     [[nodiscard]] int rowOf(const View* view) const;
     [[nodiscard]] double scroll() const { return m_scroll; }
+    [[nodiscard]] int insertGap() const { return m_insertGap; }
     [[nodiscard]] int columnX(int columnIndex, int viewportWidth) const;
     [[nodiscard]] int columnWidth(int columnIndex, int viewportWidth) const;
 
@@ -36,6 +43,8 @@ namespace umbriel {
     void removeView(View* view);
     void moveColumn(int from, int to);
     void setScroll(double scroll);
+    void setInsertGap(int gapIndex);
+    void clearInsertGap();
     void ensureVisible(int columnIndex, int viewportWidth);
     void arrange(const wlr_box& usable);
     [[nodiscard]] wlr_box targetBox(const View* view) const;
@@ -59,6 +68,7 @@ namespace umbriel {
     std::vector<Column> m_columns;
     std::vector<Target> m_targets;
     double m_scroll = 0;
+    int m_insertGap = -1;
   };
 
 } // namespace umbriel

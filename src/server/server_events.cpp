@@ -226,6 +226,7 @@ namespace umbriel {
     for (const auto& entry : m_views) {
       if (entry->mapped()) {
         wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
+        entry->setBorderFocused(false);
         entry->setForeignActivated(false);
       }
     }

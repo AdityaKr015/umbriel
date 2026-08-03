@@ -21,6 +21,13 @@ namespace umbriel {
       return toplevel->parent == nullptr && !fixedWidth && !fixedHeight;
     }
   } // namespace
+  struct View::BorderEdge {
+    wlr_box box;
+    fx_corner_radii outer;
+    bool hasHole;
+    wlr_box hole;
+    fx_corner_radii holeCorners;
+  };
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
       : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
@@ -150,11 +157,16 @@ namespace umbriel {
     if (prev != nullptr) {
       if (wlr_xdg_toplevel* prevToplevel = wlr_xdg_toplevel_try_from_wlr_surface(prev)) {
         wlr_xdg_toplevel_set_activated(prevToplevel, false);
+        auto* prevTree = static_cast<wlr_scene_tree*>(prevToplevel->base->data);
+        if (prevTree != nullptr && prevTree->node.data != nullptr) {
+          static_cast<View*>(prevTree->node.data)->setBorderFocused(false);
+        }
       }
     }
 
     wlr_scene_node_raise_to_top(&m_sceneTree->node);
     wlr_xdg_toplevel_set_activated(m_toplevel, true);
+    setBorderFocused(true);
     setForeignActivated(true);
 
     if (wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat)) {
@@ -268,9 +280,175 @@ namespace umbriel {
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
   }
 
+  std::array<View::BorderEdge, 4> View::borderEdges() const {
+    const wlr_box& geometry = m_toplevel->base->geometry;
+    const int width = geometry.width + 2 * kBorderPx;
+    const int innerWidth = std::max(0, width - 2 * kBorderPx);
+    const int sideHeight = std::max(0, geometry.height - 2 * kCornerRadius);
+
+    return {{
+        {
+            .box = {-kBorderPx, -kBorderPx, width, kBorderPx + kCornerRadius},
+            .outer = corner_radii_top(kCornerRadius + kBorderPx),
+            .hasHole = true,
+            .hole = {kBorderPx, kBorderPx, innerWidth, kBorderPx + kCornerRadius},
+            .holeCorners = corner_radii_top(kCornerRadius),
+        },
+        {
+            .box = {-kBorderPx, geometry.height - kCornerRadius, width, kBorderPx + kCornerRadius},
+            .outer = corner_radii_bottom(kCornerRadius + kBorderPx),
+            .hasHole = true,
+            .hole = {kBorderPx, -1, innerWidth, kCornerRadius + 1},
+            .holeCorners = corner_radii_bottom(kCornerRadius),
+        },
+        {
+            .box = {-kBorderPx, kCornerRadius, kBorderPx, sideHeight},
+            .outer = corner_radii_none(),
+            .hasHole = false,
+            .hole = {},
+            .holeCorners = corner_radii_none(),
+        },
+        {
+            .box = {geometry.width, kCornerRadius, kBorderPx, sideHeight},
+            .outer = corner_radii_none(),
+            .hasHole = false,
+            .hole = {},
+            .holeCorners = corner_radii_none(),
+        },
+    }};
+  }
+
+  void View::updateBorderGeometry() {
+    if (m_borderTree == nullptr) {
+      return;
+    }
+    const auto edges = borderEdges();
+    for (size_t i = 0; i < edges.size(); ++i) {
+      wlr_scene_rect* rect = m_borderRects[i];
+      const BorderEdge& edge = edges[i];
+      wlr_scene_node_set_position(&rect->node, edge.box.x, edge.box.y);
+      wlr_scene_rect_set_size(rect, edge.box.width, edge.box.height);
+      wlr_scene_rect_set_corner_radii(rect, edge.outer);
+      wlr_scene_rect_set_clipped_region(
+          rect,
+          edge.hasHole ? clipped_region{.area = edge.hole, .corners = edge.holeCorners} : clipped_region_get_default()
+      );
+    }
+  }
+
+  void View::setBorderFocused(bool focused) {
+    if (m_borderTree == nullptr) {
+      return;
+    }
+    for (wlr_scene_rect* rect : m_borderRects) {
+      wlr_scene_rect_set_color(rect, focused ? kBorderFocused : kBorderUnfocused);
+    }
+  }
+
+  void View::applyCornerRadius() {
+    wlr_scene_node_for_each_buffer(
+        &m_sceneTree->node,
+        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+          auto* self = static_cast<View*>(data);
+          wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+          if (sceneSurface == nullptr
+              || wlr_surface_get_root_surface(sceneSurface->surface) != self->m_toplevel->base->surface) {
+            return;
+          }
+          wlr_scene_buffer_set_corner_radius(
+              buffer, self->m_tiled && !self->m_toplevel->scheduled.fullscreen ? kCornerRadius : 0
+          );
+        },
+        this
+    );
+  }
+
+  void View::clearOutputClip() {
+    wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
+    if (m_borderTree != nullptr) {
+      updateBorderGeometry();
+    }
+  }
+
+  void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
+    if (screenIntersection == nullptr || wlr_box_equal(screenIntersection, &target)) {
+      clearOutputClip();
+      return;
+    }
+
+    const wlr_box& geometry = m_toplevel->base->geometry;
+    const wlr_box surfaceClip{
+        .x = geometry.x + screenIntersection->x - target.x,
+        .y = geometry.y + screenIntersection->y - target.y,
+        .width = screenIntersection->width,
+        .height = screenIntersection->height,
+    };
+    // This also reaches popup subsurface trees, whose popup-local clip coordinates
+    // can be wrong while the parent is partially off-output. This rare case is accepted.
+    wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, &surfaceClip);
+
+    if (m_borderTree == nullptr) {
+      return;
+    }
+
+    const auto edges = borderEdges();
+    for (size_t i = 0; i < edges.size(); ++i) {
+      wlr_scene_rect* rect = m_borderRects[i];
+      const BorderEdge& edge = edges[i];
+      wlr_box screenBox = edge.box;
+      screenBox.x += target.x;
+      screenBox.y += target.y;
+
+      wlr_box visible{};
+      if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
+        wlr_scene_rect_set_size(rect, 0, 0);
+        continue;
+      }
+
+      wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
+      wlr_scene_rect_set_size(rect, visible.width, visible.height);
+
+      const bool trimLeft = visible.x > screenBox.x;
+      const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
+      const bool trimTop = visible.y > screenBox.y;
+      const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
+      const auto trimCorners = [&](fx_corner_radii corners) {
+        return corner_radii_new(
+            trimLeft || trimTop ? 0 : corners.top_left, trimRight || trimTop ? 0 : corners.top_right,
+            trimRight || trimBottom ? 0 : corners.bottom_right, trimLeft || trimBottom ? 0 : corners.bottom_left
+        );
+      };
+
+      wlr_scene_rect_set_corner_radii(rect, trimCorners(edge.outer));
+      if (edge.hasHole) {
+        wlr_box hole = edge.hole;
+        hole.x += screenBox.x - visible.x;
+        hole.y += screenBox.y - visible.y;
+        wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = hole, .corners = trimCorners(edge.holeCorners)});
+      } else {
+        wlr_scene_rect_set_clipped_region(rect, clipped_region_get_default());
+      }
+    }
+  }
+
   void View::handleMap() {
     m_mapped = true;
     m_tiled = looksTiled(m_toplevel);
+    clearOutputClip();
+    if (m_tiled) {
+      if (m_borderTree == nullptr) {
+        m_borderTree = wlr_scene_tree_create(m_sceneTree);
+        for (auto*& rect : m_borderRects) {
+          rect = wlr_scene_rect_create(m_borderTree, 0, 0, kBorderUnfocused);
+        }
+        wlr_scene_node_lower_to_bottom(&m_borderTree->node);
+      }
+      wlr_scene_node_set_enabled(&m_borderTree->node, !m_toplevel->current.fullscreen);
+      updateBorderGeometry();
+    } else if (m_borderTree != nullptr) {
+      wlr_scene_node_set_enabled(&m_borderTree->node, false);
+    }
+    applyCornerRadius();
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this);
     } else if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
@@ -294,6 +472,9 @@ namespace umbriel {
 
   void View::handleUnmap() {
     cancelPositionAnimation();
+    if (m_borderTree != nullptr) {
+      wlr_scene_node_set_enabled(&m_borderTree->node, false);
+    }
     m_mapped = false;
     if (m_workspace != nullptr) {
       m_workspace->layoutDetach(this);
@@ -318,6 +499,14 @@ namespace umbriel {
         wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
       }
     }
+    if (m_borderTree != nullptr) {
+      const wlr_box& geometry = m_toplevel->base->geometry;
+      if (m_borderRects[0]->width != geometry.width + 2 * kBorderPx
+          || m_borderRects[2]->height != std::max(0, geometry.height - 2 * kCornerRadius)) {
+        updateBorderGeometry();
+      }
+    }
+    applyCornerRadius();
     updateForeignState();
   }
 
@@ -352,6 +541,8 @@ namespace umbriel {
     m_requestFullscreen.link.next = nullptr;
     m_setTitle.link.next = nullptr;
     m_setAppId.link.next = nullptr;
+    m_sceneTree->node.data = nullptr;
+    m_toplevel->base->data = nullptr;
     m_server->removeView(this);
   }
 
@@ -398,6 +589,7 @@ namespace umbriel {
 
     const bool fullscreen = !m_toplevel->current.fullscreen;
     if (fullscreen) {
+      clearOutputClip();
       wlr_output* output = m_server->preferredOutput();
       wlr_box fullArea{};
       wlr_output_layout_get_box(m_server->outputLayout(), output, &fullArea);
@@ -407,6 +599,10 @@ namespace umbriel {
       }
     }
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
+    if (m_borderTree != nullptr) {
+      wlr_scene_node_set_enabled(&m_borderTree->node, !fullscreen);
+    }
+    applyCornerRadius();
     if (!fullscreen && m_workspace != nullptr) {
       m_workspace->arrange();
     }

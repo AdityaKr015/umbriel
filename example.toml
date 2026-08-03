@@ -18,6 +18,9 @@ autostart = []
 # Clients that explicitly request CSD are still honored. Restart apps after
 # changing this for full effect.
 prefer_no_csd = false
+# Re-selecting the active workspace (e.g. Mod+2 while already on 2) jumps back
+# to the previously active workspace on that output.
+workspace_back_and_forth = false
 
 [appearance]
 border_width = 2          # 0-100

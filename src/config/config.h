@@ -93,6 +93,8 @@ namespace umbriel {
       std::string terminal;
       std::vector<std::string> autostart;
       bool preferNoCsd = false;
+      // Re-selecting the active workspace jumps back to the previous one.
+      bool workspaceBackAndForth = false;
     } general;
 
     struct Input {

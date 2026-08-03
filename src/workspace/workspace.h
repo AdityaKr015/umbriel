@@ -84,6 +84,7 @@ namespace umbriel {
     [[nodiscard]] Server* server() const { return m_server; }
     [[nodiscard]] wlr_ext_workspace_group_handle_v1* handle() const { return m_handle; }
     [[nodiscard]] Workspace* active() const { return m_active; }
+    [[nodiscard]] Workspace* previous() const { return m_previous; }
     [[nodiscard]] Workspace* workspaceAt(size_t index) const;
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
 
@@ -97,6 +98,7 @@ namespace umbriel {
     Output* m_output = nullptr;
     wlr_ext_workspace_group_handle_v1* m_handle = nullptr;
     Workspace* m_active = nullptr;
+    Workspace* m_previous = nullptr;
     std::vector<std::unique_ptr<Workspace>> m_workspaces;
   };
 

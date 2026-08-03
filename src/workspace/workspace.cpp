@@ -369,6 +369,7 @@ namespace umbriel {
 
   WorkspaceGroup::~WorkspaceGroup() {
     m_active = nullptr;
+    m_previous = nullptr;
     if (m_handle != nullptr && m_output != nullptr && m_output->wlr() != nullptr) {
       wlr_ext_workspace_group_handle_v1_output_leave(m_handle, m_output->wlr());
     }
@@ -406,6 +407,7 @@ namespace umbriel {
       return;
     }
     if (m_active != nullptr) {
+      m_previous = m_active;
       m_active->setActive(false);
     }
     m_active = workspace;
@@ -414,10 +416,20 @@ namespace umbriel {
   }
 
   void WorkspaceGroup::activateIndex(size_t index) {
-    if (Workspace* workspace = workspaceAt(index)) {
-      activate(workspace);
-      m_server->refocus(m_output);
+    Workspace* workspace = workspaceAt(index);
+    if (workspace == nullptr) {
+      return;
     }
+    // Re-selecting the active workspace jumps back when back_and_forth is enabled.
+    if (m_active == workspace) {
+      if (!config().general.workspaceBackAndForth || m_previous == nullptr || m_previous == m_active) {
+        return;
+      }
+      activate(m_previous);
+    } else {
+      activate(workspace);
+    }
+    m_server->refocus(m_output);
   }
 
   void WorkspaceGroup::deactivate(Workspace* workspace) {

@@ -133,31 +133,6 @@ namespace umbriel {
     wlr_seat_keyboard_notify_clear_focus(seat);
   }
 
-  void Server::updateFullscreenShell(Output* output) {
-    if (output == nullptr) {
-      return;
-    }
-    bool covered = false;
-    for (const auto& entry : m_views) {
-      View* view = entry.get();
-      if (view == nullptr || !view->mapped() || !view->toplevel()->scheduled.fullscreen) {
-        continue;
-      }
-      Output* home = nullptr;
-      if (view->workspace() != nullptr && view->workspace()->group() != nullptr) {
-        home = view->workspace()->group()->output();
-      }
-      if (home == nullptr) {
-        home = outputFromWlr(preferredOutput());
-      }
-      if (home == output) {
-        covered = true;
-        break;
-      }
-    }
-    output->setShellCoveredByFullscreen(covered);
-  }
-
   View* Server::viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer) {
     if (layer != nullptr) {
       *layer = nullptr;

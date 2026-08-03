@@ -590,10 +590,8 @@ namespace umbriel {
       wlr_scene_node_set_enabled(&m_borderTree->node, false);
     }
     m_blur.hide();
-    const bool wasFullscreen = m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen;
-    Output* home = nullptr;
-    if (m_workspace != nullptr && m_workspace->group() != nullptr) {
-      home = m_workspace->group()->output();
+    if (m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
+      wlr_scene_node_reparent(&m_sceneTree->node, m_server->xdgTree());
     }
     m_mapped = false;
     if (m_workspace != nullptr) {
@@ -603,9 +601,6 @@ namespace umbriel {
     setForeignActivated(false);
     if (m_server->cursor()->mode() != CursorMode::Passthrough) {
       m_server->cursor()->resetMode();
-    }
-    if (wasFullscreen) {
-      m_server->updateFullscreenShell(home != nullptr ? home : m_server->outputFromWlr(m_server->preferredOutput()));
     }
   }
 
@@ -721,9 +716,9 @@ namespace umbriel {
     }
 
     const bool fullscreen = !m_toplevel->current.fullscreen;
-    Output* output = nullptr;
     if (fullscreen) {
       clearOutputClip();
+      Output* output = nullptr;
       if (m_workspace != nullptr && m_workspace->group() != nullptr) {
         output = m_workspace->group()->output();
       }
@@ -737,8 +732,10 @@ namespace umbriel {
         wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
         wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
       }
-    } else if (m_workspace != nullptr && m_workspace->group() != nullptr) {
-      output = m_workspace->group()->output();
+      wlr_scene_node_reparent(&m_sceneTree->node, m_server->fullscreenTree());
+      wlr_scene_node_raise_to_top(&m_sceneTree->node);
+    } else {
+      wlr_scene_node_reparent(&m_sceneTree->node, m_server->xdgTree());
     }
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     if (m_borderTree != nullptr) {
@@ -749,10 +746,6 @@ namespace umbriel {
       m_workspace->arrange();
     }
     updateForeignState();
-    if (output == nullptr) {
-      output = m_server->outputFromWlr(m_server->preferredOutput());
-    }
-    m_server->updateFullscreenShell(output);
   }
 
 } // namespace umbriel

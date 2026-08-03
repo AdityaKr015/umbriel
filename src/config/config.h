@@ -57,9 +57,11 @@ namespace umbriel {
   struct Config {
     struct Appearance {
       int borderWidth = 2;
+      int outerBorderWidth = 0;
       int cornerRadius = 10;
       std::array<float, 4> borderFocused{0.48F, 0.64F, 1.0F, 1.0F};
       std::array<float, 4> borderUnfocused{0.16F, 0.16F, 0.20F, 1.0F};
+      std::array<float, 4> outerBorderColor{0.10F, 0.10F, 0.12F, 1.0F};
       int animationMs = 250;
       struct Blur {
         bool enabled = true;
@@ -71,6 +73,8 @@ namespace umbriel {
         double saturation = 1.1;
         double ignoreAlpha = 0.5;
       } blur;
+
+      [[nodiscard]] int totalBorderWidth() const { return borderWidth + outerBorderWidth; }
     } appearance;
 
     struct Layout {
@@ -79,6 +83,9 @@ namespace umbriel {
       std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
       int scrollWheelStep = 60;
     } layout;
+
+    // Gap from usable-area edges (layer exclusive zones) including outer border.
+    [[nodiscard]] int layoutEdgePad() const { return layout.gap + appearance.outerBorderWidth; }
 
     struct General {
       std::string terminal;

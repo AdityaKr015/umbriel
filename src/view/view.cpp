@@ -14,6 +14,14 @@
 #include "workspace/workspace.h"
 
 namespace umbriel {
+  struct View::BorderEdge {
+    wlr_box box;
+    fx_corner_radii outer;
+    bool hasHole;
+    wlr_box hole;
+    fx_corner_radii holeCorners;
+  };
+
   namespace {
     bool looksTiled(const wlr_xdg_toplevel* toplevel) {
       const auto& state = toplevel->current;
@@ -22,13 +30,42 @@ namespace umbriel {
       return toplevel->parent == nullptr && !fixedWidth && !fixedHeight;
     }
   } // namespace
-  struct View::BorderEdge {
-    wlr_box box;
-    fx_corner_radii outer;
-    bool hasHole;
-    wlr_box hole;
-    fx_corner_radii holeCorners;
-  };
+
+  std::array<View::BorderEdge, 4> View::makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness) {
+    const int width = contentWidth + 2 * thickness;
+    const int innerWidth = std::max(0, width - 2 * thickness);
+    const int sideHeight = std::max(0, contentHeight - 2 * radius);
+    return {{
+        {
+            .box = {-thickness, -thickness, width, thickness + radius},
+            .outer = corner_radii_top(radius + thickness),
+            .hasHole = true,
+            .hole = {thickness, thickness, innerWidth, thickness + radius},
+            .holeCorners = corner_radii_top(radius),
+        },
+        {
+            .box = {-thickness, contentHeight - radius, width, thickness + radius},
+            .outer = corner_radii_bottom(radius + thickness),
+            .hasHole = true,
+            .hole = {thickness, -1, innerWidth, radius + 1},
+            .holeCorners = corner_radii_bottom(radius),
+        },
+        {
+            .box = {-thickness, radius, thickness, sideHeight},
+            .outer = corner_radii_none(),
+            .hasHole = false,
+            .hole = {},
+            .holeCorners = corner_radii_none(),
+        },
+        {
+            .box = {contentWidth, radius, thickness, sideHeight},
+            .outer = corner_radii_none(),
+            .hasHole = false,
+            .hole = {},
+            .holeCorners = corner_radii_none(),
+        },
+    }};
+  }
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
       : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
@@ -289,48 +326,9 @@ namespace umbriel {
 
   std::array<View::BorderEdge, 4> View::borderEdges() const {
     const wlr_box& geometry = m_toplevel->base->geometry;
-    const int width = geometry.width + 2 * config().appearance.borderWidth;
-    const int innerWidth = std::max(0, width - 2 * config().appearance.borderWidth);
-    const int sideHeight = std::max(0, geometry.height - 2 * config().appearance.cornerRadius);
-
-    return {{
-        {
-            .box =
-                {-config().appearance.borderWidth, -config().appearance.borderWidth, width,
-                 config().appearance.borderWidth + config().appearance.cornerRadius},
-            .outer = corner_radii_top(config().appearance.cornerRadius + config().appearance.borderWidth),
-            .hasHole = true,
-            .hole =
-                {config().appearance.borderWidth, config().appearance.borderWidth, innerWidth,
-                 config().appearance.borderWidth + config().appearance.cornerRadius},
-            .holeCorners = corner_radii_top(config().appearance.cornerRadius),
-        },
-        {
-            .box =
-                {-config().appearance.borderWidth, geometry.height - config().appearance.cornerRadius, width,
-                 config().appearance.borderWidth + config().appearance.cornerRadius},
-            .outer = corner_radii_bottom(config().appearance.cornerRadius + config().appearance.borderWidth),
-            .hasHole = true,
-            .hole = {config().appearance.borderWidth, -1, innerWidth, config().appearance.cornerRadius + 1},
-            .holeCorners = corner_radii_bottom(config().appearance.cornerRadius),
-        },
-        {
-            .box =
-                {-config().appearance.borderWidth, config().appearance.cornerRadius, config().appearance.borderWidth,
-                 sideHeight},
-            .outer = corner_radii_none(),
-            .hasHole = false,
-            .hole = {},
-            .holeCorners = corner_radii_none(),
-        },
-        {
-            .box = {geometry.width, config().appearance.cornerRadius, config().appearance.borderWidth, sideHeight},
-            .outer = corner_radii_none(),
-            .hasHole = false,
-            .hole = {},
-            .holeCorners = corner_radii_none(),
-        },
-    }};
+    return makeBorderRing(
+        geometry.width, geometry.height, config().appearance.cornerRadius, config().appearance.borderWidth
+    );
   }
 
   void View::updateBorderGeometry() {
@@ -340,6 +338,9 @@ namespace umbriel {
     const auto edges = borderEdges();
     for (size_t i = 0; i < edges.size(); ++i) {
       wlr_scene_rect* rect = m_borderRects[i];
+      if (rect == nullptr) {
+        continue;
+      }
       const BorderEdge& edge = edges[i];
       wlr_scene_node_set_position(&rect->node, edge.box.x, edge.box.y);
       wlr_scene_rect_set_size(rect, edge.box.width, edge.box.height);
@@ -349,6 +350,38 @@ namespace umbriel {
           edge.hasHole ? clipped_region{.area = edge.hole, .corners = edge.holeCorners} : clipped_region_get_default()
       );
     }
+
+    if (m_outerBorderRect != nullptr) {
+      const int outer = config().appearance.outerBorderWidth;
+      const int total = config().appearance.totalBorderWidth();
+      const int radius = config().appearance.cornerRadius;
+      if (outer <= 0) {
+        wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
+      } else {
+        const wlr_box& geometry = m_toplevel->base->geometry;
+        // Fill the full decoration bounds; hole is only the window surface so the
+        // outer color tucks under the inner border (no gap between the two rings).
+        wlr_scene_node_set_position(&m_outerBorderRect->node, -total, -total);
+        wlr_scene_rect_set_size(m_outerBorderRect, geometry.width + 2 * total, geometry.height + 2 * total);
+        wlr_scene_rect_set_corner_radii(
+            m_outerBorderRect, corner_radii_new(radius + total, radius + total, radius + total, radius + total)
+        );
+        wlr_scene_rect_set_color(m_outerBorderRect, config().appearance.outerBorderColor.data());
+        wlr_scene_rect_set_clipped_region(
+            m_outerBorderRect,
+            clipped_region{
+                .area = {total, total, geometry.width, geometry.height},
+                .corners = corner_radii_new(radius, radius, radius, radius),
+            }
+        );
+      }
+    }
+
+    for (wlr_scene_rect* rect : m_borderRects) {
+      if (rect != nullptr) {
+        wlr_scene_node_raise_to_top(&rect->node);
+      }
+    }
   }
 
   void View::setBorderFocused(bool focused) {
@@ -356,9 +389,118 @@ namespace umbriel {
       return;
     }
     for (wlr_scene_rect* rect : m_borderRects) {
+      if (rect == nullptr) {
+        continue;
+      }
       wlr_scene_rect_set_color(
           rect, focused ? config().appearance.borderFocused.data() : config().appearance.borderUnfocused.data()
       );
+    }
+    if (m_outerBorderRect != nullptr) {
+      wlr_scene_rect_set_color(m_outerBorderRect, config().appearance.outerBorderColor.data());
+    }
+  }
+
+  void View::applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox) {
+    if (m_outerBorderRect == nullptr || config().appearance.outerBorderWidth <= 0) {
+      if (m_outerBorderRect != nullptr) {
+        wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
+      }
+      return;
+    }
+    const int total = config().appearance.totalBorderWidth();
+    const int radius = config().appearance.cornerRadius;
+    const wlr_box& geometry = m_toplevel->base->geometry;
+    const wlr_box screenBox{
+        .x = target.x - total,
+        .y = target.y - total,
+        .width = geometry.width + 2 * total,
+        .height = geometry.height + 2 * total,
+    };
+    wlr_box visible{};
+    if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
+      wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
+      return;
+    }
+
+    wlr_scene_node_set_position(&m_outerBorderRect->node, visible.x - target.x, visible.y - target.y);
+    wlr_scene_rect_set_size(m_outerBorderRect, visible.width, visible.height);
+
+    const bool trimLeft = visible.x > screenBox.x;
+    const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
+    const bool trimTop = visible.y > screenBox.y;
+    const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
+    const int outerRadius = radius + total;
+    wlr_scene_rect_set_corner_radii(
+        m_outerBorderRect,
+        corner_radii_new(
+            trimLeft || trimTop ? 0 : outerRadius, trimRight || trimTop ? 0 : outerRadius,
+            trimRight || trimBottom ? 0 : outerRadius, trimLeft || trimBottom ? 0 : outerRadius
+        )
+    );
+
+    // Hole matches the window surface; inner border covers the overlap on top.
+    wlr_box hole{
+        .x = screenBox.x + total - visible.x,
+        .y = screenBox.y + total - visible.y,
+        .width = geometry.width,
+        .height = geometry.height,
+    };
+    wlr_scene_rect_set_clipped_region(
+        m_outerBorderRect,
+        clipped_region{
+            .area = hole,
+            .corners = corner_radii_new(
+                trimLeft || trimTop ? 0 : radius, trimRight || trimTop ? 0 : radius,
+                trimRight || trimBottom ? 0 : radius, trimLeft || trimBottom ? 0 : radius
+            ),
+        }
+    );
+  }
+
+  void View::applyBorderClip(
+      wlr_scene_rect* const rects[4], const std::array<BorderEdge, 4>& edges, const wlr_box& target,
+      const wlr_box& outputBox
+  ) {
+    for (size_t i = 0; i < edges.size(); ++i) {
+      wlr_scene_rect* rect = rects[i];
+      if (rect == nullptr) {
+        continue;
+      }
+      const BorderEdge& edge = edges[i];
+      wlr_box screenBox = edge.box;
+      screenBox.x += target.x;
+      screenBox.y += target.y;
+
+      wlr_box visible{};
+      if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
+        wlr_scene_rect_set_size(rect, 0, 0);
+        continue;
+      }
+
+      wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
+      wlr_scene_rect_set_size(rect, visible.width, visible.height);
+
+      const bool trimLeft = visible.x > screenBox.x;
+      const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
+      const bool trimTop = visible.y > screenBox.y;
+      const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
+      const auto trimCorners = [&](fx_corner_radii corners) {
+        return corner_radii_new(
+            trimLeft || trimTop ? 0 : corners.top_left, trimRight || trimTop ? 0 : corners.top_right,
+            trimRight || trimBottom ? 0 : corners.bottom_right, trimLeft || trimBottom ? 0 : corners.bottom_left
+        );
+      };
+
+      wlr_scene_rect_set_corner_radii(rect, trimCorners(edge.outer));
+      if (edge.hasHole) {
+        wlr_box hole = edge.hole;
+        hole.x += screenBox.x - visible.x;
+        hole.y += screenBox.y - visible.y;
+        wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = hole, .corners = trimCorners(edge.holeCorners)});
+      } else {
+        wlr_scene_rect_set_clipped_region(rect, clipped_region_get_default());
+      }
     }
   }
 
@@ -425,7 +567,7 @@ namespace umbriel {
 
   void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
     const wlr_box& geometry = m_toplevel->base->geometry;
-    const int border = m_tiled ? config().appearance.borderWidth : 0;
+    const int border = m_tiled ? config().appearance.totalBorderWidth() : 0;
     wlr_box decorated = target;
     decorated.x -= border;
     decorated.y -= border;
@@ -473,44 +615,11 @@ namespace umbriel {
       if (decoratedFullyVisible) {
         updateBorderGeometry();
       } else {
-        const auto edges = borderEdges();
-        for (size_t i = 0; i < edges.size(); ++i) {
-          wlr_scene_rect* rect = m_borderRects[i];
-          const BorderEdge& edge = edges[i];
-          wlr_box screenBox = edge.box;
-          screenBox.x += target.x;
-          screenBox.y += target.y;
-
-          wlr_box visible{};
-          if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
-            wlr_scene_rect_set_size(rect, 0, 0);
-            continue;
-          }
-
-          wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
-          wlr_scene_rect_set_size(rect, visible.width, visible.height);
-
-          const bool trimLeft = visible.x > screenBox.x;
-          const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
-          const bool trimTop = visible.y > screenBox.y;
-          const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
-          const auto trimCorners = [&](fx_corner_radii corners) {
-            return corner_radii_new(
-                trimLeft || trimTop ? 0 : corners.top_left, trimRight || trimTop ? 0 : corners.top_right,
-                trimRight || trimBottom ? 0 : corners.bottom_right, trimLeft || trimBottom ? 0 : corners.bottom_left
-            );
-          };
-
-          wlr_scene_rect_set_corner_radii(rect, trimCorners(edge.outer));
-          if (edge.hasHole) {
-            wlr_box hole = edge.hole;
-            hole.x += screenBox.x - visible.x;
-            hole.y += screenBox.y - visible.y;
-            wlr_scene_rect_set_clipped_region(
-                rect, clipped_region{.area = hole, .corners = trimCorners(edge.holeCorners)}
-            );
-          } else {
-            wlr_scene_rect_set_clipped_region(rect, clipped_region_get_default());
+        applyOuterBorderClip(target, outputBox);
+        applyBorderClip(m_borderRects, borderEdges(), target, outputBox);
+        for (wlr_scene_rect* rect : m_borderRects) {
+          if (rect != nullptr) {
+            wlr_scene_node_raise_to_top(&rect->node);
           }
         }
       }
@@ -577,8 +686,13 @@ namespace umbriel {
     if (m_tiled) {
       if (m_borderTree == nullptr) {
         m_borderTree = wlr_scene_tree_create(m_sceneTree);
+        // Outer below, then inner on top so the focus ring stays visible.
+        m_outerBorderRect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.outerBorderColor.data());
         for (auto*& rect : m_borderRects) {
           rect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.borderUnfocused.data());
+        }
+        for (wlr_scene_rect* rect : m_borderRects) {
+          wlr_scene_node_raise_to_top(&rect->node);
         }
         wlr_scene_node_lower_to_bottom(&m_borderTree->node);
       }
@@ -635,8 +749,8 @@ namespace umbriel {
       if (looksTiled(m_toplevel)) {
         wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
         const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-        const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
-        const int height = std::max(1, usable.height - 2 * config().layout.gap);
+        const int viewportWidth = std::max(1, usable.width - 2 * config().layoutEdgePad());
+        const int height = std::max(1, usable.height - 2 * config().layoutEdgePad());
         wlr_xdg_toplevel_set_size(
             m_toplevel,
             std::max(1, static_cast<int>(std::lround(config().layout.defaultWidthFraction * viewportWidth))), height
@@ -649,7 +763,12 @@ namespace umbriel {
     if (m_borderTree != nullptr) {
       const wlr_box& geometry = m_toplevel->base->geometry;
       if (m_borderRects[0]->width != geometry.width + 2 * config().appearance.borderWidth
-          || m_borderRects[2]->height != std::max(0, geometry.height - 2 * config().appearance.cornerRadius)) {
+          || m_borderRects[2]->height != std::max(0, geometry.height - 2 * config().appearance.cornerRadius)
+          || (m_outerBorderRect != nullptr
+              && m_outerBorderRect->width
+                  != (config().appearance.outerBorderWidth > 0
+                          ? geometry.width + 2 * config().appearance.totalBorderWidth()
+                          : 0))) {
         updateBorderGeometry();
       }
     }

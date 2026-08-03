@@ -77,9 +77,15 @@ namespace umbriel {
     void handleForeignClose();
     void handleForeignDestroy();
     struct BorderEdge;
+    static std::array<BorderEdge, 4> makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness);
     [[nodiscard]] std::array<BorderEdge, 4> borderEdges() const;
     void updateBorderGeometry();
     void setBorderFocused(bool focused);
+    void applyBorderClip(
+        wlr_scene_rect* const rects[4], const std::array<BorderEdge, 4>& edges, const wlr_box& target,
+        const wlr_box& outputBox
+    );
+    void applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox);
     void applyCornerRadius();
     void updateBlur();
     void clearOutputClip();
@@ -93,7 +99,8 @@ namespace umbriel {
     wlr_xdg_toplevel* m_toplevel = nullptr;
     wlr_scene_tree* m_sceneTree = nullptr;
     wlr_scene_tree* m_borderTree = nullptr;
-    wlr_scene_rect* m_borderRects[4] = {}; // top, bottom, left, right
+    wlr_scene_rect* m_borderRects[4] = {};       // top, bottom, left, right (inner)
+    wlr_scene_rect* m_outerBorderRect = nullptr; // single rounded ring outside the inner border
     SurfaceBlur m_blur;
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_output* m_foreignOutput = nullptr;

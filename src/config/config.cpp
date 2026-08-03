@@ -424,12 +424,17 @@ namespace umbriel {
       }
       warnUnknownKeys(
           *section, "appearance",
-          {"border_width", "corner_radius", "border_focused", "border_unfocused", "animation_ms", "blur"}
+          {"border_width", "outer_border_width", "corner_radius", "border_focused", "border_unfocused",
+           "outer_border_color", "animation_ms", "blur"}
       );
       readInteger(*section, "border_width", "appearance.border_width", 0, 100, loaded.appearance.borderWidth);
+      readInteger(
+          *section, "outer_border_width", "appearance.outer_border_width", 0, 100, loaded.appearance.outerBorderWidth
+      );
       readInteger(*section, "corner_radius", "appearance.corner_radius", 0, 500, loaded.appearance.cornerRadius);
       readColor(*section, "border_focused", "appearance.border_focused", loaded.appearance.borderFocused);
       readColor(*section, "border_unfocused", "appearance.border_unfocused", loaded.appearance.borderUnfocused);
+      readColor(*section, "outer_border_color", "appearance.outer_border_color", loaded.appearance.outerBorderColor);
       readInteger(*section, "animation_ms", "appearance.animation_ms", 1, 10000, loaded.appearance.animationMs);
 
       if (const toml::node* blurNode = section->get("blur")) {

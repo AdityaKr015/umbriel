@@ -442,7 +442,7 @@ namespace umbriel {
             .width = geometry.width,
             .height = geometry.height,
         };
-        const int border = view->tiled() ? config().appearance.borderWidth : 0;
+        const int border = view->tiled() ? config().appearance.totalBorderWidth() : 0;
         wlr_box decorated = target;
         decorated.x -= border;
         decorated.y -= border;
@@ -526,7 +526,7 @@ namespace umbriel {
             .width = geometry.width,
             .height = geometry.height,
         };
-        const int border = view->tiled() ? config().appearance.borderWidth : 0;
+        const int border = view->tiled() ? config().appearance.totalBorderWidth() : 0;
         wlr_box decorated = target;
         decorated.x -= border;
         decorated.y -= border;

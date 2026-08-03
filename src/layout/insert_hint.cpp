@@ -79,7 +79,8 @@ namespace umbriel {
     if (usable.width <= 0 || usable.height <= 0) {
       return;
     }
-    const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
+    const int edgePad = config().layoutEdgePad();
+    const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
     const int gap = std::clamp(gapIndex, 0, columnCount);
     // Paint onto the column boundary (overlay), do not open a layout gap.
@@ -94,15 +95,9 @@ namespace umbriel {
     } else {
       boundaryX = workspace->layout().columnX(gap, viewportWidth) - config().layout.gap / 2;
     }
-    const int targetX = usable.x
-        + config().layout.gap
-        + boundaryX
-        - kHintWidth / 2
-        - static_cast<int>(std::lround(workspace->visualScroll()));
-    showGeometry(
-        workspace, targetX, usable.y + config().layout.gap, kHintWidth,
-        std::max(1, usable.height - 2 * config().layout.gap)
-    );
+    const int targetX =
+        usable.x + edgePad + boundaryX - kHintWidth / 2 - static_cast<int>(std::lround(workspace->visualScroll()));
+    showGeometry(workspace, targetX, usable.y + edgePad, kHintWidth, std::max(1, usable.height - 2 * edgePad));
   }
 
   void InsertHint::showRow(Workspace* workspace, int columnIndex, int rowIndex) {
@@ -115,17 +110,18 @@ namespace umbriel {
     }
     Output* output = workspace->group()->output();
     const wlr_box usable = output->usableArea();
-    const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
+    const int edgePad = config().layoutEdgePad();
+    const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const Column& column = workspace->layout().columns()[static_cast<size_t>(columnIndex)];
     const int row = std::clamp(rowIndex, 0, static_cast<int>(column.views.size()));
-    int boundaryY = usable.y + config().layout.gap;
+    int boundaryY = usable.y + edgePad;
     if (row == static_cast<int>(column.views.size())) {
-      boundaryY = usable.y + usable.height - config().layout.gap;
+      boundaryY = usable.y + usable.height - edgePad;
     } else if (row > 0) {
       boundaryY = workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layout.gap / 2;
     }
     const int targetX = usable.x
-        + config().layout.gap
+        + edgePad
         + workspace->layout().columnX(columnIndex, viewportWidth)
         - static_cast<int>(std::lround(workspace->visualScroll()));
     const int width = workspace->layout().columnWidth(columnIndex, viewportWidth);

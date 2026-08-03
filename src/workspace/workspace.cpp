@@ -197,7 +197,7 @@ namespace umbriel {
     const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
     wlr_box target = m_layout.targetBox(view);
     target.x += scrollOffset;
-    const int border = config().appearance.borderWidth;
+    const int border = config().appearance.totalBorderWidth();
     wlr_box decorated = target;
     decorated.x -= border;
     decorated.y -= border;
@@ -217,7 +217,7 @@ namespace umbriel {
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
     const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
-    const int border = config().appearance.borderWidth;
+    const int border = config().appearance.totalBorderWidth();
     for (const Column& column : m_layout.columns()) {
       for (View* view : column.views) {
         if (view == nullptr || !view->mapped()) {
@@ -337,7 +337,7 @@ namespace umbriel {
       return;
     }
     const int column = m_layout.columnOf(m_focusedView);
-    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * config().layout.gap);
+    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * config().layoutEdgePad());
     m_layout.ensureVisible(column, viewportWidth);
   }
 

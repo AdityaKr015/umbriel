@@ -211,8 +211,11 @@ namespace umbriel {
 
   void ScrollingLayout::arrange(const wlr_box& usable) {
     m_targets.clear();
-    const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
-    const int availableHeight = std::max(1, usable.height - 2 * config().layout.gap);
+    // Include outer border in the usable-area inset so decorations stay clear of
+    // layer-shell exclusive zones (panels).
+    const int edgePad = config().layoutEdgePad();
+    const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
+    const int availableHeight = std::max(1, usable.height - 2 * edgePad);
     m_scroll = std::clamp(m_scroll, 0.0, static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth)));
 
     for (size_t columnIndex = 0; columnIndex < m_columns.size(); ++columnIndex) {
@@ -222,12 +225,12 @@ namespace umbriel {
       }
       const int width = columnWidth(static_cast<int>(columnIndex), viewportWidth);
       const int x = usable.x
-          + config().layout.gap
+          + edgePad
           + columnX(static_cast<int>(columnIndex), viewportWidth)
           - static_cast<int>(std::lround(m_scroll));
       const int rowCount = static_cast<int>(column.views.size());
       const int rowsHeight = std::max(rowCount, availableHeight - (rowCount - 1) * config().layout.gap);
-      int y = usable.y + config().layout.gap;
+      int y = usable.y + edgePad;
       int remainingHeight = rowsHeight;
       for (int row = 0; row < rowCount; ++row) {
         const int remainingRows = rowCount - row;

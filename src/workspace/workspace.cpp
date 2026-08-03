@@ -403,7 +403,7 @@ namespace umbriel {
   void WorkspaceGroup::activateIndex(size_t index) {
     if (Workspace* workspace = workspaceAt(index)) {
       activate(workspace);
-      m_server->refocus();
+      m_server->refocus(m_output);
     }
   }
 
@@ -417,12 +417,12 @@ namespace umbriel {
     }
     if (fallback != nullptr) {
       activate(fallback);
-      m_server->refocus();
+      m_server->refocus(m_output);
       return;
     }
     m_active->setActive(false);
     m_active = nullptr;
-    m_server->refocus();
+    m_server->refocus(m_output);
   }
 
   Workspace* WorkspaceGroup::createWorkspace(const char* name) {

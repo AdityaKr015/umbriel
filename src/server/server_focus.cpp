@@ -65,7 +65,7 @@ namespace umbriel {
     return nullptr;
   }
 
-  void Server::refocus() {
+  void Server::refocus(Output* preferred) {
     if (m_sessionLocked) {
       return;
     }
@@ -73,14 +73,89 @@ namespace umbriel {
       layer->focus();
       return;
     }
-    // Do not auto-focus on-demand layers; only exclusive grabs keyboard without a click.
+
+    const auto focusMappedOn = [this](Output* output) -> bool {
+      if (output == nullptr || output->workspaceGroup() == nullptr) {
+        return false;
+      }
+      Workspace* workspace = output->workspaceGroup()->active();
+      if (workspace == nullptr) {
+        return false;
+      }
+      if (View* focused = workspace->focusedView()) {
+        if (focused->mapped() && focused->onActiveWorkspace()) {
+          focusView(focused);
+          return true;
+        }
+      }
+      for (const auto& entry : m_views) {
+        if (entry->mapped() && entry->workspace() == workspace) {
+          focusView(entry.get());
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (preferred != nullptr) {
+      if (focusMappedOn(preferred)) {
+        return;
+      }
+      // Empty workspace on this output: clear focus instead of highlighting another display.
+      clearKeyboardFocus();
+      return;
+    }
+
+    Output* underCursor = outputFromWlr(preferredOutput());
+    if (focusMappedOn(underCursor)) {
+      return;
+    }
     for (const auto& entry : m_views) {
       if (entry->mapped() && entry->onActiveWorkspace()) {
         focusView(entry.get());
         return;
       }
     }
-    wlr_seat_keyboard_notify_clear_focus(m_seat->wlr());
+    clearKeyboardFocus();
+  }
+
+  void Server::clearKeyboardFocus() {
+    wlr_seat* seat = m_seat->wlr();
+    if (wlr_surface* prev = seat->keyboard_state.focused_surface) {
+      if (wlr_xdg_toplevel* prevToplevel = wlr_xdg_toplevel_try_from_wlr_surface(prev)) {
+        wlr_xdg_toplevel_set_activated(prevToplevel, false);
+        auto* prevTree = static_cast<wlr_scene_tree*>(prevToplevel->base->data);
+        if (prevTree != nullptr && prevTree->node.data != nullptr) {
+          static_cast<View*>(prevTree->node.data)->setBorderFocused(false);
+        }
+      }
+    }
+    wlr_seat_keyboard_notify_clear_focus(seat);
+  }
+
+  void Server::updateFullscreenShell(Output* output) {
+    if (output == nullptr) {
+      return;
+    }
+    bool covered = false;
+    for (const auto& entry : m_views) {
+      View* view = entry.get();
+      if (view == nullptr || !view->mapped() || !view->toplevel()->scheduled.fullscreen) {
+        continue;
+      }
+      Output* home = nullptr;
+      if (view->workspace() != nullptr && view->workspace()->group() != nullptr) {
+        home = view->workspace()->group()->output();
+      }
+      if (home == nullptr) {
+        home = outputFromWlr(preferredOutput());
+      }
+      if (home == output) {
+        covered = true;
+        break;
+      }
+    }
+    output->setShellCoveredByFullscreen(covered);
   }
 
   View* Server::viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer) {

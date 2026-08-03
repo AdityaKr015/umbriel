@@ -141,6 +141,7 @@ namespace umbriel {
     } else {
       leaveForeignOutput();
       setForeignActivated(false);
+      setBorderFocused(false);
     }
   }
 
@@ -589,6 +590,11 @@ namespace umbriel {
       wlr_scene_node_set_enabled(&m_borderTree->node, false);
     }
     m_blur.hide();
+    const bool wasFullscreen = m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen;
+    Output* home = nullptr;
+    if (m_workspace != nullptr && m_workspace->group() != nullptr) {
+      home = m_workspace->group()->output();
+    }
     m_mapped = false;
     if (m_workspace != nullptr) {
       m_workspace->layoutDetach(this);
@@ -597,6 +603,9 @@ namespace umbriel {
     setForeignActivated(false);
     if (m_server->cursor()->mode() != CursorMode::Passthrough) {
       m_server->cursor()->resetMode();
+    }
+    if (wasFullscreen) {
+      m_server->updateFullscreenShell(home != nullptr ? home : m_server->outputFromWlr(m_server->preferredOutput()));
     }
   }
 
@@ -712,15 +721,24 @@ namespace umbriel {
     }
 
     const bool fullscreen = !m_toplevel->current.fullscreen;
+    Output* output = nullptr;
     if (fullscreen) {
       clearOutputClip();
-      wlr_output* output = m_server->preferredOutput();
+      if (m_workspace != nullptr && m_workspace->group() != nullptr) {
+        output = m_workspace->group()->output();
+      }
+      if (output == nullptr) {
+        output = m_server->outputFromWlr(m_server->preferredOutput());
+      }
+      wlr_output* wlrOutput = output != nullptr ? output->wlr() : m_server->preferredOutput();
       wlr_box fullArea{};
-      wlr_output_layout_get_box(m_server->outputLayout(), output, &fullArea);
+      wlr_output_layout_get_box(m_server->outputLayout(), wlrOutput, &fullArea);
       if (fullArea.width > 0 && fullArea.height > 0) {
         wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
         wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
       }
+    } else if (m_workspace != nullptr && m_workspace->group() != nullptr) {
+      output = m_workspace->group()->output();
     }
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     if (m_borderTree != nullptr) {
@@ -731,6 +749,10 @@ namespace umbriel {
       m_workspace->arrange();
     }
     updateForeignState();
+    if (output == nullptr) {
+      output = m_server->outputFromWlr(m_server->preferredOutput());
+    }
+    m_server->updateFullscreenShell(output);
   }
 
 } // namespace umbriel

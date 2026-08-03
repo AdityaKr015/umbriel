@@ -143,6 +143,16 @@ namespace umbriel {
     }
   }
 
+  void Output::setShellCoveredByFullscreen(bool covered) {
+    // Keep BACKGROUND (wallpaper) and OVERLAY (OSD); hide panel layers under fullscreen.
+    if (m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] != nullptr) {
+      wlr_scene_node_set_enabled(&m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM]->node, !covered);
+    }
+    if (m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] != nullptr) {
+      wlr_scene_node_set_enabled(&m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP]->node, !covered);
+    }
+  }
+
   wlr_scene_tree* Output::layerTree(uint32_t layer) const {
     if (layer >= kLayerCount) {
       return m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP];

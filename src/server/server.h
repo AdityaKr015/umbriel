@@ -112,7 +112,10 @@ namespace umbriel {
     void raiseLockTree();
     void updateLockBlank();
     void notifyIdleActivity();
-    void refocus();
+    // Prefer focusing a view on `preferred` when set (workspace switch on one output).
+    void refocus(Output* preferred = nullptr);
+    void clearKeyboardFocus();
+    void updateFullscreenShell(Output* output);
     [[nodiscard]] LayerSurface* exclusiveKeyboardLayer() const;
     // Hide foreign-output views for this pass so shared scene nodes cannot bleed.
     void prepareSceneForOutput(Output* rendering);

@@ -243,7 +243,7 @@ namespace umbriel {
       case WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE: {
         if (Workspace* workspace = workspaceFromHandle(request->activate.workspace)) {
           workspace->group()->activate(workspace);
-          refocus();
+          refocus(workspace->group()->output());
         }
         break;
       }

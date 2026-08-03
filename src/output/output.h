@@ -63,6 +63,7 @@ namespace umbriel {
 
     bool m_inFrame = false;
     bool m_hasDeferredMode = false;
+    bool m_gammaDirty = false;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;
 

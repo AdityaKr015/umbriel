@@ -68,5 +68,26 @@
           };
         }
       );
+
+      homeModules.default =
+        { pkgs, lib, ... }:
+        {
+          imports = [ ./nix/home-module.nix ];
+          programs.umbriel.package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        };
+
+      hjemModules.default =
+        { pkgs, lib, ... }:
+        {
+          imports = [ ./nix/hjem-module.nix ];
+          programs.umbriel.package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        };
+
+      nixosModules.default =
+        { pkgs, lib, ... }:
+        {
+          imports = [ ./nix/nixos-module.nix ];
+          programs.umbriel.package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        };
     };
 }

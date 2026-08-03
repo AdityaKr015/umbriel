@@ -77,9 +77,9 @@ theme = ""
 size = 24                 # 1-512
 
 [keybinds]
-# Chords are case-insensitive and require at least one modifier. Supported
-# modifiers: Mod, Shift, Ctrl/Control, Alt, and Super/Logo/Win. `Mod` is Alt in
-# nested sessions and Super on DRM.
+# Chords are case-insensitive. Supported modifiers: Mod, Shift, Ctrl/Control,
+# Alt, and Super/Logo/Win (`Mod` is Alt nested / Super on DRM). Bare keys are
+# allowed (e.g. XF86AudioMute).
 #
 # A configured chord replaces its compiled default. `none` removes a binding.
 # Values may be any of:

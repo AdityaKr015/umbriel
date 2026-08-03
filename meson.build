@@ -19,11 +19,16 @@ add_project_arguments(
 wayland_server_dep = dependency('wayland-server')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')
-scenefx_proj = subproject(
-  'scenefx',
-  default_options: ['examples=false', 'tracy_enable=false', 'werror=false', 'default_library=static'],
-)
-scenefx_dep = scenefx_proj.get_variable('scenefx')
+# Prefer a system/packaged SceneFX (Nix). Fall back to the wrap subproject for
+# local non-Nix builds so the ignore_alpha patch still applies via packagefiles.
+scenefx_dep = dependency('scenefx-0.5', required: false)
+if not scenefx_dep.found()
+  scenefx_proj = subproject(
+    'scenefx',
+    default_options: ['examples=false', 'tracy_enable=false', 'werror=false', 'default_library=static'],
+  )
+  scenefx_dep = scenefx_proj.get_variable('scenefx')
+endif
 xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput')
 pixman_dep = dependency('pixman-1')

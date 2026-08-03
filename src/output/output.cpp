@@ -221,7 +221,11 @@ namespace umbriel {
     }
   }
 
-  void Output::onGammaChanged(wlr_gamma_control_v1* /*control*/) { wlr_output_schedule_frame(m_output); }
+  void Output::onGammaChanged(wlr_gamma_control_v1* /*control*/) {
+    // DRM gamma LUT upload is expensive; apply once on change, not every frame.
+    m_gammaDirty = true;
+    wlr_output_schedule_frame(m_output);
+  }
 
   void Output::onFrame(wl_listener* listener, void* /*data*/) {
     Output* self = wl_container_of(listener, self, m_frame);
@@ -248,6 +252,9 @@ namespace umbriel {
     wlr_output_state_set_custom_mode(&state, width, height, 0);
     if (!wlr_output_commit_state(m_output, &state)) {
       wlr_log(WLR_ERROR, "failed to commit output mode %dx%d for '%s'", width, height, m_output->name);
+    } else {
+      // Mode changes can drop the DRM gamma LUT; re-apply on the next frame.
+      m_gammaDirty = true;
     }
     wlr_output_state_finish(&state);
     arrangeLayers();
@@ -270,7 +277,7 @@ namespace umbriel {
     if (m_output->width <= 0 || m_output->height <= 0) {
       return;
     }
-    if (!wlr_scene_output_needs_frame(m_sceneOutput)) {
+    if (!wlr_scene_output_needs_frame(m_sceneOutput) && !m_gammaDirty) {
       if (m_server->animator().active()) {
         wlr_output_schedule_frame(m_output);
       }
@@ -289,17 +296,30 @@ namespace umbriel {
     }
 
     // Hardware gamma only (DRM). Nested Wayland has no gamma LUT; leave that alone.
-    if (wlr_gamma_control_v1* control = wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output)) {
+    // Apply only when dirty: uploading the LUT every frame stalls the compositor.
+    bool gammaPending = false;
+    if (m_gammaDirty) {
       if (wlr_output_get_gamma_size(m_output) > 0) {
+        wlr_gamma_control_v1* control = wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output);
         if (!wlr_gamma_control_v1_apply(control, &state)) {
-          wlr_gamma_control_v1_send_failed_and_destroy(control);
+          if (control != nullptr) {
+            wlr_gamma_control_v1_send_failed_and_destroy(control);
+          }
+          m_gammaDirty = false;
+        } else {
+          gammaPending = true;
         }
+      } else {
+        m_gammaDirty = false;
       }
     }
 
     const bool ok = wlr_output_commit_state(m_output, &state);
     wlr_output_state_finish(&state);
     m_inFrame = false;
+    if (ok && gammaPending) {
+      m_gammaDirty = false;
+    }
 
     if (m_hasDeferredMode) {
       m_hasDeferredMode = false;
@@ -338,6 +358,7 @@ namespace umbriel {
     }
     if ((event->state->committed & (WLR_OUTPUT_STATE_MODE | WLR_OUTPUT_STATE_ENABLED)) != 0) {
       arrangeLayers();
+      m_gammaDirty = true;
     }
     wlr_output_schedule_frame(m_output);
   }

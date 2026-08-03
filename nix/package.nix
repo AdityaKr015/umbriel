@@ -19,6 +19,13 @@
 let
   inherit (builtins) head match readFile;
   version = head (match ".*\n  version: '([0-9][^']+)'.*" (readFile ../meson.build));
+
+  # Umbriel needs ignore_alpha on scene blur (not upstream in scenefx 0.5 yet).
+  scenefxPatched = scenefx.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      ../subprojects/packagefiles/scenefx-blur-ignore-alpha.diff
+    ];
+  });
 in
 stdenv.mkDerivation {
   pname = "umbriel";
@@ -36,8 +43,9 @@ stdenv.mkDerivation {
   buildInputs = [
     wayland
     wayland-protocols
+    # SceneFX before wlroots so its scene symbols win at link time.
+    scenefxPatched
     wlroots_0_20
-    scenefx
     libxkbcommon
     libinput
     pixman
@@ -47,6 +55,20 @@ stdenv.mkDerivation {
   ];
 
   mesonBuildType = "release";
+
+  postInstall = ''
+    mkdir -p "$out/share/wayland-sessions"
+    cat > "$out/share/wayland-sessions/umbriel.desktop" <<EOF
+[Desktop Entry]
+Name=Umbriel
+Comment=Umbriel Wayland Compositor
+Exec=$out/bin/umbriel
+Type=Application
+DesktopNames=Umbriel
+EOF
+  '';
+
+  passthru.providedSessions = [ "umbriel" ];
 
   meta = with lib; {
     description = "A Wayland compositor built on wlroots and SceneFX";

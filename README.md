@@ -49,7 +49,7 @@ Still open / planned:
 - meson, ninja, pkg-config, wayland-scanner
 - wlroots 0.20
 - scenefx 0.5
-- wayland, libxkbcommon, libinput, pixman, libGL, libdrm
+- wayland, libxkbcommon, libinput, pixman, libGL, libdrm, tomlplusplus
 
 ## Build (Nix)
 
@@ -71,11 +71,12 @@ nix build
 ./result/bin/umbriel
 ```
 
-SceneFX comes in as a flake input (`github:wlrfx/scenefx/0.5`).
+SceneFX comes in as a flake input (`github:wlrfx/scenefx/0.5`). Prefer `nix develop` for local
+builds so wlroots, SceneFX, and tomlplusplus are on `PKG_CONFIG_PATH`.
 
 ## Build (system packages)
 
-If `wlroots-0.20` and `scenefx-0.5` are available via pkg-config:
+If `wlroots-0.20`, `scenefx-0.5`, and `tomlplusplus` are available via pkg-config:
 
 ```sh
 just debug
@@ -124,6 +125,41 @@ Pass `-c path/to/config.toml` to use another file. Config files can include othe
 See [`example.toml`](example.toml) for every available option, its default or supported range, input-device behavior,
 keybinding syntax, and the complete action list.
 
+### Nix (home-manager / NixOS)
+
+Declarative config mirrors Noctalia: Nix attrsets are serialized to TOML with `pkgs.formats.toml`.
+
+```nix
+# flake input
+umbriel.url = "path:/path/to/umbriel"; # or github:noctalia-dev/umbriel
+
+# NixOS
+imports = [ inputs.umbriel.nixosModules.default ];
+programs.umbriel.enable = true;
+
+# home-manager
+imports = [ inputs.umbriel.homeModules.default ];
+programs.umbriel = {
+  enable = true;
+  settings = {
+    general = {
+      terminal = "ghostty";
+      autostart = [ "noctalia" ];
+    };
+    layout.gap = 5;
+    input.keyboard.layout = "de";
+    keybinds = {
+      "Mod+Return" = "spawn-terminal";
+      "Mod+Q" = "close";
+      "Mod+R" = "spawn:noctalia msg panel-toggle launcher";
+    };
+  };
+};
+```
+
+`settings` also accepts a raw TOML string or a path to a `.toml` file. A hjem module is exported as
+`inputs.umbriel.hjemModules.default`.
+
 The `appearance`, `layout`, `general`, `input`, and `keybinds` sections overlay compiled defaults, so a config file is
 optional. Keyboard input supports XKB layout/variant and repeat settings; touchpads support tap-to-click and natural
 scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput options are applied only
@@ -150,6 +186,9 @@ protocols/    vendored Wayland protocol XML
 nix/
   package.nix
   devshell.nix
+  home-module.nix
+  hjem-module.nix
+  nixos-module.nix
 ```
 
 `src/` is the include root. Headers live next to their sources.

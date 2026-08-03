@@ -141,7 +141,7 @@ namespace umbriel {
       }
 
       output.keysym = xkb_keysym_to_lower(keysym);
-      return output.useMod || output.modifiers != 0;
+      return true;
     }
 
     bool parseAction(std::string_view value, Keybind& output) {

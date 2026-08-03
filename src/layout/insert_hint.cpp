@@ -1,5 +1,6 @@
 #include "layout/insert_hint.h"
 
+#include "config/config.h"
 #include "layout/scrolling.h"
 #include "output/output.h"
 #include "server/server.h"
@@ -65,12 +66,16 @@ namespace umbriel {
     if (usable.width <= 0 || usable.height <= 0) {
       return;
     }
-    const int viewportWidth = std::max(1, usable.width - 2 * kGap);
+    const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
     const int gap = std::clamp(gapIndex, 0, columnCount);
-    const int hintX = workspace->layout().columnX(gap, viewportWidth) - kGap - kHintWidth;
-    const int targetX = usable.x + kGap + hintX - static_cast<int>(std::lround(workspace->visualScroll()));
-    showGeometry(workspace, targetX, usable.y + kGap, kHintWidth, std::max(1, usable.height - 2 * kGap));
+    const int hintX = workspace->layout().columnX(gap, viewportWidth) - config().layout.gap - kHintWidth;
+    const int targetX =
+        usable.x + config().layout.gap + hintX - static_cast<int>(std::lround(workspace->visualScroll()));
+    showGeometry(
+        workspace, targetX, usable.y + config().layout.gap, kHintWidth,
+        std::max(1, usable.height - 2 * config().layout.gap)
+    );
   }
 
   void InsertHint::showRow(Workspace* workspace, int columnIndex, int rowIndex) {
@@ -83,17 +88,17 @@ namespace umbriel {
     }
     Output* output = workspace->group()->output();
     const wlr_box usable = output->usableArea();
-    const int viewportWidth = std::max(1, usable.width - 2 * kGap);
+    const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
     const Column& column = workspace->layout().columns()[static_cast<size_t>(columnIndex)];
     const int row = std::clamp(rowIndex, 0, static_cast<int>(column.views.size()));
-    int boundaryY = usable.y + kGap;
+    int boundaryY = usable.y + config().layout.gap;
     if (row == static_cast<int>(column.views.size())) {
-      boundaryY = usable.y + usable.height - kGap;
+      boundaryY = usable.y + usable.height - config().layout.gap;
     } else if (row > 0) {
-      boundaryY = workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - kGap / 2;
+      boundaryY = workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layout.gap / 2;
     }
     const int targetX = usable.x
-        + kGap
+        + config().layout.gap
         + workspace->layout().columnX(columnIndex, viewportWidth)
         - static_cast<int>(std::lround(workspace->visualScroll()));
     const int width = workspace->layout().columnWidth(columnIndex, viewportWidth);
@@ -120,15 +125,15 @@ namespace umbriel {
         m_server->animator().cancel(m_fadeAnim);
       }
       m_fadeAnim = m_server->animator().animate(
-          0.0, kHintAlpha, kAnimMs, [this](double alpha) { setAlpha(static_cast<float>(alpha)); },
-          [this] { m_fadeAnim = 0; }
+          0.0, kHintAlpha, config().appearance.animationMs,
+          [this](double alpha) { setAlpha(static_cast<float>(alpha)); }, [this] { m_fadeAnim = 0; }
       );
       m_visible = true;
     } else if (m_tree->node.x != x || m_tree->node.y != y) {
       const int fromX = m_tree->node.x;
       const int fromY = m_tree->node.y;
       m_positionAnim = m_server->animator().animate(
-          0.0, 1.0, kAnimMs,
+          0.0, 1.0, config().appearance.animationMs,
           [this, fromX, fromY, x, y](double progress) {
             wlr_scene_node_set_position(
                 &m_tree->node, static_cast<int>(std::lround(fromX + (x - fromX) * progress)),

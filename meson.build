@@ -23,6 +23,7 @@ scenefx_dep = dependency('scenefx-0.5')
 xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput')
 pixman_dep = dependency('pixman-1')
+tomlplusplus_dep = dependency('tomlplusplus')
 
 # wlroots cursor-shape header pulls enum defs from wayland-protocols.
 wayland_protocols_enums = declare_dependency(
@@ -45,6 +46,8 @@ sources = files(
   'src/main.cpp',
   'src/core/animation.cpp',
   'src/core/log.cpp',
+  'src/config/config.cpp',
+  'src/config/config_merge.cpp',
   'src/layout/insert_hint.cpp',
   'src/layout/scrolling.cpp',
   'src/server/server.cpp',
@@ -75,6 +78,7 @@ umbriel = executable(
     xkbcommon_dep,
     libinput_dep,
     pixman_dep,
+    tomlplusplus_dep,
   ],
   install: true,
 )

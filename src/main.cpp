@@ -1,3 +1,4 @@
+#include "config/config.h"
 #include "core/log.h"
 #include "server/server.h"
 #include "wlr.h"
@@ -17,7 +18,7 @@ namespace {
     }
   }
 
-  void printUsage(const char* argv0) { kLog.error("Usage: {} [-s startup_command]", argv0); }
+  void printUsage(const char* argv0) { kLog.error("Usage: {} [-s startup_command] [-c config_file]", argv0); }
 } // namespace
 
 int main(int argc, char** argv) {
@@ -29,9 +30,12 @@ int main(int argc, char** argv) {
 #endif
 
   const char* startupCmd = nullptr;
+  const char* configPath = nullptr;
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
       startupCmd = argv[++i];
+    } else if (std::strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
+      configPath = argv[++i];
     } else {
       printUsage(argv[0]);
       return EXIT_FAILURE;
@@ -40,6 +44,7 @@ int main(int argc, char** argv) {
 
   try {
     kLog.info("starting umbriel");
+    umbriel::loadConfig(configPath);
     umbriel::Server server;
     g_server = &server;
 

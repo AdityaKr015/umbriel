@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config/config.h"
+
 #include <vector>
 
 struct wlr_box;
@@ -8,20 +10,11 @@ namespace umbriel {
 
   class View;
 
-  inline constexpr int kGap = 8;
-  inline constexpr int kBorderPx = 2;
-  inline constexpr int kCornerRadius = 10;
-  inline constexpr float kBorderFocused[4] = {0.48F, 0.64F, 1.0F, 1.0F};
-  inline constexpr float kBorderUnfocused[4] = {0.16F, 0.16F, 0.20F, 1.0F};
   inline constexpr int kHintWidth = 20;
-  inline constexpr int kInsertGapWidth = kHintWidth + kGap;
-  inline constexpr double kWidthPresets[] = {1.0 / 3, 0.5, 2.0 / 3};
-  inline constexpr double kDefaultWidthFrac = 0.5;
-  inline constexpr int kScrollWheelStep = 60;
 
   struct Column {
     std::vector<View*> views;
-    double widthFrac = kDefaultWidthFrac;
+    double widthFrac = config().layout.defaultWidthFraction;
     double savedWidthFrac = 0.0;
   };
 

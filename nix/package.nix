@@ -14,6 +14,7 @@
   libGL,
   libdrm,
   scenefx,
+  tomlplusplus,
 }:
 let
   inherit (builtins) head match readFile;
@@ -40,6 +41,7 @@ stdenv.mkDerivation {
     libxkbcommon
     libinput
     pixman
+    tomlplusplus
     libGL
     libdrm
   ];

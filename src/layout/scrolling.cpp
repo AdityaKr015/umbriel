@@ -1,5 +1,7 @@
 #include "layout/scrolling.h"
 
+#include "config/config.h"
+
 // clang-format off
 #include <algorithm>
 #include <cmath>
@@ -41,10 +43,10 @@ namespace umbriel {
     const int end = std::clamp(columnIndex, 0, static_cast<int>(m_columns.size()));
     int x = 0;
     for (int i = 0; i < end; ++i) {
-      x += columnWidth(i, viewportWidth) + kGap;
+      x += columnWidth(i, viewportWidth) + config().layout.gap;
     }
     if (m_insertGap >= 0 && end >= m_insertGap) {
-      x += kInsertGapWidth;
+      x += kHintWidth + config().layout.gap;
     }
     return x;
   }
@@ -53,7 +55,7 @@ namespace umbriel {
     if (m_columns.empty()) {
       return 0;
     }
-    return columnX(static_cast<int>(m_columns.size()), viewportWidth) - kGap;
+    return columnX(static_cast<int>(m_columns.size()), viewportWidth) - config().layout.gap;
   }
 
   void ScrollingLayout::insertView(View* view, int columnIndex) {
@@ -169,8 +171,8 @@ namespace umbriel {
 
   void ScrollingLayout::arrange(const wlr_box& usable) {
     m_targets.clear();
-    const int viewportWidth = std::max(1, usable.width - 2 * kGap);
-    const int availableHeight = std::max(1, usable.height - 2 * kGap);
+    const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
+    const int availableHeight = std::max(1, usable.height - 2 * config().layout.gap);
     m_scroll = std::clamp(m_scroll, 0.0, static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth)));
 
     for (size_t columnIndex = 0; columnIndex < m_columns.size(); ++columnIndex) {
@@ -180,12 +182,12 @@ namespace umbriel {
       }
       const int width = columnWidth(static_cast<int>(columnIndex), viewportWidth);
       const int x = usable.x
-          + kGap
+          + config().layout.gap
           + columnX(static_cast<int>(columnIndex), viewportWidth)
           - static_cast<int>(std::lround(m_scroll));
       const int rowCount = static_cast<int>(column.views.size());
-      const int rowsHeight = std::max(rowCount, availableHeight - (rowCount - 1) * kGap);
-      int y = usable.y + kGap;
+      const int rowsHeight = std::max(rowCount, availableHeight - (rowCount - 1) * config().layout.gap);
+      int y = usable.y + config().layout.gap;
       int remainingHeight = rowsHeight;
       for (int row = 0; row < rowCount; ++row) {
         const int remainingRows = rowCount - row;
@@ -193,7 +195,7 @@ namespace umbriel {
         m_targets.push_back(
             {.view = column.views[static_cast<size_t>(row)], .x = x, .y = y, .width = width, .height = height}
         );
-        y += height + kGap;
+        y += height + config().layout.gap;
         remainingHeight -= height;
       }
     }
@@ -213,11 +215,11 @@ namespace umbriel {
       return false;
     }
     Column& column = m_columns[static_cast<size_t>(columnIndex)];
-    const auto it =
-        std::find_if(std::begin(kWidthPresets), std::end(kWidthPresets), [current = column.widthFrac](double preset) {
-          return preset > current + 0.0001;
-        });
-    column.widthFrac = it == std::end(kWidthPresets) ? kWidthPresets[0] : *it;
+    const auto& presets = config().layout.widthPresets;
+    const auto it = std::find_if(presets.begin(), presets.end(), [current = column.widthFrac](double preset) {
+      return preset > current + 0.0001;
+    });
+    column.widthFrac = it == presets.end() ? presets[0] : *it;
     column.savedWidthFrac = 0.0;
     return true;
   }
@@ -249,7 +251,7 @@ namespace umbriel {
 
   double ScrollingLayout::widthFraction(int columnIndex) const {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {
-      return kDefaultWidthFrac;
+      return config().layout.defaultWidthFraction;
     }
     return m_columns[static_cast<size_t>(columnIndex)].widthFrac;
   }

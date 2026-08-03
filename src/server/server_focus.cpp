@@ -1,3 +1,4 @@
+#include "config/config.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layer/surface.h"
@@ -281,9 +282,10 @@ namespace umbriel {
       stop();
       return true;
     case XKB_KEY_Return: {
-      const char* terminal = std::getenv("TERMINAL");
+      const std::string& configured = config().general.terminal;
+      const char* terminal = !configured.empty() ? configured.c_str() : std::getenv("TERMINAL");
       if (terminal == nullptr || terminal[0] == '\0') {
-        wlr_log(WLR_ERROR, "mod+Return: set TERMINAL to your terminal binary");
+        wlr_log(WLR_ERROR, "mod+Return: set [general].terminal or $TERMINAL");
         return true;
       }
       spawn(terminal);

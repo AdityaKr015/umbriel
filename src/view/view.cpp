@@ -1,5 +1,6 @@
 #include "view/view.h"
 
+#include "config/config.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layout/scrolling.h"
@@ -199,7 +200,7 @@ namespace umbriel {
     }
     cancelPositionAnimation();
     m_posAnim = m_server->animator().animate(
-        0.0, 1.0, kAnimMs,
+        0.0, 1.0, config().appearance.animationMs,
         [this, fromX, fromY, x, y](double progress) {
           wlr_scene_node_set_position(
               &m_sceneTree->node, static_cast<int>(std::lround(fromX + (x - fromX) * progress)),
@@ -282,34 +283,42 @@ namespace umbriel {
 
   std::array<View::BorderEdge, 4> View::borderEdges() const {
     const wlr_box& geometry = m_toplevel->base->geometry;
-    const int width = geometry.width + 2 * kBorderPx;
-    const int innerWidth = std::max(0, width - 2 * kBorderPx);
-    const int sideHeight = std::max(0, geometry.height - 2 * kCornerRadius);
+    const int width = geometry.width + 2 * config().appearance.borderWidth;
+    const int innerWidth = std::max(0, width - 2 * config().appearance.borderWidth);
+    const int sideHeight = std::max(0, geometry.height - 2 * config().appearance.cornerRadius);
 
     return {{
         {
-            .box = {-kBorderPx, -kBorderPx, width, kBorderPx + kCornerRadius},
-            .outer = corner_radii_top(kCornerRadius + kBorderPx),
+            .box =
+                {-config().appearance.borderWidth, -config().appearance.borderWidth, width,
+                 config().appearance.borderWidth + config().appearance.cornerRadius},
+            .outer = corner_radii_top(config().appearance.cornerRadius + config().appearance.borderWidth),
             .hasHole = true,
-            .hole = {kBorderPx, kBorderPx, innerWidth, kBorderPx + kCornerRadius},
-            .holeCorners = corner_radii_top(kCornerRadius),
+            .hole =
+                {config().appearance.borderWidth, config().appearance.borderWidth, innerWidth,
+                 config().appearance.borderWidth + config().appearance.cornerRadius},
+            .holeCorners = corner_radii_top(config().appearance.cornerRadius),
         },
         {
-            .box = {-kBorderPx, geometry.height - kCornerRadius, width, kBorderPx + kCornerRadius},
-            .outer = corner_radii_bottom(kCornerRadius + kBorderPx),
+            .box =
+                {-config().appearance.borderWidth, geometry.height - config().appearance.cornerRadius, width,
+                 config().appearance.borderWidth + config().appearance.cornerRadius},
+            .outer = corner_radii_bottom(config().appearance.cornerRadius + config().appearance.borderWidth),
             .hasHole = true,
-            .hole = {kBorderPx, -1, innerWidth, kCornerRadius + 1},
-            .holeCorners = corner_radii_bottom(kCornerRadius),
+            .hole = {config().appearance.borderWidth, -1, innerWidth, config().appearance.cornerRadius + 1},
+            .holeCorners = corner_radii_bottom(config().appearance.cornerRadius),
         },
         {
-            .box = {-kBorderPx, kCornerRadius, kBorderPx, sideHeight},
+            .box =
+                {-config().appearance.borderWidth, config().appearance.cornerRadius, config().appearance.borderWidth,
+                 sideHeight},
             .outer = corner_radii_none(),
             .hasHole = false,
             .hole = {},
             .holeCorners = corner_radii_none(),
         },
         {
-            .box = {geometry.width, kCornerRadius, kBorderPx, sideHeight},
+            .box = {geometry.width, config().appearance.cornerRadius, config().appearance.borderWidth, sideHeight},
             .outer = corner_radii_none(),
             .hasHole = false,
             .hole = {},
@@ -341,7 +350,9 @@ namespace umbriel {
       return;
     }
     for (wlr_scene_rect* rect : m_borderRects) {
-      wlr_scene_rect_set_color(rect, focused ? kBorderFocused : kBorderUnfocused);
+      wlr_scene_rect_set_color(
+          rect, focused ? config().appearance.borderFocused.data() : config().appearance.borderUnfocused.data()
+      );
     }
   }
 
@@ -374,7 +385,7 @@ namespace umbriel {
           wlr_scene_buffer_set_source_box(buffer, &source);
           wlr_scene_buffer_set_dest_size(buffer, geometry.width, geometry.height);
           wlr_scene_node_set_position(&buffer->node, geometry.x, geometry.y);
-          wlr_scene_buffer_set_corner_radius(buffer, kCornerRadius);
+          wlr_scene_buffer_set_corner_radius(buffer, config().appearance.cornerRadius);
         },
         this
     );
@@ -457,7 +468,7 @@ namespace umbriel {
       if (m_borderTree == nullptr) {
         m_borderTree = wlr_scene_tree_create(m_sceneTree);
         for (auto*& rect : m_borderRects) {
-          rect = wlr_scene_rect_create(m_borderTree, 0, 0, kBorderUnfocused);
+          rect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.borderUnfocused.data());
         }
         wlr_scene_node_lower_to_bottom(&m_borderTree->node);
       }
@@ -509,10 +520,11 @@ namespace umbriel {
       if (looksTiled(m_toplevel)) {
         wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
         const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-        const int viewportWidth = std::max(1, usable.width - 2 * kGap);
-        const int height = std::max(1, usable.height - 2 * kGap);
+        const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
+        const int height = std::max(1, usable.height - 2 * config().layout.gap);
         wlr_xdg_toplevel_set_size(
-            m_toplevel, std::max(1, static_cast<int>(std::lround(kDefaultWidthFrac * viewportWidth))), height
+            m_toplevel,
+            std::max(1, static_cast<int>(std::lround(config().layout.defaultWidthFraction * viewportWidth))), height
         );
       } else {
         wlr_xdg_toplevel_set_tiled(m_toplevel, 0);
@@ -521,8 +533,8 @@ namespace umbriel {
     }
     if (m_borderTree != nullptr) {
       const wlr_box& geometry = m_toplevel->base->geometry;
-      if (m_borderRects[0]->width != geometry.width + 2 * kBorderPx
-          || m_borderRects[2]->height != std::max(0, geometry.height - 2 * kCornerRadius)) {
+      if (m_borderRects[0]->width != geometry.width + 2 * config().appearance.borderWidth
+          || m_borderRects[2]->height != std::max(0, geometry.height - 2 * config().appearance.cornerRadius)) {
         updateBorderGeometry();
       }
     }

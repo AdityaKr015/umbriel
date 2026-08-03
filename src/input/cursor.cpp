@@ -1,5 +1,6 @@
 #include "input/cursor.h"
 
+#include "config/config.h"
 #include "input/seat.h"
 #include "layer/surface.h"
 #include "layout/insert_hint.h"
@@ -262,7 +263,7 @@ namespace umbriel {
           output != nullptr && output->workspaceGroup() != nullptr ? output->workspaceGroup()->active() : nullptr;
       if (workspace != nullptr) {
         const double delta = event->delta_discrete != 0
-            ? static_cast<double>(event->delta_discrete) / 120.0 * kScrollWheelStep
+            ? static_cast<double>(event->delta_discrete) / 120.0 * config().layout.scrollWheelStep
             : event->delta * 0.5;
         workspace->layout().setScroll(workspace->layout().scroll() + delta);
         workspace->arrange();
@@ -357,9 +358,9 @@ namespace umbriel {
       m_dropWorkspace->layout().clearInsertGap();
       m_dropWorkspace->arrange(true);
     }
-    const int viewportWidth = std::max(1, usable.width - 2 * kGap);
+    const int viewportWidth = std::max(1, usable.width - 2 * config().layout.gap);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
-    const double layoutX = m_cursor->x - usable.x - kGap + workspace->visualScroll();
+    const double layoutX = m_cursor->x - usable.x - config().layout.gap + workspace->visualScroll();
 
     for (int columnIndex = 0; columnIndex < columnCount; ++columnIndex) {
       const int columnX = workspace->layout().columnX(columnIndex, viewportWidth);
@@ -369,11 +370,11 @@ namespace umbriel {
       }
       const Column& column = workspace->layout().columns()[static_cast<size_t>(columnIndex)];
       int nearestRow = 0;
-      double rowDistance = std::abs(m_cursor->y - (usable.y + kGap));
+      double rowDistance = std::abs(m_cursor->y - (usable.y + config().layout.gap));
       for (int row = 1; row <= static_cast<int>(column.views.size()); ++row) {
         const int boundary = row == static_cast<int>(column.views.size())
-            ? usable.y + usable.height - kGap
-            : workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - kGap / 2;
+            ? usable.y + usable.height - config().layout.gap
+            : workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layout.gap / 2;
         const double distance = std::abs(m_cursor->y - boundary);
         if (distance < rowDistance) {
           nearestRow = row;
@@ -395,8 +396,9 @@ namespace umbriel {
     int nearestGap = 0;
     double nearestDistance = std::abs(layoutX);
     for (int gap = 1; gap <= columnCount; ++gap) {
-      const int boundary = gap == columnCount ? workspace->layout().columnX(gap, viewportWidth) - kGap
-                                              : workspace->layout().columnX(gap, viewportWidth) - kGap / 2;
+      const int boundary = gap == columnCount
+          ? workspace->layout().columnX(gap, viewportWidth) - config().layout.gap
+          : workspace->layout().columnX(gap, viewportWidth) - config().layout.gap / 2;
       const double distance = std::abs(layoutX - boundary);
       if (distance < nearestDistance) {
         nearestGap = gap;
@@ -484,7 +486,8 @@ namespace umbriel {
       resetMode();
       return;
     }
-    const int viewportWidth = std::max(1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * kGap);
+    const int viewportWidth =
+        std::max(1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * config().layout.gap);
     const double fraction = m_resizeStartFraction + (m_cursor->x - m_resizeStartX) / viewportWidth;
     if (m_resizeWorkspace->layout().setWidthFraction(m_resizeColumn, fraction)) {
       wlr_xdg_toplevel_set_maximized(m_grabbedView->toplevel(), false);

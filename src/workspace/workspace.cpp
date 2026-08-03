@@ -1,5 +1,6 @@
 #include "workspace/workspace.h"
 
+#include "config/config.h"
 #include "core/log.h"
 #include "output/output.h"
 #include "server/server.h"
@@ -158,7 +159,7 @@ namespace umbriel {
         }
       }
       m_scrollAnim = m_group->server()->animator().animate(
-          m_visualScroll, targetScroll, kAnimMs,
+          m_visualScroll, targetScroll, config().appearance.animationMs,
           [this](double value) {
             m_visualScroll = value;
             applyPositions(false);
@@ -289,7 +290,7 @@ namespace umbriel {
       return;
     }
     const int column = m_layout.columnOf(m_focusedView);
-    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * kGap);
+    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * config().layout.gap);
     m_layout.ensureVisible(column, viewportWidth);
   }
 

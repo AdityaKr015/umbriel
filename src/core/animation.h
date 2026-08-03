@@ -7,7 +7,6 @@
 namespace umbriel {
 
   using AnimId = uint64_t;
-  inline constexpr int kAnimMs = 250;
 
   class Animator {
   public:

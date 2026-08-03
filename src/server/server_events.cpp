@@ -302,7 +302,7 @@ namespace umbriel {
   void Server::onRequestActivate(wl_listener* listener, void* data) {
     Server* self = wl_container_of(listener, self, m_requestActivate);
     auto* event = static_cast<wlr_xdg_activation_v1_request_activate_event*>(data);
-    if (self->m_sessionLocked || self->exclusiveKeyboardLayer() != nullptr) {
+    if (self->m_sessionLocked) {
       return;
     }
 

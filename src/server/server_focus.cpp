@@ -18,10 +18,6 @@ namespace umbriel {
     if (view == nullptr || m_sessionLocked) {
       return;
     }
-    // Exclusive layer-shell keyboard grab must not be stolen by window focus.
-    if (exclusiveKeyboardLayer() != nullptr) {
-      return;
-    }
     if (Workspace* workspace = view->workspace()) {
       if (!workspace->active()) {
         workspace->group()->activate(workspace);
@@ -46,7 +42,11 @@ namespace umbriel {
       m_views.insert(m_views.begin(), std::move(entry));
     }
 
-    view->focus();
+    // Keep workspace focus while exclusive layer-shell holds the seat; refocus applies it later.
+    const bool seatAvailable = exclusiveKeyboardLayer() == nullptr;
+    if (seatAvailable) {
+      view->focus();
+    }
     if (Workspace* workspace = view->workspace()) {
       workspace->setFocusedView(view);
       if (bringIntoView && view->tiled()) {

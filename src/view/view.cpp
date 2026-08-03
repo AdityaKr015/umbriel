@@ -351,20 +351,38 @@ namespace umbriel {
         [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
           auto* self = static_cast<View*>(data);
           wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-          if (sceneSurface == nullptr
-              || wlr_surface_get_root_surface(sceneSurface->surface) != self->m_toplevel->base->surface) {
+          if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
             return;
           }
-          wlr_scene_buffer_set_corner_radius(
-              buffer, self->m_tiled && !self->m_toplevel->scheduled.fullscreen ? kCornerRadius : 0
-          );
+
+          const bool rounded = self->m_tiled && !self->m_toplevel->scheduled.fullscreen;
+          if (!rounded) {
+            wlr_scene_buffer_set_source_box(buffer, nullptr);
+            wlr_scene_buffer_set_dest_size(buffer, 0, 0);
+            wlr_scene_node_set_position(&buffer->node, 0, 0);
+            wlr_scene_buffer_set_corner_radius(buffer, 0);
+            return;
+          }
+
+          const wlr_box& geometry = self->m_toplevel->base->geometry;
+          const wlr_fbox source{
+              .x = static_cast<double>(geometry.x),
+              .y = static_cast<double>(geometry.y),
+              .width = static_cast<double>(geometry.width),
+              .height = static_cast<double>(geometry.height),
+          };
+          wlr_scene_buffer_set_source_box(buffer, &source);
+          wlr_scene_buffer_set_dest_size(buffer, geometry.width, geometry.height);
+          wlr_scene_node_set_position(&buffer->node, geometry.x, geometry.y);
+          wlr_scene_buffer_set_corner_radius(buffer, kCornerRadius);
         },
         this
     );
   }
 
   void View::clearOutputClip() {
-    wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
+    const wlr_box* clip = m_tiled ? &m_toplevel->base->geometry : nullptr;
+    wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, clip);
     if (m_borderTree != nullptr) {
       updateBorderGeometry();
     }
@@ -489,6 +507,7 @@ namespace umbriel {
   void View::handleCommit() {
     if (m_toplevel->base->initial_commit) {
       if (looksTiled(m_toplevel)) {
+        wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
         const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
         const int viewportWidth = std::max(1, usable.width - 2 * kGap);
         const int height = std::max(1, usable.height - 2 * kGap);
@@ -496,6 +515,7 @@ namespace umbriel {
             m_toplevel, std::max(1, static_cast<int>(std::lround(kDefaultWidthFrac * viewportWidth))), height
         );
       } else {
+        wlr_xdg_toplevel_set_tiled(m_toplevel, 0);
         wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
       }
     }

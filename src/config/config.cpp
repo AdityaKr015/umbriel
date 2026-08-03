@@ -147,23 +147,23 @@ namespace umbriel {
     bool parseAction(std::string_view value, Keybind& output) {
       static constexpr std::pair<std::string_view, KeybindAction> actions[] = {
           {"none", KeybindAction::None},
-          {"spawn-terminal", KeybindAction::SpawnTerminal},
-          {"close", KeybindAction::Close},
-          {"quit", KeybindAction::Quit},
-          {"focus-left", KeybindAction::FocusLeft},
-          {"focus-right", KeybindAction::FocusRight},
-          {"focus-up", KeybindAction::FocusUp},
-          {"focus-down", KeybindAction::FocusDown},
-          {"move-column-left", KeybindAction::MoveColumnLeft},
-          {"move-column-right", KeybindAction::MoveColumnRight},
-          {"move-up", KeybindAction::MoveUp},
-          {"move-down", KeybindAction::MoveDown},
-          {"consume-left", KeybindAction::ConsumeLeft},
-          {"expel-right", KeybindAction::ExpelRight},
-          {"cycle-width", KeybindAction::CycleWidth},
-          {"toggle-full-width", KeybindAction::ToggleFullWidth},
-          {"focus-next", KeybindAction::FocusNext},
-          {"reload-config", KeybindAction::ReloadConfig},
+          {"terminal-spawn", KeybindAction::SpawnTerminal},
+          {"window-close", KeybindAction::Close},
+          {"session-quit", KeybindAction::Quit},
+          {"window-focus-left", KeybindAction::FocusLeft},
+          {"window-focus-right", KeybindAction::FocusRight},
+          {"window-focus-up", KeybindAction::FocusUp},
+          {"window-focus-down", KeybindAction::FocusDown},
+          {"column-move-left", KeybindAction::MoveColumnLeft},
+          {"column-move-right", KeybindAction::MoveColumnRight},
+          {"window-move-up", KeybindAction::MoveUp},
+          {"window-move-down", KeybindAction::MoveDown},
+          {"window-consume-left", KeybindAction::ConsumeLeft},
+          {"window-expel-right", KeybindAction::ExpelRight},
+          {"window-cycle-width", KeybindAction::CycleWidth},
+          {"window-toggle-full-width", KeybindAction::ToggleFullWidth},
+          {"window-focus-next", KeybindAction::FocusNext},
+          {"config-reload", KeybindAction::ReloadConfig},
       };
       for (const auto& [name, action] : actions) {
         if (value == name) {
@@ -191,8 +191,8 @@ namespace umbriel {
         output.workspace = number.front() - '1';
         return true;
       };
-      return parseWorkspace("workspace:", KeybindAction::Workspace)
-          || parseWorkspace("move-to-workspace:", KeybindAction::MoveToWorkspace);
+      return parseWorkspace("workspace-switch:", KeybindAction::Workspace)
+          || parseWorkspace("window-move-to-workspace:", KeybindAction::MoveToWorkspace);
     }
 
     std::filesystem::path defaultConfigPath() {

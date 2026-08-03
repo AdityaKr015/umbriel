@@ -18,7 +18,7 @@ namespace umbriel {
   ConfigWatcher::ConfigWatcher(wl_event_loop* loop, std::function<void()> onChange) : m_onChange(std::move(onChange)) {
     m_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
     if (m_fd < 0) {
-      kLog.warn("config: inotify unavailable; hot reload disabled (use the reload-config keybind)");
+      kLog.warn("config: inotify unavailable; hot reload disabled (use the config-reload keybind)");
       return;
     }
 
@@ -26,7 +26,7 @@ namespace umbriel {
     m_timer = wl_event_loop_add_timer(loop, onTimer, this);
     if (m_fdSource == nullptr || m_timer == nullptr) {
       kLog.warn(
-          "config: unable to register inotify event sources; hot reload disabled (use the reload-config keybind)"
+          "config: unable to register inotify event sources; hot reload disabled (use the config-reload keybind)"
       );
       if (m_fdSource != nullptr) {
         wl_event_source_remove(m_fdSource);

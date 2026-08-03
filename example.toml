@@ -1,7 +1,7 @@
 # Umbriel configuration example
 # Copy to ~/.config/umbriel/config.toml or pass with `umbriel -c example.toml`.
 # Changes to this file and its includes apply immediately. Invalid configurations
-# keep the previous state. Use `reload-config` as a keybind action for manual reloads.
+# keep the previous state. Use `config-reload` as a keybind action for manual reloads.
 
 [include]
 # Included files are resolved relative to this file. Later files override earlier
@@ -9,7 +9,7 @@
 files = []
 
 [general]
-# Command used by the `spawn-terminal` action. An empty value falls back to
+# Command used by the `terminal-spawn` action. An empty value falls back to
 # $TERMINAL.
 terminal = ""
 # Shell commands run once after startup; they are never re-run on config reload.
@@ -54,7 +54,7 @@ ignore_alpha = 0.5
 gap = 8                         # 0-500
 # Initial width assigned to new columns.
 default_width_fraction = 0.5    # 0.1-1.0
-# Widths visited by `cycle-width`.
+# Widths visited by `window-cycle-width`.
 width_presets = [0.333, 0.5, 0.667]
 scroll_wheel_step = 60           # 1-1000
 # Output names must exactly match connector names such as DP-1 or HDMI-A-1.
@@ -96,13 +96,14 @@ size = 24                 # 1-512
 #
 # A configured chord replaces its compiled default. `none` removes a binding.
 # Values may be any of:
-#   none, spawn-terminal, close, quit,
-#   focus-left, focus-right, focus-up, focus-down,
-#   move-column-left, move-column-right, move-up, move-down,
-#   consume-left, expel-right, cycle-width, toggle-full-width, focus-next, reload-config,
-#   workspace:N, move-to-workspace:N (N is 1-9),
+#   none, terminal-spawn, window-close, session-quit,
+#   window-focus-left, window-focus-right, window-focus-up, window-focus-down,
+#   column-move-left, column-move-right, window-move-up, window-move-down,
+#   window-consume-left, window-expel-right, window-cycle-width,
+#   window-toggle-full-width, window-focus-next, config-reload,
+#   workspace-switch:N, window-move-to-workspace:N (N is 1-9),
 #   spawn:<shell command>
-"Mod+T" = "spawn-terminal"
-"Mod+Shift+Q" = "close"
+"Mod+T" = "terminal-spawn"
+"Mod+Shift+Q" = "window-close"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"
 # "Mod+Escape" = "none"

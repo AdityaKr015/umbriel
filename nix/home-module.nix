@@ -59,8 +59,8 @@ in
         input.keyboard.layout = "de";
 
         keybinds = {
-          "Mod+Return" = "spawn-terminal";
-          "Mod+Q" = "close";
+          "Mod+Return" = "terminal-spawn";
+          "Mod+Q" = "window-close";
           "Mod+R" = "spawn:noctalia msg panel-toggle launcher";
         };
       '';

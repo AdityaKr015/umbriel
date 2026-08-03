@@ -149,8 +149,8 @@ programs.umbriel = {
     layout.gap = 5;
     input.keyboard.layout = "de";
     keybinds = {
-      "Mod+Return" = "spawn-terminal";
-      "Mod+Q" = "close";
+      "Mod+Return" = "terminal-spawn";
+      "Mod+Q" = "window-close";
       "Mod+R" = "spawn:noctalia msg panel-toggle launcher";
     };
   };
@@ -166,8 +166,8 @@ scrolling, mice support natural scrolling, and cursor theme/size are configurabl
 when supported by the device.
 
 Key names and modifiers are case-insensitive. `Mod` resolves to Alt in nested sessions and Super on DRM.
-Bindings support compositor actions, `workspace:N`, `move-to-workspace:N`, and arbitrary shell commands with
-`spawn:command`. Configuration is currently startup-only.
+Bindings use `option-action` names (for example `window-close`, `config-reload`),
+plus `workspace-switch:N`, `window-move-to-workspace:N`, and arbitrary shell commands with `spawn:command`.
 
 ## Project layout
 

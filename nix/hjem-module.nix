@@ -36,8 +36,8 @@ in
         };
 
         keybinds = {
-          "Mod+Return" = "spawn-terminal";
-          "Mod+Q" = "close";
+          "Mod+Return" = "terminal-spawn";
+          "Mod+Q" = "window-close";
         };
       '';
     };

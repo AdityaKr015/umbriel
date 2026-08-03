@@ -3,7 +3,6 @@
 #include "core/animation.h"
 
 struct wlr_scene_rect;
-struct wlr_scene_shadow;
 struct wlr_scene_tree;
 
 namespace umbriel {
@@ -32,7 +31,6 @@ namespace umbriel {
 
     Server* m_server = nullptr;
     wlr_scene_tree* m_tree = nullptr;
-    wlr_scene_shadow* m_shadow = nullptr;
     wlr_scene_rect* m_rect = nullptr;
     AnimId m_fadeAnim = 0;
     bool m_visible = false;

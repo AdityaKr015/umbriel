@@ -54,6 +54,7 @@ namespace umbriel {
   class View;
   class Workspace;
   class WorkspaceGroup;
+  class ConfigBanner;
 
   class Server {
   public:
@@ -164,6 +165,8 @@ namespace umbriel {
     void beginSessionLock(wlr_session_lock_v1* lock);
     void applyConfig();
     void handleConfigReload();
+    void showConfigDiagnostics();
+    void relayoutBanner();
     void clearNormalFocus();
     void setLockBlankEnabled(bool enabled);
     void updateIdleInhibit();
@@ -225,6 +228,8 @@ namespace umbriel {
     std::unique_ptr<SessionLock> m_sessionLock;
     std::unique_ptr<InsertHint> m_insertHint;
     std::unique_ptr<ConfigWatcher> m_configWatcher;
+    wlr_scene_tree* m_bannerTree = nullptr;
+    std::unique_ptr<ConfigBanner> m_configBanner;
 
     bool m_nested = false;
     std::string m_socketName;

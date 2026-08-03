@@ -1,4 +1,5 @@
 #include "config/config.h"
+#include "config/config_diag.h"
 #include "config/config_watcher.h"
 #include "core/log.h"
 #include "input/cursor.h"
@@ -198,6 +199,7 @@ namespace umbriel {
       applyConfig();
       kLog.info("config reloaded");
     }
+    showConfigDiagnostics();
     if (m_configWatcher != nullptr) {
       m_configWatcher->watch(configWatchPaths());
     }
@@ -459,6 +461,7 @@ namespace umbriel {
 
   void Server::addOutput(wlr_output* output) {
     m_outputs.push_back(std::make_unique<Output>(*this, output));
+    relayoutBanner();
     if (m_sessionLocked) {
       updateLockBlank();
       raiseLockTree();
@@ -505,6 +508,7 @@ namespace umbriel {
     }
 
     std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) { return entry.get() == output; });
+    relayoutBanner();
     if (m_sessionLocked) {
       updateLockBlank();
     }

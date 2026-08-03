@@ -51,3 +51,4 @@ private:
 };
 
 void initLogFile();
+void setConsoleLogging(bool enabled);

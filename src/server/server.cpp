@@ -1,6 +1,7 @@
 #include "server/server.h"
 
 #include "config/config.h"
+#include "config/config_diag.h"
 #include "config/config_watcher.h"
 #include "core/log.h"
 #include "input/cursor.h"
@@ -11,6 +12,7 @@
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "view/view.h"
+#include "scene/config_banner.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
 
@@ -119,6 +121,7 @@ namespace umbriel {
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);
     m_fullscreenTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
+    m_bannerTree = wlr_scene_tree_create(&m_scene->tree);
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
     const float blankColor[4] = {0.f, 0.f, 0.f, 1.f};
     m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, blankColor);
@@ -206,6 +209,7 @@ namespace umbriel {
     m_configWatcher.reset();
 
     m_insertHint.reset();
+    m_configBanner.reset();
     m_sessionLock.reset();
     m_layerSurfaces.clear();
     m_views.clear();
@@ -278,8 +282,20 @@ namespace umbriel {
     }
     m_configWatcher =
         std::make_unique<ConfigWatcher>(wl_display_get_event_loop(m_display), [this] { handleConfigReload(); });
+    m_configBanner = std::make_unique<ConfigBanner>(*this, m_bannerTree);
     m_configWatcher->watch(configWatchPaths());
+    showConfigDiagnostics();
     return true;
+  }
+
+  void Server::showConfigDiagnostics() {
+    m_configBanner->show(configDiagnostics());
+  }
+
+  void Server::relayoutBanner() {
+    if (m_configBanner != nullptr) {
+      m_configBanner->relayout();
+    }
   }
 
   void Server::run() { wl_display_run(m_display); }

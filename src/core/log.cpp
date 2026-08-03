@@ -20,6 +20,7 @@ namespace {
   std::mutex gLogMutex;
   std::string gLogPath;
   bool gRegisteredExitFlush = false;
+  bool gConsoleEnabled = true;
 
   const char* levelTagAnsi(LogLevel level) {
     switch (level) {
@@ -150,7 +151,7 @@ namespace detail {
 
     std::scoped_lock lock(gLogMutex);
 
-    if (level >= gMinLevel) {
+    if (gConsoleEnabled && level >= gMinLevel) {
       writeLine(stderr, consolePrefix(tm, msec, level, section), msg);
     }
 
@@ -163,3 +164,8 @@ namespace detail {
   }
 
 } // namespace detail
+
+void setConsoleLogging(bool enabled) {
+  std::scoped_lock lock(gLogMutex);
+  gConsoleEnabled = enabled;
+}

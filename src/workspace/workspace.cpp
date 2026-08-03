@@ -197,12 +197,9 @@ namespace umbriel {
     const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
     wlr_box target = m_layout.targetBox(view);
     target.x += scrollOffset;
+    const wlr_box& geometry = view->toplevel()->base->geometry;
     const int border = config().appearance.totalBorderWidth();
-    wlr_box decorated = target;
-    decorated.x -= border;
-    decorated.y -= border;
-    decorated.width += 2 * border;
-    decorated.height += 2 * border;
+    wlr_box decorated{target.x - border, target.y - border, geometry.width + 2 * border, geometry.height + 2 * border};
     wlr_box intersection{};
     const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
     wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
@@ -236,11 +233,10 @@ namespace umbriel {
           view->setPosition(target.x, target.y);
         }
         // Include borders so near-edge windows stay clipped to this output.
-        wlr_box decorated = target;
-        decorated.x -= border;
-        decorated.y -= border;
-        decorated.width += 2 * border;
-        decorated.height += 2 * border;
+        const wlr_box& geometry = view->toplevel()->base->geometry;
+        wlr_box decorated{
+            target.x - border, target.y - border, geometry.width + 2 * border, geometry.height + 2 * border
+        };
         wlr_box intersection{};
         const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
         wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);

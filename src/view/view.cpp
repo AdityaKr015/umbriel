@@ -567,8 +567,15 @@ namespace umbriel {
 
   void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
     const wlr_box& geometry = m_toplevel->base->geometry;
+    // Size clip/decoration from xdg geometry at tile origin; layout target can shrink first.
+    const wlr_box content{
+        .x = target.x,
+        .y = target.y,
+        .width = geometry.width,
+        .height = geometry.height,
+    };
     const int border = m_tiled ? config().appearance.totalBorderWidth() : 0;
-    wlr_box decorated = target;
+    wlr_box decorated = content;
     decorated.x -= border;
     decorated.y -= border;
     decorated.width += 2 * border;
@@ -584,13 +591,13 @@ namespace umbriel {
     }
 
     wlr_box contentVisible{};
-    const bool contentOnOutput = wlr_box_intersection(&contentVisible, &target, &outputBox);
+    const bool contentOnOutput = wlr_box_intersection(&contentVisible, &content, &outputBox);
     const bool decoratedFullyVisible = wlr_box_equal(&decoratedVisible, &decorated);
 
     if (contentOnOutput) {
       wlr_box surfaceClip{
-          .x = geometry.x + contentVisible.x - target.x,
-          .y = geometry.y + contentVisible.y - target.y,
+          .x = geometry.x + contentVisible.x - content.x,
+          .y = geometry.y + contentVisible.y - content.y,
           .width = contentVisible.width,
           .height = contentVisible.height,
       };

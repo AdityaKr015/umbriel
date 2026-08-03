@@ -36,6 +36,11 @@ namespace umbriel {
     m_sceneTree->node.data = this;
     m_toplevel->base->data = m_sceneTree;
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
+    if (wlr_output* output = m_server->preferredOutput()) {
+      wlr_surface* surface = m_toplevel->base->surface;
+      wlr_fractional_scale_v1_notify_scale(surface, output->scale);
+      wlr_surface_set_preferred_buffer_scale(surface, static_cast<int32_t>(std::ceil(output->scale)));
+    }
 
     m_map.notify = onMap;
     wl_signal_add(&m_toplevel->base->surface->events.map, &m_map);
@@ -367,34 +372,7 @@ namespace umbriel {
           }
 
           const bool rounded = self->m_tiled && !self->m_toplevel->scheduled.fullscreen;
-          if (!rounded) {
-            wlr_scene_buffer_set_source_box(buffer, nullptr);
-            wlr_scene_buffer_set_dest_size(buffer, 0, 0);
-            wlr_scene_node_set_position(&buffer->node, 0, 0);
-            wlr_scene_buffer_set_corner_radius(buffer, 0);
-            return;
-          }
-
-          const wlr_box& geometry = self->m_toplevel->base->geometry;
-          const wlr_surface_state& surface = sceneSurface->surface->current;
-          const int sourceX = std::clamp(geometry.x, 0, surface.width);
-          const int sourceY = std::clamp(geometry.y, 0, surface.height);
-          const int sourceRight = std::clamp(geometry.x + geometry.width, sourceX, surface.width);
-          const int sourceBottom = std::clamp(geometry.y + geometry.height, sourceY, surface.height);
-          const wlr_fbox source{
-              .x = static_cast<double>(sourceX),
-              .y = static_cast<double>(sourceY),
-              .width = static_cast<double>(sourceRight - sourceX),
-              .height = static_cast<double>(sourceBottom - sourceY),
-          };
-          wlr_scene_buffer_set_source_box(buffer, &source);
-          wlr_scene_buffer_set_dest_size(buffer, sourceRight - sourceX, sourceBottom - sourceY);
-          wlr_scene_node_set_position(&buffer->node, sourceX, sourceY);
-          const bool fullyVisible = sourceX == geometry.x
-              && sourceY == geometry.y
-              && sourceRight == geometry.x + geometry.width
-              && sourceBottom == geometry.y + geometry.height;
-          wlr_scene_buffer_set_corner_radius(buffer, fullyVisible ? config().appearance.cornerRadius : 0);
+          wlr_scene_buffer_set_corner_radius(buffer, rounded ? config().appearance.cornerRadius : 0);
         },
         this
     );

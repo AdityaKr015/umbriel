@@ -5,6 +5,7 @@
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
+#include "view/xdg_size.h"
 // clang-format off
 #include <algorithm>
 #include <cmath>
@@ -144,8 +145,11 @@ namespace umbriel {
         }
         const wlr_box target = m_layout.targetBox(view);
         const wlr_box& geometry = view->toplevel()->base->geometry;
-        if (geometry.width != target.width || geometry.height != target.height) {
-          wlr_xdg_toplevel_set_size(view->toplevel(), target.width, target.height);
+        const XdgSizeHints hints = xdgSizeHints(view->toplevel());
+        const int width = clampXdgWidth(target.width, hints);
+        const int height = clampXdgHeight(target.height, hints);
+        if (geometry.width != width || geometry.height != height) {
+          wlr_xdg_toplevel_set_size(view->toplevel(), width, height);
         }
       }
     }

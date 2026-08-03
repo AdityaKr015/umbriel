@@ -9,6 +9,7 @@
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
+#include "view/xdg_size.h"
 // clang-format off
 #include <algorithm>
 #include <cmath>
@@ -638,28 +639,41 @@ namespace umbriel {
     int newRight = m_grabGeoX + m_grabGeoWidth;
     int newTop = m_grabGeoY;
     int newBottom = m_grabGeoY + m_grabGeoHeight;
+    const XdgSizeHints hints = xdgSizeHints(m_grabbedView->toplevel());
 
     if ((m_resizeEdges & WLR_EDGE_TOP) != 0) {
       newTop = static_cast<int>(borderY);
-      if (newTop >= newBottom) {
-        newTop = newBottom - 1;
+      if (newBottom - newTop < hints.minHeight) {
+        newTop = newBottom - hints.minHeight;
+      }
+      if (hints.maxHeight > 0 && newBottom - newTop > hints.maxHeight) {
+        newTop = newBottom - hints.maxHeight;
       }
     } else if ((m_resizeEdges & WLR_EDGE_BOTTOM) != 0) {
       newBottom = static_cast<int>(borderY);
-      if (newBottom <= newTop) {
-        newBottom = newTop + 1;
+      if (newBottom - newTop < hints.minHeight) {
+        newBottom = newTop + hints.minHeight;
+      }
+      if (hints.maxHeight > 0 && newBottom - newTop > hints.maxHeight) {
+        newBottom = newTop + hints.maxHeight;
       }
     }
 
     if ((m_resizeEdges & WLR_EDGE_LEFT) != 0) {
       newLeft = static_cast<int>(borderX);
-      if (newLeft >= newRight) {
-        newLeft = newRight - 1;
+      if (newRight - newLeft < hints.minWidth) {
+        newLeft = newRight - hints.minWidth;
+      }
+      if (hints.maxWidth > 0 && newRight - newLeft > hints.maxWidth) {
+        newLeft = newRight - hints.maxWidth;
       }
     } else if ((m_resizeEdges & WLR_EDGE_RIGHT) != 0) {
       newRight = static_cast<int>(borderX);
-      if (newRight <= newLeft) {
-        newRight = newLeft + 1;
+      if (newRight - newLeft < hints.minWidth) {
+        newRight = newLeft + hints.minWidth;
+      }
+      if (hints.maxWidth > 0 && newRight - newLeft > hints.maxWidth) {
+        newRight = newLeft + hints.maxWidth;
       }
     }
 
@@ -708,11 +722,46 @@ namespace umbriel {
     const double dx = m_cursor->x - m_resizeStartX;
     const double dy = m_cursor->y - m_resizeStartY;
 
+    auto columnMinWidth = [&](int columnIndex) {
+      int minWidth = static_cast<int>(std::lround(0.15 * viewportWidth));
+      if (columnIndex < 0 || columnIndex >= static_cast<int>(layout.columns().size())) {
+        return minWidth;
+      }
+      for (View* view : layout.columns()[static_cast<size_t>(columnIndex)].views) {
+        if (view != nullptr) {
+          minWidth = std::max(minWidth, xdgSizeHints(view->toplevel()).minWidth);
+        }
+      }
+      return std::min(minWidth, viewportWidth);
+    };
+    auto columnMaxWidth = [&](int columnIndex) {
+      int maxWidth = viewportWidth;
+      if (columnIndex < 0 || columnIndex >= static_cast<int>(layout.columns().size())) {
+        return maxWidth;
+      }
+      bool any = false;
+      int clientMax = 0;
+      for (View* view : layout.columns()[static_cast<size_t>(columnIndex)].views) {
+        if (view == nullptr) {
+          continue;
+        }
+        const int hintMax = xdgSizeHints(view->toplevel()).maxWidth;
+        if (hintMax > 0) {
+          clientMax = any ? std::min(clientMax, hintMax) : hintMax;
+          any = true;
+        }
+      }
+      if (any) {
+        maxWidth = std::min(maxWidth, clientMax);
+      }
+      return std::max(maxWidth, columnMinWidth(columnIndex));
+    };
+
     if ((m_resizeEdges & WLR_EDGE_RIGHT) != 0) {
       // Pin left edge; only this column's width changes (neighbors untouched).
       const int newWidth = std::clamp(
-          m_resizeStartWidthPx + static_cast<int>(std::lround(dx)), static_cast<int>(std::lround(0.15 * viewportWidth)),
-          viewportWidth
+          m_resizeStartWidthPx + static_cast<int>(std::lround(dx)), columnMinWidth(m_resizeColumn),
+          columnMaxWidth(m_resizeColumn)
       );
       layout.setWidthFraction(m_resizeColumn, static_cast<double>(newWidth) / viewportWidth);
       if (m_resizeSoloHorizontal) {
@@ -724,10 +773,13 @@ namespace umbriel {
         // Shared boundary with previous column: move both widths, keep pair span fixed.
         const int gap = config().layoutGap();
         const int pair = m_resizeStartPrevWidthPx + gap + m_resizeStartWidthPx;
+        const int minPrev = columnMinWidth(m_resizeColumn - 1);
+        const int minCur = columnMinWidth(m_resizeColumn);
+        const int maxPrev = columnMaxWidth(m_resizeColumn - 1);
+        const int maxCur = columnMaxWidth(m_resizeColumn);
         const int newPrev = std::clamp(
-            m_resizeStartPrevWidthPx + static_cast<int>(std::lround(dx)),
-            static_cast<int>(std::lround(0.15 * viewportWidth)),
-            pair - gap - static_cast<int>(std::lround(0.15 * viewportWidth))
+            m_resizeStartPrevWidthPx + static_cast<int>(std::lround(dx)), std::max(minPrev, pair - gap - maxCur),
+            std::min(maxPrev, pair - gap - minCur)
         );
         const int newCur = pair - gap - newPrev;
         layout.setWidthFraction(m_resizeColumn - 1, static_cast<double>(newPrev) / viewportWidth);
@@ -735,8 +787,8 @@ namespace umbriel {
       } else {
         // Column 0 or full-width: pin the right edge, move only this column via width + scroll.
         const int newWidth = std::clamp(
-            m_resizeStartWidthPx - static_cast<int>(std::lround(dx)),
-            static_cast<int>(std::lround(0.15 * viewportWidth)), viewportWidth
+            m_resizeStartWidthPx - static_cast<int>(std::lround(dx)), columnMinWidth(m_resizeColumn),
+            columnMaxWidth(m_resizeColumn)
         );
         layout.setWidthFraction(m_resizeColumn, static_cast<double>(newWidth) / viewportWidth);
         layout.setScroll(m_resizeStartScroll + static_cast<double>(newWidth - m_resizeStartWidthPx));
@@ -751,31 +803,47 @@ namespace umbriel {
       const int stackHeight = std::max(rowCount, availableHeight - gapsTotal);
       if (stackHeight > 0) {
         constexpr double kMinWindow = 0.05;
+        double totalWeight = std::max(0.0, column.topGapWeight) + std::max(0.0, column.bottomGapWeight);
+        for (double weight : column.heightWeights) {
+          totalWeight += std::max(kMinWindow, weight);
+        }
+        totalWeight = std::max(kMinWindow, totalWeight);
+
+        auto minWindowWeight = [&](View* view) {
+          if (view == nullptr) {
+            return kMinWindow;
+          }
+          const double fromHints =
+              static_cast<double>(xdgSizeHints(view->toplevel()).minHeight) / stackHeight * totalWeight;
+          return std::max(kMinWindow, fromHints);
+        };
+
         const double pair = std::max(kMinWindow, m_resizeStartUpperWeight + m_resizeStartLowerWeight);
         const double deltaWeight = dy / static_cast<double>(stackHeight) * pair;
 
-        auto splitWindows = [&](double startUpper, double /*startLower*/, double delta) {
+        auto splitWindows = [&](double startUpper, double /*startLower*/, double delta, double minUpper,
+                                double minLower) {
           double upper = startUpper + delta;
           double lower = pair - upper;
-          if (upper < kMinWindow) {
-            upper = kMinWindow;
+          if (upper < minUpper) {
+            upper = minUpper;
             lower = pair - upper;
           }
-          if (lower < kMinWindow) {
-            lower = kMinWindow;
+          if (lower < minLower) {
+            lower = minLower;
             upper = pair - lower;
           }
           return std::pair{upper, lower};
         };
-        auto splitGapAndWindow = [&](double startGap, double /*startWindow*/, double deltaGap) {
+        auto splitGapAndWindow = [&](double startGap, double /*startWindow*/, double deltaGap, double minWindow) {
           double gapWeight = startGap + deltaGap;
           double windowWeight = pair - gapWeight;
           if (gapWeight < 0.0) {
             gapWeight = 0.0;
             windowWeight = pair;
           }
-          if (windowWeight < kMinWindow) {
-            windowWeight = kMinWindow;
+          if (windowWeight < minWindow) {
+            windowWeight = minWindow;
             gapWeight = pair - windowWeight;
             if (gapWeight < 0.0) {
               gapWeight = 0.0;
@@ -788,24 +856,32 @@ namespace umbriel {
         if ((m_resizeEdges & WLR_EDGE_TOP) != 0) {
           if (m_resizeRow == 0) {
             // Top edge of first window: trade with top gap only.
+            const double minWindow = minWindowWeight(column.views[0]);
             const auto [gapWeight, windowWeight] =
-                splitGapAndWindow(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight);
+                splitGapAndWindow(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight, minWindow);
             layout.setTopGapWeight(m_resizeColumn, gapWeight);
             layout.setHeightWeight(m_resizeColumn, 0, windowWeight);
           } else if (m_resizeUpperRow >= 0) {
-            const auto [upper, lower] = splitWindows(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight);
+            const double minUpper = minWindowWeight(column.views[static_cast<size_t>(m_resizeUpperRow)]);
+            const double minLower = minWindowWeight(column.views[static_cast<size_t>(m_resizeRow)]);
+            const auto [upper, lower] =
+                splitWindows(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight, minUpper, minLower);
             layout.setRowBoundary(m_resizeColumn, m_resizeUpperRow, upper, lower);
           }
         } else if ((m_resizeEdges & WLR_EDGE_BOTTOM) != 0) {
           if (m_resizeRow + 1 >= rowCount) {
             // Bottom edge of last window: trade with bottom gap only.
             // Dragging down with no gap must not steal height from the window above.
+            const double minWindow = minWindowWeight(column.views[static_cast<size_t>(m_resizeRow)]);
             const auto [gapWeight, windowWeight] =
-                splitGapAndWindow(m_resizeStartLowerWeight, m_resizeStartUpperWeight, -deltaWeight);
+                splitGapAndWindow(m_resizeStartLowerWeight, m_resizeStartUpperWeight, -deltaWeight, minWindow);
             layout.setHeightWeight(m_resizeColumn, m_resizeRow, windowWeight);
             layout.setBottomGapWeight(m_resizeColumn, gapWeight);
           } else if (m_resizeUpperRow >= 0) {
-            const auto [upper, lower] = splitWindows(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight);
+            const double minUpper = minWindowWeight(column.views[static_cast<size_t>(m_resizeUpperRow)]);
+            const double minLower = minWindowWeight(column.views[static_cast<size_t>(m_resizeRow + 1)]);
+            const auto [upper, lower] =
+                splitWindows(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight, minUpper, minLower);
             layout.setRowBoundary(m_resizeColumn, m_resizeUpperRow, upper, lower);
           }
         }

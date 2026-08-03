@@ -1,6 +1,8 @@
 #include "layout/scrolling.h"
 
 #include "config/config.h"
+#include "view/view.h"
+#include "view/xdg_size.h"
 
 // clang-format off
 #include <algorithm>
@@ -31,6 +33,33 @@ namespace umbriel {
       return std::max(kMinHeightWeight, total);
     }
 
+    int columnMinWidthPx(const Column& column) {
+      int minWidth = 1;
+      for (const View* view : column.views) {
+        if (view == nullptr || view->toplevel() == nullptr) {
+          continue;
+        }
+        minWidth = std::max(minWidth, xdgSizeHints(view->toplevel()).minWidth);
+      }
+      return minWidth;
+    }
+
+    int columnMaxWidthPx(const Column& column) {
+      int maxWidth = 0;
+      bool any = false;
+      for (const View* view : column.views) {
+        if (view == nullptr || view->toplevel() == nullptr) {
+          continue;
+        }
+        const int clientMax = xdgSizeHints(view->toplevel()).maxWidth;
+        if (clientMax > 0) {
+          maxWidth = any ? std::min(maxWidth, clientMax) : clientMax;
+          any = true;
+        }
+      }
+      return any ? maxWidth : 0;
+    }
+
   } // namespace
 
   void ScrollingLayout::syncHeightWeights(Column& column) { ensureWeightCount(column); }
@@ -58,10 +87,14 @@ namespace umbriel {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {
       return 0;
     }
-    return std::clamp(
-        static_cast<int>(std::lround(m_columns[static_cast<size_t>(columnIndex)].widthFrac * viewportWidth)), 1,
-        std::max(1, viewportWidth)
-    );
+    const Column& column = m_columns[static_cast<size_t>(columnIndex)];
+    int width = static_cast<int>(std::lround(column.widthFrac * viewportWidth));
+    width = std::max(width, columnMinWidthPx(column));
+    const int maxWidth = columnMaxWidthPx(column);
+    if (maxWidth > 0) {
+      width = std::min(width, maxWidth);
+    }
+    return std::clamp(width, 1, std::max(1, viewportWidth));
   }
 
   int ScrollingLayout::columnX(int columnIndex, int viewportWidth) const {
@@ -321,9 +354,11 @@ namespace umbriel {
         } else {
           height = std::max(1, height);
         }
-        m_targets.push_back(
-            {.view = column.views[static_cast<size_t>(row)], .x = x, .y = y, .width = width, .height = height}
-        );
+        View* view = column.views[static_cast<size_t>(row)];
+        if (view != nullptr) {
+          height = clampXdgHeight(height, xdgSizeHints(view->toplevel()));
+        }
+        m_targets.push_back({.view = view, .x = x, .y = y, .width = width, .height = height});
         y += height + gap;
         used += height;
       }

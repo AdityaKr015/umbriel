@@ -77,31 +77,31 @@ namespace umbriel {
         });
       };
 
-      add(KeybindAction::SpawnTerminal, XKB_KEY_Return);
-      add(KeybindAction::Quit, XKB_KEY_Escape);
-      add(KeybindAction::FocusNext, XKB_KEY_F1);
+      add(KeybindAction::TerminalSpawn, XKB_KEY_Return);
+      add(KeybindAction::SessionQuit, XKB_KEY_Escape);
+      add(KeybindAction::WindowFocusNext, XKB_KEY_F1);
 
-      add(KeybindAction::FocusLeft, XKB_KEY_Left);
-      add(KeybindAction::FocusLeft, XKB_KEY_h);
-      add(KeybindAction::FocusRight, XKB_KEY_Right);
-      add(KeybindAction::FocusRight, XKB_KEY_l);
-      add(KeybindAction::FocusUp, XKB_KEY_Up);
-      add(KeybindAction::FocusUp, XKB_KEY_k);
-      add(KeybindAction::FocusDown, XKB_KEY_Down);
-      add(KeybindAction::FocusDown, XKB_KEY_j);
+      add(KeybindAction::WindowFocusLeft, XKB_KEY_Left);
+      add(KeybindAction::WindowFocusLeft, XKB_KEY_h);
+      add(KeybindAction::WindowFocusRight, XKB_KEY_Right);
+      add(KeybindAction::WindowFocusRight, XKB_KEY_l);
+      add(KeybindAction::WindowFocusUp, XKB_KEY_Up);
+      add(KeybindAction::WindowFocusUp, XKB_KEY_k);
+      add(KeybindAction::WindowFocusDown, XKB_KEY_Down);
+      add(KeybindAction::WindowFocusDown, XKB_KEY_j);
 
-      add(KeybindAction::MoveColumnLeft, XKB_KEY_Left, WLR_MODIFIER_SHIFT);
-      add(KeybindAction::MoveColumnLeft, XKB_KEY_h, WLR_MODIFIER_SHIFT);
-      add(KeybindAction::MoveColumnRight, XKB_KEY_Right, WLR_MODIFIER_SHIFT);
-      add(KeybindAction::MoveColumnRight, XKB_KEY_l, WLR_MODIFIER_SHIFT);
-      add(KeybindAction::MoveUp, XKB_KEY_Up, WLR_MODIFIER_SHIFT);
-      add(KeybindAction::MoveUp, XKB_KEY_k, WLR_MODIFIER_SHIFT);
-      add(KeybindAction::MoveDown, XKB_KEY_Down, WLR_MODIFIER_SHIFT);
-      add(KeybindAction::MoveDown, XKB_KEY_j, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::ColumnMoveLeft, XKB_KEY_Left, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::ColumnMoveLeft, XKB_KEY_h, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::ColumnMoveRight, XKB_KEY_Right, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::ColumnMoveRight, XKB_KEY_l, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::WindowMoveUp, XKB_KEY_Up, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::WindowMoveUp, XKB_KEY_k, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::WindowMoveDown, XKB_KEY_Down, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::WindowMoveDown, XKB_KEY_j, WLR_MODIFIER_SHIFT);
 
-      add(KeybindAction::ConsumeLeft, XKB_KEY_comma);
-      add(KeybindAction::ExpelRight, XKB_KEY_period);
-      add(KeybindAction::CycleWidth, XKB_KEY_r);
+      add(KeybindAction::WindowConsumeLeft, XKB_KEY_comma);
+      add(KeybindAction::WindowExpelRight, XKB_KEY_period);
+      add(KeybindAction::WindowCycleWidth, XKB_KEY_r);
       add(KeybindAction::ToggleFullscreen, XKB_KEY_f);
       add(KeybindAction::ToggleMaximize, XKB_KEY_f, WLR_MODIFIER_CTRL);
 
@@ -118,10 +118,10 @@ namespace umbriel {
               .workspace = index,
           });
         };
-        addWorkspace(KeybindAction::Workspace, digit, 0);
-        addWorkspace(KeybindAction::Workspace, keypad, 0);
-        addWorkspace(KeybindAction::MoveToWorkspace, digit, WLR_MODIFIER_SHIFT);
-        addWorkspace(KeybindAction::MoveToWorkspace, keypad, WLR_MODIFIER_SHIFT);
+        addWorkspace(KeybindAction::WorkspaceSwitch, digit, 0);
+        addWorkspace(KeybindAction::WorkspaceSwitch, keypad, 0);
+        addWorkspace(KeybindAction::WindowMoveToWorkspace, digit, WLR_MODIFIER_SHIFT);
+        addWorkspace(KeybindAction::WindowMoveToWorkspace, keypad, WLR_MODIFIER_SHIFT);
       }
 
       return keybinds;
@@ -182,24 +182,24 @@ namespace umbriel {
     bool parseAction(std::string_view value, Keybind& output) {
       static constexpr std::pair<std::string_view, KeybindAction> actions[] = {
           {"none", KeybindAction::None},
-          {"terminal-spawn", KeybindAction::SpawnTerminal},
-          {"window-close", KeybindAction::Close},
-          {"session-quit", KeybindAction::Quit},
-          {"window-focus-left", KeybindAction::FocusLeft},
-          {"window-focus-right", KeybindAction::FocusRight},
-          {"window-focus-up", KeybindAction::FocusUp},
-          {"window-focus-down", KeybindAction::FocusDown},
-          {"column-move-left", KeybindAction::MoveColumnLeft},
-          {"column-move-right", KeybindAction::MoveColumnRight},
-          {"window-move-up", KeybindAction::MoveUp},
-          {"window-move-down", KeybindAction::MoveDown},
-          {"window-consume-left", KeybindAction::ConsumeLeft},
-          {"window-expel-right", KeybindAction::ExpelRight},
-          {"window-cycle-width", KeybindAction::CycleWidth},
+          {"terminal-spawn", KeybindAction::TerminalSpawn},
+          {"window-close", KeybindAction::WindowClose},
+          {"session-quit", KeybindAction::SessionQuit},
+          {"window-focus-left", KeybindAction::WindowFocusLeft},
+          {"window-focus-right", KeybindAction::WindowFocusRight},
+          {"window-focus-up", KeybindAction::WindowFocusUp},
+          {"window-focus-down", KeybindAction::WindowFocusDown},
+          {"column-move-left", KeybindAction::ColumnMoveLeft},
+          {"column-move-right", KeybindAction::ColumnMoveRight},
+          {"window-move-up", KeybindAction::WindowMoveUp},
+          {"window-move-down", KeybindAction::WindowMoveDown},
+          {"window-consume-left", KeybindAction::WindowConsumeLeft},
+          {"window-expel-right", KeybindAction::WindowExpelRight},
+          {"window-cycle-width", KeybindAction::WindowCycleWidth},
           {"toggle-maximize", KeybindAction::ToggleMaximize},
           {"toggle-fullscreen", KeybindAction::ToggleFullscreen},
-          {"window-focus-next", KeybindAction::FocusNext},
-          {"config-reload", KeybindAction::ReloadConfig},
+          {"window-focus-next", KeybindAction::WindowFocusNext},
+          {"config-reload", KeybindAction::ConfigReload},
       };
       for (const auto& [name, action] : actions) {
         if (value == name) {
@@ -227,8 +227,8 @@ namespace umbriel {
         output.workspace = number.front() - '1';
         return true;
       };
-      return parseWorkspace("workspace-switch:", KeybindAction::Workspace)
-          || parseWorkspace("window-move-to-workspace:", KeybindAction::MoveToWorkspace);
+      return parseWorkspace("workspace-switch:", KeybindAction::WorkspaceSwitch)
+          || parseWorkspace("window-move-to-workspace:", KeybindAction::WindowMoveToWorkspace);
     }
 
     std::filesystem::path defaultConfigPath() {

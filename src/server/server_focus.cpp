@@ -234,7 +234,7 @@ namespace umbriel {
       case KeybindAction::Spawn:
         spawn(bind.spawnCommand.c_str());
         return true;
-      case KeybindAction::SpawnTerminal: {
+      case KeybindAction::TerminalSpawn: {
         const std::string& configured = config().general.terminal;
         const char* terminal = !configured.empty() ? configured.c_str() : std::getenv("TERMINAL");
         if (terminal == nullptr || terminal[0] == '\0') {
@@ -244,78 +244,78 @@ namespace umbriel {
         spawn(terminal);
         return true;
       }
-      case KeybindAction::Close:
+      case KeybindAction::WindowClose:
         if (Workspace* workspace = activeWorkspace()) {
           if (View* view = workspace->focusedView()) {
             wlr_xdg_toplevel_send_close(view->toplevel());
           }
         }
         return true;
-      case KeybindAction::Quit:
+      case KeybindAction::SessionQuit:
         stop();
         return true;
-      case KeybindAction::ReloadConfig:
+      case KeybindAction::ConfigReload:
         handleConfigReload();
         return true;
-      case KeybindAction::FocusLeft:
+      case KeybindAction::WindowFocusLeft:
         if (Workspace* workspace = activeWorkspace()) {
           if (View* target = workspace->focusAdjacent(-1)) {
             focusView(target);
           }
         }
         return true;
-      case KeybindAction::FocusRight:
+      case KeybindAction::WindowFocusRight:
         if (Workspace* workspace = activeWorkspace()) {
           if (View* target = workspace->focusAdjacent(1)) {
             focusView(target);
           }
         }
         return true;
-      case KeybindAction::FocusUp:
+      case KeybindAction::WindowFocusUp:
         if (Workspace* workspace = activeWorkspace()) {
           if (View* target = workspace->focusVertical(-1)) {
             focusView(target);
           }
         }
         return true;
-      case KeybindAction::FocusDown:
+      case KeybindAction::WindowFocusDown:
         if (Workspace* workspace = activeWorkspace()) {
           if (View* target = workspace->focusVertical(1)) {
             focusView(target);
           }
         }
         return true;
-      case KeybindAction::MoveColumnLeft:
+      case KeybindAction::ColumnMoveLeft:
         if (Workspace* workspace = activeWorkspace()) {
           workspace->moveFocusedColumn(-1);
         }
         return true;
-      case KeybindAction::MoveColumnRight:
+      case KeybindAction::ColumnMoveRight:
         if (Workspace* workspace = activeWorkspace()) {
           workspace->moveFocusedColumn(1);
         }
         return true;
-      case KeybindAction::MoveUp:
+      case KeybindAction::WindowMoveUp:
         if (Workspace* workspace = activeWorkspace()) {
           workspace->moveFocusedVertical(-1);
         }
         return true;
-      case KeybindAction::MoveDown:
+      case KeybindAction::WindowMoveDown:
         if (Workspace* workspace = activeWorkspace()) {
           workspace->moveFocusedVertical(1);
         }
         return true;
-      case KeybindAction::ConsumeLeft:
+      case KeybindAction::WindowConsumeLeft:
         if (Workspace* workspace = activeWorkspace()) {
           workspace->consumeFocusedLeft();
         }
         return true;
-      case KeybindAction::ExpelRight:
+      case KeybindAction::WindowExpelRight:
         if (Workspace* workspace = activeWorkspace()) {
           workspace->expelFocusedRight();
         }
         return true;
-      case KeybindAction::CycleWidth:
+      case KeybindAction::WindowCycleWidth:
         if (Workspace* workspace = activeWorkspace()) {
           workspace->cycleFocusedWidth();
         }
@@ -330,7 +330,7 @@ namespace umbriel {
           workspace->toggleFocusedFullscreen();
         }
         return true;
-      case KeybindAction::FocusNext:
+      case KeybindAction::WindowFocusNext:
         if (m_views.size() >= 2) {
           for (size_t n = 0; n < m_views.size(); ++n) {
             auto current = std::move(m_views.front());
@@ -343,8 +343,8 @@ namespace umbriel {
           }
         }
         return true;
-      case KeybindAction::Workspace:
-      case KeybindAction::MoveToWorkspace: {
+      case KeybindAction::WorkspaceSwitch:
+      case KeybindAction::WindowMoveToWorkspace: {
         Output* output = outputFromWlr(preferredOutput());
         if (output == nullptr || output->workspaceGroup() == nullptr) {
           return true;
@@ -355,7 +355,7 @@ namespace umbriel {
         if (target == nullptr) {
           return true;
         }
-        if (bind.action == KeybindAction::MoveToWorkspace) {
+        if (bind.action == KeybindAction::WindowMoveToWorkspace) {
           for (const auto& entry : m_views) {
             if (entry->mapped() && entry->onActiveWorkspace()) {
               entry->setWorkspace(target);

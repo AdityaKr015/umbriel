@@ -56,8 +56,7 @@ namespace {
 
 namespace umbriel {
 
-  ConfigBanner::ConfigBanner(Server& server, wlr_scene_tree* parent)
-      : m_server(server), m_parent(parent) {}
+  ConfigBanner::ConfigBanner(Server& server, wlr_scene_tree* parent) : m_server(server), m_parent(parent) {}
 
   ConfigBanner::~ConfigBanner() {
     hide();

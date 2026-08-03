@@ -4,12 +4,12 @@
 #include "server/server.h"
 #include "wlr.h"
 
-#include <cstdio>
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <exception>
+#include <filesystem>
 #include <string>
 
 namespace {
@@ -39,8 +39,7 @@ namespace {
     const auto& diagnostics = umbriel::configDiagnostics();
     const auto& rootPath = umbriel::configRootPath();
 
-    if (configPath == nullptr && diagnostics.empty()
-        && !std::filesystem::is_regular_file(rootPath)) {
+    if (configPath == nullptr && diagnostics.empty() && !std::filesystem::is_regular_file(rootPath)) {
       std::printf("no config file found: %s (defaults will be used)\n", rootPath.c_str());
       return EXIT_SUCCESS;
     }
@@ -48,8 +47,7 @@ namespace {
     int errors = 0;
     int warnings = 0;
     for (const auto& diag : diagnostics) {
-      const char* severity =
-          diag.severity == umbriel::ConfigDiagnostic::Severity::Error ? "error" : "warning";
+      const char* severity = diag.severity == umbriel::ConfigDiagnostic::Severity::Error ? "error" : "warning";
       const std::string loc = diag.location();
       if (loc.empty()) {
         std::printf("%s: %s\n", severity, diag.message.c_str());
@@ -72,9 +70,7 @@ namespace {
   }
 
   void printUsage(const char* argv0) {
-    kLog.error(
-        "Usage: {} [-s startup_command] [-c config_file]\n       {} validate [-c config_file]", argv0, argv0
-    );
+    kLog.error("Usage: {} [-s startup_command] [-c config_file]\n       {} validate [-c config_file]", argv0, argv0);
   }
 } // namespace
 

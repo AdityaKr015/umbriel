@@ -1,13 +1,13 @@
 #pragma once
 
+#include "config/config_diag.h"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
-
-#include "config/config_diag.h"
 
 namespace umbriel {
   enum class KeybindAction {

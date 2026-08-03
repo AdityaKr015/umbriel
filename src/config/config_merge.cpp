@@ -1,6 +1,6 @@
 #include "config/config_merge.h"
-#include "config/config_diag.h"
 
+#include "config/config_diag.h"
 #include "core/log.h"
 
 #include <algorithm>
@@ -19,9 +19,8 @@ namespace umbriel::configmerge {
 
     constexpr Logger kLog("config");
 
-    void emit(
-        MergeResult& result, ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg
-    ) {
+    void
+    emit(MergeResult& result, ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
       ConfigDiagnostic diag;
       diag.severity = severity;
       diag.message = msg;

@@ -26,9 +26,8 @@ namespace umbriel {
   };
 
   // Copies file/line/column out of a toml source region (path may be null).
-  [[nodiscard]] inline ConfigDiagnostic makeDiagnostic(
-      ConfigDiagnostic::Severity severity, const toml::source_region& source, std::string message
-  ) {
+  [[nodiscard]] inline ConfigDiagnostic
+  makeDiagnostic(ConfigDiagnostic::Severity severity, const toml::source_region& source, std::string message) {
     ConfigDiagnostic diagnostic;
     diagnostic.severity = severity;
     diagnostic.message = std::move(message);

@@ -98,15 +98,15 @@ namespace umbriel {
     } else if (clampedGap >= columnCount) {
       // After the last column.
       hintX = workspace->layout().columnX(columnCount - 1, viewportWidth)
-          + workspace->layout().columnWidth(columnCount - 1, viewportWidth) + gap;
+          + workspace->layout().columnWidth(columnCount - 1, viewportWidth)
+          + gap;
     } else {
       // Between two columns: center on the gap boundary.
       hintX = workspace->layout().columnX(clampedGap, viewportWidth) - gap / 2 - kColumnHintWidth / 2;
     }
 
     const int hintHeight = std::max(1, usable.height - 2 * edgePad);
-    const int targetX =
-        usable.x + edgePad + hintX - static_cast<int>(std::lround(workspace->visualScroll()));
+    const int targetX = usable.x + edgePad + hintX - static_cast<int>(std::lround(workspace->visualScroll()));
     showGeometry(workspace, targetX, usable.y + edgePad, kColumnHintWidth, hintHeight);
   }
 

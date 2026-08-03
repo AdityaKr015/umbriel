@@ -109,7 +109,7 @@ follows_mouse = false
 #   window-focus-left, window-focus-right, window-focus-up, window-focus-down,
 #   column-move-left, column-move-right, window-move-up, window-move-down,
 #   window-consume-left, window-expel-right, window-cycle-width,
-#   toggle-maximize, toggle-fullscreen, window-focus-next, config-reload,
+#   window-toggle-maximize, window-toggle-fullscreen, window-focus-next, config-reload,
 #   workspace-switch:N, window-move-to-workspace:N (N is 1-9),
 #   spawn:<shell command>
 "Mod+T" = "terminal-spawn"

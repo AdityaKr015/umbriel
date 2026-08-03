@@ -53,13 +53,11 @@ namespace umbriel {
       g_diagnostics.push_back(std::move(diag));
     }
 
-    template <typename... A>
-    void warnAt(const toml::source_region& src, std::format_string<A...> fmt, A&&... args) {
+    template <typename... A> void warnAt(const toml::source_region& src, std::format_string<A...> fmt, A&&... args) {
       emitDiag(ConfigDiagnostic::Severity::Warning, &src, std::format(fmt, std::forward<A>(args)...));
     }
 
-    template <typename... A>
-    void warnNoSrc(std::format_string<A...> fmt, A&&... args) {
+    template <typename... A> void warnNoSrc(std::format_string<A...> fmt, A&&... args) {
       emitDiag(ConfigDiagnostic::Severity::Warning, nullptr, std::format(fmt, std::forward<A>(args)...));
     }
 
@@ -183,22 +181,22 @@ namespace umbriel {
       static constexpr std::pair<std::string_view, KeybindAction> actions[] = {
           {"none", KeybindAction::None},
           {"terminal-spawn", KeybindAction::TerminalSpawn},
-          {"window-close", KeybindAction::WindowClose},
           {"session-quit", KeybindAction::SessionQuit},
+          {"window-close", KeybindAction::WindowClose},
           {"window-focus-left", KeybindAction::WindowFocusLeft},
           {"window-focus-right", KeybindAction::WindowFocusRight},
           {"window-focus-up", KeybindAction::WindowFocusUp},
           {"window-focus-down", KeybindAction::WindowFocusDown},
-          {"column-move-left", KeybindAction::ColumnMoveLeft},
-          {"column-move-right", KeybindAction::ColumnMoveRight},
+          {"window-focus-next", KeybindAction::WindowFocusNext},
           {"window-move-up", KeybindAction::WindowMoveUp},
           {"window-move-down", KeybindAction::WindowMoveDown},
+          {"window-toggle-maximize", KeybindAction::ToggleMaximize},
+          {"window-toggle-fullscreen", KeybindAction::ToggleFullscreen},
           {"window-consume-left", KeybindAction::WindowConsumeLeft},
           {"window-expel-right", KeybindAction::WindowExpelRight},
           {"window-cycle-width", KeybindAction::WindowCycleWidth},
-          {"toggle-maximize", KeybindAction::ToggleMaximize},
-          {"toggle-fullscreen", KeybindAction::ToggleFullscreen},
-          {"window-focus-next", KeybindAction::WindowFocusNext},
+          {"column-move-left", KeybindAction::ColumnMoveLeft},
+          {"column-move-right", KeybindAction::ColumnMoveRight},
           {"config-reload", KeybindAction::ConfigReload},
       };
       for (const auto& [name, action] : actions) {
@@ -737,7 +735,9 @@ namespace umbriel {
           const auto value = modeNode->value<std::string>();
           OutputMode mode;
           if (!value || !parseOutputMode(*value, mode)) {
-            warnAt(modeNode->source(), "ignoring output.{}.mode (expected \"WIDTHxHEIGHT\" or \"WIDTHxHEIGHT@HZ\")", name);
+            warnAt(
+                modeNode->source(), "ignoring output.{}.mode (expected \"WIDTHxHEIGHT\" or \"WIDTHxHEIGHT@HZ\")", name
+            );
           } else {
             rule.mode = mode;
           }
@@ -923,8 +923,7 @@ namespace umbriel {
       if (!std::filesystem::is_regular_file(g_rootPath, error) || error) {
         if (g_explicitPath) {
           emitDiag(
-              ConfigDiagnostic::Severity::Error, nullptr,
-              std::format("config file not found: {}", g_rootPath.string())
+              ConfigDiagnostic::Severity::Error, nullptr, std::format("config file not found: {}", g_rootPath.string())
           );
         } else {
           kLog.info("no config file found: {}, using defaults", g_rootPath.string());

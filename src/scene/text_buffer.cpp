@@ -25,9 +25,8 @@ namespace {
     delete buf;
   }
 
-  bool cairoBufferBeginDataPtrAccess(
-      wlr_buffer* wlrBuf, uint32_t /*flags*/, void** data, uint32_t* format, size_t* stride
-  ) {
+  bool
+  cairoBufferBeginDataPtrAccess(wlr_buffer* wlrBuf, uint32_t /*flags*/, void** data, uint32_t* format, size_t* stride) {
     CairoBuffer* buf = wl_container_of(wlrBuf, buf, base);
     *data = cairo_image_surface_get_data(buf->surface);
     *format = DRM_FORMAT_ARGB8888;

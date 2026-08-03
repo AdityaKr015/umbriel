@@ -11,8 +11,8 @@
 #include "layout/insert_hint.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
-#include "view/view.h"
 #include "scene/config_banner.h"
+#include "view/view.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
 
@@ -288,9 +288,7 @@ namespace umbriel {
     return true;
   }
 
-  void Server::showConfigDiagnostics() {
-    m_configBanner->show(configDiagnostics());
-  }
+  void Server::showConfigDiagnostics() { m_configBanner->show(configDiagnostics()); }
 
   void Server::relayoutBanner() {
     if (m_configBanner != nullptr) {

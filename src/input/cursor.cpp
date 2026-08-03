@@ -172,18 +172,14 @@ namespace umbriel {
       m_grabX = m_cursor->x - view->sceneTree()->node.x;
       m_grabY = m_cursor->y - view->sceneTree()->node.y;
       if (mode == CursorMode::MoveTile) {
+        m_tileDragPending = true;
+        m_tileDragStartX = m_cursor->x;
+        m_tileDragStartY = m_cursor->y;
         m_dragSourceWorkspace = view->workspace();
         m_dragSourceColumn = m_dragSourceWorkspace != nullptr ? m_dragSourceWorkspace->layout().columnOf(view) : -1;
         m_dropWorkspace = m_dragSourceWorkspace;
         m_dropColumn = std::max(0, m_dragSourceColumn);
         m_dropRow = -1;
-        view->cancelPositionAnimation();
-        if (m_dragSourceWorkspace != nullptr) {
-          m_dragSourceWorkspace->layoutDetach(view);
-        }
-        wlr_scene_node_raise_to_top(&view->sceneTree()->node);
-        clipGrabbedViewToOutput();
-        updateDropTarget();
       }
       return;
     }
@@ -212,6 +208,7 @@ namespace umbriel {
     m_dragSourceColumn = -1;
     m_dropColumn = -1;
     m_dropRow = -1;
+    m_tileDragPending = false;
     m_resizeWorkspace = nullptr;
     m_resizeColumn = -1;
     m_resizeRow = -1;
@@ -314,7 +311,11 @@ namespace umbriel {
 
     if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
       if (m_mode == CursorMode::MoveTile) {
-        finishTileMove();
+        if (m_tileDragPending) {
+          resetMode();
+        } else {
+          finishTileMove();
+        }
         return;
       }
       if (m_mode == CursorMode::ResizeTile) {
@@ -416,6 +417,21 @@ namespace umbriel {
       if (m_server->sessionLocked()) {
         resetMode();
       } else {
+        if (m_mode == CursorMode::MoveTile && m_tileDragPending) {
+          constexpr double kDragThreshold = 10.0;
+          const double dx = m_cursor->x - m_tileDragStartX;
+          const double dy = m_cursor->y - m_tileDragStartY;
+          if (dx * dx + dy * dy < kDragThreshold * kDragThreshold) {
+            return;
+          }
+          m_tileDragPending = false;
+          m_grabbedView->cancelPositionAnimation();
+          if (m_dragSourceWorkspace != nullptr) {
+            m_dragSourceWorkspace->layoutDetach(m_grabbedView);
+          }
+          wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
+          clipGrabbedViewToOutput();
+        }
         processMove();
         if (m_mode == CursorMode::MoveTile) {
           updateDropTarget();

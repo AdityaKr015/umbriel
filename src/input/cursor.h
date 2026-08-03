@@ -91,6 +91,9 @@ namespace umbriel {
     int m_dragSourceColumn = -1;
     int m_dropColumn = -1;
     int m_dropRow = -1;
+    bool m_tileDragPending = false;
+    double m_tileDragStartX = 0;
+    double m_tileDragStartY = 0;
     Workspace* m_resizeWorkspace = nullptr;
     int m_resizeColumn = -1;
     int m_resizeRow = -1;

@@ -61,6 +61,16 @@ namespace umbriel {
       std::array<float, 4> borderFocused{0.48F, 0.64F, 1.0F, 1.0F};
       std::array<float, 4> borderUnfocused{0.16F, 0.16F, 0.20F, 1.0F};
       int animationMs = 250;
+      struct Blur {
+        bool enabled = true;
+        int passes = 3;
+        int radius = 5;
+        double noise = 0.02;
+        double brightness = 0.9;
+        double contrast = 0.9;
+        double saturation = 1.1;
+        double ignoreAlpha = 0.5;
+      } blur;
     } appearance;
 
     struct Layout {

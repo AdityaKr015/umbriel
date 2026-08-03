@@ -64,6 +64,11 @@ namespace umbriel {
     m_outputLayout = wlr_output_layout_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_outputLayout);
     m_scene = wlr_scene_create();
+    const Config::Appearance::Blur& blur = config().appearance.blur;
+    wlr_scene_set_blur_data(
+        m_scene, blur.passes, blur.radius, static_cast<float>(blur.noise), static_cast<float>(blur.brightness),
+        static_cast<float>(blur.contrast), static_cast<float>(blur.saturation)
+    );
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
 
     // Fixed global stacking: background < bottom < xdg < top < overlay < lock.

@@ -1,6 +1,12 @@
 # Build
 build*/
 cmake-build-*/
+
+# Meson wrap downloads
+subprojects/*
+!subprojects/*.wrap
+!subprojects/packagefiles/
+!subprojects/packagefiles/**
 compile_commands.json
 
 # Editor / IDE

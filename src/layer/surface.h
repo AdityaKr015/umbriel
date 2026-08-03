@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scene/node.h"
+#include "scene/surface_blur.h"
 
 #include <wayland-server-core.h>
 
@@ -48,11 +49,13 @@ namespace umbriel {
     void handleDestroy();
     void handleNewPopup(void* data);
     void reparentToLayer(uint32_t layer);
+    void updateBlur();
     Output* output() const;
 
     Server* m_server = nullptr;
     wlr_layer_surface_v1* m_layerSurface = nullptr;
     wlr_scene_layer_surface_v1* m_scene = nullptr;
+    SurfaceBlur m_blur;
     bool m_mapped = false;
     bool m_arrangingOut = false;
 

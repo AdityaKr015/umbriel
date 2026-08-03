@@ -65,6 +65,11 @@ namespace umbriel {
     }
   } // namespace
   void Server::applyConfig() {
+    const Config::Appearance::Blur& blur = config().appearance.blur;
+    wlr_scene_set_blur_data(
+        m_scene, blur.passes, blur.radius, static_cast<float>(blur.noise), static_cast<float>(blur.brightness),
+        static_cast<float>(blur.contrast), static_cast<float>(blur.saturation)
+    );
     for (const auto& keyboard : m_keyboards) {
       keyboard->applyConfig();
     }
@@ -82,6 +87,12 @@ namespace umbriel {
       view->setBorderFocused(false);
       view->updateBorderGeometry();
       view->applyCornerRadius();
+      view->updateBlur();
+    }
+    for (const auto& layer : m_layerSurfaces) {
+      if (layer->mapped()) {
+        layer->updateBlur();
+      }
     }
     refocus();
     if (m_sessionLocked) {
@@ -410,6 +421,7 @@ namespace umbriel {
     }
     std::erase_if(m_views, [view](const std::unique_ptr<View>& entry) { return entry.get() == view; });
     if (hadKeyboardFocus) {
+      wlr_seat_keyboard_notify_clear_focus(m_seat->wlr());
       if (replacement != nullptr) {
         focusView(replacement);
       } else {

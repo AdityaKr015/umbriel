@@ -17,6 +17,8 @@ namespace umbriel {
 
     m_commit.notify = onCommit;
     wl_signal_add(&m_popup->base->surface->events.commit, &m_commit);
+    m_unmap.notify = onUnmap;
+    wl_signal_add(&m_popup->base->surface->events.unmap, &m_unmap);
     m_destroy.notify = onDestroy;
     wl_signal_add(&m_popup->events.destroy, &m_destroy);
   }
@@ -24,6 +26,7 @@ namespace umbriel {
   Popup::~Popup() {
     if (m_commit.link.next != nullptr) {
       wl_list_remove(&m_commit.link);
+      wl_list_remove(&m_unmap.link);
       wl_list_remove(&m_destroy.link);
     }
   }
@@ -33,12 +36,22 @@ namespace umbriel {
     self->handleCommit();
   }
 
+  void Popup::onUnmap(wl_listener* listener, void* /*data*/) {
+    Popup* self = wl_container_of(listener, self, m_unmap);
+    self->m_blur.hide();
+  }
+
   void Popup::onDestroy(wl_listener* listener, void* /*data*/) {
     Popup* self = wl_container_of(listener, self, m_destroy);
     self->handleDestroy();
   }
 
   void Popup::handleCommit() {
+    const wlr_box& geometry = m_popup->base->geometry;
+    m_blur.update(
+        static_cast<wlr_scene_tree*>(m_popup->base->data), m_popup->base->surface,
+        wlr_box{0, 0, geometry.width, geometry.height}, geometry, 0
+    );
     if (!m_popup->base->initial_commit) {
       return;
     }
@@ -54,8 +67,10 @@ namespace umbriel {
 
   void Popup::handleDestroy() {
     wl_list_remove(&m_commit.link);
+    wl_list_remove(&m_unmap.link);
     wl_list_remove(&m_destroy.link);
     m_commit.link.next = nullptr;
+    m_unmap.link.next = nullptr;
     m_destroy.link.next = nullptr;
     delete this;
   }

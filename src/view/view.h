@@ -1,6 +1,7 @@
 #pragma once
 #include "core/animation.h"
 #include "scene/node.h"
+#include "scene/surface_blur.h"
 
 #include <array>
 #include <wayland-server-core.h>
@@ -78,6 +79,7 @@ namespace umbriel {
     void updateBorderGeometry();
     void setBorderFocused(bool focused);
     void applyCornerRadius();
+    void updateBlur();
     void clearOutputClip();
     void placeInUsableArea();
     void updateForeignIdentity();
@@ -90,6 +92,7 @@ namespace umbriel {
     wlr_scene_tree* m_sceneTree = nullptr;
     wlr_scene_tree* m_borderTree = nullptr;
     wlr_scene_rect* m_borderRects[4] = {}; // top, bottom, left, right
+    SurfaceBlur m_blur;
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
     Workspace* m_workspace = nullptr;

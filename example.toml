@@ -22,6 +22,21 @@ border_focused = "#7AA3FFFF"   # #RRGGBB or #RRGGBBAA
 border_unfocused = "#292933FF"
 animation_ms = 250        # 1-10000
 
+# Backdrop blur behind transparent surfaces (windows, panels, popups).
+# Blur only renders where a surface is actually transparent.
+[appearance.blur]
+enabled = true
+passes = 3               # 0-8; 0 disables
+radius = 5               # 0-100; 0 disables
+noise = 0.02             # 0.0-1.0
+brightness = 0.9         # 0.0-2.0
+contrast = 0.9           # 0.0-2.0
+saturation = 1.1         # 0.0-2.0
+# Skip blurring pixels whose own alpha is below this threshold (0.0-1.0).
+# 0.0 blurs the surface's whole rectangle; higher values leave more-transparent
+# regions unblurred. 0.5 skips pixels that are less than half-opaque.
+ignore_alpha = 0.5
+
 [layout]
 gap = 8                         # 0-500
 # Initial width assigned to new columns.

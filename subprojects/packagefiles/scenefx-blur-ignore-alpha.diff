@@ -1,0 +1,151 @@
+--- a/render/fx_renderer/shaders/tex.frag
++++ b/render/fx_renderer/shaders/tex.frag
+@@ -45,7 +45,7 @@
+ uniform float clip_radius_bottom_right;
+ #endif
+ 
+-uniform bool discard_transparent;
++uniform float discard_transparent;
+ 
+ vec4 sample_texture() {
+ #if SOURCE == SOURCE_TEXTURE_RGBA || SOURCE == SOURCE_TEXTURE_EXTERNAL
+@@ -88,7 +88,7 @@
+ 	gl_FragColor = sample_texture() * alpha;
+ #endif
+ 
+-	if (discard_transparent && gl_FragColor.a == 0.0) {
++	if (gl_FragColor.a < discard_transparent) {
+ 		discard;
+ 	}
+ }
+--- a/include/scenefx/render/pass.h
++++ b/include/scenefx/render/pass.h
+@@ -45,7 +45,7 @@
+ 	struct wlr_render_texture_options base;
+ 	const struct wlr_box *clip_box; // Used to clip csd. Ignored if NULL
+ 	struct fx_corner_fradii corners;
+-	bool discard_transparent;
++	float discard_transparent; // discard pixels with alpha < this; 0.0 discards nothing
+ 	struct clipped_fregion clipped_region;
+ };
+ 
+@@ -87,7 +87,7 @@
+ 	struct fx_framebuffer *current_buffer;
+ 	struct blur_data *blur_data;
+ 	bool use_optimized_blur;
+-	bool ignore_transparent;
++	float ignore_alpha; // 0.0 = blur whole box; >0 = skip pixels with mask alpha < value
+ 	float blur_strength;
+ 	struct fx_corner_fradii corners;
+ 	struct clipped_fregion clipped_region;
+--- a/render/fx_renderer/fx_pass.c
++++ b/render/fx_renderer/fx_pass.c
+@@ -27,7 +27,7 @@
+ 		const struct wlr_render_texture_options *base) {
+ 	struct fx_render_texture_options options = {
+ 		.corners = {0},
+-		.discard_transparent = false,
++		.discard_transparent = 0.0f,
+ 		.clip_box = NULL,
+ 		.clipped_region = {0},
+ 	};
+@@ -1041,7 +1041,7 @@
+ 			fx_options->tex_options.base.src_box.height,
+ 			fx_options->tex_options.base.src_box.x,
+ 			fx_options->tex_options.base.src_box.y);
+-	TRACY_ZONE_TEXT_f("Ignore Transparent: %d", fx_options->ignore_transparent);
++	TRACY_ZONE_TEXT_f("Ignore Alpha: %f", fx_options->ignore_alpha);
+ 	TRACY_ZONE_TEXT_f("Discard Transparent: %d", fx_options->tex_options.discard_transparent);
+ 	TRACY_ZONE_TEXT_f("Use Optimized Blur: %d", fx_options->use_optimized_blur);
+ 	TRACY_ZONE_TEXT_f("Blur Options:");
+@@ -1136,11 +1136,11 @@
+ 	struct fx_texture *blur_texture = fx_get_texture(wlr_texture);
+ 
+ 	// Get a stencil of the window ignoring transparent regions
+-	if (fx_options->ignore_transparent && fx_options->tex_options.base.texture) {
++	if (fx_options->ignore_alpha > 0.0f && fx_options->tex_options.base.texture) {
+ 		stencil_mask_init();
+ 
+ 		struct fx_render_texture_options tex_options = fx_options->tex_options;
+-		tex_options.discard_transparent = true;
++		tex_options.discard_transparent = fx_options->ignore_alpha;
+ 		tex_options.clipped_region = fx_options->clipped_region;
+ 		fx_render_pass_add_texture(pass, &tex_options);
+ 
+@@ -1169,7 +1169,7 @@
+ 	wlr_texture_destroy(&blur_texture->wlr_texture);
+ 
+ 	// Finish stenciling
+-	if (fx_options->ignore_transparent && fx_options->tex_options.base.texture) {
++	if (fx_options->ignore_alpha > 0.0f && fx_options->tex_options.base.texture) {
+ 		stencil_mask_fini();
+ 	}
+ 
+@@ -1203,7 +1203,7 @@
+ 			fx_options->tex_options.base.src_box.height,
+ 			fx_options->tex_options.base.src_box.x,
+ 			fx_options->tex_options.base.src_box.y);
+-	TRACY_ZONE_TEXT_f("Ignore Transparent: %d", fx_options->ignore_transparent);
++	TRACY_ZONE_TEXT_f("Ignore Alpha: %f", fx_options->ignore_alpha);
+ 	TRACY_ZONE_TEXT_f("Discard Transparent: %d", fx_options->tex_options.discard_transparent);
+ 	TRACY_ZONE_TEXT_f("Use Optimized Blur: %d", fx_options->use_optimized_blur);
+ 	TRACY_ZONE_TEXT_f("Blur Options:");
+--- a/include/scenefx/types/wlr_scene.h
++++ b/include/scenefx/types/wlr_scene.h
+@@ -178,6 +178,7 @@
+ 
+ 	float strength;
+ 	float alpha;
++	float ignore_alpha;
+ 
+ 	bool should_only_blur_bottom_layer;
+ 
+@@ -671,6 +672,13 @@
+ void wlr_scene_blur_set_strength(struct wlr_scene_blur *blur, float strength);
+ 
+ /**
++ * Skip blurring pixels whose transparency-mask alpha is below this threshold
++ * (0.0..1.0). 0.0 blurs the whole node box. Only effective when a
++ * transparency mask source is set. Default 0.0.
++ */
++void wlr_scene_blur_set_ignore_alpha(struct wlr_scene_blur *blur, float ignore_alpha);
++
++/**
+  * Sets the region where to clip the blur.
+  *
+  * For there to be corner rounding of the clipped region, the corner radius and
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -1092,6 +1092,7 @@
+ 	scene_node_init(&blur->node, WLR_SCENE_NODE_BLUR, parent);
+ 
+ 	blur->alpha = 1.0f;
++	blur->ignore_alpha = 0.0f;
+ 	blur->strength = 1.0f;
+ 	blur->clipped_region = (struct clipped_region){0};
+ 	blur->corners = corner_radii_all(0);
+@@ -1176,6 +1177,15 @@
+ 	}
+ 
+ 	blur->alpha = alpha;
++	scene_node_update(&blur->node, NULL);
++}
++
++void wlr_scene_blur_set_ignore_alpha(struct wlr_scene_blur *blur, float ignore_alpha) {
++	if (blur->ignore_alpha == ignore_alpha) {
++		return;
++	}
++
++	blur->ignore_alpha = ignore_alpha;
+ 	scene_node_update(&blur->node, NULL);
+ }
+ 
+@@ -2227,7 +2237,7 @@
+ 			},
+ 			.use_optimized_blur = blur->should_only_blur_bottom_layer,
+ 			.blur_data = &scene->blur_data,
+-			.ignore_transparent = mask != NULL,
++			.ignore_alpha = mask != NULL ? blur->ignore_alpha : 0.0f,
+ 			.blur_strength = blur->strength,
+ 		};
+ 		fx_render_pass_add_blur(fx_pass, &blur_options);

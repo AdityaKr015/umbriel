@@ -19,7 +19,11 @@ add_project_arguments(
 wayland_server_dep = dependency('wayland-server')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')
-scenefx_dep = dependency('scenefx-0.5')
+scenefx_proj = subproject(
+  'scenefx',
+  default_options: ['examples=false', 'tracy_enable=false', 'werror=false', 'default_library=static'],
+)
+scenefx_dep = scenefx_proj.get_variable('scenefx')
 xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput')
 pixman_dep = dependency('pixman-1')
@@ -63,6 +67,7 @@ sources = files(
   'src/view/view_foreign.cpp',
   'src/view/popup.cpp',
   'src/layer/surface.cpp',
+  'src/scene/surface_blur.cpp',
   'src/lock/session_lock.cpp',
   'src/workspace/workspace.cpp',
 )

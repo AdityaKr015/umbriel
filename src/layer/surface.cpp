@@ -154,6 +154,11 @@ namespace umbriel {
     wlr_xdg_popup_unconstrain_from_box(popup, &box);
   }
 
+  void LayerSurface::updateBlur() {
+    const wlr_box box{0, 0, m_layerSurface->surface->current.width, m_layerSurface->surface->current.height};
+    m_blur.update(m_scene->tree, m_layerSurface->surface, box, box, 0);
+  }
+
   void LayerSurface::onMap(wl_listener* listener, void* /*data*/) {
     LayerSurface* self = wl_container_of(listener, self, m_map);
     self->handleMap();
@@ -188,11 +193,13 @@ namespace umbriel {
     if (exclusiveKeyboard()) {
       focus();
     }
+    updateBlur();
   }
 
   void LayerSurface::handleUnmap() {
     const bool hadFocus = hasKeyboardFocus();
     m_mapped = false;
+    m_blur.hide();
     // Avoid sending configures while unmapping (wrong serial / client abort).
     m_arrangingOut = true;
     if (Output* out = output()) {
@@ -205,6 +212,7 @@ namespace umbriel {
   }
 
   void LayerSurface::handleCommit() {
+    updateBlur();
     if (m_layerSurface->initial_commit) {
       if (Output* out = output()) {
         out->arrangeLayers();

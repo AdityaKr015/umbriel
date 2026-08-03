@@ -424,13 +424,40 @@ namespace umbriel {
       }
       warnUnknownKeys(
           *section, "appearance",
-          {"border_width", "corner_radius", "border_focused", "border_unfocused", "animation_ms"}
+          {"border_width", "corner_radius", "border_focused", "border_unfocused", "animation_ms", "blur"}
       );
       readInteger(*section, "border_width", "appearance.border_width", 0, 100, loaded.appearance.borderWidth);
       readInteger(*section, "corner_radius", "appearance.corner_radius", 0, 500, loaded.appearance.cornerRadius);
       readColor(*section, "border_focused", "appearance.border_focused", loaded.appearance.borderFocused);
       readColor(*section, "border_unfocused", "appearance.border_unfocused", loaded.appearance.borderUnfocused);
       readInteger(*section, "animation_ms", "appearance.animation_ms", 1, 10000, loaded.appearance.animationMs);
+
+      if (const toml::node* blurNode = section->get("blur")) {
+        if (const auto* blur = blurNode->as_table()) {
+          warnUnknownKeys(
+              *blur, "appearance.blur",
+              {"enabled", "passes", "radius", "noise", "brightness", "contrast", "saturation", "ignore_alpha"}
+          );
+          if (const toml::node* enabledNode = blur->get("enabled")) {
+            if (enabledNode->is_boolean()) {
+              loaded.appearance.blur.enabled = enabledNode->value<bool>().value();
+            } else {
+              kLog.warn("config: ignoring appearance.blur.enabled (expected boolean)");
+            }
+          }
+          readInteger(*blur, "passes", "appearance.blur.passes", 0, 8, loaded.appearance.blur.passes);
+          readInteger(*blur, "radius", "appearance.blur.radius", 0, 100, loaded.appearance.blur.radius);
+          readDouble(*blur, "noise", "appearance.blur.noise", 0.0, 1.0, loaded.appearance.blur.noise);
+          readDouble(*blur, "brightness", "appearance.blur.brightness", 0.0, 2.0, loaded.appearance.blur.brightness);
+          readDouble(*blur, "contrast", "appearance.blur.contrast", 0.0, 2.0, loaded.appearance.blur.contrast);
+          readDouble(*blur, "saturation", "appearance.blur.saturation", 0.0, 2.0, loaded.appearance.blur.saturation);
+          readDouble(
+              *blur, "ignore_alpha", "appearance.blur.ignore_alpha", 0.0, 1.0, loaded.appearance.blur.ignoreAlpha
+          );
+        } else {
+          kLog.warn("config: ignoring appearance.blur (expected table)");
+        }
+      }
     }
 
     void readLayout(const toml::table& table, Config& loaded) {

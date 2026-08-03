@@ -378,6 +378,15 @@ namespace umbriel {
     );
   }
 
+  void View::updateBlur() {
+    const wlr_box& geometry = m_toplevel->base->geometry;
+    const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
+    const bool rounded = m_tiled && !m_toplevel->scheduled.fullscreen;
+    m_blur.update(
+        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0
+    );
+  }
+
   void View::clearOutputClip() {
     const wlr_box* clip = m_tiled ? &m_toplevel->base->geometry : nullptr;
     wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, clip);
@@ -465,6 +474,7 @@ namespace umbriel {
       wlr_scene_node_set_enabled(&m_borderTree->node, false);
     }
     applyCornerRadius();
+    updateBlur();
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this);
     } else if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
@@ -491,6 +501,7 @@ namespace umbriel {
     if (m_borderTree != nullptr) {
       wlr_scene_node_set_enabled(&m_borderTree->node, false);
     }
+    m_blur.hide();
     m_mapped = false;
     if (m_workspace != nullptr) {
       m_workspace->layoutDetach(this);
@@ -526,6 +537,7 @@ namespace umbriel {
       }
     }
     applyCornerRadius();
+    updateBlur();
     updateForeignState();
   }
 

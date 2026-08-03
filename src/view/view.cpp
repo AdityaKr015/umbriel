@@ -861,7 +861,27 @@ namespace umbriel {
     }
 
     // Honor the client's requested state (not a blind toggle).
-    const bool fullscreen = m_toplevel->requested.fullscreen;
+    setFullscreen(m_toplevel->requested.fullscreen);
+  }
+
+  void View::toggleFullscreen() {
+    if (!m_toplevel->base->initialized) {
+      return;
+    }
+    setFullscreen(!m_toplevel->scheduled.fullscreen);
+  }
+
+  void View::setFullscreen(bool fullscreen) {
+    // Leaving column maximize when entering real fullscreen avoids a stale
+    // widthFrac=1.0 column after the client leaves fullscreen.
+    if (fullscreen && m_tiled && m_workspace != nullptr) {
+      const int column = m_workspace->layout().columnOf(this);
+      if (m_workspace->layout().isFullWidth(column)) {
+        m_workspace->layout().clearFullWidthState(column);
+        wlr_xdg_toplevel_set_maximized(m_toplevel, false);
+      }
+    }
+
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     if (fullscreen) {
       // scheduled.fullscreen is set; drop any tile clip and cover the full output

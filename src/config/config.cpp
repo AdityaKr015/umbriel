@@ -68,7 +68,8 @@ namespace umbriel {
       add(KeybindAction::ConsumeLeft, XKB_KEY_comma);
       add(KeybindAction::ExpelRight, XKB_KEY_period);
       add(KeybindAction::CycleWidth, XKB_KEY_r);
-      add(KeybindAction::ToggleFullWidth, XKB_KEY_f);
+      add(KeybindAction::ToggleFullscreen, XKB_KEY_f);
+      add(KeybindAction::ToggleMaximize, XKB_KEY_f, WLR_MODIFIER_CTRL);
 
       for (int index = 0; index < 9; ++index) {
         const uint32_t digit = XKB_KEY_1 + static_cast<uint32_t>(index);
@@ -161,7 +162,8 @@ namespace umbriel {
           {"window-consume-left", KeybindAction::ConsumeLeft},
           {"window-expel-right", KeybindAction::ExpelRight},
           {"window-cycle-width", KeybindAction::CycleWidth},
-          {"window-toggle-full-width", KeybindAction::ToggleFullWidth},
+          {"toggle-maximize", KeybindAction::ToggleMaximize},
+          {"toggle-fullscreen", KeybindAction::ToggleFullscreen},
           {"window-focus-next", KeybindAction::FocusNext},
           {"config-reload", KeybindAction::ReloadConfig},
       };
@@ -495,7 +497,9 @@ namespace umbriel {
         kLog.warn("config: ignoring general (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "general", {"terminal", "autostart", "prefer_no_csd", "workspace_back_and_forth", "xwayland"});
+      warnUnknownKeys(
+          *section, "general", {"terminal", "autostart", "prefer_no_csd", "workspace_back_and_forth", "xwayland"}
+      );
       if (const toml::node* terminal = section->get("terminal")) {
         const auto value = terminal->value<std::string>();
         if (!value) {

@@ -315,9 +315,14 @@ namespace umbriel {
           workspace->cycleFocusedWidth();
         }
         return true;
-      case KeybindAction::ToggleFullWidth:
+      case KeybindAction::ToggleMaximize:
         if (Workspace* workspace = activeWorkspace()) {
           workspace->toggleFocusedFullWidth();
+        }
+        return true;
+      case KeybindAction::ToggleFullscreen:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->toggleFocusedFullscreen();
         }
         return true;
       case KeybindAction::FocusNext:

@@ -44,6 +44,8 @@ namespace umbriel {
     void cancelPositionAnimation();
     // Size/position to the full output and drop tile clips (exclusive zones do not apply).
     void applyFullscreenLayout();
+    // Compositor-driven fullscreen toggle (keybind); client requests use handleRequestFullscreen.
+    void toggleFullscreen();
 
   private:
     friend class Cursor;
@@ -71,6 +73,7 @@ namespace umbriel {
     void handleRequestResize(void* data);
     void handleRequestMaximize();
     void handleRequestFullscreen();
+    void setFullscreen(bool fullscreen);
     void handleSetTitle();
     void handleSetAppId();
     void handleForeignActivate();

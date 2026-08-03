@@ -332,6 +332,14 @@ namespace umbriel {
     return true;
   }
 
+  bool Workspace::toggleFocusedFullscreen() {
+    if (m_focusedView == nullptr || !m_focusedView->mapped()) {
+      return false;
+    }
+    m_focusedView->toggleFullscreen();
+    return true;
+  }
+
   void Workspace::ensureFocusedVisible() {
     if (m_group == nullptr || m_group->output() == nullptr) {
       return;

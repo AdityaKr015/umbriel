@@ -65,6 +65,7 @@ namespace umbriel {
     void finishTileMove();
     void processResize();
     void processResizeTile();
+    [[nodiscard]] uint32_t tileResizeEdges(View* view) const;
     void setActiveConstraint(wlr_pointer_constraint_v1* constraint);
     void updateConstraintForSurface(wlr_surface* surface);
     void warpToConstraintHint(wlr_pointer_constraint_v1* constraint);
@@ -91,8 +92,20 @@ namespace umbriel {
     int m_dropRow = -1;
     Workspace* m_resizeWorkspace = nullptr;
     int m_resizeColumn = -1;
+    int m_resizeRow = -1;
     double m_resizeStartX = 0;
-    double m_resizeStartFraction = 0;
+    double m_resizeStartY = 0;
+    double m_resizeStartScroll = 0;
+    int m_resizeStartLeft = 0;
+    int m_resizeStartRight = 0;
+    int m_resizeStartWidthPx = 0;
+    int m_resizeStartPrevWidthPx = 0;
+    int m_resizeStartTop = 0;
+    int m_resizeStartBottom = 0;
+    double m_resizeStartUpperWeight = 0;
+    double m_resizeStartLowerWeight = 0;
+    int m_resizeUpperRow = -1;
+    bool m_resizeSoloHorizontal = false;
 
     wl_listener m_motion{};
     wl_listener m_motionAbsolute{};

@@ -63,6 +63,11 @@ namespace umbriel {
     uint32_t keycode = event->keycode + 8;
     const xkb_keysym_t* syms = nullptr;
     int nsyms = xkb_state_key_get_syms(m_keyboard->xkb_state, keycode, &syms);
+    const xkb_keysym_t* rawSyms = nullptr;
+    xkb_keymap* keymap = xkb_state_get_keymap(m_keyboard->xkb_state);
+    const xkb_layout_index_t layout = xkb_state_key_get_layout(m_keyboard->xkb_state, keycode);
+    const int nraw = xkb_keymap_key_get_syms_by_level(keymap, keycode, layout, 0, &rawSyms);
+    const uint32_t rawSym = nraw > 0 ? rawSyms[0] : XKB_KEY_NoSymbol;
 
     bool handled = false;
     uint32_t modifiers = wlr_keyboard_get_modifiers(m_keyboard);
@@ -70,10 +75,8 @@ namespace umbriel {
       for (int i = 0; i < nsyms; ++i) {
         handled = m_server->handleVtSwitch(syms[i], modifiers) || handled;
       }
-      if ((modifiers & m_server->modKey()) != 0) {
-        for (int i = 0; i < nsyms; ++i) {
-          handled = m_server->handleKeybind(syms[i], modifiers, event->keycode) || handled;
-        }
+      for (int i = 0; i < nsyms; ++i) {
+        handled = m_server->handleKeybind(syms[i], rawSym, modifiers) || handled;
       }
     }
 

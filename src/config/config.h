@@ -1,10 +1,42 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
 namespace umbriel {
+  enum class KeybindAction {
+    None,
+    Spawn,
+    SpawnTerminal,
+    Close,
+    Quit,
+    FocusLeft,
+    FocusRight,
+    FocusUp,
+    FocusDown,
+    MoveColumnLeft,
+    MoveColumnRight,
+    MoveUp,
+    MoveDown,
+    ConsumeLeft,
+    ExpelRight,
+    CycleWidth,
+    ToggleFullWidth,
+    FocusNext,
+    Workspace,
+    MoveToWorkspace,
+  };
+
+  struct Keybind {
+    uint32_t modifiers = 0;
+    bool useMod = false;
+    uint32_t keysym = 0;
+    KeybindAction action = KeybindAction::None;
+    std::string spawnCommand;
+    int workspace = 0;
+  };
 
   struct Config {
     struct Appearance {
@@ -25,6 +57,8 @@ namespace umbriel {
     struct General {
       std::string terminal;
     } general;
+
+    std::vector<Keybind> keybinds;
   };
 
   [[nodiscard]] const Config& config();

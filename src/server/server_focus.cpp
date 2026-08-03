@@ -11,7 +11,6 @@
 
 #include <algorithm>
 #include <cstdlib>
-#include <linux/input-event-codes.h>
 
 namespace umbriel {
 
@@ -152,54 +151,13 @@ namespace umbriel {
     return true;
   }
 
-  bool Server::handleKeybind(uint32_t keysym, uint32_t modifiers, uint32_t keycode) {
+  bool Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {
     if (m_sessionLocked) {
       return false;
     }
 
-    // Use the physical keycode so mod+Shift+1 still resolves to workspace 1
-    // (Shift changes the keysym to '!' / '@' / … depending on layout).
-    auto workspaceIndex = [](uint32_t code, uint32_t sym) -> int {
-      if (code >= KEY_1 && code <= KEY_9) {
-        return static_cast<int>(code - KEY_1);
-      }
-      if (code >= KEY_KP1 && code <= KEY_KP9) {
-        return static_cast<int>(code - KEY_KP1);
-      }
-      if (sym >= XKB_KEY_1 && sym <= XKB_KEY_9) {
-        return static_cast<int>(sym - XKB_KEY_1);
-      }
-      if (sym >= XKB_KEY_KP_1 && sym <= XKB_KEY_KP_9) {
-        return static_cast<int>(sym - XKB_KEY_KP_1);
-      }
-      return -1;
-    };
-
-    if (const int index = workspaceIndex(keycode, keysym); index >= 0) {
-      Output* out = outputFromWlr(preferredOutput());
-      if (out == nullptr || out->workspaceGroup() == nullptr) {
-        return true;
-      }
-      WorkspaceGroup* group = out->workspaceGroup();
-      Workspace* target = group->workspaceAt(static_cast<size_t>(index));
-      if (target == nullptr) {
-        return true;
-      }
-      if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
-        for (const auto& entry : m_views) {
-          if (entry->mapped() && entry->onActiveWorkspace()) {
-            entry->setWorkspace(target);
-            group->activate(target);
-            focusView(entry.get());
-            return true;
-          }
-        }
-        group->activateIndex(static_cast<size_t>(index));
-        return true;
-      }
-      group->activateIndex(static_cast<size_t>(index));
-      return true;
-    }
+    const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
+    const uint32_t lowered = xkb_keysym_to_lower(keysym);
 
     auto activeWorkspace = [this]() -> Workspace* {
       Output* output = outputFromWlr(preferredOutput());
@@ -209,104 +167,148 @@ namespace umbriel {
       return output->workspaceGroup()->active();
     };
 
-    switch (keysym) {
-    case XKB_KEY_Left:
-    case XKB_KEY_h:
-    case XKB_KEY_H: {
-      if (Workspace* workspace = activeWorkspace()) {
-        if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
-          workspace->moveFocusedColumn(-1);
-        } else if (View* target = workspace->focusAdjacent(-1)) {
-          focusView(target);
+    for (const Keybind& bind : config().keybinds) {
+      const uint32_t expected = bind.modifiers | (bind.useMod ? modKey() : 0);
+      if (effective != expected || (lowered != bind.keysym && rawKeysym != bind.keysym)) {
+        continue;
+      }
+
+      switch (bind.action) {
+      case KeybindAction::None:
+        return true;
+      case KeybindAction::Spawn:
+        spawn(bind.spawnCommand.c_str());
+        return true;
+      case KeybindAction::SpawnTerminal: {
+        const std::string& configured = config().general.terminal;
+        const char* terminal = !configured.empty() ? configured.c_str() : std::getenv("TERMINAL");
+        if (terminal == nullptr || terminal[0] == '\0') {
+          wlr_log(WLR_ERROR, "mod+Return: set [general].terminal or $TERMINAL");
+          return true;
         }
-      }
-      return true;
-    }
-    case XKB_KEY_Right:
-    case XKB_KEY_l:
-    case XKB_KEY_L: {
-      if (Workspace* workspace = activeWorkspace()) {
-        if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
-          workspace->moveFocusedColumn(1);
-        } else if (View* target = workspace->focusAdjacent(1)) {
-          focusView(target);
-        }
-      }
-      return true;
-    }
-    case XKB_KEY_Up:
-    case XKB_KEY_k:
-    case XKB_KEY_K: {
-      if (Workspace* workspace = activeWorkspace()) {
-        if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
-          workspace->moveFocusedVertical(-1);
-        } else if (View* target = workspace->focusVertical(-1)) {
-          focusView(target);
-        }
-      }
-      return true;
-    }
-    case XKB_KEY_Down:
-    case XKB_KEY_j:
-    case XKB_KEY_J: {
-      if (Workspace* workspace = activeWorkspace()) {
-        if ((modifiers & WLR_MODIFIER_SHIFT) != 0) {
-          workspace->moveFocusedVertical(1);
-        } else if (View* target = workspace->focusVertical(1)) {
-          focusView(target);
-        }
-      }
-      return true;
-    }
-    case XKB_KEY_comma:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->consumeFocusedLeft();
-      }
-      return true;
-    case XKB_KEY_period:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->expelFocusedRight();
-      }
-      return true;
-    case XKB_KEY_r:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->cycleFocusedWidth();
-      }
-      return true;
-    case XKB_KEY_f:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->toggleFocusedFullWidth();
-      }
-      return true;
-    case XKB_KEY_Escape:
-      stop();
-      return true;
-    case XKB_KEY_Return: {
-      const std::string& configured = config().general.terminal;
-      const char* terminal = !configured.empty() ? configured.c_str() : std::getenv("TERMINAL");
-      if (terminal == nullptr || terminal[0] == '\0') {
-        wlr_log(WLR_ERROR, "mod+Return: set [general].terminal or $TERMINAL");
+        spawn(terminal);
         return true;
       }
-      spawn(terminal);
-      return true;
-    }
-    case XKB_KEY_F1:
-      if (m_views.size() >= 2) {
-        for (size_t n = 0; n < m_views.size(); ++n) {
-          auto current = std::move(m_views.front());
-          m_views.erase(m_views.begin());
-          m_views.push_back(std::move(current));
-          if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
-            focusView(m_views.front().get());
-            break;
+      case KeybindAction::Close:
+        if (Workspace* workspace = activeWorkspace()) {
+          if (View* view = workspace->focusedView()) {
+            wlr_xdg_toplevel_send_close(view->toplevel());
           }
         }
+        return true;
+      case KeybindAction::Quit:
+        stop();
+        return true;
+      case KeybindAction::FocusLeft:
+        if (Workspace* workspace = activeWorkspace()) {
+          if (View* target = workspace->focusAdjacent(-1)) {
+            focusView(target);
+          }
+        }
+        return true;
+      case KeybindAction::FocusRight:
+        if (Workspace* workspace = activeWorkspace()) {
+          if (View* target = workspace->focusAdjacent(1)) {
+            focusView(target);
+          }
+        }
+        return true;
+      case KeybindAction::FocusUp:
+        if (Workspace* workspace = activeWorkspace()) {
+          if (View* target = workspace->focusVertical(-1)) {
+            focusView(target);
+          }
+        }
+        return true;
+      case KeybindAction::FocusDown:
+        if (Workspace* workspace = activeWorkspace()) {
+          if (View* target = workspace->focusVertical(1)) {
+            focusView(target);
+          }
+        }
+        return true;
+      case KeybindAction::MoveColumnLeft:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->moveFocusedColumn(-1);
+        }
+        return true;
+      case KeybindAction::MoveColumnRight:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->moveFocusedColumn(1);
+        }
+        return true;
+      case KeybindAction::MoveUp:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->moveFocusedVertical(-1);
+        }
+        return true;
+      case KeybindAction::MoveDown:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->moveFocusedVertical(1);
+        }
+        return true;
+      case KeybindAction::ConsumeLeft:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->consumeFocusedLeft();
+        }
+        return true;
+      case KeybindAction::ExpelRight:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->expelFocusedRight();
+        }
+        return true;
+      case KeybindAction::CycleWidth:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->cycleFocusedWidth();
+        }
+        return true;
+      case KeybindAction::ToggleFullWidth:
+        if (Workspace* workspace = activeWorkspace()) {
+          workspace->toggleFocusedFullWidth();
+        }
+        return true;
+      case KeybindAction::FocusNext:
+        if (m_views.size() >= 2) {
+          for (size_t n = 0; n < m_views.size(); ++n) {
+            auto current = std::move(m_views.front());
+            m_views.erase(m_views.begin());
+            m_views.push_back(std::move(current));
+            if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
+              focusView(m_views.front().get());
+              break;
+            }
+          }
+        }
+        return true;
+      case KeybindAction::Workspace:
+      case KeybindAction::MoveToWorkspace: {
+        Output* output = outputFromWlr(preferredOutput());
+        if (output == nullptr || output->workspaceGroup() == nullptr) {
+          return true;
+        }
+        WorkspaceGroup* group = output->workspaceGroup();
+        const size_t index = static_cast<size_t>(bind.workspace);
+        Workspace* target = group->workspaceAt(index);
+        if (target == nullptr) {
+          return true;
+        }
+        if (bind.action == KeybindAction::MoveToWorkspace) {
+          for (const auto& entry : m_views) {
+            if (entry->mapped() && entry->onActiveWorkspace()) {
+              entry->setWorkspace(target);
+              group->activate(target);
+              focusView(entry.get());
+              return true;
+            }
+          }
+        }
+        group->activateIndex(index);
+        return true;
       }
-      return true;
-    default:
-      return false;
+      }
     }
+
+    return false;
   }
 
   void Server::arrangeLayers(wlr_output* output) {

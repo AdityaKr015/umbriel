@@ -3,13 +3,20 @@
 #include "config/config_merge.h"
 #include "core/log.h"
 
+// clang-format off
+#include <xkbcommon/xkbcommon.h>
+#include "wlr.h"
+// clang-format on
+
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <initializer_list>
 #include <string_view>
+#include <utility>
 
 namespace umbriel {
 
@@ -17,6 +24,171 @@ namespace umbriel {
 
     constexpr Logger kLog("config");
     Config g_config;
+
+    std::vector<Keybind> defaultKeybinds() {
+      std::vector<Keybind> keybinds;
+      keybinds.reserve(59);
+      auto add = [&keybinds](KeybindAction action, uint32_t keysym, uint32_t modifiers = 0) {
+        keybinds.push_back({
+            .modifiers = modifiers,
+            .useMod = true,
+            .keysym = xkb_keysym_to_lower(keysym),
+            .action = action,
+            .spawnCommand = {},
+            .workspace = 0,
+        });
+      };
+
+      add(KeybindAction::SpawnTerminal, XKB_KEY_Return);
+      add(KeybindAction::Quit, XKB_KEY_Escape);
+      add(KeybindAction::FocusNext, XKB_KEY_F1);
+
+      add(KeybindAction::FocusLeft, XKB_KEY_Left);
+      add(KeybindAction::FocusLeft, XKB_KEY_h);
+      add(KeybindAction::FocusRight, XKB_KEY_Right);
+      add(KeybindAction::FocusRight, XKB_KEY_l);
+      add(KeybindAction::FocusUp, XKB_KEY_Up);
+      add(KeybindAction::FocusUp, XKB_KEY_k);
+      add(KeybindAction::FocusDown, XKB_KEY_Down);
+      add(KeybindAction::FocusDown, XKB_KEY_j);
+
+      add(KeybindAction::MoveColumnLeft, XKB_KEY_Left, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::MoveColumnLeft, XKB_KEY_h, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::MoveColumnRight, XKB_KEY_Right, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::MoveColumnRight, XKB_KEY_l, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::MoveUp, XKB_KEY_Up, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::MoveUp, XKB_KEY_k, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::MoveDown, XKB_KEY_Down, WLR_MODIFIER_SHIFT);
+      add(KeybindAction::MoveDown, XKB_KEY_j, WLR_MODIFIER_SHIFT);
+
+      add(KeybindAction::ConsumeLeft, XKB_KEY_comma);
+      add(KeybindAction::ExpelRight, XKB_KEY_period);
+      add(KeybindAction::CycleWidth, XKB_KEY_r);
+      add(KeybindAction::ToggleFullWidth, XKB_KEY_f);
+
+      for (int index = 0; index < 9; ++index) {
+        const uint32_t digit = XKB_KEY_1 + static_cast<uint32_t>(index);
+        const uint32_t keypad = XKB_KEY_KP_1 + static_cast<uint32_t>(index);
+        auto addWorkspace = [&](KeybindAction action, uint32_t keysym, uint32_t modifiers) {
+          keybinds.push_back({
+              .modifiers = modifiers,
+              .useMod = true,
+              .keysym = keysym,
+              .action = action,
+              .spawnCommand = {},
+              .workspace = index,
+          });
+        };
+        addWorkspace(KeybindAction::Workspace, digit, 0);
+        addWorkspace(KeybindAction::Workspace, keypad, 0);
+        addWorkspace(KeybindAction::MoveToWorkspace, digit, WLR_MODIFIER_SHIFT);
+        addWorkspace(KeybindAction::MoveToWorkspace, keypad, WLR_MODIFIER_SHIFT);
+      }
+
+      return keybinds;
+    }
+
+    bool parseChord(std::string_view chord, Keybind& output) {
+      output = Keybind{};
+
+      std::vector<std::string_view> tokens;
+      size_t start = 0;
+      while (start <= chord.size()) {
+        const size_t separator = chord.find('+', start);
+        const size_t end = separator == std::string_view::npos ? chord.size() : separator;
+        const std::string_view token = chord.substr(start, end - start);
+        if (token.empty()) {
+          return false;
+        }
+        tokens.push_back(token);
+        if (separator == std::string_view::npos) {
+          break;
+        }
+        start = separator + 1;
+      }
+      if (tokens.empty()) {
+        return false;
+      }
+
+      const std::string keyName(tokens.back());
+      const xkb_keysym_t keysym = xkb_keysym_from_name(keyName.c_str(), XKB_KEYSYM_CASE_INSENSITIVE);
+      if (keysym == XKB_KEY_NoSymbol) {
+        return false;
+      }
+
+      for (size_t index = 0; index + 1 < tokens.size(); ++index) {
+        std::string modifier(tokens[index]);
+        std::ranges::transform(modifier, modifier.begin(), [](unsigned char character) {
+          return static_cast<char>(std::tolower(character));
+        });
+        if (modifier == "mod") {
+          output.useMod = true;
+        } else if (modifier == "shift") {
+          output.modifiers |= WLR_MODIFIER_SHIFT;
+        } else if (modifier == "ctrl" || modifier == "control") {
+          output.modifiers |= WLR_MODIFIER_CTRL;
+        } else if (modifier == "alt") {
+          output.modifiers |= WLR_MODIFIER_ALT;
+        } else if (modifier == "super" || modifier == "logo" || modifier == "win") {
+          output.modifiers |= WLR_MODIFIER_LOGO;
+        } else {
+          return false;
+        }
+      }
+
+      output.keysym = xkb_keysym_to_lower(keysym);
+      return output.useMod || output.modifiers != 0;
+    }
+
+    bool parseAction(std::string_view value, Keybind& output) {
+      static constexpr std::pair<std::string_view, KeybindAction> actions[] = {
+          {"none", KeybindAction::None},
+          {"spawn-terminal", KeybindAction::SpawnTerminal},
+          {"close", KeybindAction::Close},
+          {"quit", KeybindAction::Quit},
+          {"focus-left", KeybindAction::FocusLeft},
+          {"focus-right", KeybindAction::FocusRight},
+          {"focus-up", KeybindAction::FocusUp},
+          {"focus-down", KeybindAction::FocusDown},
+          {"move-column-left", KeybindAction::MoveColumnLeft},
+          {"move-column-right", KeybindAction::MoveColumnRight},
+          {"move-up", KeybindAction::MoveUp},
+          {"move-down", KeybindAction::MoveDown},
+          {"consume-left", KeybindAction::ConsumeLeft},
+          {"expel-right", KeybindAction::ExpelRight},
+          {"cycle-width", KeybindAction::CycleWidth},
+          {"toggle-full-width", KeybindAction::ToggleFullWidth},
+          {"focus-next", KeybindAction::FocusNext},
+      };
+      for (const auto& [name, action] : actions) {
+        if (value == name) {
+          output.action = action;
+          return true;
+        }
+      }
+
+      constexpr std::string_view spawnPrefix = "spawn:";
+      if (value.starts_with(spawnPrefix)) {
+        output.action = KeybindAction::Spawn;
+        output.spawnCommand = value.substr(spawnPrefix.size());
+        return true;
+      }
+
+      auto parseWorkspace = [&](std::string_view prefix, KeybindAction action) {
+        if (!value.starts_with(prefix)) {
+          return false;
+        }
+        const std::string_view number = value.substr(prefix.size());
+        if (number.size() != 1 || number.front() < '1' || number.front() > '9') {
+          return false;
+        }
+        output.action = action;
+        output.workspace = number.front() - '1';
+        return true;
+      };
+      return parseWorkspace("workspace:", KeybindAction::Workspace)
+          || parseWorkspace("move-to-workspace:", KeybindAction::MoveToWorkspace);
+    }
 
     std::filesystem::path defaultConfigPath() {
       if (const char* xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
@@ -227,10 +399,60 @@ namespace umbriel {
       loaded.general.terminal = *value;
     }
 
+    void readKeybinds(const toml::table& table, Config& loaded) {
+      loaded.keybinds = defaultKeybinds();
+      const toml::node* node = table.get("keybinds");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* section = node->as_table();
+      if (section == nullptr) {
+        kLog.warn("config: ignoring keybinds (expected table)");
+        return;
+      }
+
+      std::vector<Keybind> configured;
+      auto sameChord = [](const Keybind& left, const Keybind& right) {
+        return left.modifiers == right.modifiers && left.useMod == right.useMod && left.keysym == right.keysym;
+      };
+      for (const auto& [key, entry] : *section) {
+        const std::string chord(key.str());
+        const auto value = entry.value<std::string>();
+        if (!value) {
+          kLog.warn("config: ignoring keybind '{}' (expected string)", chord);
+          continue;
+        }
+
+        Keybind binding;
+        if (!parseChord(chord, binding)) {
+          if (binding.keysym != XKB_KEY_NoSymbol && binding.modifiers == 0 && !binding.useMod) {
+            kLog.warn("config: ignoring keybind '{}' (needs at least one modifier)", chord);
+          } else {
+            kLog.warn("config: ignoring keybind '{}' (bad chord)", chord);
+          }
+          continue;
+        }
+        if (!parseAction(*value, binding)) {
+          kLog.warn("config: ignoring keybind '{}' (unknown action '{}')", chord, *value);
+          continue;
+        }
+
+        if (std::ranges::any_of(configured, [&](const Keybind& existing) { return sameChord(existing, binding); })) {
+          kLog.warn("config: duplicate keybind {}", chord);
+        }
+        std::erase_if(configured, [&](const Keybind& existing) { return sameChord(existing, binding); });
+        configured.push_back(binding);
+        std::erase_if(loaded.keybinds, [&](const Keybind& existing) { return sameChord(existing, binding); });
+        if (binding.action != KeybindAction::None) {
+          loaded.keybinds.push_back(std::move(binding));
+        }
+      }
+    }
+
     void warnUnknownTopLevel(const toml::table& table) {
       for (const auto& [key, value] : table) {
         (void)value;
-        if (!knownKey(key.str(), {"appearance", "layout", "general"})) {
+        if (!knownKey(key.str(), {"appearance", "layout", "general", "keybinds"})) {
           kLog.warn("config: unknown key {}", key.str());
         }
       }
@@ -242,6 +464,7 @@ namespace umbriel {
 
   void loadConfig(const char* explicitPath) {
     g_config = Config{};
+    g_config.keybinds = defaultKeybinds();
     const std::filesystem::path path =
         explicitPath == nullptr ? defaultConfigPath() : std::filesystem::path(explicitPath);
     std::error_code error;
@@ -261,6 +484,7 @@ namespace umbriel {
       readAppearance(result.merged, loaded);
       readLayout(result.merged, loaded);
       readGeneral(result.merged, loaded);
+      readKeybinds(result.merged, loaded);
       g_config = std::move(loaded);
     } catch (const std::exception& exception) {
       kLog.error("config load error: {}", exception.what());

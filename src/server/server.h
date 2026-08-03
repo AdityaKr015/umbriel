@@ -93,7 +93,7 @@ namespace umbriel {
 
     void focusView(View* view);
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
-    bool handleKeybind(uint32_t keysym, uint32_t modifiers, uint32_t keycode);
+    bool handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
     bool handleVtSwitch(uint32_t keysym, uint32_t modifiers);
     void arrangeLayers(wlr_output* output);
     [[nodiscard]] wlr_output* preferredOutput() const;

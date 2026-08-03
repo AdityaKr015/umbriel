@@ -19,10 +19,36 @@ add_project_arguments(
 wayland_server_dep = dependency('wayland-server')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')
-# Prefer a system/packaged SceneFX (Nix). Fall back to the wrap subproject for
-# local non-Nix builds so the ignore_alpha patch still applies via packagefiles.
-scenefx_dep = dependency('scenefx-0.5', required: false)
-if not scenefx_dep.found()
+# Umbriel needs ignore_alpha (not in upstream SceneFX 0.5). Prefer a system
+# scenefx-0.5 that already has the symbol (Nix applies
+# subprojects/packagefiles/scenefx-blur-ignore-alpha.diff in package.nix).
+# Otherwise build the wrap subproject so the same diff applies via diff_files.
+# Probe the header text instead of compiling: SceneFX headers use C99
+# `static` array sizes that break raw C++ compile checks.
+fs = import('fs')
+pkgconfig = find_program('pkg-config', required: false)
+use_system_scenefx = false
+if pkgconfig.found()
+  scenefx_exists = run_command(pkgconfig, '--exists', 'scenefx-0.5', check: false)
+  if scenefx_exists.returncode() == 0
+    scenefx_cflags = run_command(pkgconfig, '--cflags-only-I', 'scenefx-0.5', check: true).stdout().split()
+    foreach flag : scenefx_cflags
+      if flag.startswith('-I')
+        header = flag.substring(2) / 'scenefx' / 'types' / 'wlr_scene.h'
+        if fs.exists(header) and fs.read(header).contains('wlr_scene_blur_set_ignore_alpha')
+          use_system_scenefx = true
+          break
+        endif
+      endif
+    endforeach
+    if not use_system_scenefx
+      message('system scenefx-0.5 lacks ignore_alpha; using patched wrap subproject')
+    endif
+  endif
+endif
+if use_system_scenefx
+  scenefx_dep = dependency('scenefx-0.5', allow_fallback: false)
+else
   scenefx_proj = subproject(
     'scenefx',
     default_options: ['examples=false', 'tracy_enable=false', 'werror=false', 'default_library=static'],

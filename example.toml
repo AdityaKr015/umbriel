@@ -120,3 +120,16 @@ follows_mouse = false
 "Mod+Shift+Q" = "window-close"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"
 # "Mod+Escape" = "none"
+
+# Media keys — bare XF86 key names work without a modifier.
+# Volume (PipeWire/WirePlumber)
+# "XF86AudioRaiseVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
+# "XF86AudioLowerVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+# "XF86AudioMute" = "spawn:wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+# Brightness (brightnessctl)
+# "XF86MonBrightnessUp" = "spawn:brightnessctl set +5%"
+# "XF86MonBrightnessDown" = "spawn:brightnessctl set 5%-"
+# Media playback (playerctl)
+# "XF86AudioPlay" = "spawn:playerctl play-pause"
+# "XF86AudioNext" = "spawn:playerctl next"
+# "XF86AudioPrev" = "spawn:playerctl previous"

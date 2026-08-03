@@ -1,5 +1,6 @@
 #include "input/keyboard.h"
 
+#include "config/config.h"
 #include "input/seat.h"
 #include "server/server.h"
 #include "wlr.h"
@@ -8,12 +9,27 @@ namespace umbriel {
 
   Keyboard::Keyboard(Server& server, wlr_input_device* device)
       : m_server(&server), m_keyboard(wlr_keyboard_from_input_device(device)) {
+    const Config::Input::Keyboard& configured = config().input.keyboard;
     xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    xkb_keymap* keymap = xkb_keymap_new_from_names(context, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS);
-    wlr_keyboard_set_keymap(m_keyboard, keymap);
-    xkb_keymap_unref(keymap);
-    xkb_context_unref(context);
-    wlr_keyboard_set_repeat_info(m_keyboard, 25, 600);
+    const xkb_rule_names names{
+        .rules = nullptr,
+        .model = nullptr,
+        .layout = configured.layout.empty() ? nullptr : configured.layout.c_str(),
+        .variant = configured.variant.empty() ? nullptr : configured.variant.c_str(),
+        .options = nullptr,
+    };
+    xkb_keymap* keymap =
+        context == nullptr ? nullptr : xkb_keymap_new_from_names(context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    if (keymap != nullptr) {
+      wlr_keyboard_set_keymap(m_keyboard, keymap);
+      xkb_keymap_unref(keymap);
+    } else {
+      wlr_log(WLR_ERROR, "failed to create keyboard keymap");
+    }
+    if (context != nullptr) {
+      xkb_context_unref(context);
+    }
+    wlr_keyboard_set_repeat_info(m_keyboard, configured.repeatRate, configured.repeatDelay);
 
     m_modifiers.notify = onModifiers;
     wl_signal_add(&m_keyboard->events.modifiers, &m_modifiers);

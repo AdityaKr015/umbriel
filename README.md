@@ -125,6 +125,20 @@ Pass `-c path/to/config.toml` to use another file. Config files can include othe
 [general]
 terminal = "kitty"
 
+[input.keyboard]
+layout = "us"
+variant = "altgr-intl"
+repeat_rate = 30
+repeat_delay = 300
+
+[input.touchpad]
+tap = true
+natural_scroll = true
+
+[input.cursor]
+theme = "default"
+size = 24
+
 [layout]
 gap = 8
 width_presets = [0.333, 0.5, 0.667]
@@ -136,7 +150,11 @@ width_presets = [0.333, 0.5, 0.667]
 "Mod+Escape" = "none" # remove a compiled default
 ```
 
-The `appearance`, `layout`, `general`, and `keybinds` sections overlay compiled defaults, so a config file is optional.
+The `appearance`, `layout`, `general`, `input`, and `keybinds` sections overlay compiled defaults, so a config file is
+optional. Keyboard input supports XKB layout/variant and repeat settings; touchpads support tap-to-click and natural
+scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput options are applied only
+when supported by the device.
+
 Key names and modifiers are case-insensitive. `Mod` resolves to Alt in nested sessions and Super on DRM.
 Bindings support compositor actions, `workspace:N`, `move-to-workspace:N`, and arbitrary shell commands with
 `spawn:command`. Configuration is currently startup-only.

@@ -1,3 +1,4 @@
+#include "config/config.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/keyboard.h"
@@ -11,12 +12,56 @@
 #include "wlr.h"
 #include "workspace/workspace.h"
 
-#include <cstdlib>
-
 namespace umbriel {
 
   namespace {
     constexpr Logger kLog("server");
+
+    const char* deviceName(const wlr_input_device* device) {
+      return device->name != nullptr ? device->name : "unknown";
+    }
+
+    void applyNaturalScroll(
+        libinput_device* libinputDevice, const wlr_input_device* device, const std::optional<bool>& enabled,
+        std::string_view setting
+    ) {
+      if (!enabled) {
+        return;
+      }
+      if (libinput_device_config_scroll_has_natural_scroll(libinputDevice) == 0) {
+        kLog.warn("input: '{}' does not support {}", deviceName(device), setting);
+        return;
+      }
+      if (libinput_device_config_scroll_set_natural_scroll_enabled(libinputDevice, *enabled)
+          != LIBINPUT_CONFIG_STATUS_SUCCESS) {
+        kLog.warn("input: failed to apply {} to '{}'", setting, deviceName(device));
+      }
+    }
+
+    void applyPointerConfig(wlr_input_device* device) {
+      if (!wlr_input_device_is_libinput(device)) {
+        return;
+      }
+      libinput_device* libinputDevice = wlr_libinput_get_device_handle(device);
+      if (libinputDevice == nullptr) {
+        return;
+      }
+
+      const bool isTouchpad = libinput_device_config_tap_get_finger_count(libinputDevice) > 0;
+      if (isTouchpad) {
+        const Config::Input::Touchpad& touchpad = config().input.touchpad;
+        if (touchpad.tap) {
+          const auto state = *touchpad.tap ? LIBINPUT_CONFIG_TAP_ENABLED : LIBINPUT_CONFIG_TAP_DISABLED;
+          if (libinput_device_config_tap_set_enabled(libinputDevice, state) != LIBINPUT_CONFIG_STATUS_SUCCESS) {
+            kLog.warn("input: failed to apply input.touchpad.tap to '{}'", deviceName(device));
+          }
+        }
+        applyNaturalScroll(libinputDevice, device, touchpad.naturalScroll, "input.touchpad.natural_scroll");
+        return;
+      }
+
+      applyNaturalScroll(libinputDevice, device, config().input.mouse.naturalScroll, "input.mouse.natural_scroll");
+    }
   } // namespace
 
   void Server::onNewOutput(wl_listener* listener, void* data) {
@@ -264,7 +309,10 @@ namespace umbriel {
     m_keyboards.push_back(std::make_unique<Keyboard>(*this, device));
   }
 
-  void Server::addPointer(wlr_input_device* device) { m_cursor->attachInputDevice(device); }
+  void Server::addPointer(wlr_input_device* device) {
+    applyPointerConfig(device);
+    m_cursor->attachInputDevice(device);
+  }
 
   void Server::removeOutput(Output* output) {
     WorkspaceGroup* dying = output->workspaceGroup();

@@ -257,6 +257,33 @@ namespace umbriel {
       target = used;
     }
 
+    void readString(const toml::table& section, std::string_view name, std::string_view fullName, std::string& target) {
+      const toml::node* node = section.get(name);
+      if (node == nullptr) {
+        return;
+      }
+      const auto value = node->value<std::string>();
+      if (!value) {
+        kLog.warn("config: ignoring {} (expected string)", fullName);
+        return;
+      }
+      target = *value;
+    }
+
+    void readBoolean(
+        const toml::table& section, std::string_view name, std::string_view fullName, std::optional<bool>& target
+    ) {
+      const toml::node* node = section.get(name);
+      if (node == nullptr) {
+        return;
+      }
+      if (!node->is_boolean()) {
+        kLog.warn("config: ignoring {} (expected boolean)", fullName);
+        return;
+      }
+      target = node->value<bool>().value();
+    }
+
     int hexDigit(char character) {
       if (character >= '0' && character <= '9') {
         return character - '0';
@@ -399,6 +426,99 @@ namespace umbriel {
       loaded.general.terminal = *value;
     }
 
+    void validateKeyboardInput(Config::Input::Keyboard& keyboard) {
+      if (keyboard.layout.empty() && keyboard.variant.empty()) {
+        return;
+      }
+      xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+      if (context == nullptr) {
+        kLog.warn("config: unable to validate input.keyboard XKB configuration");
+        keyboard.layout.clear();
+        keyboard.variant.clear();
+        return;
+      }
+      const xkb_rule_names names{
+          .rules = nullptr,
+          .model = nullptr,
+          .layout = keyboard.layout.empty() ? nullptr : keyboard.layout.c_str(),
+          .variant = keyboard.variant.empty() ? nullptr : keyboard.variant.c_str(),
+          .options = nullptr,
+      };
+      xkb_keymap* keymap = xkb_keymap_new_from_names(context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+      if (keymap == nullptr) {
+        kLog.warn(
+            "config: ignoring input.keyboard layout='{}' variant='{}' (invalid XKB configuration)", keyboard.layout,
+            keyboard.variant
+        );
+        keyboard.layout.clear();
+        keyboard.variant.clear();
+      } else {
+        xkb_keymap_unref(keymap);
+      }
+      xkb_context_unref(context);
+    }
+
+    void readInput(const toml::table& table, Config& loaded) {
+      const toml::node* node = table.get("input");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* input = node->as_table();
+      if (input == nullptr) {
+        kLog.warn("config: ignoring input (expected table)");
+        return;
+      }
+      warnUnknownKeys(*input, "input", {"keyboard", "touchpad", "mouse", "cursor"});
+
+      if (const toml::node* keyboardNode = input->get("keyboard")) {
+        if (const auto* keyboard = keyboardNode->as_table()) {
+          warnUnknownKeys(*keyboard, "input.keyboard", {"layout", "variant", "repeat_rate", "repeat_delay"});
+          readString(*keyboard, "layout", "input.keyboard.layout", loaded.input.keyboard.layout);
+          readString(*keyboard, "variant", "input.keyboard.variant", loaded.input.keyboard.variant);
+          readInteger(
+              *keyboard, "repeat_rate", "input.keyboard.repeat_rate", 0, 1000, loaded.input.keyboard.repeatRate
+          );
+          readInteger(
+              *keyboard, "repeat_delay", "input.keyboard.repeat_delay", 0, 10000, loaded.input.keyboard.repeatDelay
+          );
+          validateKeyboardInput(loaded.input.keyboard);
+        } else {
+          kLog.warn("config: ignoring input.keyboard (expected table)");
+        }
+      }
+
+      if (const toml::node* touchpadNode = input->get("touchpad")) {
+        if (const auto* touchpad = touchpadNode->as_table()) {
+          warnUnknownKeys(*touchpad, "input.touchpad", {"tap", "natural_scroll"});
+          readBoolean(*touchpad, "tap", "input.touchpad.tap", loaded.input.touchpad.tap);
+          readBoolean(
+              *touchpad, "natural_scroll", "input.touchpad.natural_scroll", loaded.input.touchpad.naturalScroll
+          );
+        } else {
+          kLog.warn("config: ignoring input.touchpad (expected table)");
+        }
+      }
+
+      if (const toml::node* mouseNode = input->get("mouse")) {
+        if (const auto* mouse = mouseNode->as_table()) {
+          warnUnknownKeys(*mouse, "input.mouse", {"natural_scroll"});
+          readBoolean(*mouse, "natural_scroll", "input.mouse.natural_scroll", loaded.input.mouse.naturalScroll);
+        } else {
+          kLog.warn("config: ignoring input.mouse (expected table)");
+        }
+      }
+
+      if (const toml::node* cursorNode = input->get("cursor")) {
+        if (const auto* cursor = cursorNode->as_table()) {
+          warnUnknownKeys(*cursor, "input.cursor", {"theme", "size"});
+          readString(*cursor, "theme", "input.cursor.theme", loaded.input.cursor.theme);
+          readInteger(*cursor, "size", "input.cursor.size", 1, 512, loaded.input.cursor.size);
+        } else {
+          kLog.warn("config: ignoring input.cursor (expected table)");
+        }
+      }
+    }
+
     void readKeybinds(const toml::table& table, Config& loaded) {
       loaded.keybinds = defaultKeybinds();
       const toml::node* node = table.get("keybinds");
@@ -452,7 +572,7 @@ namespace umbriel {
     void warnUnknownTopLevel(const toml::table& table) {
       for (const auto& [key, value] : table) {
         (void)value;
-        if (!knownKey(key.str(), {"appearance", "layout", "general", "keybinds"})) {
+        if (!knownKey(key.str(), {"appearance", "layout", "general", "input", "keybinds"})) {
           kLog.warn("config: unknown key {}", key.str());
         }
       }
@@ -484,6 +604,7 @@ namespace umbriel {
       readAppearance(result.merged, loaded);
       readLayout(result.merged, loaded);
       readGeneral(result.merged, loaded);
+      readInput(result.merged, loaded);
       readKeybinds(result.merged, loaded);
       g_config = std::move(loaded);
     } catch (const std::exception& exception) {

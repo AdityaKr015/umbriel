@@ -22,7 +22,9 @@ namespace umbriel {
   Cursor::Cursor(Server& server) : m_server(&server) {
     m_cursor = wlr_cursor_create();
     wlr_cursor_attach_output_layout(m_cursor, m_server->outputLayout());
-    m_xcursorManager = wlr_xcursor_manager_create(nullptr, 24);
+    const Config::Input::Cursor& configured = config().input.cursor;
+    m_xcursorManager =
+        wlr_xcursor_manager_create(configured.theme.empty() ? nullptr : configured.theme.c_str(), configured.size);
 
     m_motion.notify = onMotion;
     wl_signal_add(&m_cursor->events.motion, &m_motion);

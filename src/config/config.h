@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -57,6 +58,29 @@ namespace umbriel {
     struct General {
       std::string terminal;
     } general;
+
+    struct Input {
+      struct Keyboard {
+        std::string layout;
+        std::string variant;
+        int repeatRate = 25;
+        int repeatDelay = 600;
+      } keyboard;
+
+      struct Touchpad {
+        std::optional<bool> tap;
+        std::optional<bool> naturalScroll;
+      } touchpad;
+
+      struct Mouse {
+        std::optional<bool> naturalScroll;
+      } mouse;
+
+      struct Cursor {
+        std::string theme;
+        int size = 24;
+      } cursor;
+    } input;
 
     std::vector<Keybind> keybinds;
   };

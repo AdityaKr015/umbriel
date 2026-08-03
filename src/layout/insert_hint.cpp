@@ -14,19 +14,25 @@
 namespace umbriel {
 
   namespace {
-    constexpr float kHintRed = 0.48F;
-    constexpr float kHintGreen = 0.64F;
-    constexpr float kHintBlue = 1.0F;
-    constexpr float kHintAlpha = 0.28F;
-    constexpr float kShadowAlpha = 0.10F;
     constexpr int kHintFadeMs = 80;
 
-    // SceneFX rect/shadow colors are premultiplied.
-    void premultiplied(float out[4], float alpha) {
-      out[0] = kHintRed * alpha;
-      out[1] = kHintGreen * alpha;
-      out[2] = kHintBlue * alpha;
-      out[3] = alpha;
+    // Width of the column-insert preview rectangle (logical pixels).
+    // Matches the layout-gap reservation in ScrollingLayout::columnX.
+    constexpr int kColumnHintWidth = 300;
+
+    // Height of the row-insert preview when at an edge (first/last), and full
+    // height when inserting between two existing rows.
+    constexpr int kRowHintEdgeHeight = 150;
+    constexpr int kRowHintMidHeight = 300;
+
+    // Build a premultiplied RGBA color from straight-alpha RGBA + an opacity
+    // multiplier (used for the fade-in animation).
+    void premultiplied(float out[4], const std::array<float, 4>& base, float opacity) {
+      const float a = base[3] * opacity;
+      out[0] = base[0] * a;
+      out[1] = base[1] * a;
+      out[2] = base[2] * a;
+      out[3] = a;
     }
   } // namespace
 
@@ -37,7 +43,6 @@ namespace umbriel {
     if (m_tree != nullptr) {
       wlr_scene_node_destroy(&m_tree->node);
       m_tree = nullptr;
-      m_shadow = nullptr;
       m_rect = nullptr;
     }
   }
@@ -48,19 +53,16 @@ namespace umbriel {
     }
     // dragTree sits above xdg windows so the hint is never covered by them.
     m_tree = wlr_scene_tree_create(m_server->dragTree());
-    float shadowColor[4]{};
-    premultiplied(shadowColor, kShadowAlpha);
-    m_shadow = wlr_scene_shadow_create(m_tree, kHintWidth, 1, kHintWidth / 2, 18.0F, shadowColor);
-    float rectColor[4]{};
-    premultiplied(rectColor, 0.0F);
-    m_rect = wlr_scene_rect_create(m_tree, kHintWidth, 1, rectColor);
-    wlr_scene_rect_set_corner_radius(m_rect, kHintWidth / 2);
+    float color[4]{};
+    premultiplied(color, config().appearance.insertHintColor, 0.0F);
+    m_rect = wlr_scene_rect_create(m_tree, 1, 1, color);
+    wlr_scene_rect_set_corner_radius(m_rect, config().appearance.cornerRadius);
     wlr_scene_node_set_enabled(&m_tree->node, false);
   }
 
   void InsertHint::setAlpha(float alpha) {
     float color[4]{};
-    premultiplied(color, alpha);
+    premultiplied(color, config().appearance.insertHintColor, alpha);
     wlr_scene_rect_set_color(m_rect, color);
   }
 
@@ -80,24 +82,32 @@ namespace umbriel {
       return;
     }
     const int edgePad = config().layoutEdgePad();
+    const int gap = config().layoutGap();
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
-    const int gap = std::clamp(gapIndex, 0, columnCount);
-    // Paint onto the column boundary (overlay), do not open a layout gap.
-    int boundaryX = 0;
+    const int clampedGap = std::clamp(gapIndex, 0, columnCount);
+
+    // Position the preview rectangle at the would-be column location.
+    int hintX = 0;
     if (columnCount == 0) {
-      boundaryX = 0;
-    } else if (gap <= 0) {
-      boundaryX = 0;
-    } else if (gap >= columnCount) {
-      boundaryX = workspace->layout().columnX(columnCount - 1, viewportWidth)
-          + workspace->layout().columnWidth(columnCount - 1, viewportWidth);
+      // Empty workspace: center the hint.
+      hintX = 0;
+    } else if (clampedGap <= 0) {
+      // Before the first column.
+      hintX = -kColumnHintWidth - gap;
+    } else if (clampedGap >= columnCount) {
+      // After the last column.
+      hintX = workspace->layout().columnX(columnCount - 1, viewportWidth)
+          + workspace->layout().columnWidth(columnCount - 1, viewportWidth) + gap;
     } else {
-      boundaryX = workspace->layout().columnX(gap, viewportWidth) - config().layoutGap() / 2;
+      // Between two columns: center on the gap boundary.
+      hintX = workspace->layout().columnX(clampedGap, viewportWidth) - gap / 2 - kColumnHintWidth / 2;
     }
+
+    const int hintHeight = std::max(1, usable.height - 2 * edgePad);
     const int targetX =
-        usable.x + edgePad + boundaryX - kHintWidth / 2 - static_cast<int>(std::lround(workspace->visualScroll()));
-    showGeometry(workspace, targetX, usable.y + edgePad, kHintWidth, std::max(1, usable.height - 2 * edgePad));
+        usable.x + edgePad + hintX - static_cast<int>(std::lround(workspace->visualScroll()));
+    showGeometry(workspace, targetX, usable.y + edgePad, kColumnHintWidth, hintHeight);
   }
 
   void InsertHint::showRow(Workspace* workspace, int columnIndex, int rowIndex) {
@@ -113,28 +123,41 @@ namespace umbriel {
     const int edgePad = config().layoutEdgePad();
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const Column& column = workspace->layout().columns()[static_cast<size_t>(columnIndex)];
-    const int row = std::clamp(rowIndex, 0, static_cast<int>(column.views.size()));
-    int boundaryY = usable.y + edgePad;
-    if (row == static_cast<int>(column.views.size())) {
-      boundaryY = usable.y + usable.height - edgePad;
-    } else if (row > 0) {
-      boundaryY = workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layoutGap() / 2;
+    const int rowCount = static_cast<int>(column.views.size());
+    const int row = std::clamp(rowIndex, 0, rowCount);
+
+    // Compute the preview rectangle anchored at the row boundary.
+    int hintY = 0;
+    int hintHeight = 0;
+    if (row == 0) {
+      // At the top: anchor to the top edge.
+      hintY = usable.y + edgePad;
+      hintHeight = kRowHintEdgeHeight;
+    } else if (row >= rowCount) {
+      // At the bottom: anchor to the bottom edge.
+      hintY = usable.y + usable.height - edgePad - kRowHintEdgeHeight;
+      hintHeight = kRowHintEdgeHeight;
+    } else {
+      // Between two rows: centered on the boundary.
+      const int boundary =
+          workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layoutGap() / 2;
+      hintY = boundary - kRowHintMidHeight / 2;
+      hintHeight = kRowHintMidHeight;
     }
+
     const int targetX = usable.x
         + edgePad
         + workspace->layout().columnX(columnIndex, viewportWidth)
         - static_cast<int>(std::lround(workspace->visualScroll()));
     const int width = workspace->layout().columnWidth(columnIndex, viewportWidth);
-    showGeometry(workspace, targetX, boundaryY - kHintWidth / 2, width, kHintWidth);
+    showGeometry(workspace, targetX, hintY, width, hintHeight);
   }
 
   void InsertHint::showGeometry(Workspace* workspace, int x, int y, int width, int height) {
     ensureScene();
     wlr_scene_rect_set_size(m_rect, width, height);
-    wlr_scene_shadow_set_size(m_shadow, width, height);
-    const int radius = std::min(width, height) / 2;
+    const int radius = config().appearance.cornerRadius;
     wlr_scene_rect_set_corner_radius(m_rect, radius);
-    wlr_scene_shadow_set_corner_radius(m_shadow, radius);
 
     // Snap to the drop target; animating the indicator lags behind the cursor.
     wlr_scene_node_set_position(&m_tree->node, x, y);
@@ -147,12 +170,12 @@ namespace umbriel {
         m_server->animator().cancel(m_fadeAnim);
       }
       m_fadeAnim = m_server->animator().animate(
-          0.0, kHintAlpha, kHintFadeMs, [this](double alpha) { setAlpha(static_cast<float>(alpha)); },
+          0.0, 1.0, kHintFadeMs, [this](double alpha) { setAlpha(static_cast<float>(alpha)); },
           [this] { m_fadeAnim = 0; }
       );
       m_visible = true;
     } else {
-      setAlpha(kHintAlpha);
+      setAlpha(1.0F);
     }
     scheduleFrame(workspace);
   }

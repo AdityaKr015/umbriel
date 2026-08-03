@@ -63,6 +63,7 @@ namespace umbriel {
       std::array<float, 4> borderFocused{0.48F, 0.64F, 1.0F, 1.0F};
       std::array<float, 4> borderUnfocused{0.16F, 0.16F, 0.20F, 1.0F};
       std::array<float, 4> outerBorderColor{0.10F, 0.10F, 0.12F, 1.0F};
+      std::array<float, 4> insertHintColor{0.50F, 0.78F, 1.0F, 0.50F};
       int animationMs = 250;
       struct Blur {
         bool enabled = true;

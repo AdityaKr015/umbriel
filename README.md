@@ -121,34 +121,8 @@ Umbriel loads `$XDG_CONFIG_HOME/umbriel/config.toml` (normally `~/.config/umbrie
 Pass `-c path/to/config.toml` to use another file. Config files can include other TOML files with
 `[include] files = ["theme.toml", "keybinds.toml"]`; later files and the main file override earlier values.
 
-```toml
-[general]
-terminal = "kitty"
-
-[input.keyboard]
-layout = "us"
-variant = "altgr-intl"
-repeat_rate = 30
-repeat_delay = 300
-
-[input.touchpad]
-tap = true
-natural_scroll = true
-
-[input.cursor]
-theme = "default"
-size = 24
-
-[layout]
-gap = 8
-width_presets = [0.333, 0.5, 0.667]
-
-[keybinds]
-"Mod+T" = "spawn-terminal"
-"Mod+Shift+Q" = "close"
-"Mod+R" = "spawn:noctalia msg panel-toggle launcher"
-"Mod+Escape" = "none" # remove a compiled default
-```
+See [`example.toml`](example.toml) for every available option, its default or supported range, input-device behavior,
+keybinding syntax, and the complete action list.
 
 The `appearance`, `layout`, `general`, `input`, and `keybinds` sections overlay compiled defaults, so a config file is
 optional. Keyboard input supports XKB layout/variant and repeat settings; touchpads support tap-to-click and natural

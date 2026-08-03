@@ -1,0 +1,68 @@
+# Umbriel configuration example
+# Copy to ~/.config/umbriel/config.toml or pass with `umbriel -c example.toml`.
+# Configuration is loaded once at startup.
+
+[include]
+# Included files are resolved relative to this file. Later files override earlier
+# files, and values in this file override every include.
+files = []
+
+[general]
+# Command used by the `spawn-terminal` action. An empty value falls back to
+# $TERMINAL.
+terminal = ""
+
+[appearance]
+border_width = 2          # 0-100
+corner_radius = 10        # 0-500; 0 disables rounded corners
+border_focused = "#7AA3FFFF"   # #RRGGBB or #RRGGBBAA
+border_unfocused = "#292933FF"
+animation_ms = 250        # 1-10000
+
+[layout]
+gap = 8                         # 0-500
+# Initial width assigned to new columns.
+default_width_fraction = 0.5    # 0.1-1.0
+# Widths visited by `cycle-width`.
+width_presets = [0.333, 0.5, 0.667]
+scroll_wheel_step = 60           # 1-1000
+
+[input.keyboard]
+# Empty layout/variant use the system XKB defaults.
+layout = ""
+variant = ""
+repeat_rate = 25          # 0-1000 Hz; 0 disables repeat
+repeat_delay = 600        # 0-10000 ms
+
+[input.touchpad]
+# These options are applied only when supported by the libinput device.
+# Leave them commented to preserve each device's defaults.
+# tap = true
+# natural_scroll = true
+
+[input.mouse]
+# Leave commented to preserve each device's default.
+# natural_scroll = false
+
+[input.cursor]
+# An empty theme uses the environment/default Xcursor theme.
+theme = ""
+size = 24                 # 1-512
+
+[keybinds]
+# Chords are case-insensitive and require at least one modifier. Supported
+# modifiers: Mod, Shift, Ctrl/Control, Alt, and Super/Logo/Win. `Mod` is Alt in
+# nested sessions and Super on DRM.
+#
+# A configured chord replaces its compiled default. `none` removes a binding.
+# Values may be any of:
+#   none, spawn-terminal, close, quit,
+#   focus-left, focus-right, focus-up, focus-down,
+#   move-column-left, move-column-right, move-up, move-down,
+#   consume-left, expel-right, cycle-width, toggle-full-width, focus-next,
+#   workspace:N, move-to-workspace:N (N is 1-9),
+#   spawn:<shell command>
+"Mod+T" = "spawn-terminal"
+"Mod+Shift+Q" = "close"
+"Mod+R" = "spawn:noctalia msg panel-toggle launcher"
+# "Mod+Escape" = "none"

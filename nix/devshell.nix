@@ -18,6 +18,7 @@ pkgs.mkShell {
     gnused
     findutils
     gdb
+    xwayland-satellite
   ];
 
   shellHook = ''

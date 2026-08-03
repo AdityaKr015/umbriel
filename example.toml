@@ -21,6 +21,10 @@ prefer_no_csd = false
 # Re-selecting the active workspace (e.g. Mod+2 while already on 2) jumps back
 # to the previously active workspace on that output.
 workspace_back_and_forth = false
+# Spawn and manage xwayland-satellite for X11 app support (the binary must be
+# installed). X11 clients see it as a regular X server on a private DISPLAY.
+# Changing this requires a restart.
+xwayland = true
 
 [appearance]
 border_width = 2          # 0-100

@@ -495,7 +495,7 @@ namespace umbriel {
         kLog.warn("config: ignoring general (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "general", {"terminal", "autostart", "prefer_no_csd", "workspace_back_and_forth"});
+      warnUnknownKeys(*section, "general", {"terminal", "autostart", "prefer_no_csd", "workspace_back_and_forth", "xwayland"});
       if (const toml::node* terminal = section->get("terminal")) {
         const auto value = terminal->value<std::string>();
         if (!value) {
@@ -516,6 +516,13 @@ namespace umbriel {
           loaded.general.workspaceBackAndForth = *value;
         } else {
           kLog.warn("config: ignoring general.workspace_back_and_forth (expected boolean)");
+        }
+      }
+      if (const toml::node* xwayland = section->get("xwayland")) {
+        if (const auto value = xwayland->value<bool>()) {
+          loaded.general.xwayland = *value;
+        } else {
+          kLog.warn("config: ignoring general.xwayland (expected boolean)");
         }
       }
 

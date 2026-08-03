@@ -95,6 +95,8 @@ namespace umbriel {
       bool preferNoCsd = false;
       // Re-selecting the active workspace jumps back to the previous one.
       bool workspaceBackAndForth = false;
+      // Spawn and manage xwayland-satellite for X11 app support. Requires restart.
+      bool xwayland = true;
     } general;
 
     struct Input {

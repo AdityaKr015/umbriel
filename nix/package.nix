@@ -15,6 +15,8 @@
   libdrm,
   scenefx,
   tomlplusplus,
+  xwayland-satellite,
+  makeBinaryWrapper,
 }:
 let
   inherit (builtins) head match readFile;
@@ -34,6 +36,7 @@ stdenv.mkDerivation {
   src = lib.cleanSource ./..;
 
   nativeBuildInputs = [
+    makeBinaryWrapper
     meson
     ninja
     pkg-config
@@ -66,6 +69,7 @@ Exec=$out/bin/umbriel
 Type=Application
 DesktopNames=Umbriel
 EOF
+    wrapProgram $out/bin/umbriel --prefix PATH : ${lib.makeBinPath [ xwayland-satellite ]}
   '';
 
   passthru.providedSessions = [ "umbriel" ];

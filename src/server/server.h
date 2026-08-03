@@ -1,9 +1,11 @@
 #pragma once
 #include "core/animation.h"
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <sys/types.h>
 #include <vector>
 #include <wayland-server-core.h>
 
@@ -167,6 +169,13 @@ namespace umbriel {
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 
+    // xwayland-satellite lifecycle
+    void startXwayland();
+    void spawnXwaylandSatellite();
+    void handleXwaylandExit();
+    static int onXwaylandPidfd(int fd, uint32_t mask, void* data);
+    static int onXwaylandRespawnTimer(void* data);
+
     struct IdleInhibitorWatch {
       Server* server = nullptr;
       wl_listener destroy{};
@@ -216,6 +225,15 @@ namespace umbriel {
 
     bool m_nested = false;
     std::string m_socketName;
+
+    // xwayland-satellite state
+    pid_t m_xwaylandPid = -1;
+    int m_xwaylandPidfd = -1;
+    std::string m_xwaylandDisplay;
+    wl_event_source* m_xwaylandExitSource = nullptr;
+    wl_event_source* m_xwaylandRespawnTimer = nullptr;
+    int m_xwaylandFailures = 0;
+    std::chrono::steady_clock::time_point m_xwaylandSpawnTime{};
 
     wl_listener m_newOutput{};
     wl_listener m_newInput{};

@@ -14,9 +14,12 @@
 #include "wlr.h"
 #include "workspace/workspace.h"
 
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <filesystem>
 #include <stdexcept>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 namespace umbriel {
@@ -176,6 +179,20 @@ namespace umbriel {
     m_seat.reset();
     m_cursor.reset();
 
+
+    // Tear down xwayland-satellite before destroying Wayland clients.
+    if (m_xwaylandExitSource != nullptr) {
+      wl_event_source_remove(m_xwaylandExitSource);
+    }
+    if (m_xwaylandRespawnTimer != nullptr) {
+      wl_event_source_remove(m_xwaylandRespawnTimer);
+    }
+    if (m_xwaylandPidfd >= 0) {
+      close(m_xwaylandPidfd);
+    }
+    if (m_xwaylandPid > 0) {
+      kill(m_xwaylandPid, SIGTERM);
+    }
     wl_display_destroy_clients(m_display);
     wlr_scene_node_destroy(&m_scene->tree.node);
     wlr_allocator_destroy(m_allocator);
@@ -203,6 +220,12 @@ namespace umbriel {
     unsetenv("WAYLAND_SOCKET");
     kLog.info("running on WAYLAND_DISPLAY={}", m_socketName);
     wlr_log(WLR_INFO, "running on WAYLAND_DISPLAY=%s", m_socketName.c_str());
+
+    // Start xwayland-satellite before autostart so X11 apps in autostart can
+    // connect (there is still a small race against satellite's socket bind).
+    if (config().general.xwayland) {
+      startXwayland();
+    }
 
     if (startupCmd != nullptr) {
       spawn(startupCmd);
@@ -257,8 +280,12 @@ namespace umbriel {
       std::signal(SIGCHLD, SIG_DFL);
       setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");
-      // Avoid X11/XWayland fallback into the parent session.
-      unsetenv("DISPLAY");
+      if (!m_xwaylandDisplay.empty()) {
+        setenv("DISPLAY", m_xwaylandDisplay.c_str(), 1);
+      } else {
+        // Avoid X11/XWayland fallback into the parent session.
+        unsetenv("DISPLAY");
+      }
       execl("/bin/sh", "/bin/sh", "-c", command, nullptr);
       _exit(1);
     }
@@ -267,5 +294,93 @@ namespace umbriel {
   }
 
   void Server::updateSeatCapabilities() { m_seat->updateCapabilities(!m_keyboards.empty()); }
+
+  void Server::startXwayland() {
+    for (int n = 0; n < 32; ++n) {
+      const std::string num = std::to_string(n);
+      if (std::filesystem::exists("/tmp/.X11-unix/X" + num)
+          || std::filesystem::exists("/tmp/.X" + num + "-lock")) {
+        continue;
+      }
+      m_xwaylandDisplay = ":" + num;
+      setenv("DISPLAY", m_xwaylandDisplay.c_str(), 1);
+      kLog.info("xwayland: using DISPLAY={}", m_xwaylandDisplay);
+      spawnXwaylandSatellite();
+      return;
+    }
+    kLog.error("no free X display in :0..:31; disabling xwayland");
+  }
+
+  void Server::spawnXwaylandSatellite() {
+    m_xwaylandSpawnTime = std::chrono::steady_clock::now();
+
+    pid_t pid = fork();
+    if (pid < 0) {
+      kLog.error("fork failed for xwayland-satellite");
+      return;
+    }
+    if (pid == 0) {
+      std::signal(SIGCHLD, SIG_DFL);
+      setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
+      unsetenv("WAYLAND_SOCKET");
+      // Satellite provides DISPLAY — it must not consume one.
+      unsetenv("DISPLAY");
+      execlp("xwayland-satellite", "xwayland-satellite", m_xwaylandDisplay.c_str(), nullptr);
+      _exit(127);
+    }
+
+    m_xwaylandPid = pid;
+    m_xwaylandPidfd = static_cast<int>(syscall(SYS_pidfd_open, pid, 0));
+    if (m_xwaylandPidfd < 0) {
+      kLog.error("pidfd_open failed for xwayland-satellite; crash respawn disabled");
+    } else {
+      m_xwaylandExitSource = wl_event_loop_add_fd(
+          wl_display_get_event_loop(m_display), m_xwaylandPidfd, WL_EVENT_READABLE, onXwaylandPidfd, this);
+    }
+    kLog.info("xwayland-satellite spawned (pid {}) on DISPLAY={}", pid, m_xwaylandDisplay);
+  }
+
+  int Server::onXwaylandPidfd(int /*fd*/, uint32_t /*mask*/, void* data) {
+    static_cast<Server*>(data)->handleXwaylandExit();
+    return 0;
+  }
+
+  void Server::handleXwaylandExit() {
+    // Clean up the current watch; no waitpid needed (SIGCHLD is SIG_IGN).
+    if (m_xwaylandExitSource != nullptr) {
+      wl_event_source_remove(m_xwaylandExitSource);
+      m_xwaylandExitSource = nullptr;
+    }
+    if (m_xwaylandPidfd >= 0) {
+      close(m_xwaylandPidfd);
+      m_xwaylandPidfd = -1;
+    }
+    m_xwaylandPid = -1;
+
+    // Reset failure counter if the process ran for more than 60 seconds.
+    auto elapsed = std::chrono::steady_clock::now() - m_xwaylandSpawnTime;
+    if (elapsed > std::chrono::seconds(60)) {
+      m_xwaylandFailures = 0;
+    }
+    ++m_xwaylandFailures;
+
+    if (m_xwaylandFailures > 5) {
+      kLog.error("xwayland-satellite keeps exiting; giving up "
+                  "(is it installed and is Xwayland >= 23.1 present?)");
+      return;
+    }
+
+    kLog.warn("xwayland-satellite exited; respawning in 1 s");
+    wl_event_loop* loop = wl_display_get_event_loop(m_display);
+    if (m_xwaylandRespawnTimer == nullptr) {
+      m_xwaylandRespawnTimer = wl_event_loop_add_timer(loop, onXwaylandRespawnTimer, this);
+    }
+    wl_event_source_timer_update(m_xwaylandRespawnTimer, 1000);
+  }
+
+  int Server::onXwaylandRespawnTimer(void* data) {
+    static_cast<Server*>(data)->spawnXwaylandSatellite();
+    return 0;
+  }
 
 } // namespace umbriel

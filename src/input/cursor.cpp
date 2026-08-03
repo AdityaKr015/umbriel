@@ -353,7 +353,9 @@ namespace umbriel {
     if (layer != nullptr) {
       layer->focus();
     } else if (m_server->exclusiveKeyboardLayer() == nullptr) {
-      m_server->focusView(view);
+      // Do not ensureVisible/scroll on click. Peek adjustment would move the
+      // surface under the cursor and break link clicks and in-window drags.
+      m_server->focusView(view, false);
     }
   }
 
@@ -386,6 +388,13 @@ namespace umbriel {
   void Cursor::handleFrame() { wlr_seat_pointer_notify_frame(m_server->seat()->wlr()); }
 
   void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY) {
+    // DnD icons are parented under dragIconTree; keep that tree on the cursor (dwl-style).
+    if (wlr_seat* seat = m_server->seat()->wlr(); seat->drag != nullptr && seat->drag->icon != nullptr) {
+      wlr_scene_node_set_position(
+          &m_server->dragIconTree()->node, static_cast<int>(m_cursor->x), static_cast<int>(m_cursor->y)
+      );
+    }
+
     if (m_mode == CursorMode::Move || m_mode == CursorMode::MoveTile) {
       if (m_server->sessionLocked()) {
         resetMode();
@@ -745,7 +754,7 @@ namespace umbriel {
         const double pair = std::max(kMinWindow, m_resizeStartUpperWeight + m_resizeStartLowerWeight);
         const double deltaWeight = dy / static_cast<double>(stackHeight) * pair;
 
-        auto splitWindows = [&](double startUpper, double startLower, double delta) {
+        auto splitWindows = [&](double startUpper, double /*startLower*/, double delta) {
           double upper = startUpper + delta;
           double lower = pair - upper;
           if (upper < kMinWindow) {
@@ -758,7 +767,7 @@ namespace umbriel {
           }
           return std::pair{upper, lower};
         };
-        auto splitGapAndWindow = [&](double startGap, double startWindow, double deltaGap) {
+        auto splitGapAndWindow = [&](double startGap, double /*startWindow*/, double deltaGap) {
           double gapWeight = startGap + deltaGap;
           double windowWeight = pair - gapWeight;
           if (gapWeight < 0.0) {

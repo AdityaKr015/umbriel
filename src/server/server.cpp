@@ -17,9 +17,12 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <stdexcept>
+#include <string>
 #include <sys/syscall.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 namespace umbriel {
@@ -27,6 +30,37 @@ namespace umbriel {
   namespace {
 
     constexpr Logger kLog("server");
+
+    bool executableOnPath(const char* name) {
+      if (name == nullptr || name[0] == '\0') {
+        return false;
+      }
+      // Absolute / relative path: check directly.
+      if (std::strchr(name, '/') != nullptr) {
+        return access(name, X_OK) == 0;
+      }
+      const char* pathEnv = std::getenv("PATH");
+      if (pathEnv == nullptr || pathEnv[0] == '\0') {
+        return false;
+      }
+      std::string path = pathEnv;
+      std::size_t start = 0;
+      while (start <= path.size()) {
+        const std::size_t end = path.find(':', start);
+        const std::size_t count = (end == std::string::npos ? path.size() : end) - start;
+        const std::string dir = path.substr(start, count);
+        start = end == std::string::npos ? path.size() + 1 : end + 1;
+        if (dir.empty()) {
+          continue;
+        }
+        const std::filesystem::path candidate = std::filesystem::path(dir) / name;
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(candidate, ec) && access(candidate.c_str(), X_OK) == 0) {
+          return true;
+        }
+      }
+      return false;
+    }
 
   } // namespace
 
@@ -81,6 +115,7 @@ namespace umbriel {
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&m_scene->tree);
     m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
     m_dragTree = wlr_scene_tree_create(&m_scene->tree);
+    m_dragIconTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);
     m_fullscreenTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
@@ -178,7 +213,6 @@ namespace umbriel {
     m_outputs.clear();
     m_seat.reset();
     m_cursor.reset();
-
 
     // Tear down xwayland-satellite before destroying Wayland clients.
     if (m_xwaylandExitSource != nullptr) {
@@ -305,10 +339,14 @@ namespace umbriel {
   void Server::updateSeatCapabilities() { m_seat->updateCapabilities(!m_keyboards.empty()); }
 
   void Server::startXwayland() {
+    if (!executableOnPath("xwayland-satellite")) {
+      kLog.info("xwayland: xwayland-satellite not on PATH; skipping");
+      return;
+    }
+
     for (int n = 0; n < 32; ++n) {
       const std::string num = std::to_string(n);
-      if (std::filesystem::exists("/tmp/.X11-unix/X" + num)
-          || std::filesystem::exists("/tmp/.X" + num + "-lock")) {
+      if (std::filesystem::exists("/tmp/.X11-unix/X" + num) || std::filesystem::exists("/tmp/.X" + num + "-lock")) {
         continue;
       }
       m_xwaylandDisplay = ":" + num;
@@ -344,7 +382,8 @@ namespace umbriel {
       kLog.error("pidfd_open failed for xwayland-satellite; crash respawn disabled");
     } else {
       m_xwaylandExitSource = wl_event_loop_add_fd(
-          wl_display_get_event_loop(m_display), m_xwaylandPidfd, WL_EVENT_READABLE, onXwaylandPidfd, this);
+          wl_display_get_event_loop(m_display), m_xwaylandPidfd, WL_EVENT_READABLE, onXwaylandPidfd, this
+      );
     }
     kLog.info("xwayland-satellite spawned (pid {}) on DISPLAY={}", pid, m_xwaylandDisplay);
   }
@@ -355,6 +394,15 @@ namespace umbriel {
   }
 
   void Server::handleXwaylandExit() {
+    int exitStatus = -1;
+    if (m_xwaylandPidfd >= 0) {
+      siginfo_t info{};
+      if (waitid(P_PIDFD, static_cast<id_t>(m_xwaylandPidfd), &info, WEXITED | WNOHANG) == 0
+          && info.si_code == CLD_EXITED) {
+        exitStatus = info.si_status;
+      }
+    }
+
     // Clean up the current watch; no waitpid needed (SIGCHLD is SIG_IGN).
     if (m_xwaylandExitSource != nullptr) {
       wl_event_source_remove(m_xwaylandExitSource);
@@ -366,6 +414,13 @@ namespace umbriel {
     }
     m_xwaylandPid = -1;
 
+    if (exitStatus == 127) {
+      kLog.error("xwayland-satellite not found or failed to exec; not respawning");
+      m_xwaylandDisplay.clear();
+      unsetenv("DISPLAY");
+      return;
+    }
+
     // Reset failure counter if the process ran for more than 60 seconds.
     auto elapsed = std::chrono::steady_clock::now() - m_xwaylandSpawnTime;
     if (elapsed > std::chrono::seconds(60)) {
@@ -374,8 +429,10 @@ namespace umbriel {
     ++m_xwaylandFailures;
 
     if (m_xwaylandFailures > 5) {
-      kLog.error("xwayland-satellite keeps exiting; giving up "
-                  "(is it installed and is Xwayland >= 23.1 present?)");
+      kLog.error(
+          "xwayland-satellite keeps exiting; giving up "
+          "(is it installed and is Xwayland >= 23.1 present?)"
+      );
       return;
     }
 

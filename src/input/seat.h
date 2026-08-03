@@ -26,11 +26,17 @@ namespace umbriel {
     static void onRequestSetShape(wl_listener* listener, void* data);
     static void onPointerFocusChange(wl_listener* listener, void* data);
     static void onRequestSetSelection(wl_listener* listener, void* data);
+    static void onRequestSetPrimarySelection(wl_listener* listener, void* data);
+    static void onRequestStartDrag(wl_listener* listener, void* data);
+    static void onStartDrag(wl_listener* listener, void* data);
 
     void handleRequestCursor(void* data);
     void handleRequestSetShape(void* data);
     void handlePointerFocusChange(void* data);
     void handleRequestSetSelection(void* data);
+    void handleRequestSetPrimarySelection(void* data);
+    void handleRequestStartDrag(void* data);
+    void handleStartDrag(void* data);
 
     Server* m_server = nullptr;
     wlr_seat* m_seat = nullptr;
@@ -40,6 +46,9 @@ namespace umbriel {
     wl_listener m_requestSetShape{};
     wl_listener m_pointerFocusChange{};
     wl_listener m_requestSetSelection{};
+    wl_listener m_requestSetPrimarySelection{};
+    wl_listener m_requestStartDrag{};
+    wl_listener m_startDrag{};
   };
 
 } // namespace umbriel

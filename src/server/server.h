@@ -78,6 +78,8 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* xdgTree() const { return m_xdgTree; }
     // Above xdg windows, below layer-shell top/overlay (drag/drop insert hint).
     [[nodiscard]] wlr_scene_tree* dragTree() const { return m_dragTree; }
+    // Parent for wl_data_device drag icons; moved to the cursor while a drag is active.
+    [[nodiscard]] wlr_scene_tree* dragIconTree() const { return m_dragIconTree; }
     // Above top panels, below overlay/lock (fullscreen xdg views).
     [[nodiscard]] wlr_scene_tree* fullscreenTree() const { return m_fullscreenTree; }
     [[nodiscard]] wlr_scene_tree* lockTree() const { return m_lockTree; }
@@ -211,6 +213,7 @@ namespace umbriel {
     wlr_scene_tree* m_shellLayerTrees[kLayerCount]{};
     wlr_scene_tree* m_xdgTree = nullptr;
     wlr_scene_tree* m_dragTree = nullptr;
+    wlr_scene_tree* m_dragIconTree = nullptr;
     wlr_scene_tree* m_fullscreenTree = nullptr;
     wlr_scene_tree* m_lockTree = nullptr;
     wlr_scene_rect* m_lockBlank = nullptr;

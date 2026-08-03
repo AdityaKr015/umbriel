@@ -18,13 +18,6 @@ autostart = []
 # Clients that explicitly request CSD are still honored. Restart apps after
 # changing this for full effect.
 prefer_no_csd = false
-# Focus the window under the pointer as it moves (sloppy focus).
-# Enters a window (pointer crosses onto it), then scrolls it on-screen and keeps
-# the pointer glued to that window so neighbor peeks do not steal focus.
-focus_follows_mouse = false
-# Refuse focus when bring-into-view would scroll more
-# than this fraction of the viewport (0.0 = never scroll for FFM). Omit for no limit.
-# focus_follows_mouse_max_scroll = 0.0
 
 [appearance]
 border_width = 2          # 0-100
@@ -88,6 +81,14 @@ repeat_delay = 600        # 0-10000 ms
 # An empty theme uses the environment/default Xcursor theme.
 theme = ""
 size = 24                 # 1-512
+
+[input.focus]
+# Focus the window under the pointer as it moves (sloppy focus).
+# Runs only when the pointer enters a different window, then scrolls it on-screen.
+follows_mouse = false
+# Refuse focus when bring-into-view would scroll more than this fraction of the
+# viewport (0.0 = never scroll). Omit for no limit.
+# follows_mouse_max_scroll = 0.0
 
 [keybinds]
 # Chords are case-insensitive. Supported modifiers: Mod, Shift, Ctrl/Control,

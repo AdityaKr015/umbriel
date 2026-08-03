@@ -93,11 +93,6 @@ namespace umbriel {
       std::string terminal;
       std::vector<std::string> autostart;
       bool preferNoCsd = false;
-      // Focus the window under the pointer on motion (sloppy focus).
-      bool focusFollowsMouse = false;
-      // Like niri max-scroll-amount: refuse FFM when ensureVisible would scroll more
-      // than this fraction of the viewport. nullopt = no limit (plain niri FFM).
-      std::optional<double> focusFollowsMouseMaxScroll;
     } general;
 
     struct Input {
@@ -121,6 +116,11 @@ namespace umbriel {
         std::string theme;
         int size = 24;
       } cursor;
+
+      struct Focus {
+        bool followsMouse = false;
+        std::optional<double> followsMouseMaxScroll;
+      } focus;
     } input;
 
     std::vector<Keybind> keybinds;

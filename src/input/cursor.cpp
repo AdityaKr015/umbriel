@@ -334,7 +334,7 @@ namespace umbriel {
     LayerSurface* layer = nullptr;
     View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
 
-    if (config().general.focusFollowsMouse
+    if (config().input.focus.followsMouse
         && !m_server->sessionLocked()
         && layer == nullptr
         && view != nullptr
@@ -359,7 +359,7 @@ namespace umbriel {
           const int viewportWidth =
               std::max(1, workspace->group()->output()->usableArea().width - 2 * config().layoutEdgePad());
           const double amount = workspace->layout().scrollAmountToEnsureVisible(column, viewportWidth);
-          if (const auto& maxScroll = config().general.focusFollowsMouseMaxScroll) {
+          if (const auto& maxScroll = config().input.focus.followsMouseMaxScroll) {
             if (amount > *maxScroll) {
               allow = false;
             }

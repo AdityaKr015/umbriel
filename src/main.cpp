@@ -50,6 +50,7 @@ int main(int argc, char** argv) {
 
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
+    std::signal(SIGCHLD, SIG_IGN);
 
     if (!server.start(startupCmd)) {
       kLog.error("failed to start server");

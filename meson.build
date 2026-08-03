@@ -48,6 +48,7 @@ sources = files(
   'src/core/log.cpp',
   'src/config/config.cpp',
   'src/config/config_merge.cpp',
+  'src/config/config_watcher.cpp',
   'src/layout/insert_hint.cpp',
   'src/layout/scrolling.cpp',
   'src/server/server.cpp',

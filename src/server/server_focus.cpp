@@ -199,6 +199,9 @@ namespace umbriel {
       case KeybindAction::Quit:
         stop();
         return true;
+      case KeybindAction::ReloadConfig:
+        handleConfigReload();
+        return true;
       case KeybindAction::FocusLeft:
         if (Workspace* workspace = activeWorkspace()) {
           if (View* target = workspace->focusAdjacent(-1)) {

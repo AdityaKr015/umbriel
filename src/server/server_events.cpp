@@ -1,4 +1,5 @@
 #include "config/config.h"
+#include "config/config_watcher.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/keyboard.h"
@@ -63,6 +64,40 @@ namespace umbriel {
       applyNaturalScroll(libinputDevice, device, config().input.mouse.naturalScroll, "input.mouse.natural_scroll");
     }
   } // namespace
+  void Server::applyConfig() {
+    for (const auto& keyboard : m_keyboards) {
+      keyboard->applyConfig();
+    }
+    for (const auto& pointer : m_pointers) {
+      applyPointerConfig(pointer->device);
+    }
+    m_cursor->applyConfig();
+    for (const auto& output : m_outputs) {
+      output->applyConfig();
+    }
+    for (const auto& view : m_views) {
+      if (!view->mapped()) {
+        continue;
+      }
+      view->setBorderFocused(false);
+      view->updateBorderGeometry();
+      view->applyCornerRadius();
+    }
+    refocus();
+    if (m_sessionLocked) {
+      updateLockBlank();
+    }
+  }
+
+  void Server::handleConfigReload() {
+    if (reloadConfig()) {
+      applyConfig();
+      kLog.info("config reloaded");
+    }
+    if (m_configWatcher != nullptr) {
+      m_configWatcher->watch(configWatchPaths());
+    }
+  }
 
   void Server::onNewOutput(wl_listener* listener, void* data) {
     Server* self = wl_container_of(listener, self, m_newOutput);
@@ -137,6 +172,14 @@ namespace umbriel {
     delete watch;
     server->updateIdleInhibit();
     kLog.debug("idle inhibitor removed");
+  }
+  void Server::onPointerDestroy(wl_listener* listener, void* /*data*/) {
+    PointerDevice* watch = wl_container_of(listener, watch, destroy);
+    Server* server = watch->server;
+    wl_list_remove(&watch->destroy.link);
+    std::erase_if(server->m_pointers, [watch](const std::unique_ptr<PointerDevice>& pointer) {
+      return pointer.get() == watch;
+    });
   }
 
   void Server::onRequestActivate(wl_listener* listener, void* data) {
@@ -310,8 +353,14 @@ namespace umbriel {
   }
 
   void Server::addPointer(wlr_input_device* device) {
+    auto pointer = std::make_unique<PointerDevice>();
+    pointer->server = this;
+    pointer->device = device;
+    pointer->destroy.notify = onPointerDestroy;
+    wl_signal_add(&device->events.destroy, &pointer->destroy);
     applyPointerConfig(device);
     m_cursor->attachInputDevice(device);
+    m_pointers.push_back(std::move(pointer));
   }
 
   void Server::removeOutput(Output* output) {

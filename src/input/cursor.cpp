@@ -54,6 +54,19 @@ namespace umbriel {
   }
 
   void Cursor::attachInputDevice(wlr_input_device* device) { wlr_cursor_attach_input_device(m_cursor, device); }
+  void Cursor::applyConfig() {
+    const Config::Input::Cursor& configured = config().input.cursor;
+    wlr_xcursor_manager* manager =
+        wlr_xcursor_manager_create(configured.theme.empty() ? nullptr : configured.theme.c_str(), configured.size);
+    if (manager == nullptr) {
+      return;
+    }
+    wlr_xcursor_manager_destroy(m_xcursorManager);
+    m_xcursorManager = manager;
+    if (m_server->seat()->wlr()->pointer_state.focused_surface == nullptr) {
+      wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+    }
+  }
 
   void Cursor::beginInteractive(View* view, CursorMode mode, uint32_t edges) {
     if (view == nullptr) {

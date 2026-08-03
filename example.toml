@@ -1,6 +1,7 @@
 # Umbriel configuration example
 # Copy to ~/.config/umbriel/config.toml or pass with `umbriel -c example.toml`.
-# Configuration is loaded once at startup.
+# Changes to this file and its includes apply immediately. Invalid configurations
+# keep the previous state. Use `reload-config` as a keybind action for manual reloads.
 
 [include]
 # Included files are resolved relative to this file. Later files override earlier
@@ -11,6 +12,8 @@ files = []
 # Command used by the `spawn-terminal` action. An empty value falls back to
 # $TERMINAL.
 terminal = ""
+# Shell commands run once after startup; they are never re-run on config reload.
+autostart = []
 
 [appearance]
 border_width = 2          # 0-100
@@ -26,6 +29,15 @@ default_width_fraction = 0.5    # 0.1-1.0
 # Widths visited by `cycle-width`.
 width_presets = [0.333, 0.5, 0.667]
 scroll_wheel_step = 60           # 1-1000
+# Output names must exactly match connector names such as DP-1 or HDMI-A-1.
+# Nested outputs use WL-1; headless outputs use HEADLESS-1. Mode is ignored in
+# nested sessions because the parent compositor controls the output size.
+# [output."DP-1"]
+# mode = "2560x1440@144" # WIDTHxHEIGHT or WIDTHxHEIGHT@HZ; fractional HZ is allowed
+# position = [0, 0]      # Layout coordinates [x, y]
+# scale = 1.25           # 0.25-4.0
+# transform = "normal"   # normal|90|180|270|flipped|flipped-90|flipped-180|flipped-270
+
 
 [input.keyboard]
 # Empty layout/variant use the system XKB defaults.
@@ -59,7 +71,7 @@ size = 24                 # 1-512
 #   none, spawn-terminal, close, quit,
 #   focus-left, focus-right, focus-up, focus-down,
 #   move-column-left, move-column-right, move-up, move-down,
-#   consume-left, expel-right, cycle-width, toggle-full-width, focus-next,
+#   consume-left, expel-right, cycle-width, toggle-full-width, focus-next, reload-config,
 #   workspace:N, move-to-workspace:N (N is 1-9),
 #   spawn:<shell command>
 "Mod+T" = "spawn-terminal"

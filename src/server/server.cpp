@@ -1,5 +1,7 @@
 #include "server/server.h"
 
+#include "config/config.h"
+#include "config/config_watcher.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/keyboard.h"
@@ -12,6 +14,7 @@
 #include "wlr.h"
 #include "workspace/workspace.h"
 
+#include <csignal>
 #include <cstdlib>
 #include <stdexcept>
 #include <unistd.h>
@@ -142,6 +145,7 @@ namespace umbriel {
     wl_list_remove(&m_requestActivate.link);
     wl_list_remove(&m_workspaceCommit.link);
     wl_list_remove(&m_setGamma.link);
+    m_configWatcher.reset();
 
     m_insertHint.reset();
     m_sessionLock.reset();
@@ -183,6 +187,12 @@ namespace umbriel {
     if (startupCmd != nullptr) {
       spawn(startupCmd);
     }
+    for (const std::string& command : config().general.autostart) {
+      spawn(command.c_str());
+    }
+    m_configWatcher =
+        std::make_unique<ConfigWatcher>(wl_display_get_event_loop(m_display), [this] { handleConfigReload(); });
+    m_configWatcher->watch(configWatchPaths());
     return true;
   }
 
@@ -224,6 +234,7 @@ namespace umbriel {
       return;
     }
     if (pid == 0) {
+      std::signal(SIGCHLD, SIG_DFL);
       setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");
       // Avoid X11/XWayland fallback into the parent session.

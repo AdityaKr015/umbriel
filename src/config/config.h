@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -28,6 +29,7 @@ namespace umbriel {
     FocusNext,
     Workspace,
     MoveToWorkspace,
+    ReloadConfig,
   };
 
   struct Keybind {
@@ -37,6 +39,19 @@ namespace umbriel {
     KeybindAction action = KeybindAction::None;
     std::string spawnCommand;
     int workspace = 0;
+  };
+  struct OutputMode {
+    int width = 0;
+    int height = 0;
+    int refreshMHz = 0;
+  };
+
+  struct OutputRule {
+    std::string name;
+    std::optional<OutputMode> mode;
+    std::optional<std::array<int, 2>> position;
+    std::optional<double> scale;
+    std::optional<int> transform;
   };
 
   struct Config {
@@ -57,6 +72,7 @@ namespace umbriel {
 
     struct General {
       std::string terminal;
+      std::vector<std::string> autostart;
     } general;
 
     struct Input {
@@ -83,9 +99,12 @@ namespace umbriel {
     } input;
 
     std::vector<Keybind> keybinds;
+    std::vector<OutputRule> outputs;
   };
 
   [[nodiscard]] const Config& config();
   void loadConfig(const char* explicitPath);
+  [[nodiscard]] bool reloadConfig();
+  [[nodiscard]] const std::vector<std::filesystem::path>& configWatchPaths();
 
 } // namespace umbriel

@@ -2,6 +2,7 @@
 
 #include "core/log.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <format>
@@ -152,6 +153,7 @@ namespace umbriel::configmerge {
           result.firstError = std::format("include not found: {} (from {})", entry, path.string());
         }
         kLog.warn("config include not found: {} (from {})", target.string(), path.string());
+        result.loadedFiles.push_back(canonicalKey(target));
       }
 
       toml::table body = parsed;
@@ -166,6 +168,11 @@ namespace umbriel::configmerge {
       try {
         parsed = toml::parse_file(path.string());
       } catch (const toml::parse_error& error) {
+        result.hadParseError = true;
+        const auto key = canonicalKey(path);
+        if (std::ranges::find(result.loadedFiles, key) == result.loadedFiles.end()) {
+          result.loadedFiles.push_back(key);
+        }
         const auto& source = error.source();
         const std::string message = std::format(
             "{} line {}, column {}: {}", path.string(), source.begin.line, source.begin.column, error.description()

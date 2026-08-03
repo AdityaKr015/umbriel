@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -24,6 +25,9 @@ namespace umbriel {
 
     constexpr Logger kLog("config");
     Config g_config;
+    std::filesystem::path g_rootPath;
+    bool g_explicitPath = false;
+    std::vector<std::filesystem::path> g_watchPaths;
 
     std::vector<Keybind> defaultKeybinds() {
       std::vector<Keybind> keybinds;
@@ -159,6 +163,7 @@ namespace umbriel {
           {"cycle-width", KeybindAction::CycleWidth},
           {"toggle-full-width", KeybindAction::ToggleFullWidth},
           {"focus-next", KeybindAction::FocusNext},
+          {"reload-config", KeybindAction::ReloadConfig},
       };
       for (const auto& [name, action] : actions) {
         if (value == name) {
@@ -203,6 +208,51 @@ namespace umbriel {
 
     bool knownKey(std::string_view key, std::initializer_list<std::string_view> known) {
       return std::ranges::find(known, key) != known.end();
+    }
+    bool parseOutputMode(std::string_view value, OutputMode& output) {
+      const size_t widthEnd = value.find('x');
+      if (widthEnd == std::string_view::npos) {
+        return false;
+      }
+      const size_t heightEnd = value.find('@', widthEnd + 1);
+      const std::string_view widthText = value.substr(0, widthEnd);
+      const std::string_view heightText =
+          value.substr(widthEnd + 1, heightEnd == std::string_view::npos ? value.size() : heightEnd - widthEnd - 1);
+      if (widthText.empty() || heightText.empty()) {
+        return false;
+      }
+
+      int width = 0;
+      int height = 0;
+      const auto [widthPtr, widthError] = std::from_chars(widthText.data(), widthText.data() + widthText.size(), width);
+      const auto [heightPtr, heightError] =
+          std::from_chars(heightText.data(), heightText.data() + heightText.size(), height);
+      if (widthError != std::errc{}
+          || widthPtr != widthText.data() + widthText.size()
+          || heightError != std::errc{}
+          || heightPtr != heightText.data() + heightText.size()) {
+        return false;
+      }
+
+      double refreshHz = 0.0;
+      if (heightEnd != std::string_view::npos) {
+        const std::string_view refreshText = value.substr(heightEnd + 1);
+        if (refreshText.empty()) {
+          return false;
+        }
+        const auto [refreshPtr, refreshError] =
+            std::from_chars(refreshText.data(), refreshText.data() + refreshText.size(), refreshHz);
+        if (refreshError != std::errc{}
+            || refreshPtr != refreshText.data() + refreshText.size()
+            || !std::isfinite(refreshHz)) {
+          return false;
+        }
+      }
+
+      output.width = std::clamp(width, 1, 16384);
+      output.height = std::clamp(height, 1, 16384);
+      output.refreshMHz = static_cast<int>(std::lround(std::clamp(refreshHz, 0.0, 1000.0) * 1000.0));
+      return true;
     }
 
     void warnUnknownKeys(
@@ -413,17 +463,40 @@ namespace umbriel {
         kLog.warn("config: ignoring general (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "general", {"terminal"});
-      const toml::node* terminal = section->get("terminal");
-      if (terminal == nullptr) {
+      warnUnknownKeys(*section, "general", {"terminal", "autostart"});
+      if (const toml::node* terminal = section->get("terminal")) {
+        const auto value = terminal->value<std::string>();
+        if (!value) {
+          kLog.warn("config: ignoring general.terminal (expected string)");
+        } else {
+          loaded.general.terminal = *value;
+        }
+      }
+
+      const toml::node* autostart = section->get("autostart");
+      if (autostart == nullptr) {
         return;
       }
-      const auto value = terminal->value<std::string>();
-      if (!value) {
-        kLog.warn("config: ignoring general.terminal (expected string)");
+      const auto* array = autostart->as_array();
+      if (array == nullptr) {
+        kLog.warn("config: ignoring general.autostart (expected array of strings)");
         return;
       }
-      loaded.general.terminal = *value;
+      std::vector<std::string> parsed;
+      parsed.reserve(array->size());
+      for (const auto& entry : *array) {
+        const auto value = entry.value<std::string>();
+        if (!value) {
+          kLog.warn("config: ignoring general.autostart (expected array of strings)");
+          return;
+        }
+        if (value->empty()) {
+          kLog.warn("config: ignoring empty general.autostart entry");
+          continue;
+        }
+        parsed.push_back(*value);
+      }
+      loaded.general.autostart = std::move(parsed);
     }
 
     void validateKeyboardInput(Config::Input::Keyboard& keyboard) {
@@ -519,6 +592,101 @@ namespace umbriel {
       }
     }
 
+    void readOutputs(const toml::table& table, Config& loaded) {
+      const toml::node* node = table.get("output");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* outputs = node->as_table();
+      if (outputs == nullptr) {
+        kLog.warn("config: ignoring output (expected table)");
+        return;
+      }
+
+      for (const auto& [key, entry] : *outputs) {
+        const std::string name(key.str());
+        const auto* section = entry.as_table();
+        if (section == nullptr) {
+          kLog.warn("config: ignoring output.{} (expected table)", name);
+          continue;
+        }
+        warnUnknownKeys(*section, std::string("output.") + name, {"mode", "position", "scale", "transform"});
+
+        if (std::ranges::any_of(loaded.outputs, [&](const OutputRule& rule) { return rule.name == name; })) {
+          kLog.warn("config: duplicate output section '{}'", name);
+          std::erase_if(loaded.outputs, [&](const OutputRule& rule) { return rule.name == name; });
+        }
+        OutputRule rule;
+        rule.name = name;
+
+        if (const toml::node* modeNode = section->get("mode")) {
+          const auto value = modeNode->value<std::string>();
+          OutputMode mode;
+          if (!value || !parseOutputMode(*value, mode)) {
+            kLog.warn("config: ignoring output.{}.mode (expected \"WIDTHxHEIGHT\" or \"WIDTHxHEIGHT@HZ\")", name);
+          } else {
+            rule.mode = mode;
+          }
+        }
+
+        if (const toml::node* positionNode = section->get("position")) {
+          const auto* position = positionNode->as_array();
+          bool valid = position != nullptr && position->size() == 2;
+          std::array<int, 2> parsed{};
+          if (valid) {
+            for (size_t index = 0; index < parsed.size(); ++index) {
+              const auto value = (*position)[index].value<std::int64_t>();
+              if (!value) {
+                valid = false;
+                break;
+              }
+              parsed[index] = static_cast<int>(
+                  std::clamp(*value, static_cast<std::int64_t>(-100000), static_cast<std::int64_t>(100000))
+              );
+            }
+          }
+          if (!valid) {
+            kLog.warn("config: ignoring output.{}.position (expected [x, y] integers)", name);
+          } else {
+            rule.position = parsed;
+          }
+        }
+
+        if (const toml::node* scaleNode = section->get("scale")) {
+          const auto value = scaleNode->value<double>();
+          if (!value || std::isnan(*value)) {
+            kLog.warn("config: ignoring output.{}.scale (expected number)", name);
+          } else {
+            double scale = *value;
+            readDouble(*section, "scale", std::string("output.") + name + ".scale", 0.25, 4.0, scale);
+            rule.scale = scale;
+          }
+        }
+
+        if (const toml::node* transformNode = section->get("transform")) {
+          const auto value = transformNode->value<std::string>();
+          static constexpr std::pair<std::string_view, int> transforms[] = {
+              {"normal", 0},  {"90", 1},         {"180", 2},         {"270", 3},
+              {"flipped", 4}, {"flipped-90", 5}, {"flipped-180", 6}, {"flipped-270", 7},
+          };
+          const auto match = value
+              ? std::ranges::find_if(transforms, [&](const auto& candidate) { return candidate.first == *value; })
+              : std::end(transforms);
+          if (match == std::end(transforms)) {
+            kLog.warn(
+                "config: ignoring output.{}.transform (expected "
+                "normal|90|180|270|flipped|flipped-90|flipped-180|flipped-270)",
+                name
+            );
+          } else {
+            rule.transform = match->second;
+          }
+        }
+
+        loaded.outputs.push_back(std::move(rule));
+      }
+    }
+
     void readKeybinds(const toml::table& table, Config& loaded) {
       loaded.keybinds = defaultKeybinds();
       const toml::node* node = table.get("keybinds");
@@ -572,10 +740,48 @@ namespace umbriel {
     void warnUnknownTopLevel(const toml::table& table) {
       for (const auto& [key, value] : table) {
         (void)value;
-        if (!knownKey(key.str(), {"appearance", "layout", "general", "input", "keybinds"})) {
+        if (!knownKey(key.str(), {"appearance", "layout", "general", "input", "keybinds", "output"})) {
           kLog.warn("config: unknown key {}", key.str());
         }
       }
+    }
+    bool parseInto(Config& out) {
+      g_watchPaths.clear();
+      g_watchPaths.push_back(g_rootPath);
+
+      std::error_code error;
+      if (!std::filesystem::is_regular_file(g_rootPath, error) || error) {
+        return false;
+      }
+
+      try {
+        auto result = configmerge::mergeWithIncludes(g_rootPath);
+        for (const auto& path : result.loadedFiles) {
+          if (std::ranges::find(g_watchPaths, path) == g_watchPaths.end()) {
+            g_watchPaths.push_back(path);
+          }
+        }
+        if (result.hadParseError) {
+          return false;
+        }
+
+        Config loaded;
+        loaded.keybinds = defaultKeybinds();
+        warnUnknownTopLevel(result.merged);
+        readAppearance(result.merged, loaded);
+        readLayout(result.merged, loaded);
+        readGeneral(result.merged, loaded);
+        readInput(result.merged, loaded);
+        readOutputs(result.merged, loaded);
+        readKeybinds(result.merged, loaded);
+        out = std::move(loaded);
+        return true;
+      } catch (const std::exception& exception) {
+        kLog.error("config load error: {}", exception.what());
+      } catch (...) {
+        kLog.error("config load error: unknown error");
+      }
+      return false;
     }
 
   } // namespace
@@ -583,35 +789,35 @@ namespace umbriel {
   const Config& config() { return g_config; }
 
   void loadConfig(const char* explicitPath) {
-    g_config = Config{};
-    g_config.keybinds = defaultKeybinds();
-    const std::filesystem::path path =
-        explicitPath == nullptr ? defaultConfigPath() : std::filesystem::path(explicitPath);
-    std::error_code error;
-    if (!std::filesystem::is_regular_file(path, error) || error) {
-      if (explicitPath != nullptr) {
-        kLog.error("config file not found: {}", path.string());
-      } else {
-        kLog.info("no config file found: {}, using defaults", path.string());
-      }
-      return;
-    }
+    g_rootPath = explicitPath == nullptr ? defaultConfigPath() : std::filesystem::path(explicitPath);
+    g_explicitPath = explicitPath != nullptr;
 
-    try {
-      auto result = configmerge::mergeWithIncludes(path);
-      Config loaded;
-      warnUnknownTopLevel(result.merged);
-      readAppearance(result.merged, loaded);
-      readLayout(result.merged, loaded);
-      readGeneral(result.merged, loaded);
-      readInput(result.merged, loaded);
-      readKeybinds(result.merged, loaded);
-      g_config = std::move(loaded);
-    } catch (const std::exception& exception) {
-      kLog.error("config load error: {}", exception.what());
-    } catch (...) {
-      kLog.error("config load error: unknown error");
+    Config loaded;
+    loaded.keybinds = defaultKeybinds();
+    if (!parseInto(loaded)) {
+      std::error_code error;
+      if (!std::filesystem::is_regular_file(g_rootPath, error) || error) {
+        if (g_explicitPath) {
+          kLog.error("config file not found: {}", g_rootPath.string());
+        } else {
+          kLog.info("no config file found: {}, using defaults", g_rootPath.string());
+        }
+      }
     }
+    g_config = std::move(loaded);
   }
+
+  bool reloadConfig() {
+    Config loaded;
+    loaded.keybinds = defaultKeybinds();
+    if (parseInto(loaded)) {
+      g_config = std::move(loaded);
+      return true;
+    }
+    kLog.warn("config reload failed; keeping previous configuration");
+    return false;
+  }
+
+  const std::vector<std::filesystem::path>& configWatchPaths() { return g_watchPaths; }
 
 } // namespace umbriel

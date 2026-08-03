@@ -9,6 +9,18 @@ namespace umbriel {
 
   Keyboard::Keyboard(Server& server, wlr_input_device* device)
       : m_server(&server), m_keyboard(wlr_keyboard_from_input_device(device)) {
+    applyConfig();
+
+    m_modifiers.notify = onModifiers;
+    wl_signal_add(&m_keyboard->events.modifiers, &m_modifiers);
+    m_key.notify = onKey;
+    wl_signal_add(&m_keyboard->events.key, &m_key);
+    m_destroy.notify = onDestroy;
+    wl_signal_add(&device->events.destroy, &m_destroy);
+
+    wlr_seat_set_keyboard(m_server->seat()->wlr(), m_keyboard);
+  }
+  void Keyboard::applyConfig() {
     const Config::Input::Keyboard& configured = config().input.keyboard;
     xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     const xkb_rule_names names{
@@ -30,15 +42,6 @@ namespace umbriel {
       xkb_context_unref(context);
     }
     wlr_keyboard_set_repeat_info(m_keyboard, configured.repeatRate, configured.repeatDelay);
-
-    m_modifiers.notify = onModifiers;
-    wl_signal_add(&m_keyboard->events.modifiers, &m_modifiers);
-    m_key.notify = onKey;
-    wl_signal_add(&m_keyboard->events.key, &m_key);
-    m_destroy.notify = onDestroy;
-    wl_signal_add(&device->events.destroy, &m_destroy);
-
-    wlr_seat_set_keyboard(m_server->seat()->wlr(), m_keyboard);
   }
 
   Keyboard::~Keyboard() {

@@ -376,16 +376,25 @@ namespace umbriel {
           }
 
           const wlr_box& geometry = self->m_toplevel->base->geometry;
+          const wlr_surface_state& surface = sceneSurface->surface->current;
+          const int sourceX = std::clamp(geometry.x, 0, surface.width);
+          const int sourceY = std::clamp(geometry.y, 0, surface.height);
+          const int sourceRight = std::clamp(geometry.x + geometry.width, sourceX, surface.width);
+          const int sourceBottom = std::clamp(geometry.y + geometry.height, sourceY, surface.height);
           const wlr_fbox source{
-              .x = static_cast<double>(geometry.x),
-              .y = static_cast<double>(geometry.y),
-              .width = static_cast<double>(geometry.width),
-              .height = static_cast<double>(geometry.height),
+              .x = static_cast<double>(sourceX),
+              .y = static_cast<double>(sourceY),
+              .width = static_cast<double>(sourceRight - sourceX),
+              .height = static_cast<double>(sourceBottom - sourceY),
           };
           wlr_scene_buffer_set_source_box(buffer, &source);
-          wlr_scene_buffer_set_dest_size(buffer, geometry.width, geometry.height);
-          wlr_scene_node_set_position(&buffer->node, geometry.x, geometry.y);
-          wlr_scene_buffer_set_corner_radius(buffer, config().appearance.cornerRadius);
+          wlr_scene_buffer_set_dest_size(buffer, sourceRight - sourceX, sourceBottom - sourceY);
+          wlr_scene_node_set_position(&buffer->node, sourceX, sourceY);
+          const bool fullyVisible = sourceX == geometry.x
+              && sourceY == geometry.y
+              && sourceRight == geometry.x + geometry.width
+              && sourceBottom == geometry.y + geometry.height;
+          wlr_scene_buffer_set_corner_radius(buffer, fullyVisible ? config().appearance.cornerRadius : 0);
         },
         this
     );

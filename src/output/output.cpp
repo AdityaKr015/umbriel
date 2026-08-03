@@ -1,5 +1,6 @@
 #include "output/output.h"
 
+#include "config/config.h"
 #include "core/log.h"
 #include "layer/surface.h"
 #include "scene/node.h"
@@ -7,12 +8,22 @@
 #include "wlr.h"
 #include "workspace/workspace.h"
 
+#include <cstdlib>
 #include <ctime>
 
 namespace umbriel {
 
   namespace {
     constexpr Logger kLog("output");
+
+    const OutputRule* findRule(const char* name) {
+      for (const OutputRule& rule : config().outputs) {
+        if (rule.name == name) {
+          return &rule;
+        }
+      }
+      return nullptr;
+    }
   } // namespace
 
   Output::Output(Server& server, wlr_output* output) : m_server(&server), m_output(output) {
@@ -28,20 +39,8 @@ namespace umbriel {
     m_destroy.notify = onDestroy;
     wl_signal_add(&m_output->events.destroy, &m_destroy);
 
-    wlr_output_state state{};
-    wlr_output_state_init(&state);
-    wlr_output_state_set_enabled(&state, true);
-    // Nested Wayland outputs get their real size from the parent configure
-    // (request_state). Setting preferred mode here races that path.
-    if (!wlr_output_is_wl(m_output)) {
-      if (wlr_output_mode* mode = wlr_output_preferred_mode(m_output)) {
-        wlr_output_state_set_mode(&state, mode);
-      }
-    }
-    wlr_output_commit_state(m_output, &state);
-    wlr_output_state_finish(&state);
-
-    wlr_output_layout_output* layoutOutput = wlr_output_layout_add_auto(m_server->outputLayout(), m_output);
+    applyConfiguredState();
+    wlr_output_layout_output* layoutOutput = addToLayout();
     m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
     wlr_scene_output_layout_add_output(m_server->sceneLayout(), layoutOutput, m_sceneOutput);
 
@@ -52,6 +51,85 @@ namespace umbriel {
 
     arrangeLayers();
     m_workspaceGroup = std::make_unique<WorkspaceGroup>(*m_server, *this);
+  }
+  void Output::applyConfiguredState() {
+    const OutputRule* rule = findRule(m_output->name);
+    wlr_output_state state{};
+    wlr_output_state_init(&state);
+    wlr_output_state_set_enabled(&state, true);
+
+    if (rule != nullptr && rule->mode) {
+      if (wlr_output_is_wl(m_output)) {
+        kLog.info("output '{}': mode is ignored in nested sessions", m_output->name);
+      } else {
+        const OutputMode& configured = *rule->mode;
+        wlr_output_mode* selected = nullptr;
+        wlr_output_mode* mode = nullptr;
+        wl_list_for_each(mode, &m_output->modes, link) {
+          if (mode->width != configured.width || mode->height != configured.height) {
+            continue;
+          }
+          if (configured.refreshMHz != 0) {
+            if (selected == nullptr
+                || std::abs(mode->refresh - configured.refreshMHz)
+                    < std::abs(selected->refresh - configured.refreshMHz)) {
+              selected = mode;
+            }
+          } else if (
+              selected == nullptr
+              || (mode->preferred && !selected->preferred)
+              || (mode->preferred == selected->preferred && mode->refresh > selected->refresh)
+          ) {
+            selected = mode;
+          }
+        }
+        if (selected != nullptr) {
+          wlr_output_state_set_mode(&state, selected);
+        } else {
+          wlr_output_state_set_custom_mode(&state, configured.width, configured.height, configured.refreshMHz);
+        }
+      }
+    } else if (!wlr_output_is_wl(m_output)) {
+      if (wlr_output_mode* mode = wlr_output_preferred_mode(m_output)) {
+        wlr_output_state_set_mode(&state, mode);
+      }
+    }
+
+    if (rule != nullptr && rule->scale) {
+      wlr_output_state_set_scale(&state, static_cast<float>(*rule->scale));
+    }
+    if (rule != nullptr && rule->transform) {
+      wlr_output_state_set_transform(&state, static_cast<wl_output_transform>(*rule->transform));
+    }
+
+    const bool committed = wlr_output_commit_state(m_output, &state);
+    wlr_output_state_finish(&state);
+    if (!committed) {
+      kLog.error("output '{}': failed to commit configured state", m_output->name);
+      return;
+    }
+    kLog.info(
+        "output '{}': applied mode={}x{}@{}mHz scale={} transform={}", m_output->name, m_output->width,
+        m_output->height, m_output->refresh, m_output->scale, static_cast<int>(m_output->transform)
+    );
+  }
+
+  wlr_output_layout_output* Output::addToLayout() {
+    const OutputRule* rule = findRule(m_output->name);
+    if (rule != nullptr && rule->position) {
+      return wlr_output_layout_add(m_server->outputLayout(), m_output, (*rule->position)[0], (*rule->position)[1]);
+    }
+    return wlr_output_layout_add_auto(m_server->outputLayout(), m_output);
+  }
+
+  void Output::applyConfig() {
+    applyConfiguredState();
+    addToLayout();
+    arrangeLayers();
+    if (m_server->sessionLocked()) {
+      m_server->updateLockBlank();
+    }
+    wlr_output_schedule_frame(m_output);
   }
 
   Output::~Output() {

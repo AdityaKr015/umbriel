@@ -6,6 +6,7 @@
 
 struct wlr_gamma_control_v1;
 struct wlr_output;
+struct wlr_output_layout_output;
 struct wlr_scene_output;
 struct wlr_scene_tree;
 
@@ -37,6 +38,7 @@ namespace umbriel {
 
     void arrangeLayers();
     void onGammaChanged(wlr_gamma_control_v1* control);
+    void applyConfig();
 
   private:
     static void onFrame(wl_listener* listener, void* data);
@@ -47,6 +49,8 @@ namespace umbriel {
     void handleRequestState(void* data);
     void handleDestroy();
     void applyMode(int width, int height);
+    void applyConfiguredState();
+    wlr_output_layout_output* addToLayout();
     void arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive);
 
     Server* m_server = nullptr;

@@ -18,6 +18,7 @@ namespace umbriel {
     Keyboard& operator=(const Keyboard&) = delete;
 
     [[nodiscard]] wlr_keyboard* wlr() const { return m_keyboard; }
+    void applyConfig();
 
   private:
     static void onModifiers(wl_listener* listener, void* data);

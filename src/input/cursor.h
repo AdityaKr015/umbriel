@@ -36,6 +36,7 @@ namespace umbriel {
     [[nodiscard]] CursorMode mode() const { return m_mode; }
 
     void attachInputDevice(wlr_input_device* device);
+    void applyConfig();
     void beginInteractive(View* view, CursorMode mode, uint32_t edges);
     void resetMode();
     void handleNewConstraint(wlr_pointer_constraint_v1* constraint);

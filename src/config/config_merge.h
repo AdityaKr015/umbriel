@@ -12,6 +12,7 @@ namespace umbriel::configmerge {
     toml::table merged;
     std::vector<std::filesystem::path> loadedFiles;
     std::string firstError;
+    bool hadParseError = false;
   };
 
   [[nodiscard]] MergeResult mergeWithIncludes(const std::filesystem::path& rootFile);

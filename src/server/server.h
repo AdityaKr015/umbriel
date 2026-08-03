@@ -40,6 +40,7 @@ struct wlr_scene_tree;
 namespace umbriel {
 
   class Cursor;
+  class ConfigWatcher;
   class InsertHint;
   class Keyboard;
   class LayerSurface;
@@ -134,6 +135,7 @@ namespace umbriel {
     static void onRequestActivate(wl_listener* listener, void* data);
     static void onWorkspaceCommit(wl_listener* listener, void* data);
     static void onSetGamma(wl_listener* listener, void* data);
+    static void onPointerDestroy(wl_listener* listener, void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -141,6 +143,8 @@ namespace umbriel {
     void updateSeatCapabilities();
     void spawn(const char* command);
     void beginSessionLock(wlr_session_lock_v1* lock);
+    void applyConfig();
+    void handleConfigReload();
     void clearNormalFocus();
     void setLockBlankEnabled(bool enabled);
     void updateIdleInhibit();
@@ -150,6 +154,11 @@ namespace umbriel {
 
     struct IdleInhibitorWatch {
       Server* server = nullptr;
+      wl_listener destroy{};
+    };
+    struct PointerDevice {
+      Server* server = nullptr;
+      wlr_input_device* device = nullptr;
       wl_listener destroy{};
     };
 
@@ -184,6 +193,7 @@ namespace umbriel {
     std::unique_ptr<Cursor> m_cursor;
     std::unique_ptr<SessionLock> m_sessionLock;
     std::unique_ptr<InsertHint> m_insertHint;
+    std::unique_ptr<ConfigWatcher> m_configWatcher;
 
     bool m_nested = false;
     std::string m_socketName;
@@ -202,6 +212,7 @@ namespace umbriel {
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;
+    std::vector<std::unique_ptr<PointerDevice>> m_pointers;
     std::vector<std::unique_ptr<View>> m_views;
     std::vector<std::unique_ptr<LayerSurface>> m_layerSurfaces;
   };

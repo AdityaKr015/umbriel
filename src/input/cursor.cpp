@@ -477,7 +477,7 @@ namespace umbriel {
       for (int row = 1; row <= static_cast<int>(column.views.size()); ++row) {
         const int boundary = row == static_cast<int>(column.views.size())
             ? usable.y + usable.height - edgePad
-            : workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layout.gap / 2;
+            : workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layoutGap() / 2;
         const double distance = std::abs(m_cursor->y - boundary);
         if (distance < rowDistance) {
           nearestRow = row;
@@ -496,8 +496,8 @@ namespace umbriel {
     double nearestDistance = std::abs(layoutX);
     for (int gap = 1; gap <= columnCount; ++gap) {
       const int boundary = gap == columnCount
-          ? workspace->layout().columnX(gap, viewportWidth) - config().layout.gap
-          : workspace->layout().columnX(gap, viewportWidth) - config().layout.gap / 2;
+          ? workspace->layout().columnX(gap, viewportWidth) - config().layoutGap()
+          : workspace->layout().columnX(gap, viewportWidth) - config().layoutGap() / 2;
       const double distance = std::abs(layoutX - boundary);
       if (distance < nearestDistance) {
         nearestGap = gap;

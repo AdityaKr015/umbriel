@@ -41,12 +41,13 @@ namespace umbriel {
 
   int ScrollingLayout::columnX(int columnIndex, int viewportWidth) const {
     const int end = std::clamp(columnIndex, 0, static_cast<int>(m_columns.size()));
+    const int gap = config().layoutGap();
     int x = 0;
     for (int i = 0; i < end; ++i) {
-      x += columnWidth(i, viewportWidth) + config().layout.gap;
+      x += columnWidth(i, viewportWidth) + gap;
     }
     if (m_insertGap >= 0 && end >= m_insertGap) {
-      x += kHintWidth + config().layout.gap;
+      x += kHintWidth + gap;
     }
     return x;
   }
@@ -55,7 +56,7 @@ namespace umbriel {
     if (m_columns.empty()) {
       return 0;
     }
-    return columnX(static_cast<int>(m_columns.size()), viewportWidth) - config().layout.gap;
+    return columnX(static_cast<int>(m_columns.size()), viewportWidth) - config().layoutGap();
   }
 
   void ScrollingLayout::insertView(View* view, int columnIndex) {
@@ -229,7 +230,8 @@ namespace umbriel {
           + columnX(static_cast<int>(columnIndex), viewportWidth)
           - static_cast<int>(std::lround(m_scroll));
       const int rowCount = static_cast<int>(column.views.size());
-      const int rowsHeight = std::max(rowCount, availableHeight - (rowCount - 1) * config().layout.gap);
+      const int gap = config().layoutGap();
+      const int rowsHeight = std::max(rowCount, availableHeight - (rowCount - 1) * gap);
       int y = usable.y + edgePad;
       int remainingHeight = rowsHeight;
       for (int row = 0; row < rowCount; ++row) {
@@ -238,7 +240,7 @@ namespace umbriel {
         m_targets.push_back(
             {.view = column.views[static_cast<size_t>(row)], .x = x, .y = y, .width = width, .height = height}
         );
-        y += height + config().layout.gap;
+        y += height + gap;
         remainingHeight -= height;
       }
     }

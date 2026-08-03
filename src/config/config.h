@@ -84,8 +84,10 @@ namespace umbriel {
       int scrollWheelStep = 60;
     } layout;
 
-    // Gap from usable-area edges (layer exclusive zones) including outer border.
-    [[nodiscard]] int layoutEdgePad() const { return layout.gap + appearance.outerBorderWidth; }
+    // Clear `layout.gap` outside decoration edges: borders are drawn outside the
+    // surface, so tile spacing and usable-area insets include total border width.
+    [[nodiscard]] int layoutGap() const { return layout.gap + 2 * appearance.totalBorderWidth(); }
+    [[nodiscard]] int layoutEdgePad() const { return layout.gap + appearance.totalBorderWidth(); }
 
     struct General {
       std::string terminal;

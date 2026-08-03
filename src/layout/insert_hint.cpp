@@ -93,7 +93,7 @@ namespace umbriel {
       boundaryX = workspace->layout().columnX(columnCount - 1, viewportWidth)
           + workspace->layout().columnWidth(columnCount - 1, viewportWidth);
     } else {
-      boundaryX = workspace->layout().columnX(gap, viewportWidth) - config().layout.gap / 2;
+      boundaryX = workspace->layout().columnX(gap, viewportWidth) - config().layoutGap() / 2;
     }
     const int targetX =
         usable.x + edgePad + boundaryX - kHintWidth / 2 - static_cast<int>(std::lround(workspace->visualScroll()));
@@ -118,7 +118,7 @@ namespace umbriel {
     if (row == static_cast<int>(column.views.size())) {
       boundaryY = usable.y + usable.height - edgePad;
     } else if (row > 0) {
-      boundaryY = workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layout.gap / 2;
+      boundaryY = workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layoutGap() / 2;
     }
     const int targetX = usable.x
         + edgePad

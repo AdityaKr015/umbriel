@@ -110,12 +110,8 @@ namespace umbriel {
     if (focusMappedOn(underCursor)) {
       return;
     }
-    for (const auto& entry : m_views) {
-      if (entry->mapped() && entry->onActiveWorkspace()) {
-        focusView(entry.get());
-        return;
-      }
-    }
+    // Stay on the pointer's output: never steal focus onto another display when
+    // this one has no mapped window (closing the last window on DP-1, empty WS, …).
     clearKeyboardFocus();
   }
 

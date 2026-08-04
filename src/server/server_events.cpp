@@ -527,7 +527,11 @@ namespace umbriel {
     }
     const bool hadKeyboardFocus = m_seat->wlr()->keyboard_state.focused_surface == view->toplevel()->base->surface;
     View* replacement = nullptr;
+    Output* output = nullptr;
     if (Workspace* workspace = view->workspace()) {
+      if (workspace->group() != nullptr) {
+        output = workspace->group()->output();
+      }
       replacement = workspace->removeView(view);
       view->detachWorkspace();
     }
@@ -537,7 +541,7 @@ namespace umbriel {
       if (replacement != nullptr) {
         focusView(replacement);
       } else {
-        refocus();
+        refocus(output);
       }
     }
   }

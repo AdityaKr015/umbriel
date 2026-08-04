@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <wayland-server-core.h>
 
 struct wlr_cursor;
@@ -43,6 +44,9 @@ namespace umbriel {
     void resetMode();
     void handleNewConstraint(wlr_pointer_constraint_v1* constraint);
     void clearConstraint();
+    // Recompute compositor cursor (mod-held resize/move affordance, or active grab).
+    void refreshInteractiveCursor();
+    [[nodiscard]] bool compositorOwnsCursor() const { return m_compositorOwnsCursor; }
 
   private:
     static void onMotion(wl_listener* listener, void* data);
@@ -69,6 +73,10 @@ namespace umbriel {
     void processResizeTile();
     [[nodiscard]] uint32_t tileResizeEdges(View* view) const;
     [[nodiscard]] uint32_t floatResizeEdges(View* view) const;
+    [[nodiscard]] uint32_t hoverResizeEdges(View* view) const;
+    void updateInteractiveCursor(View* under);
+    void setCompositorCursor(const char* name);
+    void restoreClientCursor();
     void setActiveConstraint(wlr_pointer_constraint_v1* constraint);
     void updateConstraintForSurface(wlr_surface* surface);
     [[nodiscard]] bool constraintSurfaceActive() const;
@@ -116,6 +124,8 @@ namespace umbriel {
     // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
     wlr_output* m_pointerOutput = nullptr;
     double m_wheelAccum[2]{};
+    bool m_compositorOwnsCursor = false;
+    std::string m_compositorCursorName;
 
     wl_listener m_motion{};
     wl_listener m_motionAbsolute{};

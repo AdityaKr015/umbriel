@@ -1,6 +1,7 @@
 #include "input/keyboard.h"
 
 #include "config/config.h"
+#include "input/cursor.h"
 #include "input/seat.h"
 #include "server/server.h"
 #include "wlr.h"
@@ -72,6 +73,7 @@ namespace umbriel {
     wlr_seat* seat = m_server->seat()->wlr();
     wlr_seat_set_keyboard(seat, m_keyboard);
     wlr_seat_keyboard_notify_modifiers(seat, &m_keyboard->modifiers);
+    m_server->cursor()->refreshInteractiveCursor();
   }
 
   void Keyboard::handleKey(void* data) {

@@ -333,9 +333,10 @@ namespace umbriel {
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const int availableHeight = std::max(1, usable.height - 2 * edgePad);
     const double maxScroll = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
-    // Allow slightly negative scroll so column-0 left-edge resize can pin the right edge
-    // when shrinking would otherwise leave empty space that clamp-to-0 would eat.
-    m_scroll = std::clamp(m_scroll, -static_cast<double>(viewportWidth), maxScroll);
+    // Allow overscroll past both edges so gesture spring-back is visible.
+    // Left: column-0 resize may also use slightly negative scroll.
+    const auto vw = static_cast<double>(viewportWidth);
+    m_scroll = std::clamp(m_scroll, -vw, maxScroll + vw);
 
     for (size_t columnIndex = 0; columnIndex < m_columns.size(); ++columnIndex) {
       Column& column = m_columns[columnIndex];

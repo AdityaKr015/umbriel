@@ -990,7 +990,22 @@ namespace umbriel {
           && (m_toplevel->scheduled.width != keepWidth || m_toplevel->scheduled.height != keepHeight)) {
         wlr_xdg_toplevel_set_size(m_toplevel, keepWidth, keepHeight);
       }
-      wlr_scene_node_set_position(&m_sceneTree->node, keepX, keepY);
+      // Nudge down-right so the float is obviously detached from the tile strip.
+      wlr_box usable{};
+      if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+        usable = m_workspace->group()->output()->usableArea();
+      } else {
+        usable = m_server->usableAreaAt(keepX, keepY);
+      }
+      const int nudge = std::max(32, config().layout.gap * 2);
+      int floatX = keepX + nudge;
+      int floatY = keepY + nudge;
+      if (usable.width > 0 && usable.height > 0 && keepWidth > 0 && keepHeight > 0) {
+        floatX = std::clamp(floatX, usable.x, std::max(usable.x, usable.x + usable.width - keepWidth));
+        floatY = std::clamp(floatY, usable.y, std::max(usable.y, usable.y + usable.height - keepHeight));
+      }
+      setPosition(keepX, keepY);
+      animateTo(floatX, floatY);
       syncFloatingSurfaceClip();
       // Keep the focus ring when floating a tiled window.
       ensureBorders();

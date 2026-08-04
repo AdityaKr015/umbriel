@@ -196,27 +196,18 @@ namespace umbriel {
 
     wlr_seat* seat = m_server->seat()->wlr();
     wlr_surface* surface = m_toplevel->base->surface;
-    wlr_surface* prev = seat->keyboard_state.focused_surface;
-    if (prev == surface) {
-      setForeignActivated(true);
-      return;
-    }
-
-    if (prev != nullptr) {
-      if (wlr_xdg_toplevel* prevToplevel = wlr_xdg_toplevel_try_from_wlr_surface(prev)) {
-        wlr_xdg_toplevel_set_activated(prevToplevel, false);
-        auto* prevTree = static_cast<wlr_scene_tree*>(prevToplevel->base->data);
-        if (prevTree != nullptr && prevTree->node.data != nullptr) {
-          static_cast<View*>(prevTree->node.data)->setBorderFocused(false);
-        }
-      }
-    }
+    // Always clear other views first: the previous seat surface may be a layer, so
+    // deactivating only that surface can leave another window's focus border on.
+    m_server->deactivateViews(this);
 
     wlr_scene_node_raise_to_top(&m_sceneTree->node);
     wlr_xdg_toplevel_set_activated(m_toplevel, true);
     setBorderFocused(true);
     setForeignActivated(true);
 
+    if (seat->keyboard_state.focused_surface == surface) {
+      return;
+    }
     if (wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat)) {
       wlr_seat_keyboard_notify_enter(seat, surface, keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
     }

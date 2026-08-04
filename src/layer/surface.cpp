@@ -115,15 +115,10 @@ namespace umbriel {
 
     wlr_seat* seat = m_server->seat()->wlr();
     wlr_surface* surface = m_layerSurface->surface;
-    wlr_surface* prev = seat->keyboard_state.focused_surface;
-    if (prev == surface) {
+    // Layers take the seat: drop every window's activated/border so none stay "focused".
+    m_server->deactivateViews(nullptr);
+    if (seat->keyboard_state.focused_surface == surface) {
       return;
-    }
-
-    if (prev != nullptr) {
-      if (wlr_xdg_toplevel* prevToplevel = wlr_xdg_toplevel_try_from_wlr_surface(prev)) {
-        wlr_xdg_toplevel_set_activated(prevToplevel, false);
-      }
     }
 
     // Give the layer seat keyboard focus so clients (e.g. Noctalia) receive Escape.

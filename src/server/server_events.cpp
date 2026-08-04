@@ -467,6 +467,7 @@ namespace umbriel {
       updateLockBlank();
       raiseLockTree();
     }
+    updateOutputManagerConfig();
   }
 
   void Server::addKeyboard(wlr_input_device* device) {

@@ -29,23 +29,26 @@ namespace umbriel {
       const bool fixedHeight = state.max_height > 0 && state.min_height == state.max_height;
       return toplevel->parent == nullptr && !fixedWidth && !fixedHeight;
     }
+
+    int expandedRadius(int radius, int thickness) { return radius > 0 ? radius + thickness : 0; }
   } // namespace
 
   std::array<View::BorderEdge, 4> View::makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness) {
     const int width = contentWidth + 2 * thickness;
     const int innerWidth = std::max(0, width - 2 * thickness);
     const int sideHeight = std::max(0, contentHeight - 2 * radius);
+    const int outer = expandedRadius(radius, thickness);
     return {{
         {
             .box = {-thickness, -thickness, width, thickness + radius},
-            .outer = corner_radii_top(radius + thickness),
+            .outer = corner_radii_top(outer),
             .hasHole = true,
             .hole = {thickness, thickness, innerWidth, thickness + radius},
             .holeCorners = corner_radii_top(radius),
         },
         {
             .box = {-thickness, contentHeight - radius, width, thickness + radius},
-            .outer = corner_radii_bottom(radius + thickness),
+            .outer = corner_radii_bottom(outer),
             .hasHole = true,
             .hole = {thickness, -1, innerWidth, radius + 1},
             .holeCorners = corner_radii_bottom(radius),
@@ -371,8 +374,9 @@ namespace umbriel {
         // outer color tucks under the inner border (no gap between the two rings).
         wlr_scene_node_set_position(&m_outerBorderRect->node, -total, -total);
         wlr_scene_rect_set_size(m_outerBorderRect, contentWidth + 2 * total, contentHeight + 2 * total);
+        const int outerRadius = expandedRadius(radius, total);
         wlr_scene_rect_set_corner_radii(
-            m_outerBorderRect, corner_radii_new(radius + total, radius + total, radius + total, radius + total)
+            m_outerBorderRect, corner_radii_new(outerRadius, outerRadius, outerRadius, outerRadius)
         );
         wlr_scene_rect_set_color(m_outerBorderRect, config().appearance.outerBorderColor.data());
         wlr_scene_rect_set_clipped_region(
@@ -438,7 +442,7 @@ namespace umbriel {
     const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
     const bool trimTop = visible.y > screenBox.y;
     const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
-    const int outerRadius = radius + total;
+    const int outerRadius = expandedRadius(radius, total);
     wlr_scene_rect_set_corner_radii(
         m_outerBorderRect,
         corner_radii_new(

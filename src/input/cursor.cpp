@@ -165,6 +165,7 @@ namespace umbriel {
         m_resizeStartBottom = 0;
         m_resizeStartWidthPx = 0;
       }
+      updateInteractiveCursor(view);
       return;
     }
 
@@ -181,6 +182,7 @@ namespace umbriel {
         m_dropColumn = std::max(0, m_dragSourceColumn);
         m_dropRow = -1;
       }
+      updateInteractiveCursor(view);
       return;
     }
 
@@ -193,6 +195,7 @@ namespace umbriel {
     m_grabGeoY = geo->y + static_cast<int>(view->sceneTree()->node.y);
     m_grabGeoWidth = geo->width;
     m_grabGeoHeight = geo->height;
+    updateInteractiveCursor(view);
   }
 
   void Cursor::resetMode() {
@@ -225,6 +228,7 @@ namespace umbriel {
     m_resizeStartLowerWeight = 0;
     m_resizeUpperRow = -1;
     m_resizeSoloHorizontal = false;
+    refreshInteractiveCursor();
   }
 
   void Cursor::onMotion(wl_listener* listener, void* data) {
@@ -262,7 +266,13 @@ namespace umbriel {
     );
 
     if (m_activeConstraint != nullptr && m_activeConstraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
-      return;
+      // Workspace switch (etc.) can hide the locking surface without pointer motion.
+      // Drop the lock so the cursor can move and become visible again.
+      if (!constraintSurfaceActive()) {
+        clearConstraint();
+      } else {
+        return;
+      }
     }
 
     double dx = event->delta_x;
@@ -283,7 +293,11 @@ namespace umbriel {
     auto* event = static_cast<wlr_pointer_motion_absolute_event*>(data);
     m_server->notifyIdleActivity();
     if (m_activeConstraint != nullptr && m_activeConstraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
-      return;
+      if (!constraintSurfaceActive()) {
+        clearConstraint();
+      } else {
+        return;
+      }
     }
 
     double lx = 0;
@@ -567,11 +581,14 @@ namespace umbriel {
     if (surface != nullptr) {
       wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
       wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);
-    } else {
+    } else if (!m_compositorOwnsCursor) {
       wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+      wlr_seat_pointer_clear_focus(seat);
+    } else {
       wlr_seat_pointer_clear_focus(seat);
     }
     updateConstraintForSurface(surface);
+    updateInteractiveCursor(view);
   }
 
   void Cursor::processMove() {
@@ -857,6 +874,133 @@ namespace umbriel {
           | (distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM);
     }
     return edges;
+  }
+
+  uint32_t Cursor::hoverResizeEdges(View* view) const {
+    if (view == nullptr) {
+      return 0;
+    }
+    // Only advertise resize when the pointer is near the edge that would be grabbed.
+    constexpr double kHoverSlop = 28.0;
+
+    if (view->floating()) {
+      if (view->sceneTree() == nullptr) {
+        return 0;
+      }
+      const wlr_box& geo = view->toplevel()->base->geometry;
+      const double left = view->sceneTree()->node.x + geo.x;
+      const double top = view->sceneTree()->node.y + geo.y;
+      const double right = left + geo.width;
+      const double bottom = top + geo.height;
+      const double distLeft = std::abs(m_cursor->x - left);
+      const double distRight = std::abs(m_cursor->x - right);
+      const double distTop = std::abs(m_cursor->y - top);
+      const double distBottom = std::abs(m_cursor->y - bottom);
+      const double nearestH = std::min(distLeft, distRight);
+      const double nearestV = std::min(distTop, distBottom);
+      if (std::min(nearestH, nearestV) > kHoverSlop) {
+        return 0;
+      }
+      return floatResizeEdges(view);
+    }
+
+    if (view->workspace() == nullptr) {
+      return 0;
+    }
+    const wlr_box box = view->workspace()->layout().targetBox(view);
+    if (box.width <= 0 || box.height <= 0) {
+      return 0;
+    }
+    const uint32_t edges = tileResizeEdges(view);
+    double dist = kHoverSlop + 1.0;
+    if ((edges & WLR_EDGE_LEFT) != 0) {
+      dist = std::abs(m_cursor->x - box.x);
+    } else if ((edges & WLR_EDGE_RIGHT) != 0) {
+      dist = std::abs(m_cursor->x - (box.x + box.width));
+    } else if ((edges & WLR_EDGE_TOP) != 0) {
+      dist = std::abs(m_cursor->y - box.y);
+    } else if ((edges & WLR_EDGE_BOTTOM) != 0) {
+      dist = std::abs(m_cursor->y - (box.y + box.height));
+    }
+    return dist <= kHoverSlop ? edges : 0;
+  }
+
+  void Cursor::setCompositorCursor(const char* name) {
+    if (name == nullptr) {
+      if (m_compositorOwnsCursor) {
+        restoreClientCursor();
+      }
+      return;
+    }
+    if (m_compositorOwnsCursor && m_compositorCursorName == name) {
+      return;
+    }
+    m_compositorOwnsCursor = true;
+    m_compositorCursorName = name;
+    wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, name);
+  }
+
+  void Cursor::restoreClientCursor() {
+    m_compositorOwnsCursor = false;
+    m_compositorCursorName.clear();
+
+    double sx = 0;
+    double sy = 0;
+    wlr_surface* surface = nullptr;
+    m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+    wlr_seat* seat = m_server->seat()->wlr();
+    if (surface != nullptr) {
+      // Re-enter so the client can restore its pointer shape.
+      wlr_seat_pointer_clear_focus(seat);
+      wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+    } else {
+      wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+      wlr_seat_pointer_clear_focus(seat);
+    }
+  }
+
+  void Cursor::updateInteractiveCursor(View* under) {
+    if (m_server->sessionLocked()) {
+      setCompositorCursor(nullptr);
+      return;
+    }
+
+    if (m_mode == CursorMode::Resize || m_mode == CursorMode::ResizeTile) {
+      const char* name = wlr_xcursor_get_resize_name(static_cast<enum wlr_edges>(m_resizeEdges));
+      setCompositorCursor(name != nullptr ? name : "default");
+      return;
+    }
+    if (m_mode == CursorMode::Move || m_mode == CursorMode::MoveTile) {
+      setCompositorCursor("grabbing");
+      return;
+    }
+
+    wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
+    const bool modHeld = keyboard != nullptr && (wlr_keyboard_get_modifiers(keyboard) & m_server->modKey()) != 0;
+    if (modHeld && under != nullptr && under->mapped()) {
+      const uint32_t edges = hoverResizeEdges(under);
+      if (edges != 0) {
+        const char* name = wlr_xcursor_get_resize_name(static_cast<enum wlr_edges>(edges));
+        setCompositorCursor(name != nullptr ? name : "default");
+        return;
+      }
+      setCompositorCursor("grab");
+      return;
+    }
+
+    setCompositorCursor(nullptr);
+  }
+
+  void Cursor::refreshInteractiveCursor() {
+    if (m_mode != CursorMode::Passthrough) {
+      updateInteractiveCursor(m_grabbedView);
+      return;
+    }
+    double sx = 0;
+    double sy = 0;
+    wlr_surface* surface = nullptr;
+    View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+    updateInteractiveCursor(view);
   }
 
   void Cursor::processResizeTile() {

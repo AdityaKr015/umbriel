@@ -47,6 +47,7 @@ extern "C" {
 #include <wlr/util/box.h>
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>
+#include <wlr/xcursor.h>
 #include <xkbcommon/xkbcommon.h>
 
 #define namespace namespace_

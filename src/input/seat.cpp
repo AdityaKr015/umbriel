@@ -87,6 +87,9 @@ namespace umbriel {
 
   void Seat::handleRequestCursor(void* data) {
     auto* event = static_cast<wlr_seat_pointer_request_set_cursor_event*>(data);
+    if (m_server->cursor()->compositorOwnsCursor()) {
+      return;
+    }
     if (m_seat->pointer_state.focused_client == event->seat_client) {
       wlr_cursor_set_surface(m_server->cursor()->wlr(), event->surface, event->hotspot_x, event->hotspot_y);
     }
@@ -95,6 +98,9 @@ namespace umbriel {
   void Seat::handleRequestSetShape(void* data) {
     auto* event = static_cast<wlr_cursor_shape_manager_v1_request_set_shape_event*>(data);
     if (event->device_type != WLR_CURSOR_SHAPE_MANAGER_V1_DEVICE_TYPE_POINTER) {
+      return;
+    }
+    if (m_server->cursor()->compositorOwnsCursor()) {
       return;
     }
     if (m_seat->pointer_state.focused_client != event->seat_client) {
@@ -110,7 +116,7 @@ namespace umbriel {
 
   void Seat::handlePointerFocusChange(void* data) {
     auto* event = static_cast<wlr_seat_pointer_focus_change_event*>(data);
-    if (event->new_surface == nullptr) {
+    if (event->new_surface == nullptr && !m_server->cursor()->compositorOwnsCursor()) {
       wlr_cursor_set_xcursor(m_server->cursor()->wlr(), m_server->cursor()->xcursorManager(), "default");
     }
   }

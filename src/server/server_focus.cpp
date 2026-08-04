@@ -27,12 +27,6 @@ namespace umbriel {
       return;
     }
 
-    for (const auto& entry : m_views) {
-      if (entry.get() != view) {
-        entry->setForeignActivated(false);
-      }
-    }
-
     auto it = std::find_if(m_views.begin(), m_views.end(), [view](const std::unique_ptr<View>& entry) {
       return entry.get() == view;
     });
@@ -43,9 +37,12 @@ namespace umbriel {
     }
 
     // Keep workspace focus while exclusive layer-shell holds the seat; refocus applies it later.
+    // Still clear activation chrome so the previous window does not stay visually focused.
     const bool seatAvailable = exclusiveKeyboardLayer() == nullptr;
     if (seatAvailable) {
       view->focus();
+    } else {
+      deactivateViews(nullptr);
     }
     if (Workspace* workspace = view->workspace()) {
       workspace->setFocusedView(view);
@@ -115,23 +112,20 @@ namespace umbriel {
     clearKeyboardFocus();
   }
 
-  void Server::clearKeyboardFocus() {
-    wlr_seat* seat = m_seat->wlr();
-    if (wlr_surface* prev = seat->keyboard_state.focused_surface) {
-      if (wlr_xdg_toplevel* prevToplevel = wlr_xdg_toplevel_try_from_wlr_surface(prev)) {
-        wlr_xdg_toplevel_set_activated(prevToplevel, false);
-        auto* prevTree = static_cast<wlr_scene_tree*>(prevToplevel->base->data);
-        if (prevTree != nullptr && prevTree->node.data != nullptr) {
-          auto* view = static_cast<View*>(prevTree->node.data);
-          view->setBorderFocused(false);
-          view->setForeignActivated(false);
-        }
-      }
-    }
+  void Server::deactivateViews(View* except) {
     for (const auto& entry : m_views) {
+      if (entry.get() == except || !entry->mapped()) {
+        continue;
+      }
+      wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
+      entry->setBorderFocused(false);
       entry->setForeignActivated(false);
     }
-    wlr_seat_keyboard_notify_clear_focus(seat);
+  }
+
+  void Server::clearKeyboardFocus() {
+    deactivateViews(nullptr);
+    wlr_seat_keyboard_notify_clear_focus(m_seat->wlr());
   }
 
   View* Server::viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer) {

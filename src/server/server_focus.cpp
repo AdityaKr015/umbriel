@@ -15,10 +15,24 @@
 
 namespace umbriel {
 
-  void Server::focusView(View* view, bool bringIntoView, bool animate) {
+  void Server::focusView(View* view, FocusReason reason) {
     if (view == nullptr || m_sessionLocked) {
       return;
     }
+
+    // PointerHover gate: reject focus entirely when revealing would exceed the
+    // configured max scroll fraction. Must run before any side effects (MRU,
+    // seat focus) so an over-limit hover focuses nothing — preserving the
+    // current behavior where cursor.cpp skipped focusView altogether.
+    if (reason == FocusReason::PointerHover && view->tiled()) {
+      if (Workspace* workspace = view->workspace()) {
+        const auto& maxScroll = config().input.focus.followsMouseMaxScroll;
+        if (maxScroll && workspace->scrollFractionToReveal(view) > *maxScroll) {
+          return;
+        }
+      }
+    }
+
     if (Workspace* workspace = view->workspace()) {
       if (!workspace->active()) {
         workspace->group()->activate(workspace);
@@ -39,16 +53,32 @@ namespace umbriel {
     // Still clear activation chrome so the previous window does not stay visually focused.
     const bool seatAvailable = exclusiveKeyboardLayer() == nullptr;
     if (seatAvailable) {
-      view->focus();
+      view->applySeatFocus();
     } else {
       deactivateViews(nullptr);
     }
-    if (Workspace* workspace = view->workspace()) {
+    Workspace* workspace = view->workspace();
+    if (workspace != nullptr) {
       workspace->setFocusedView(view);
-      if (bringIntoView && view->tiled()) {
-        workspace->ensureFocusedVisible();
-        workspace->arrange(animate);
-      }
+    }
+
+    // Derive reveal policy from the focus reason.
+    if (workspace == nullptr || !view->tiled()) {
+      return;
+    }
+    switch (reason) {
+    case FocusReason::Directional:
+    case FocusReason::PointerPress:
+    case FocusReason::PointerHover:
+    case FocusReason::DragDrop:
+    case FocusReason::Startup:
+      workspace->ensureFocusedVisible();
+      workspace->arrange(true);
+      break;
+    case FocusReason::Grab:
+      // No reveal: the grab is about to move/detach the tile; revealing would
+      // shift computed grab offsets and cause a visual jump.
+      break;
     }
   }
 
@@ -236,28 +266,28 @@ namespace umbriel {
     case KeybindAction::WindowFocusLeft:
       if (Workspace* workspace = activeWorkspace()) {
         if (View* target = workspace->focusAdjacent(-1)) {
-          focusView(target);
+          focusView(target, FocusReason::Directional);
         }
       }
       return true;
     case KeybindAction::WindowFocusRight:
       if (Workspace* workspace = activeWorkspace()) {
         if (View* target = workspace->focusAdjacent(1)) {
-          focusView(target);
+          focusView(target, FocusReason::Directional);
         }
       }
       return true;
     case KeybindAction::WindowFocusUp:
       if (Workspace* workspace = activeWorkspace()) {
         if (View* target = workspace->focusVertical(-1)) {
-          focusView(target);
+          focusView(target, FocusReason::Directional);
         }
       }
       return true;
     case KeybindAction::WindowFocusDown:
       if (Workspace* workspace = activeWorkspace()) {
         if (View* target = workspace->focusVertical(1)) {
-          focusView(target);
+          focusView(target, FocusReason::Directional);
         }
       }
       return true;
@@ -318,7 +348,7 @@ namespace umbriel {
           m_views.erase(m_views.begin());
           m_views.push_back(std::move(current));
           if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
-            focusView(m_views.front().get());
+            focusView(m_views.front().get(), FocusReason::Directional);
             break;
           }
         }
@@ -341,7 +371,7 @@ namespace umbriel {
           if (entry->mapped() && entry->onActiveWorkspace()) {
             entry->setWorkspace(target);
             group->activate(target);
-            focusView(entry.get());
+            focusView(entry.get(), FocusReason::Directional);
             return true;
           }
         }

@@ -186,10 +186,9 @@ namespace umbriel {
     }
   }
 
-  void View::focus() {
-    if (m_server->sessionLocked() || m_server->exclusiveKeyboardLayer() != nullptr) {
-      return;
-    }
+  void View::applySeatFocus() {
+    // Mechanism only. Policy lives in Server::focusView — do not call directly
+    // from input/event code.
     if (!m_onActiveWorkspace) {
       return;
     }

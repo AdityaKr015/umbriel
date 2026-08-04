@@ -393,12 +393,12 @@ namespace umbriel {
     wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
     const bool modHeld = keyboard != nullptr && (wlr_keyboard_get_modifiers(keyboard) & m_server->modKey()) != 0;
     if (event->button == BTN_LEFT && modHeld && view != nullptr) {
-      m_server->focusView(view);
+      m_server->focusView(view, FocusReason::Grab);
       beginInteractive(view, view->tiled() ? CursorMode::MoveTile : CursorMode::Move, 0);
       return;
     }
     if (event->button == BTN_RIGHT && modHeld && view != nullptr) {
-      m_server->focusView(view);
+      m_server->focusView(view, FocusReason::Grab);
       if (view->tiled()) {
         beginInteractive(view, CursorMode::ResizeTile, 0);
       } else {
@@ -411,10 +411,8 @@ namespace umbriel {
     if (layer != nullptr) {
       layer->focus();
     } else if (m_server->exclusiveKeyboardLayer() == nullptr) {
-      // Do not ensureVisible/scroll on click. Peek adjustment would move the
-      // surface under the cursor and break link clicks and in-window drags.
       if (view != nullptr) {
-        m_server->focusView(view, false);
+        m_server->focusView(view, FocusReason::PointerPress);
       } else {
         wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
         m_server->refocus(m_server->outputFromWlr(wlrOutput));
@@ -566,9 +564,9 @@ namespace umbriel {
         && layer == nullptr
         && view != nullptr
         && view->mapped()) {
-      // niri: only activate when the pointer enters a different window (under old pos
+      // Only activate when the pointer enters a different window (under old pos
       // != under new pos). Do not warp the pointer with scroll — that re-arms enters
-      // during a swipe and cascades across columns (e.g. 6 → 5 → … → 1).
+      // during a swipe and cascades across columns.
       wlr_surface* oldSurface = nullptr;
       double oldSx = 0;
       double oldSy = 0;
@@ -576,28 +574,10 @@ namespace umbriel {
       const bool entered = view != oldView;
       const bool alreadyFocused = view->workspace() != nullptr && view->workspace()->focusedView() == view;
       if (entered && !alreadyFocused) {
-        bool allow = true;
-        Workspace* workspace = view->workspace();
-        if (workspace != nullptr
-            && view->tiled()
-            && workspace->group() != nullptr
-            && workspace->group()->output() != nullptr) {
-          const int column = workspace->layout().columnOf(view);
-          const int viewportWidth =
-              std::max(1, workspace->group()->output()->usableArea().width - 2 * config().layoutEdgePad());
-          const double amount = workspace->layout().scrollAmountToEnsureVisible(column, viewportWidth);
-          if (const auto& maxScroll = config().input.focus.followsMouseMaxScroll) {
-            if (amount > *maxScroll) {
-              allow = false;
-            }
-          }
-        }
-        if (allow) {
-          m_server->focusView(view, true);
-          // Scroll may have moved another surface under the cursor; refresh hit-test for
-          // pointer notify only. Keyboard focus stays on the entered view until a real enter.
-          view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
-        }
+        m_server->focusView(view, FocusReason::PointerHover);
+        // Scroll may have moved another surface under the cursor; refresh hit-test for
+        // pointer notify only. Keyboard focus stays on the entered view until a real enter.
+        view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
       }
     }
 
@@ -760,7 +740,7 @@ namespace umbriel {
         target->layout().insertView(view, column);
       }
       target->arrange();
-      m_server->focusView(view);
+      m_server->focusView(view, FocusReason::DragDrop);
     }
     resetMode();
   }
@@ -782,7 +762,7 @@ namespace umbriel {
         }
       }
       wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
-      m_server->focusView(view, false);
+      m_server->focusView(view, FocusReason::DragDrop);
     }
     resetMode();
   }

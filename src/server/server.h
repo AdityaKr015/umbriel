@@ -48,6 +48,15 @@ namespace umbriel {
   enum class WheelDirection;
   struct Keybind;
 
+  enum class FocusReason : uint8_t {
+    Directional,  // window-focus-* keybinds, focus-adjacent after close
+    PointerPress, // plain click-to-focus
+    PointerHover, // follows_mouse enter
+    Grab,         // Mod+drag / Mod+resize start
+    DragDrop,     // tile/float drag finished
+    Startup,      // map, setFloating, xdg-activation, foreign activate, refocus fallback
+  };
+
   class Cursor;
   class ConfigWatcher;
   class InsertHint;
@@ -108,9 +117,7 @@ namespace umbriel {
     [[nodiscard]] bool nested() const { return m_nested; }
     [[nodiscard]] uint32_t modKey() const;
 
-    // bringIntoView scrolls the focused tiled column on-screen.
-    // animate controls whether that scroll is animated (false for pointer-driven focus).
-    void focusView(View* view, bool bringIntoView = true, bool animate = true);
+    void focusView(View* view, FocusReason reason = FocusReason::Startup);
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
     bool handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
     bool handleWheelBind(WheelDirection direction, uint32_t modifiers);

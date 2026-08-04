@@ -56,6 +56,8 @@ namespace umbriel {
     bool toggleFocusedFullscreen();
     bool toggleFocusedFloating();
     void ensureFocusedVisible();
+    // Fraction of viewport width that revealing `view` would scroll (0.0 = already visible).
+    [[nodiscard]] double scrollFractionToReveal(const View* view) const;
     void applyVisibility();
 
   private:

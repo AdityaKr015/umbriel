@@ -361,6 +361,15 @@ namespace umbriel {
     m_layout.ensureVisible(column, viewportWidth);
   }
 
+  double Workspace::scrollFractionToReveal(const View* view) const {
+    if (m_group == nullptr || m_group->output() == nullptr) {
+      return 0.0;
+    }
+    const int column = m_layout.columnOf(view);
+    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * config().layoutEdgePad());
+    return m_layout.scrollAmountToEnsureVisible(column, viewportWidth);
+  }
+
   void Workspace::applyVisibility() {
     for (View* view : m_views) {
       view->setOnActiveWorkspace(m_active);

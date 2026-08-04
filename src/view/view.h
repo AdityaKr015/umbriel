@@ -35,7 +35,9 @@ namespace umbriel {
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
 
-    void focus();
+    // Mechanism only — applies seat keyboard, activation chrome, and raise.
+    // Policy lives in Server::focusView; do not call from input/event code.
+    void applySeatFocus();
     void setForeignActivated(bool activated);
     void setWorkspace(Workspace* workspace);
     void detachWorkspace();

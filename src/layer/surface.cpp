@@ -155,27 +155,32 @@ namespace umbriel {
   }
 
   void LayerSurface::onMap(wl_listener* listener, void* /*data*/) {
-    LayerSurface* self = wl_container_of(listener, self, m_map);
+    LayerSurface* self;
+    self = wl_container_of(listener, self, m_map);
     self->handleMap();
   }
 
   void LayerSurface::onUnmap(wl_listener* listener, void* /*data*/) {
-    LayerSurface* self = wl_container_of(listener, self, m_unmap);
+    LayerSurface* self;
+    self = wl_container_of(listener, self, m_unmap);
     self->handleUnmap();
   }
 
   void LayerSurface::onCommit(wl_listener* listener, void* /*data*/) {
-    LayerSurface* self = wl_container_of(listener, self, m_commit);
+    LayerSurface* self;
+    self = wl_container_of(listener, self, m_commit);
     self->handleCommit();
   }
 
   void LayerSurface::onDestroy(wl_listener* listener, void* /*data*/) {
-    LayerSurface* self = wl_container_of(listener, self, m_destroy);
+    LayerSurface* self;
+    self = wl_container_of(listener, self, m_destroy);
     self->handleDestroy();
   }
 
   void LayerSurface::onNewPopup(wl_listener* listener, void* data) {
-    LayerSurface* self = wl_container_of(listener, self, m_newPopup);
+    LayerSurface* self;
+    self = wl_container_of(listener, self, m_newPopup);
     self->handleNewPopup(data);
   }
 

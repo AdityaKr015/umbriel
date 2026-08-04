@@ -50,7 +50,8 @@ namespace umbriel {
     }
 
     void onDecorationSurfaceCommit(wl_listener* listener, void* /*data*/) {
-      XdgDecorationWatch* watch = wl_container_of(listener, watch, surfaceCommit);
+      XdgDecorationWatch* watch;
+      watch = wl_container_of(listener, watch, surfaceCommit);
       if (watch->decoration == nullptr
           || watch->decoration->toplevel == nullptr
           || !watch->decoration->toplevel->base->initial_commit) {
@@ -92,12 +93,14 @@ namespace umbriel {
     }
 
     void onDecorationRequestMode(wl_listener* listener, void* /*data*/) {
-      XdgDecorationWatch* watch = wl_container_of(listener, watch, requestMode);
+      XdgDecorationWatch* watch;
+      watch = wl_container_of(listener, watch, requestMode);
       applyXdgDecorationMode(watch);
     }
 
     void onDecorationDestroy(wl_listener* listener, void* /*data*/) {
-      XdgDecorationWatch* watch = wl_container_of(listener, watch, destroy);
+      XdgDecorationWatch* watch;
+      watch = wl_container_of(listener, watch, destroy);
       if (watch->decoration != nullptr) {
         watch->decoration->data = nullptr;
       }
@@ -208,12 +211,14 @@ namespace umbriel {
   }
 
   void Server::onNewOutput(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_newOutput);
+    Server* self;
+    self = wl_container_of(listener, self, m_newOutput);
     self->addOutput(static_cast<wlr_output*>(data));
   }
 
   void Server::onNewInput(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_newInput);
+    Server* self;
+    self = wl_container_of(listener, self, m_newInput);
     auto* device = static_cast<wlr_input_device*>(data);
     switch (device->type) {
     case WLR_INPUT_DEVICE_KEYBOARD:
@@ -229,7 +234,8 @@ namespace umbriel {
   }
 
   void Server::onNewXdgToplevel(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_newXdgToplevel);
+    Server* self;
+    self = wl_container_of(listener, self, m_newXdgToplevel);
     self->m_views.push_back(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
   }
 
@@ -244,7 +250,8 @@ namespace umbriel {
   }
 
   void Server::onNewXdgDecoration(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_newXdgDecoration);
+    Server* self;
+    self = wl_container_of(listener, self, m_newXdgDecoration);
     auto* decoration = static_cast<wlr_xdg_toplevel_decoration_v1*>(data);
     auto* watch = new XdgDecorationWatch{.decoration = decoration};
     decoration->data = watch;
@@ -257,7 +264,8 @@ namespace umbriel {
   }
 
   void Server::onNewLayerSurface(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_newLayerSurface);
+    Server* self;
+    self = wl_container_of(listener, self, m_newLayerSurface);
     auto surface = std::make_unique<LayerSurface>(*self, static_cast<wlr_layer_surface_v1*>(data));
     if (surface->layerSurface() == nullptr) {
       return;
@@ -266,17 +274,20 @@ namespace umbriel {
   }
 
   void Server::onNewSessionLock(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_newSessionLock);
+    Server* self;
+    self = wl_container_of(listener, self, m_newSessionLock);
     self->beginSessionLock(static_cast<wlr_session_lock_v1*>(data));
   }
 
   void Server::onNewPointerConstraint(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_newPointerConstraint);
+    Server* self;
+    self = wl_container_of(listener, self, m_newPointerConstraint);
     self->m_cursor->handleNewConstraint(static_cast<wlr_pointer_constraint_v1*>(data));
   }
 
   void Server::onNewIdleInhibitor(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_newIdleInhibitor);
+    Server* self;
+    self = wl_container_of(listener, self, m_newIdleInhibitor);
     auto* inhibitor = static_cast<wlr_idle_inhibitor_v1*>(data);
     auto* watch = new IdleInhibitorWatch();
     watch->server = self;
@@ -287,7 +298,8 @@ namespace umbriel {
   }
 
   void Server::onIdleInhibitorDestroy(wl_listener* listener, void* /*data*/) {
-    IdleInhibitorWatch* watch = wl_container_of(listener, watch, destroy);
+    IdleInhibitorWatch* watch;
+    watch = wl_container_of(listener, watch, destroy);
     Server* server = watch->server;
     wl_list_remove(&watch->destroy.link);
     delete watch;
@@ -295,7 +307,8 @@ namespace umbriel {
     kLog.debug("idle inhibitor removed");
   }
   void Server::onPointerDestroy(wl_listener* listener, void* /*data*/) {
-    PointerDevice* watch = wl_container_of(listener, watch, destroy);
+    PointerDevice* watch;
+    watch = wl_container_of(listener, watch, destroy);
     Server* server = watch->server;
     wl_list_remove(&watch->destroy.link);
     std::erase_if(server->m_pointers, [watch](const std::unique_ptr<PointerDevice>& pointer) {
@@ -304,7 +317,8 @@ namespace umbriel {
   }
 
   void Server::onRequestActivate(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_requestActivate);
+    Server* self;
+    self = wl_container_of(listener, self, m_requestActivate);
     auto* event = static_cast<wlr_xdg_activation_v1_request_activate_event*>(data);
     if (self->m_sessionLocked) {
       return;
@@ -326,12 +340,14 @@ namespace umbriel {
   }
 
   void Server::onWorkspaceCommit(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_workspaceCommit);
+    Server* self;
+    self = wl_container_of(listener, self, m_workspaceCommit);
     self->handleWorkspaceCommit(data);
   }
 
   void Server::onSetGamma(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_setGamma);
+    Server* self;
+    self = wl_container_of(listener, self, m_setGamma);
     auto* event = static_cast<wlr_gamma_control_manager_v1_set_gamma_event*>(data);
     if (Output* out = self->outputFromWlr(event->output)) {
       out->onGammaChanged(event->control);
@@ -556,17 +572,20 @@ namespace umbriel {
   }
 
   void Server::onOutputManagerApply(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_outputManagerApply);
+    Server* self;
+    self = wl_container_of(listener, self, m_outputManagerApply);
     self->applyOutputManagerConfig(static_cast<wlr_output_configuration_v1*>(data), false);
   }
 
   void Server::onOutputManagerTest(wl_listener* listener, void* data) {
-    Server* self = wl_container_of(listener, self, m_outputManagerTest);
+    Server* self;
+    self = wl_container_of(listener, self, m_outputManagerTest);
     self->applyOutputManagerConfig(static_cast<wlr_output_configuration_v1*>(data), true);
   }
 
   void Server::onOutputLayoutChange(wl_listener* listener, void* /*data*/) {
-    Server* self = wl_container_of(listener, self, m_outputLayoutChange);
+    Server* self;
+    self = wl_container_of(listener, self, m_outputLayoutChange);
     self->updateOutputManagerConfig();
   }
 

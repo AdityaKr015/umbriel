@@ -20,14 +20,16 @@ namespace {
   };
 
   void cairoBufferDestroy(wlr_buffer* wlrBuf) {
-    CairoBuffer* buf = wl_container_of(wlrBuf, buf, base);
+    CairoBuffer* buf;
+    buf = wl_container_of(wlrBuf, buf, base);
     cairo_surface_destroy(buf->surface);
     delete buf;
   }
 
   bool
   cairoBufferBeginDataPtrAccess(wlr_buffer* wlrBuf, uint32_t /*flags*/, void** data, uint32_t* format, size_t* stride) {
-    CairoBuffer* buf = wl_container_of(wlrBuf, buf, base);
+    CairoBuffer* buf;
+    buf = wl_container_of(wlrBuf, buf, base);
     *data = cairo_image_surface_get_data(buf->surface);
     *format = DRM_FORMAT_ARGB8888;
     *stride = static_cast<size_t>(cairo_image_surface_get_stride(buf->surface));
@@ -82,12 +84,8 @@ namespace umbriel {
     const int logicalH = textH + params.padding * 2;
     int pixelW = static_cast<int>(std::ceil(logicalW * scale));
     int pixelH = static_cast<int>(std::ceil(logicalH * scale));
-    if (pixelW < 1) {
-      pixelW = 1;
-    }
-    if (pixelH < 1) {
-      pixelH = 1;
-    }
+    pixelW = std::max(pixelW, 1);
+    pixelH = std::max(pixelH, 1);
 
     // Render to a CairoBuffer at device-pixel resolution.
     CairoBuffer* cairoBuf = createCairoBuffer(pixelW, pixelH);

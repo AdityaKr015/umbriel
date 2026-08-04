@@ -3,10 +3,10 @@
 #include "wlr-output-management-unstable-v1-client-protocol.h"
 
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <print>
 #include <string>
 #include <wayland-client.h>
 
@@ -230,36 +230,36 @@ namespace umbriel {
     }
 
     void printHead(const HeadInfo& head) {
-      std::printf("%s \"%s\"\n", head.name.c_str(), head.description.c_str());
-      std::printf("  Enabled: %s\n", head.enabled ? "yes" : "no");
+      std::println("{} \"{}\"", head.name, head.description);
+      std::println("  Enabled: {}", head.enabled ? "yes" : "no");
       if (!head.make.empty() || !head.model.empty() || !head.serial.empty()) {
-        std::printf("  ");
+        std::print("  ");
         bool first = true;
         if (!head.make.empty()) {
-          std::printf("Make: %s", head.make.c_str());
+          std::print("Make: {}", head.make);
           first = false;
         }
         if (!head.model.empty()) {
           if (!first) {
-            std::printf("  ");
+            std::print("  ");
           }
-          std::printf("Model: %s", head.model.c_str());
+          std::print("Model: {}", head.model);
           first = false;
         }
         if (!head.serial.empty()) {
           if (!first) {
-            std::printf("  ");
+            std::print("  ");
           }
-          std::printf("Serial: %s", head.serial.c_str());
+          std::print("Serial: {}", head.serial);
         }
-        std::printf("\n");
+        std::println("");
       }
       if (head.physWidthMm > 0 || head.physHeightMm > 0) {
-        std::printf("  Physical size: %dx%d mm\n", head.physWidthMm, head.physHeightMm);
+        std::println("  Physical size: {}x{} mm", head.physWidthMm, head.physHeightMm);
       }
-      std::printf("  Position: %d,%d\n", head.x, head.y);
-      std::printf("  Transform: %s\n", transformName(head.transform));
-      std::printf("  Scale: %f\n", head.scale);
+      std::println("  Position: {},{}", head.x, head.y);
+      std::println("  Transform: {}", transformName(head.transform));
+      std::println("  Scale: {:f}", head.scale);
       if (head.adaptiveSync >= 0) {
         const char* syncState = "unknown";
         // zwlr_output_head_v1_adaptive_sync_state enum: 0=disabled, 1=enabled
@@ -268,28 +268,28 @@ namespace umbriel {
         } else if (head.adaptiveSync == 1) {
           syncState = "enabled";
         }
-        std::printf("  Adaptive sync: %s\n", syncState);
+        std::println("  Adaptive sync: {}", syncState);
       }
       if (!head.modes.empty()) {
-        std::printf("  Modes:\n");
+        std::println("  Modes:");
         for (const auto& mode : head.modes) {
           const bool isCurrent = mode.proxy == head.currentMode;
           const bool isPreferred = mode.preferred;
-          std::printf("    %dx%d @ %.3f Hz", mode.width, mode.height, static_cast<double>(mode.refreshMHz) / 1000.0);
+          std::print("    {}x{} @ {:.3f} Hz", mode.width, mode.height, static_cast<double>(mode.refreshMHz) / 1000.0);
           if (isPreferred || isCurrent) {
-            std::printf(" (");
+            std::print(" (");
             if (isPreferred) {
-              std::printf("preferred");
+              std::print("preferred");
               if (isCurrent) {
-                std::printf(", ");
+                std::print(", ");
               }
             }
             if (isCurrent) {
-              std::printf("current");
+              std::print("current");
             }
-            std::printf(")");
+            std::print(")");
           }
-          std::printf("\n");
+          std::println("");
         }
       }
     }
@@ -299,7 +299,7 @@ namespace umbriel {
   int runOutputsCommand() {
     wl_display* display = wl_display_connect(nullptr);
     if (display == nullptr) {
-      std::fprintf(stderr, "error: cannot connect to Wayland display (is the compositor running?)\n");
+      std::println(stderr, "error: cannot connect to Wayland display (is the compositor running?)");
       return EXIT_FAILURE;
     }
 
@@ -309,7 +309,7 @@ namespace umbriel {
     wl_display_roundtrip(display);
 
     if (state.manager == nullptr) {
-      std::fprintf(stderr, "error: compositor does not support wlr-output-management-unstable-v1\n");
+      std::println(stderr, "error: compositor does not support wlr-output-management-unstable-v1");
       wl_registry_destroy(registry);
       wl_display_disconnect(display);
       return EXIT_FAILURE;
@@ -320,7 +320,7 @@ namespace umbriel {
 
     for (size_t i = 0; i < state.heads.size(); ++i) {
       if (i > 0) {
-        std::printf("\n");
+        std::println("");
       }
       printHead(state.heads[i]);
     }

@@ -123,7 +123,7 @@ namespace umbriel {
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
     m_bannerTree = wlr_scene_tree_create(&m_scene->tree);
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
-    const float blankColor[4] = {0.f, 0.f, 0.f, 1.f};
+    const float blankColor[4] = {0.F, 0.F, 0.F, 1.F};
     m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, blankColor);
     wlr_scene_node_set_enabled(&m_lockBlank->node, false);
     wlr_scene_node_set_enabled(&m_lockTree->node, false);

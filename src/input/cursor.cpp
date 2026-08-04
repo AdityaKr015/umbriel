@@ -191,8 +191,8 @@ namespace umbriel {
     double borderY = (view->sceneTree()->node.y + geo->y) + ((edges & WLR_EDGE_BOTTOM) != 0 ? geo->height : 0);
     m_grabX = m_cursor->x - borderX;
     m_grabY = m_cursor->y - borderY;
-    m_grabGeoX = geo->x + static_cast<int>(view->sceneTree()->node.x);
-    m_grabGeoY = geo->y + static_cast<int>(view->sceneTree()->node.y);
+    m_grabGeoX = geo->x + view->sceneTree()->node.x;
+    m_grabGeoY = geo->y + view->sceneTree()->node.y;
     m_grabGeoWidth = geo->width;
     m_grabGeoHeight = geo->height;
     updateInteractiveCursor(view);
@@ -232,27 +232,32 @@ namespace umbriel {
   }
 
   void Cursor::onMotion(wl_listener* listener, void* data) {
-    Cursor* self = wl_container_of(listener, self, m_motion);
+    Cursor* self;
+    self = wl_container_of(listener, self, m_motion);
     self->handleMotion(data);
   }
 
   void Cursor::onMotionAbsolute(wl_listener* listener, void* data) {
-    Cursor* self = wl_container_of(listener, self, m_motionAbsolute);
+    Cursor* self;
+    self = wl_container_of(listener, self, m_motionAbsolute);
     self->handleMotionAbsolute(data);
   }
 
   void Cursor::onButton(wl_listener* listener, void* data) {
-    Cursor* self = wl_container_of(listener, self, m_button);
+    Cursor* self;
+    self = wl_container_of(listener, self, m_button);
     self->handleButton(data);
   }
 
   void Cursor::onAxis(wl_listener* listener, void* data) {
-    Cursor* self = wl_container_of(listener, self, m_axis);
+    Cursor* self;
+    self = wl_container_of(listener, self, m_axis);
     self->handleAxis(data);
   }
 
   void Cursor::onFrame(wl_listener* listener, void* /*data*/) {
-    Cursor* self = wl_container_of(listener, self, m_frame);
+    Cursor* self;
+    self = wl_container_of(listener, self, m_frame);
     self->handleFrame();
   }
 

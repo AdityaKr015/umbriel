@@ -134,9 +134,7 @@ namespace umbriel {
     int maxTextWidth = kDefaultMaxWidth;
     if (outputLogicalWidth > 0) {
       maxTextWidth = std::min(outputLogicalWidth - 80, kAbsMaxWidth);
-      if (maxTextWidth < 200) {
-        maxTextWidth = 200;
-      }
+      maxTextWidth = std::max(maxTextWidth, 200);
     }
 
     // Determine heading.

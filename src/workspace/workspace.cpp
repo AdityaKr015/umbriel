@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <ranges>
 #include "wlr.h"
 // clang-format on
 
@@ -75,7 +76,7 @@ namespace umbriel {
   }
 
   void Workspace::addView(View* view) {
-    if (view == nullptr || std::find(m_views.begin(), m_views.end(), view) != m_views.end()) {
+    if (view == nullptr || std::ranges::find(m_views, view) != m_views.end()) {
       return;
     }
     m_views.push_back(view);

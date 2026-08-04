@@ -17,7 +17,8 @@ namespace umbriel {
   void Cursor::clearConstraint() { setActiveConstraint(nullptr); }
 
   void Cursor::onConstraintDestroy(wl_listener* listener, void* /*data*/) {
-    Cursor* self = wl_container_of(listener, self, m_constraintDestroy);
+    Cursor* self;
+    self = wl_container_of(listener, self, m_constraintDestroy);
     self->handleConstraintDestroy();
   }
 

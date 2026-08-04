@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <ranges>
 
 namespace umbriel {
 
@@ -27,9 +28,7 @@ namespace umbriel {
       return;
     }
 
-    auto it = std::find_if(m_views.begin(), m_views.end(), [view](const std::unique_ptr<View>& entry) {
-      return entry.get() == view;
-    });
+    auto it = std::ranges::find_if(m_views, [view](const std::unique_ptr<View>& entry) { return entry.get() == view; });
     if (it != m_views.end() && it != m_views.begin()) {
       auto entry = std::move(*it);
       m_views.erase(it);
@@ -332,7 +331,7 @@ namespace umbriel {
         return true;
       }
       WorkspaceGroup* group = output->workspaceGroup();
-      const size_t index = static_cast<size_t>(bind.workspace);
+      const auto index = static_cast<size_t>(bind.workspace);
       Workspace* target = group->workspaceAt(index);
       if (target == nullptr) {
         return true;
@@ -353,7 +352,7 @@ namespace umbriel {
     case KeybindAction::LayoutScrollLeft:
     case KeybindAction::LayoutScrollRight:
       if (Workspace* workspace = activeWorkspace()) {
-        const double step = static_cast<double>(config().layout.scrollWheelStep);
+        const auto step = static_cast<double>(config().layout.scrollWheelStep);
         const double delta = bind.action == KeybindAction::LayoutScrollLeft ? -step : step;
         workspace->layout().setScroll(workspace->layout().scroll() + delta);
         workspace->arrange();

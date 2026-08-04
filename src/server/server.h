@@ -256,7 +256,7 @@ namespace umbriel {
     wl_event_source* m_xwaylandExitSource = nullptr;
     wl_event_source* m_xwaylandRespawnTimer = nullptr;
     int m_xwaylandFailures = 0;
-    std::chrono::steady_clock::time_point m_xwaylandSpawnTime{};
+    std::chrono::steady_clock::time_point m_xwaylandSpawnTime;
 
     wl_listener m_newOutput{};
     wl_listener m_newInput{};

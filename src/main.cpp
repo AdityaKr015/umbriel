@@ -6,11 +6,11 @@
 #include "wlr.h"
 
 #include <csignal>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <print>
 #include <string>
 
 namespace {
@@ -29,7 +29,7 @@ namespace {
       if (std::strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
         configPath = argv[++i];
       } else {
-        std::fprintf(stderr, "Usage: %s validate [-c config_file]\n", argv[0]);
+        std::println(stderr, "Usage: {} validate [-c config_file]", argv[0]);
         return EXIT_FAILURE;
       }
     }
@@ -41,7 +41,7 @@ namespace {
     const auto& rootPath = umbriel::configRootPath();
 
     if (configPath == nullptr && diagnostics.empty() && !std::filesystem::is_regular_file(rootPath)) {
-      std::printf("no config file found: %s (defaults will be used)\n", rootPath.c_str());
+      std::println("no config file found: {} (defaults will be used)", rootPath.c_str());
       return EXIT_SUCCESS;
     }
 
@@ -51,9 +51,9 @@ namespace {
       const char* severity = diag.severity == umbriel::ConfigDiagnostic::Severity::Error ? "error" : "warning";
       const std::string loc = diag.location();
       if (loc.empty()) {
-        std::printf("%s: %s\n", severity, diag.message.c_str());
+        std::println("{}: {}", severity, diag.message);
       } else {
-        std::printf("%s: %s: %s\n", loc.c_str(), severity, diag.message.c_str());
+        std::println("{}: {}: {}", loc, severity, diag.message);
       }
       if (diag.severity == umbriel::ConfigDiagnostic::Severity::Error) {
         ++errors;
@@ -63,9 +63,9 @@ namespace {
     }
 
     if (diagnostics.empty()) {
-      std::printf("config OK: %s\n", rootPath.c_str());
+      std::println("config OK: {}", rootPath.c_str());
     } else {
-      std::printf("%d error(s), %d warning(s)\n", errors, warnings);
+      std::println("{} error(s), {} warning(s)", errors, warnings);
     }
     return errors > 0 ? EXIT_FAILURE : EXIT_SUCCESS;
   }

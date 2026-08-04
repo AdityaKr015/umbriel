@@ -7,6 +7,7 @@
 // clang-format off
 #include <algorithm>
 #include <cmath>
+#include <ranges>
 #include "wlr.h"
 // clang-format on
 
@@ -79,7 +80,7 @@ namespace umbriel {
       return -1;
     }
     const auto& views = m_columns[static_cast<size_t>(column)].views;
-    const auto it = std::find(views.begin(), views.end(), view);
+    const auto it = std::ranges::find(views, view);
     return it == views.end() ? -1 : static_cast<int>(it - views.begin());
   }
 
@@ -260,7 +261,7 @@ namespace umbriel {
     // Full-width (Super+F) fills the viewport: no neighbor peek, so sloppy focus
     // cannot land on a peek strip of another column.
     if (isFullWidth(columnIndex) || width >= viewportWidth) {
-      const double scroll = static_cast<double>(x);
+      const auto scroll = static_cast<double>(x);
       const double max = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
       return std::clamp(scroll, 0.0, max);
     }
@@ -270,8 +271,8 @@ namespace umbriel {
     const bool hasPrev = columnIndex > 0;
     const bool hasNext = columnIndex + 1 < static_cast<int>(m_columns.size());
 
-    double minScroll = static_cast<double>(x + width - viewportWidth);
-    double maxScroll = static_cast<double>(x);
+    auto minScroll = static_cast<double>(x + width - viewportWidth);
+    auto maxScroll = static_cast<double>(x);
     if (hasNext) {
       minScroll += static_cast<double>(peek);
     }
@@ -366,8 +367,7 @@ namespace umbriel {
   }
 
   wlr_box ScrollingLayout::targetBox(const View* view) const {
-    const auto it =
-        std::find_if(m_targets.begin(), m_targets.end(), [view](const Target& target) { return target.view == view; });
+    const auto it = std::ranges::find_if(m_targets, [view](const Target& target) { return target.view == view; });
     if (it == m_targets.end()) {
       return {};
     }
@@ -380,7 +380,7 @@ namespace umbriel {
     }
     Column& column = m_columns[static_cast<size_t>(columnIndex)];
     const auto& presets = config().layout.widthPresets;
-    const auto it = std::find_if(presets.begin(), presets.end(), [current = column.widthFrac](double preset) {
+    const auto it = std::ranges::find_if(presets, [current = column.widthFrac](double preset) {
       return preset > current + 0.0001;
     });
     column.widthFrac = it == presets.end() ? presets[0] : *it;

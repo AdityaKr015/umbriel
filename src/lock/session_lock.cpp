@@ -77,17 +77,20 @@ namespace umbriel {
   }
 
   void LockSurface::onMap(wl_listener* listener, void* /*data*/) {
-    LockSurface* self = wl_container_of(listener, self, m_map);
+    LockSurface* self;
+    self = wl_container_of(listener, self, m_map);
     self->handleMap();
   }
 
   void LockSurface::onDestroy(wl_listener* listener, void* /*data*/) {
-    LockSurface* self = wl_container_of(listener, self, m_destroy);
+    LockSurface* self;
+    self = wl_container_of(listener, self, m_destroy);
     self->handleDestroy();
   }
 
   void LockSurface::onOutputCommit(wl_listener* listener, void* /*data*/) {
-    LockSurface* self = wl_container_of(listener, self, m_outputCommit);
+    LockSurface* self;
+    self = wl_container_of(listener, self, m_outputCommit);
     self->handleOutputCommit();
   }
 
@@ -144,17 +147,20 @@ namespace umbriel {
   }
 
   void SessionLock::onNewSurface(wl_listener* listener, void* data) {
-    SessionLock* self = wl_container_of(listener, self, m_newSurface);
+    SessionLock* self;
+    self = wl_container_of(listener, self, m_newSurface);
     self->handleNewSurface(data);
   }
 
   void SessionLock::onUnlock(wl_listener* listener, void* /*data*/) {
-    SessionLock* self = wl_container_of(listener, self, m_unlock);
+    SessionLock* self;
+    self = wl_container_of(listener, self, m_unlock);
     self->handleUnlock();
   }
 
   void SessionLock::onDestroy(wl_listener* listener, void* /*data*/) {
-    SessionLock* self = wl_container_of(listener, self, m_destroy);
+    SessionLock* self;
+    self = wl_container_of(listener, self, m_destroy);
     self->handleDestroy();
   }
 

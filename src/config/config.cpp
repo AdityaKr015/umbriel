@@ -433,7 +433,7 @@ namespace umbriel {
         warnAt(node->source(), "ignoring {} (expected boolean)", fullName);
         return;
       }
-      target = node->value<bool>().value();
+      target = node->value<bool>();
     }
 
     int hexDigit(char character) {
@@ -823,7 +823,7 @@ namespace umbriel {
           OutputMode mode;
           if (!value || !parseOutputMode(*value, mode)) {
             warnAt(
-                modeNode->source(), "ignoring output.{}.mode (expected \"WIDTHxHEIGHT\" or \"WIDTHxHEIGHT@HZ\")", name
+                modeNode->source(), R"(ignoring output.{}.mode (expected "WIDTHxHEIGHT" or "WIDTHxHEIGHT@HZ"))", name
             );
           } else {
             rule.mode = mode;

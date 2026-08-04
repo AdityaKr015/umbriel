@@ -208,8 +208,8 @@ namespace umbriel {
     }
 
     // Layer trees are output-local; pin them to the scene-output origin.
-    for (uint32_t layer = 0; layer < kLayerCount; ++layer) {
-      wlr_scene_node_set_position(&m_layerTrees[layer]->node, m_sceneOutput->x, m_sceneOutput->y);
+    for (auto& m_layerTree : m_layerTrees) {
+      wlr_scene_node_set_position(&m_layerTree->node, m_sceneOutput->x, m_sceneOutput->y);
     }
     wlr_scene_node_set_position(&m_popupTree->node, m_sceneOutput->x, m_sceneOutput->y);
 
@@ -236,17 +236,20 @@ namespace umbriel {
   }
 
   void Output::onFrame(wl_listener* listener, void* /*data*/) {
-    Output* self = wl_container_of(listener, self, m_frame);
+    Output* self;
+    self = wl_container_of(listener, self, m_frame);
     self->handleFrame();
   }
 
   void Output::onRequestState(wl_listener* listener, void* data) {
-    Output* self = wl_container_of(listener, self, m_requestState);
+    Output* self;
+    self = wl_container_of(listener, self, m_requestState);
     self->handleRequestState(data);
   }
 
   void Output::onDestroy(wl_listener* listener, void* /*data*/) {
-    Output* self = wl_container_of(listener, self, m_destroy);
+    Output* self;
+    self = wl_container_of(listener, self, m_destroy);
     self->handleDestroy();
   }
 

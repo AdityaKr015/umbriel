@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <ctime>
+#include <ranges>
 #include <utility>
 
 namespace umbriel {
@@ -40,9 +41,7 @@ namespace umbriel {
   }
 
   double Animator::currentValue(AnimId id) const {
-    const auto it = std::find_if(m_animations.begin(), m_animations.end(), [id](const Animation& animation) {
-      return animation.id == id;
-    });
+    const auto it = std::ranges::find_if(m_animations, [id](const Animation& animation) { return animation.id == id; });
     return it == m_animations.end() ? 0.0 : it->current;
   }
 
@@ -59,9 +58,7 @@ namespace umbriel {
     }
 
     for (AnimId id : ids) {
-      auto it = std::find_if(m_animations.begin(), m_animations.end(), [id](const Animation& animation) {
-        return animation.id == id;
-      });
+      auto it = std::ranges::find_if(m_animations, [id](const Animation& animation) { return animation.id == id; });
       if (it == m_animations.end()) {
         continue;
       }
@@ -77,9 +74,7 @@ namespace umbriel {
       const auto update = it->onUpdate;
       update(value);
 
-      it = std::find_if(m_animations.begin(), m_animations.end(), [id](const Animation& animation) {
-        return animation.id == id;
-      });
+      it = std::ranges::find_if(m_animations, [id](const Animation& animation) { return animation.id == id; });
       if (!done || it == m_animations.end()) {
         continue;
       }

@@ -54,17 +54,20 @@ namespace umbriel {
   }
 
   void Keyboard::onModifiers(wl_listener* listener, void* /*data*/) {
-    Keyboard* self = wl_container_of(listener, self, m_modifiers);
+    Keyboard* self;
+    self = wl_container_of(listener, self, m_modifiers);
     self->handleModifiers();
   }
 
   void Keyboard::onKey(wl_listener* listener, void* data) {
-    Keyboard* self = wl_container_of(listener, self, m_key);
+    Keyboard* self;
+    self = wl_container_of(listener, self, m_key);
     self->handleKey(data);
   }
 
   void Keyboard::onDestroy(wl_listener* listener, void* /*data*/) {
-    Keyboard* self = wl_container_of(listener, self, m_destroy);
+    Keyboard* self;
+    self = wl_container_of(listener, self, m_destroy);
     self->handleDestroy();
   }
 

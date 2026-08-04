@@ -85,7 +85,7 @@ namespace umbriel {
       }
     }
 
-    const float ignoreAlpha = static_cast<float>(cfg.ignoreAlpha);
+    const auto ignoreAlpha = static_cast<float>(cfg.ignoreAlpha);
     if (m_node->ignore_alpha != ignoreAlpha) {
       wlr_scene_blur_set_ignore_alpha(m_node, ignoreAlpha);
     }

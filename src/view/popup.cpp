@@ -32,17 +32,20 @@ namespace umbriel {
   }
 
   void Popup::onCommit(wl_listener* listener, void* /*data*/) {
-    Popup* self = wl_container_of(listener, self, m_commit);
+    Popup* self;
+    self = wl_container_of(listener, self, m_commit);
     self->handleCommit();
   }
 
   void Popup::onUnmap(wl_listener* listener, void* /*data*/) {
-    Popup* self = wl_container_of(listener, self, m_unmap);
+    Popup* self;
+    self = wl_container_of(listener, self, m_unmap);
     self->m_blur.hide();
   }
 
   void Popup::onDestroy(wl_listener* listener, void* /*data*/) {
-    Popup* self = wl_container_of(listener, self, m_destroy);
+    Popup* self;
+    self = wl_container_of(listener, self, m_destroy);
     self->handleDestroy();
   }
 

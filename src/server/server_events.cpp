@@ -3,6 +3,7 @@
 #include "config/config_watcher.h"
 #include "core/log.h"
 #include "input/cursor.h"
+#include "input/gestures.h"
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/surface.h"
@@ -503,6 +504,7 @@ namespace umbriel {
   }
 
   void Server::removeOutput(Output* output) {
+    m_gestures->cancelForOutput(output);
     // wlroots 0.20 does not track output lifetime for layer surfaces, so
     // their wlr_output pointer would dangle once the output is freed.
     // Destroy them now while the wlr_output is still valid.

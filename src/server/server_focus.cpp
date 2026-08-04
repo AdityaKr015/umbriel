@@ -507,9 +507,10 @@ namespace umbriel {
 
       if (view == grabbed) {
         const wlr_box& geometry = view->toplevel()->base->geometry;
+        const int slideY = view->workspace() != nullptr ? view->workspace()->slideOffsetY() : 0;
         const wlr_box target{
             .x = view->sceneTree()->node.x,
-            .y = view->sceneTree()->node.y,
+            .y = view->sceneTree()->node.y + slideY,
             .width = geometry.width,
             .height = geometry.height,
         };
@@ -552,9 +553,10 @@ namespace umbriel {
       }
 
       const wlr_box& geometry = view->toplevel()->base->geometry;
+      const int slideY = view->workspace() != nullptr ? view->workspace()->slideOffsetY() : 0;
       const wlr_box target{
           .x = view->sceneTree()->node.x,
-          .y = view->sceneTree()->node.y,
+          .y = view->sceneTree()->node.y + slideY,
           .width = geometry.width,
           .height = geometry.height,
       };
@@ -583,8 +585,10 @@ namespace umbriel {
         if (view->workspace() != nullptr && view->workspace()->switchTransitionActive()) {
           if (view->tiled()) {
             view->workspace()->syncViewPresentation(view);
+          } else if (view->workspace()->isSwitchTransitionView(view)) {
+            view->workspace()->syncViewPresentation(view);
           } else {
-            wlr_scene_node_set_enabled(&view->sceneTree()->node, view->workspace()->isSwitchTransitionView(view));
+            wlr_scene_node_set_enabled(&view->sceneTree()->node, false);
           }
           continue;
         }
@@ -602,9 +606,10 @@ namespace umbriel {
         wlr_box outputBox{};
         wlr_output_layout_get_box(m_outputLayout, output->wlr(), &outputBox);
         const wlr_box& geometry = view->toplevel()->base->geometry;
+        const int slideY = view->workspace() != nullptr ? view->workspace()->slideOffsetY() : 0;
         const wlr_box target{
             .x = view->sceneTree()->node.x,
-            .y = view->sceneTree()->node.y,
+            .y = view->sceneTree()->node.y + slideY,
             .width = geometry.width,
             .height = geometry.height,
         };
@@ -630,9 +635,10 @@ namespace umbriel {
       }
 
       const wlr_box& geometry = view->toplevel()->base->geometry;
+      const int slideY = view->workspace() != nullptr ? view->workspace()->slideOffsetY() : 0;
       const wlr_box target{
           .x = view->sceneTree()->node.x,
-          .y = view->sceneTree()->node.y,
+          .y = view->sceneTree()->node.y + slideY,
           .width = geometry.width,
           .height = geometry.height,
       };

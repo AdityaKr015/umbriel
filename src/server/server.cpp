@@ -5,6 +5,7 @@
 #include "config/config_watcher.h"
 #include "core/log.h"
 #include "input/cursor.h"
+#include "input/gestures.h"
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/surface.h"
@@ -169,6 +170,7 @@ namespace umbriel {
     m_pointerConstraints = wlr_pointer_constraints_v1_create(m_display);
     m_newPointerConstraint.notify = onNewPointerConstraint;
     wl_signal_add(&m_pointerConstraints->events.new_constraint, &m_newPointerConstraint);
+    m_pointerGestures = wlr_pointer_gestures_v1_create(m_display);
 
     m_idleNotifier = wlr_idle_notifier_v1_create(m_display);
     m_idleInhibitManager = wlr_idle_inhibit_v1_create(m_display);
@@ -195,6 +197,7 @@ namespace umbriel {
 
     m_cursor = std::make_unique<Cursor>(*this);
     m_seat = std::make_unique<Seat>(*this);
+    m_gestures = std::make_unique<Gestures>(*this);
     updateSeatCapabilities();
 
     m_newOutput.notify = onNewOutput;

@@ -37,6 +37,7 @@ namespace umbriel {
     [[nodiscard]] bool sizeAnimActive() const { return m_sizeAnim != 0; }
     [[nodiscard]] int presentedWidth(const wlr_box& target) const;
     [[nodiscard]] int presentedHeight(const wlr_box& target) const;
+    [[nodiscard]] wlr_scene_tree* homeTree() const;
 
     // Mechanism only — applies seat keyboard, activation chrome, and raise.
     // Policy lives in Server::focusView; do not call from input/event code.

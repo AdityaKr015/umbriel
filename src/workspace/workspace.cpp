@@ -33,6 +33,8 @@ namespace umbriel {
     wlr_ext_workspace_handle_v1_set_name(m_handle, m_name.c_str());
     const uint32_t coords[1] = {static_cast<uint32_t>(m_index)};
     wlr_ext_workspace_handle_v1_set_coordinates(m_handle, coords, 1);
+    m_tree = wlr_scene_tree_create(m_group->server()->xdgTree());
+    m_fullscreenTree = wlr_scene_tree_create(m_group->server()->fullscreenTree());
   }
 
   Workspace::~Workspace() {
@@ -45,6 +47,27 @@ namespace umbriel {
       view->detachWorkspace();
     }
     m_views.clear();
+    // Reparent any remaining children back to the global trees before destroying.
+    if (m_tree != nullptr) {
+      wlr_scene_tree* fallback = m_group->server()->xdgTree();
+      wlr_scene_node* child;
+      wlr_scene_node* tmp;
+      wl_list_for_each_safe(child, tmp, &m_tree->children, link) {
+        wlr_scene_node_reparent(child, fallback);
+      }
+      wlr_scene_node_destroy(&m_tree->node);
+      m_tree = nullptr;
+    }
+    if (m_fullscreenTree != nullptr) {
+      wlr_scene_tree* fallback = m_group->server()->fullscreenTree();
+      wlr_scene_node* child;
+      wlr_scene_node* tmp;
+      wl_list_for_each_safe(child, tmp, &m_fullscreenTree->children, link) {
+        wlr_scene_node_reparent(child, fallback);
+      }
+      wlr_scene_node_destroy(&m_fullscreenTree->node);
+      m_fullscreenTree = nullptr;
+    }
     if (m_handle != nullptr) {
       if (m_handle->data == this) {
         m_handle->data = nullptr;
@@ -80,6 +103,9 @@ namespace umbriel {
       return;
     }
     m_views.push_back(view);
+    // Reparent into the workspace's scene subtree.
+    const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
+    wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : m_tree);
     applyVisibility();
     layoutAttach(view);
   }
@@ -88,6 +114,11 @@ namespace umbriel {
     if (view == nullptr) {
       return nullptr;
     }
+    // Reparent back to the global trees.
+    const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
+    wlr_scene_node_reparent(
+        &view->sceneTree()->node, fs ? m_group->server()->fullscreenTree() : m_group->server()->xdgTree()
+    );
     const int removedColumn = m_layout.columnOf(view);
     m_layout.removeView(view);
     std::erase(m_views, view);
@@ -125,7 +156,7 @@ namespace umbriel {
   }
 
   void Workspace::arrange(bool animate) {
-    if (!m_active || m_group == nullptr || m_group->output() == nullptr) {
+    if ((!m_active && !m_inSwitchTransition) || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
     Output* output = m_group->output();
@@ -144,6 +175,13 @@ namespace umbriel {
           continue;
         }
         if (view->toplevel()->scheduled.fullscreen) {
+          wlr_box fullArea{};
+          wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &fullArea);
+          if (fullArea.width > 0 && fullArea.height > 0
+              && (view->toplevel()->scheduled.width != fullArea.width
+                  || view->toplevel()->scheduled.height != fullArea.height)) {
+            wlr_xdg_toplevel_set_size(view->toplevel(), fullArea.width, fullArea.height);
+          }
           continue;
         }
         const wlr_box target = m_layout.targetBox(view);
@@ -195,31 +233,70 @@ namespace umbriel {
       return;
     }
     if (view->toplevel()->scheduled.fullscreen) {
-      wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
-      view->applyFullscreenLayout();
-      return;
-    }
-    if (m_layout.columnOf(view) < 0) {
+      Output* output = m_group->output();
+      wlr_box outputBox{};
+      wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
+      const int col = m_layout.columnOf(view);
+      if (col < 0) {
+        // Floating fullscreen: only show when active.
+        if (m_active) {
+          wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
+          view->applyFullscreenLayout();
+        } else {
+          wlr_scene_node_set_enabled(&view->sceneTree()->node, false);
+        }
+        return;
+      }
+      // Column-derived fullscreen: enable/clip, do not reposition (applyPositions handles that).
+      const int viewportWidth = std::max(1, output->usableArea().width - 2 * config().layoutEdgePad());
+      wlr_box target = outputBox;
+      target.x = outputBox.x + m_layout.columnX(col, viewportWidth)
+          - static_cast<int>(std::lround(m_visualScroll));
+      wlr_box clipTarget = target;
+      clipTarget.y += m_slideOffsetY;
+      wlr_box decorated = clipTarget;
+      wlr_box intersection{};
+      const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
+      wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
+      view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
       return;
     }
     Output* output = m_group->output();
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
+    if (m_layout.columnOf(view) < 0) {
+      // Floating view: build target from node position, apply offset-aware clip.
+      const wlr_box& geometry = view->toplevel()->base->geometry;
+      wlr_box target{
+          .x = view->sceneTree()->node.x,
+          .y = view->sceneTree()->node.y + m_slideOffsetY,
+          .width = geometry.width,
+          .height = geometry.height,
+      };
+      wlr_box intersection{};
+      const bool visible = wlr_box_intersection(&intersection, &target, &outputBox);
+      wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
+      view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
+      return;
+    }
     const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
     wlr_box target = m_layout.targetBox(view);
     target.x += scrollOffset;
     const int border = config().appearance.totalBorderWidth();
     const int presentW = view->presentedWidth(target);
     const int presentH = view->presentedHeight(target);
-    wlr_box decorated{target.x - border, target.y - border, presentW + 2 * border, presentH + 2 * border};
+    // Offset-aware clip: shift target.y for intersection/clip math, but do NOT move node.
+    wlr_box clipTarget = target;
+    clipTarget.y += m_slideOffsetY;
+    wlr_box decorated{clipTarget.x - border, clipTarget.y - border, presentW + 2 * border, presentH + 2 * border};
     wlr_box intersection{};
     const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
     wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
-    view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
+    view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
   }
 
   void Workspace::applyPositions(bool animate) {
-    if (!m_active || m_group == nullptr || m_group->output() == nullptr) {
+    if ((!m_active && !m_inSwitchTransition) || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
     Output* output = m_group->output();
@@ -227,14 +304,40 @@ namespace umbriel {
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
     const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
     const int border = config().appearance.totalBorderWidth();
+    const int viewportWidth = std::max(1, output->usableArea().width - 2 * config().layoutEdgePad());
     for (const Column& column : m_layout.columns()) {
       for (View* view : column.views) {
         if (view == nullptr || !view->mapped()) {
           continue;
         }
         if (view->toplevel()->scheduled.fullscreen) {
-          wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
-          view->applyFullscreenLayout();
+          const int col = m_layout.columnOf(view);
+          if (col < 0) {
+            // Floating fullscreen: pinned to output (old behavior).
+            if (m_active) {
+              wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
+              view->applyFullscreenLayout();
+            }
+            continue;
+          }
+          // Column-derived fullscreen placement.
+          wlr_box target = outputBox;
+          target.x = outputBox.x + m_layout.columnX(col, viewportWidth)
+              - static_cast<int>(std::lround(m_visualScroll));
+          if (animate) {
+            view->animateTo(target.x, target.y);
+          } else {
+            view->setPosition(target.x, target.y);
+          }
+          wlr_scene_subsurface_tree_set_clip(&view->sceneTree()->node, nullptr);
+          // Clip like a tile with offset awareness.
+          wlr_box clipTarget = target;
+          clipTarget.y += m_slideOffsetY;
+          wlr_box decorated = clipTarget;
+          wlr_box intersection{};
+          const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
+          wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
+          view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
           continue;
         }
         wlr_box target = m_layout.targetBox(view);
@@ -244,14 +347,16 @@ namespace umbriel {
         } else {
           view->setPosition(target.x, target.y);
         }
-        // Include borders so near-edge windows stay clipped to this output.
+        // Offset-aware clip: use shifted target for intersection/setOutputClip.
         const int presentW = view->presentedWidth(target);
         const int presentH = view->presentedHeight(target);
-        wlr_box decorated{target.x - border, target.y - border, presentW + 2 * border, presentH + 2 * border};
+        wlr_box clipTarget = target;
+        clipTarget.y += m_slideOffsetY;
+        wlr_box decorated{clipTarget.x - border, clipTarget.y - border, presentW + 2 * border, presentH + 2 * border};
         wlr_box intersection{};
         const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
         wlr_scene_node_set_enabled(&view->sceneTree()->node, visible);
-        view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
+        view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
       }
     }
   }
@@ -394,11 +499,25 @@ namespace umbriel {
     }
   }
 
-  void Workspace::applySwitchAlpha(float alpha) {
+  void Workspace::showSwitchViews() {
     for (View* view : m_switchViews) {
-      view->setFadeAlpha(alpha);
       if (!m_active) {
         wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
+      }
+    }
+  }
+
+  void Workspace::setSlideOffset(double y) {
+    m_slideOffsetY = static_cast<int>(std::lround(y));
+    if (m_tree != nullptr) {
+      wlr_scene_node_set_position(&m_tree->node, 0, m_slideOffsetY);
+    }
+    if (m_fullscreenTree != nullptr) {
+      wlr_scene_node_set_position(&m_fullscreenTree->node, 0, m_slideOffsetY);
+    }
+    for (View* view : m_views) {
+      if (view->mapped()) {
+        syncViewPresentation(view);
       }
     }
   }
@@ -435,7 +554,7 @@ namespace umbriel {
   }
 
   WorkspaceGroup::~WorkspaceGroup() {
-    finishSwitchTransition();
+    slideFinish();
     m_active = nullptr;
     m_previous = nullptr;
     if (m_handle != nullptr && m_output != nullptr && m_output->wlr() != nullptr) {
@@ -467,18 +586,106 @@ namespace umbriel {
     return nullptr;
   }
 
-  void WorkspaceGroup::finishSwitchTransition() {
+  void WorkspaceGroup::slideFinish() {
     if (m_switchAnim != 0) {
       m_server->animator().cancel(m_switchAnim);
       m_switchAnim = 0;
     }
-    if (m_switchFrom != nullptr) {
-      m_switchFrom->endSwitchTransition();
-      m_switchFrom = nullptr;
+    if (m_slide.base != nullptr) {
+      m_slide.base->endSwitchTransition();
+      m_slide.base->setSlideOffset(0);
     }
+    if (m_slide.up != nullptr) {
+      m_slide.up->endSwitchTransition();
+      m_slide.up->setSlideOffset(0);
+    }
+    if (m_slide.down != nullptr) {
+      m_slide.down->endSwitchTransition();
+      m_slide.down->setSlideOffset(0);
+    }
+    // Also clean up any lingering active workspace transition not in the slide.
     if (m_active != nullptr && m_active->switchTransitionActive()) {
       m_active->endSwitchTransition();
     }
+    m_slide = {};
+  }
+
+  bool WorkspaceGroup::slideBegin(bool includePrev, bool includeNext) {
+    if (m_active == nullptr) {
+      return false;
+    }
+    wlr_box box{};
+    wlr_output_layout_get_box(m_server->outputLayout(), m_output->wlr(), &box);
+    if (box.height <= 0) {
+      return false;
+    }
+    slideFinish();
+    m_slide.base = m_active;
+    m_slide.height = box.height;
+    m_slide.progress = 0;
+    const size_t idx = m_active->index();
+    m_slide.up = (includePrev && idx > 0) ? workspaceAt(idx - 1) : nullptr;
+    m_slide.down = includeNext ? workspaceAt(idx + 1) : nullptr;
+    m_slide.base->beginSwitchTransition();
+    if (m_slide.up != nullptr) {
+      m_slide.up->beginSwitchTransition();
+      m_slide.up->showSwitchViews();
+      m_slide.up->arrange(false);
+    }
+    if (m_slide.down != nullptr) {
+      m_slide.down->beginSwitchTransition();
+      m_slide.down->showSwitchViews();
+      m_slide.down->arrange(false);
+    }
+    slideApply(0.0);
+    return true;
+  }
+
+  void WorkspaceGroup::slideApply(double progress) {
+    m_slide.progress = progress;
+    const double h = m_slide.height;
+    m_slide.base->setSlideOffset(-progress * h);
+    if (m_slide.down != nullptr) {
+      m_slide.down->setSlideOffset((1.0 - progress) * h);
+    }
+    if (m_slide.up != nullptr) {
+      m_slide.up->setSlideOffset((-1.0 - progress) * h);
+    }
+    wlr_output_schedule_frame(m_output->wlr());
+  }
+
+  void WorkspaceGroup::slideSettle(int delta) {
+    Workspace* target = nullptr;
+    if (delta < 0) {
+      target = m_slide.up;
+    } else if (delta > 0) {
+      target = m_slide.down;
+    }
+    if (target == nullptr) {
+      delta = 0;
+      target = m_slide.base;
+    }
+    if (target != m_active) {
+      m_previous = m_active;
+      m_active->setActive(false);
+      m_active = target;
+      m_active->setActive(true);
+      // Re-enable outgoing views that applyVisibility just disabled.
+      if (m_previous != nullptr) {
+        m_previous->showSwitchViews();
+      }
+      // Clean up the unused opposite neighbor immediately.
+      Workspace* unused = (delta > 0) ? m_slide.up : m_slide.down;
+      if (unused != nullptr) {
+        unused->endSwitchTransition();
+        unused->setSlideOffset(0);
+      }
+    }
+    kLog.debug("slide workspace {} → {} on {}", m_slide.base->name(), target->name(), m_output->wlr()->name);
+    m_switchAnim = m_server->animator().animate(
+        m_slide.progress, static_cast<double>(delta), config().appearance.animationMs, Easing::EaseOutCubic,
+        [this](double v) { slideApply(v); }, [this] { slideFinish(); }
+    );
   }
 
   void WorkspaceGroup::activate(Workspace* workspace, bool animate) {
@@ -488,7 +695,7 @@ namespace umbriel {
     if (m_active == workspace) {
       return;
     }
-    finishSwitchTransition();
+    slideFinish();
     const bool doAnimate = animate && m_active != nullptr && !m_server->sessionLocked();
     if (!doAnimate) {
       if (m_active != nullptr) {
@@ -500,27 +707,30 @@ namespace umbriel {
       kLog.debug("activate workspace {} on {}", m_active->name(), m_output->wlr()->name);
       return;
     }
-    // Crossfade path.
-    Workspace* from = m_active;
-    m_previous = from;
-    from->beginSwitchTransition();
+    // Slide path: one-screen vertical slide in the direction of the index delta.
+    wlr_box box{};
+    wlr_output_layout_get_box(m_server->outputLayout(), m_output->wlr(), &box);
+    if (box.height <= 0) {
+      // Fall back to instant switch if we can't determine output height.
+      m_previous = m_active;
+      m_active->setActive(false);
+      m_active = workspace;
+      m_active->setActive(true);
+      return;
+    }
+    const int sign = workspace->index() > m_active->index() ? 1 : -1;
+    m_slide.base = m_active;
+    m_slide.height = box.height;
+    m_slide.progress = 0;
+    if (sign > 0) {
+      m_slide.down = workspace;
+    } else {
+      m_slide.up = workspace;
+    }
+    m_slide.base->beginSwitchTransition();
     workspace->beginSwitchTransition();
-    from->setActive(false);
-    m_active = workspace;
-    m_active->setActive(true);
-    from->applySwitchAlpha(1.0F);
-    m_active->applySwitchAlpha(0.0F);
-    m_switchFrom = from;
-    m_switchAnim = m_server->animator().animate(
-        0.0, 1.0, config().appearance.animationMs, Easing::Linear,
-        [from, ws = m_active](double t) {
-          from->applySwitchAlpha(static_cast<float>(1.0 - t));
-          ws->applySwitchAlpha(static_cast<float>(t));
-        },
-        [this] { finishSwitchTransition(); }
-    );
-    wlr_output_schedule_frame(m_output->wlr());
-    kLog.debug("crossfade workspace {} → {} on {}", from->name(), m_active->name(), m_output->wlr()->name);
+    slideApply(0.0);
+    slideSettle(sign);
   }
 
   void WorkspaceGroup::activateIndex(size_t index) {

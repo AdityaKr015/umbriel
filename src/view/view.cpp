@@ -826,6 +826,14 @@ namespace umbriel {
     updateShadow();
   }
 
+  wlr_scene_tree* View::homeTree() const {
+    const bool fs = m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen;
+    if (m_workspace != nullptr) {
+      return fs ? m_workspace->fullscreenTree() : m_workspace->tree();
+    }
+    return fs ? m_server->fullscreenTree() : m_server->xdgTree();
+  }
+
   void View::applyFullscreenLayout() {
     Output* output = nullptr;
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {
@@ -1050,7 +1058,8 @@ namespace umbriel {
     m_blur.hide();
     m_shadow.hide();
     if (m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
-      wlr_scene_node_reparent(&m_sceneTree->node, m_server->xdgTree());
+      // Move out of the fullscreen layer back to the normal workspace/xdg tree.
+      wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->tree() : m_server->xdgTree());
     }
     m_mapped = false;
     if (m_workspace != nullptr) {
@@ -1387,13 +1396,18 @@ namespace umbriel {
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     cancelSizeAnimation();
     if (fullscreen) {
-      // scheduled.fullscreen is set; drop any tile clip and cover the full output
-      // (exclusive zones / usable area do not apply to fullscreen).
-      applyFullscreenLayout();
-      wlr_scene_node_reparent(&m_sceneTree->node, m_server->fullscreenTree());
+      // scheduled.fullscreen is set; reparent to fullscreen layer.
+      wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
       wlr_scene_node_raise_to_top(&m_sceneTree->node);
+      // Snap scroll to the now viewport-wide column and reflow neighbors.
+      if (m_workspace != nullptr) {
+        m_workspace->ensureFocusedVisible();
+        m_workspace->arrange(false);
+      } else {
+        applyFullscreenLayout();
+      }
     } else {
-      wlr_scene_node_reparent(&m_sceneTree->node, m_server->xdgTree());
+      wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
     }
     if (m_borderTree != nullptr) {
       wlr_scene_node_set_enabled(&m_borderTree->node, !fullscreen);

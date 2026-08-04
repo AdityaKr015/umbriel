@@ -3,7 +3,6 @@
 #include "layout/scrolling.h"
 
 #include <cstddef>
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -11,6 +10,7 @@
 struct wlr_ext_workspace_group_handle_v1;
 struct wlr_ext_workspace_handle_v1;
 struct wlr_ext_workspace_manager_v1;
+struct wlr_scene_tree;
 
 namespace umbriel {
 
@@ -36,6 +36,9 @@ namespace umbriel {
     [[nodiscard]] const ScrollingLayout& layout() const { return m_layout; }
     [[nodiscard]] View* focusedView() const { return m_focusedView; }
     [[nodiscard]] double visualScroll() const { return m_visualScroll; }
+    [[nodiscard]] int slideOffsetY() const { return m_slideOffsetY; }
+    [[nodiscard]] wlr_scene_tree* tree() const { return m_tree; }
+    [[nodiscard]] wlr_scene_tree* fullscreenTree() const { return m_fullscreenTree; }
     [[nodiscard]] bool switchTransitionActive() const { return m_inSwitchTransition; }
     [[nodiscard]] bool isSwitchTransitionView(const View* view) const;
 
@@ -62,8 +65,9 @@ namespace umbriel {
     [[nodiscard]] double scrollFractionToReveal(const View* view) const;
     void applyVisibility();
     void beginSwitchTransition();
-    void applySwitchAlpha(float alpha);
+    void showSwitchViews();
     void endSwitchTransition();
+    void setSlideOffset(double y);
 
   private:
     void applyPositions(bool animate);
@@ -78,7 +82,10 @@ namespace umbriel {
     double m_visualScroll = 0;
     AnimId m_scrollAnim = 0;
     bool m_inSwitchTransition = false;
+    int m_slideOffsetY = 0;
     std::vector<View*> m_switchViews;
+    wlr_scene_tree* m_tree = nullptr;
+    wlr_scene_tree* m_fullscreenTree = nullptr;
   };
 
   class WorkspaceGroup {
@@ -104,7 +111,21 @@ namespace umbriel {
     void deactivate(Workspace* workspace);
     Workspace* createWorkspace(const char* name);
 
+    [[nodiscard]] bool slideActive() const { return m_slide.base != nullptr; }
+    bool slideBegin(bool includePrev, bool includeNext);
+    void slideApply(double progress);
+    void slideSettle(int delta);
+    void slideFinish();
+
   private:
+    struct Slide {
+      Workspace* base = nullptr;
+      Workspace* up = nullptr;
+      Workspace* down = nullptr;
+      double height = 0;
+      double progress = 0;
+    };
+
     Server* m_server = nullptr;
     Output* m_output = nullptr;
     wlr_ext_workspace_group_handle_v1* m_handle = nullptr;
@@ -112,8 +133,7 @@ namespace umbriel {
     Workspace* m_previous = nullptr;
     std::vector<std::unique_ptr<Workspace>> m_workspaces;
     AnimId m_switchAnim = 0;
-    Workspace* m_switchFrom = nullptr;
-    void finishSwitchTransition();
+    Slide m_slide;
   };
 
 } // namespace umbriel

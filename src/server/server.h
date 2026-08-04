@@ -23,6 +23,7 @@ struct wlr_layer_shell_v1;
 struct wlr_output;
 struct wlr_output_layout;
 struct wlr_pointer_constraints_v1;
+struct wlr_pointer_gestures_v1;
 struct wlr_relative_pointer_manager_v1;
 struct wlr_renderer;
 struct wlr_scene;
@@ -61,6 +62,7 @@ namespace umbriel {
 
   class Cursor;
   class ConfigWatcher;
+  class Gestures;
   class InsertHint;
   class Keyboard;
   class LayerSurface;
@@ -116,6 +118,8 @@ namespace umbriel {
     [[nodiscard]] wlr_gamma_control_manager_v1* gammaManager() const { return m_gammaManager; }
     [[nodiscard]] wlr_pointer_constraints_v1* pointerConstraints() const { return m_pointerConstraints; }
     [[nodiscard]] wlr_relative_pointer_manager_v1* relativePointerManager() const { return m_relativePointerManager; }
+    [[nodiscard]] wlr_pointer_gestures_v1* pointerGestures() const { return m_pointerGestures; }
+    [[nodiscard]] Gestures* gestures() const { return m_gestures.get(); }
     [[nodiscard]] bool nested() const { return m_nested; }
     [[nodiscard]] uint32_t modKey() const;
 
@@ -234,6 +238,7 @@ namespace umbriel {
     wlr_session_lock_manager_v1* m_sessionLockManager = nullptr;
     wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;
     wlr_relative_pointer_manager_v1* m_relativePointerManager = nullptr;
+    wlr_pointer_gestures_v1* m_pointerGestures = nullptr;
     wlr_idle_inhibit_manager_v1* m_idleInhibitManager = nullptr;
     wlr_idle_notifier_v1* m_idleNotifier = nullptr;
     wlr_xdg_activation_v1* m_xdgActivation = nullptr;
@@ -258,6 +263,7 @@ namespace umbriel {
 
     std::unique_ptr<Seat> m_seat;
     std::unique_ptr<Cursor> m_cursor;
+    std::unique_ptr<Gestures> m_gestures;
     std::unique_ptr<SessionLock> m_sessionLock;
     std::unique_ptr<InsertHint> m_insertHint;
     std::unique_ptr<ConfigWatcher> m_configWatcher;

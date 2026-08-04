@@ -114,6 +114,7 @@ sources = files(
   'src/input/seat.cpp',
   'src/input/keyboard.cpp',
   'src/input/cursor.cpp',
+  'src/input/gestures.cpp',
   'src/input/cursor_constraint.cpp',
   'src/view/view.cpp',
   'src/view/view_foreign.cpp',

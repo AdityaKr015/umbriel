@@ -514,6 +514,7 @@ namespace umbriel {
     if (m_sessionLocked) {
       updateLockBlank();
     }
+    updateOutputManagerConfig();
   }
 
   void Server::removeKeyboard(Keyboard* keyboard) {

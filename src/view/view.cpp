@@ -827,7 +827,7 @@ namespace umbriel {
   }
 
   wlr_scene_tree* View::homeTree() const {
-    const bool fs = m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen;
+    const bool fs = m_toplevel->scheduled.fullscreen;
     if (m_workspace != nullptr) {
       return fs ? m_workspace->fullscreenTree() : m_workspace->tree();
     }

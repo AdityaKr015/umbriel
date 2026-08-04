@@ -262,7 +262,13 @@ namespace umbriel {
     );
 
     if (m_activeConstraint != nullptr && m_activeConstraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
-      return;
+      // Workspace switch (etc.) can hide the locking surface without pointer motion.
+      // Drop the lock so the cursor can move and become visible again.
+      if (!constraintSurfaceActive()) {
+        clearConstraint();
+      } else {
+        return;
+      }
     }
 
     double dx = event->delta_x;
@@ -283,7 +289,11 @@ namespace umbriel {
     auto* event = static_cast<wlr_pointer_motion_absolute_event*>(data);
     m_server->notifyIdleActivity();
     if (m_activeConstraint != nullptr && m_activeConstraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
-      return;
+      if (!constraintSurfaceActive()) {
+        clearConstraint();
+      } else {
+        return;
+      }
     }
 
     double lx = 0;

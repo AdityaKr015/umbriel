@@ -71,6 +71,7 @@ namespace umbriel {
     [[nodiscard]] uint32_t floatResizeEdges(View* view) const;
     void setActiveConstraint(wlr_pointer_constraint_v1* constraint);
     void updateConstraintForSurface(wlr_surface* surface);
+    [[nodiscard]] bool constraintSurfaceActive() const;
     void warpToConstraintHint(wlr_pointer_constraint_v1* constraint);
     [[nodiscard]] bool confineDelta(double* dx, double* dy) const;
 

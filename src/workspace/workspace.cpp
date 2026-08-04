@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "core/log.h"
+#include "input/cursor.h"
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -447,6 +448,7 @@ namespace umbriel {
     } else {
       activate(workspace);
     }
+    m_server->cursor()->clearConstraint();
     m_server->refocus(m_output);
   }
 
@@ -460,11 +462,13 @@ namespace umbriel {
     }
     if (fallback != nullptr) {
       activate(fallback);
+      m_server->cursor()->clearConstraint();
       m_server->refocus(m_output);
       return;
     }
     m_active->setActive(false);
     m_active = nullptr;
+    m_server->cursor()->clearConstraint();
     m_server->refocus(m_output);
   }
 

@@ -1,6 +1,8 @@
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "scene/node.h"
 #include "server/server.h"
+#include "view/view.h"
 #include "wlr.h"
 
 namespace umbriel {
@@ -23,6 +25,8 @@ namespace umbriel {
     wl_list_remove(&m_constraintDestroy.link);
     m_constraintDestroy.link.next = nullptr;
     m_activeConstraint = nullptr;
+    // Games hide the cursor while locked; restore a theme cursor when the lock ends.
+    wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
   }
 
   void Cursor::setActiveConstraint(wlr_pointer_constraint_v1* constraint) {
@@ -39,6 +43,7 @@ namespace umbriel {
       }
       warpToConstraintHint(previous);
       wlr_pointer_constraint_v1_send_deactivated(previous);
+      wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
     }
 
     m_activeConstraint = constraint;
@@ -49,6 +54,27 @@ namespace umbriel {
     m_constraintDestroy.notify = onConstraintDestroy;
     wl_signal_add(&constraint->events.destroy, &m_constraintDestroy);
     wlr_pointer_constraint_v1_send_activated(constraint);
+  }
+
+  bool Cursor::constraintSurfaceActive() const {
+    if (m_activeConstraint == nullptr || m_activeConstraint->surface == nullptr) {
+      return false;
+    }
+    wlr_surface* root = wlr_surface_get_root_surface(m_activeConstraint->surface);
+    wlr_xdg_surface* xdg = root != nullptr ? wlr_xdg_surface_try_from_wlr_surface(root) : nullptr;
+    if (xdg == nullptr || xdg->data == nullptr) {
+      return false;
+    }
+    auto* tree = static_cast<wlr_scene_tree*>(xdg->data);
+    if (tree->node.data == nullptr) {
+      return false;
+    }
+    auto* node = static_cast<SceneNode*>(tree->node.data);
+    if (node->kind != SceneNodeKind::View) {
+      return false;
+    }
+    auto* view = static_cast<View*>(node);
+    return view->mapped() && view->onActiveWorkspace();
   }
 
   void Cursor::updateConstraintForSurface(wlr_surface* surface) {

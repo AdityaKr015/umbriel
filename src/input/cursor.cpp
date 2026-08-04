@@ -318,6 +318,10 @@ namespace umbriel {
         }
         return;
       }
+      if (m_mode == CursorMode::Move) {
+        finishFloatMove();
+        return;
+      }
       if (m_mode == CursorMode::ResizeTile) {
         if (m_resizeWorkspace != nullptr) {
           m_resizeWorkspace->ensureFocusedVisible();
@@ -707,6 +711,28 @@ namespace umbriel {
       }
       target->arrange();
       m_server->focusView(view);
+    }
+    resetMode();
+  }
+
+  void Cursor::finishFloatMove() {
+    View* view = m_grabbedView;
+    if (view != nullptr && view->mapped()) {
+      const int x = view->sceneTree()->node.x;
+      const int y = view->sceneTree()->node.y;
+      // Own the drop output so per-frame home-output culling does not hide the window.
+      wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
+      Output* output = m_server->outputFromWlr(wlrOutput);
+      if (output != nullptr && output->workspaceGroup() != nullptr) {
+        if (Workspace* target = output->workspaceGroup()->active()) {
+          if (view->workspace() != target) {
+            view->setWorkspace(target);
+            view->setPosition(x, y);
+          }
+        }
+      }
+      wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
+      m_server->focusView(view, false);
     }
     resetMode();
   }

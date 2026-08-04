@@ -5,6 +5,7 @@
 #include "input/seat.h"
 #include "layout/scrolling.h"
 #include "output/output.h"
+#include "scene/color.h"
 #include "server/server.h"
 #include "view/xdg_size.h"
 // clang-format off
@@ -73,6 +74,14 @@ namespace umbriel {
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
       : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
+    // Register map/unmap listeners BEFORE creating the scene tree so our
+    // handlers fire before wlroots' internal unmap handler disables the
+    // surface subtree (needed for close-animation buffer snapshot).
+    m_map.notify = onMap;
+    wl_signal_add(&m_toplevel->base->surface->events.map, &m_map);
+    m_unmap.notify = onUnmap;
+    wl_signal_add(&m_toplevel->base->surface->events.unmap, &m_unmap);
+
     m_sceneTree = wlr_scene_xdg_surface_create(m_server->xdgTree(), m_toplevel->base);
     m_sceneTree->node.data = this;
     m_toplevel->base->data = m_sceneTree;
@@ -83,10 +92,6 @@ namespace umbriel {
       wlr_surface_set_preferred_buffer_scale(surface, static_cast<int32_t>(std::ceil(output->scale)));
     }
 
-    m_map.notify = onMap;
-    wl_signal_add(&m_toplevel->base->surface->events.map, &m_map);
-    m_unmap.notify = onUnmap;
-    wl_signal_add(&m_toplevel->base->surface->events.unmap, &m_unmap);
     m_commit.notify = onCommit;
     wl_signal_add(&m_toplevel->base->surface->events.commit, &m_commit);
     m_destroy.notify = onDestroy;
@@ -122,6 +127,14 @@ namespace umbriel {
   }
 
   View::~View() {
+    if (m_fadeAnim != 0) {
+      m_server->animator().cancel(m_fadeAnim);
+      m_fadeAnim = 0;
+    }
+    if (m_sizeAnim != 0) {
+      m_server->animator().cancel(m_sizeAnim);
+      m_sizeAnim = 0;
+    }
     cancelPositionAnimation();
     setWorkspace(nullptr);
     if (m_map.link.next != nullptr) {
@@ -219,6 +232,128 @@ namespace umbriel {
     }
   }
 
+  void View::setFadeAlpha(float alpha) {
+    m_fadeAlpha = alpha;
+    wlr_scene_node_for_each_buffer(
+        &m_sceneTree->node,
+        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+          wlr_scene_buffer_set_opacity(buffer, *static_cast<float*>(data));
+        },
+        &m_fadeAlpha
+    );
+    setBorderFocused(m_borderFocusedState);
+    m_shadow.setAlpha(alpha);
+    if (alpha < 1.0F) {
+      m_blur.hide();
+    } else {
+      updateBlur();
+    }
+  }
+
+  void View::cancelFadeAnimation() {
+    if (m_fadeAnim != 0) {
+      m_server->animator().cancel(m_fadeAnim);
+      m_fadeAnim = 0;
+    }
+    setFadeAlpha(1.0F);
+  }
+
+  int View::presentedWidth(const wlr_box& target) const {
+    if (m_sizeAnim != 0) {
+      return m_presentedW;
+    }
+    return std::min(m_toplevel->base->geometry.width, target.width);
+  }
+
+  int View::presentedHeight(const wlr_box& target) const {
+    if (m_sizeAnim != 0) {
+      return m_presentedH;
+    }
+    return std::min(m_toplevel->base->geometry.height, target.height);
+  }
+
+  void View::applyPresentedSize() {
+    // Scale the toplevel's primary surface buffer to the animated size.
+    wlr_scene_node_for_each_buffer(
+        &m_sceneTree->node,
+        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+          auto* self = static_cast<View*>(data);
+          wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+          if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
+            return;
+          }
+          const wlr_box& geo = self->m_toplevel->base->geometry;
+          if (geo.width > 0 && geo.height > 0) {
+            wlr_scene_buffer_set_dest_size(
+                buffer,
+                std::max(
+                    1,
+                    static_cast<int>(std::lround(
+                        sceneSurface->surface->current.width * static_cast<double>(self->m_presentedW) / geo.width
+                    ))
+                ),
+                std::max(
+                    1,
+                    static_cast<int>(std::lround(
+                        sceneSurface->surface->current.height * static_cast<double>(self->m_presentedH) / geo.height
+                    ))
+                )
+            );
+          }
+        },
+        this
+    );
+    updateBorderGeometry(m_presentedW, m_presentedH);
+    // Shadow with presented size.
+    if (!m_toplevel->scheduled.fullscreen) {
+      const bool decorated = m_borderTree != nullptr && m_borderTree->node.enabled;
+      const int total = decorated ? config().appearance.totalBorderWidth() : 0;
+      const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
+      m_shadow.update(m_sceneTree, m_presentedW, m_presentedH, total, radius);
+    }
+    // Blur with presented size.
+    const wlr_box nodeBox{0, 0, m_presentedW, m_presentedH};
+    const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
+    m_blur.update(
+        m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry,
+        rounded ? config().appearance.cornerRadius : 0
+    );
+    if (m_workspace != nullptr) {
+      m_workspace->syncViewPresentation(this);
+    }
+  }
+
+  void View::cancelSizeAnimation() {
+    if (m_sizeAnim != 0) {
+      m_server->animator().cancel(m_sizeAnim);
+      m_sizeAnim = 0;
+      const wlr_box& geo = m_toplevel->base->geometry;
+      m_presentedW = geo.width;
+      m_presentedH = geo.height;
+      // Restore the primary surface buffer to its real size.
+      wlr_scene_node_for_each_buffer(
+          &m_sceneTree->node,
+          [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+            auto* self = static_cast<View*>(data);
+            wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+            if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
+              return;
+            }
+            wlr_scene_buffer_set_dest_size(
+                buffer, sceneSurface->surface->current.width, sceneSurface->surface->current.height
+            );
+          },
+          this
+      );
+      updateBorderGeometry();
+      updateBlur();
+      updateShadow();
+      if (m_workspace != nullptr) {
+        m_workspace->syncViewPresentation(this);
+      }
+    }
+  }
+
   void View::setPosition(int x, int y) {
     cancelPositionAnimation();
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
@@ -237,7 +372,7 @@ namespace umbriel {
     }
     cancelPositionAnimation();
     m_posAnim = m_server->animator().animate(
-        0.0, 1.0, config().appearance.animationMs,
+        0.0, 1.0, config().appearance.animationMs, Easing::EaseOutCubic,
         [this, fromX, fromY, x, y](double progress) {
           wlr_scene_node_set_position(
               &m_sceneTree->node, static_cast<int>(std::lround(fromX + (x - fromX) * progress)),
@@ -386,19 +521,23 @@ namespace umbriel {
   }
 
   void View::setBorderFocused(bool focused) {
+    m_borderFocusedState = focused;
     if (m_borderTree == nullptr) {
       return;
     }
+    const auto& baseColor = focused ? config().appearance.borderFocused : config().appearance.borderUnfocused;
+    float color[4];
+    premultiplied(color, baseColor, m_fadeAlpha);
     for (wlr_scene_rect* rect : m_borderRects) {
       if (rect == nullptr) {
         continue;
       }
-      wlr_scene_rect_set_color(
-          rect, focused ? config().appearance.borderFocused.data() : config().appearance.borderUnfocused.data()
-      );
+      wlr_scene_rect_set_color(rect, color);
     }
     if (m_outerBorderRect != nullptr) {
-      wlr_scene_rect_set_color(m_outerBorderRect, config().appearance.outerBorderColor.data());
+      float outerColor[4];
+      premultiplied(outerColor, config().appearance.outerBorderColor, m_fadeAlpha);
+      wlr_scene_rect_set_color(m_outerBorderRect, outerColor);
     }
   }
 
@@ -525,6 +664,10 @@ namespace umbriel {
   }
 
   void View::updateBlur() {
+    if (m_fadeAlpha < 1.0F) {
+      m_blur.hide();
+      return;
+    }
     const wlr_box& geometry = m_toplevel->base->geometry;
     const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
     const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
@@ -543,6 +686,98 @@ namespace umbriel {
     const int total = decorated ? config().appearance.totalBorderWidth() : 0;
     const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
     m_shadow.update(m_sceneTree, geometry.width, geometry.height, total, radius);
+  }
+
+  void View::beginCloseAnimation() {
+    if (!m_mapped || !m_onActiveWorkspace || m_server->sessionLocked()) {
+      return;
+    }
+
+    wlr_scene_tree* snap = wlr_scene_tree_create(m_server->xdgTree());
+    if (snap == nullptr) {
+      return;
+    }
+    wlr_scene_node_set_position(&snap->node, m_sceneTree->node.x, m_sceneTree->node.y);
+
+    // Collect border rects for the snapshot.
+    std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> snapRects;
+
+    if (m_borderTree != nullptr && m_borderTree->node.enabled) {
+      const auto& focusedColor =
+          m_borderFocusedState ? config().appearance.borderFocused : config().appearance.borderUnfocused;
+      for (wlr_scene_rect* srcRect : m_borderRects) {
+        if (srcRect == nullptr) {
+          continue;
+        }
+        wlr_scene_rect* copy = wlr_scene_rect_create(snap, srcRect->width, srcRect->height, srcRect->color);
+        if (copy == nullptr) {
+          continue;
+        }
+        wlr_scene_node_set_position(
+            &copy->node, m_borderTree->node.x + srcRect->node.x, m_borderTree->node.y + srcRect->node.y
+        );
+        wlr_scene_rect_set_corner_radii(copy, srcRect->corners);
+        wlr_scene_rect_set_clipped_region(copy, srcRect->clipped_region);
+        snapRects.push_back({copy, focusedColor});
+      }
+      if (m_outerBorderRect != nullptr && config().appearance.outerBorderWidth > 0) {
+        wlr_scene_rect* copy =
+            wlr_scene_rect_create(snap, m_outerBorderRect->width, m_outerBorderRect->height, m_outerBorderRect->color);
+        if (copy != nullptr) {
+          wlr_scene_node_set_position(
+              &copy->node, m_borderTree->node.x + m_outerBorderRect->node.x,
+              m_borderTree->node.y + m_outerBorderRect->node.y
+          );
+          wlr_scene_rect_set_corner_radii(copy, m_outerBorderRect->corners);
+          wlr_scene_rect_set_clipped_region(copy, m_outerBorderRect->clipped_region);
+          snapRects.push_back({copy, config().appearance.outerBorderColor});
+        }
+      }
+    }
+
+    // Copy surface buffers.
+    struct CopyCtx {
+      wlr_scene_tree* snap;
+      int rootX;
+      int rootY;
+      int buffersCopied;
+    };
+    CopyCtx ctx{snap, m_sceneTree->node.x, m_sceneTree->node.y, 0};
+    wlr_scene_node_for_each_buffer(
+        &m_sceneTree->node,
+        [](wlr_scene_buffer* src, int sx, int sy, void* data) {
+          auto* c = static_cast<CopyCtx*>(data);
+          if (src->buffer == nullptr || !src->node.enabled) {
+            return;
+          }
+          wlr_scene_buffer* copy = wlr_scene_buffer_create(c->snap, src->buffer);
+          if (copy == nullptr) {
+            return;
+          }
+          wlr_scene_node_set_position(&copy->node, sx - c->rootX, sy - c->rootY);
+          if (src->dst_width > 0 && src->dst_height > 0) {
+            wlr_scene_buffer_set_dest_size(copy, src->dst_width, src->dst_height);
+          }
+          if (src->src_box.width > 0 && src->src_box.height > 0) {
+            wlr_scene_buffer_set_source_box(copy, &src->src_box);
+          }
+          wlr_scene_buffer_set_transform(copy, src->transform);
+          wlr_scene_buffer_set_corner_radii(copy, src->corners);
+          wlr_scene_buffer_set_opacity(copy, src->opacity);
+          ++c->buffersCopied;
+        },
+        &ctx
+    );
+
+    if (ctx.buffersCopied == 0) {
+      wlr_scene_node_destroy(&snap->node);
+      return;
+    }
+
+    m_server->animateCloseSnapshot(snap, std::move(snapRects));
+    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+      wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
+    }
   }
 
   void View::clearOutputClip() {
@@ -620,8 +855,8 @@ namespace umbriel {
     const wlr_box content{
         .x = target.x,
         .y = target.y,
-        .width = std::min(geometry.width, target.width),
-        .height = std::min(geometry.height, target.height),
+        .width = presentedWidth(target),
+        .height = presentedHeight(target),
     };
     const int border = m_tiled ? config().appearance.totalBorderWidth() : 0;
     wlr_box decorated = content;
@@ -688,7 +923,7 @@ namespace umbriel {
 
     const wlr_box nodeBox{0, 0, content.width, content.height};
     const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
-    if (!contentOnOutput) {
+    if (!contentOnOutput || m_fadeAlpha < 1.0F) {
       m_blur.hide();
       return;
     }
@@ -759,6 +994,9 @@ namespace umbriel {
   void View::handleMap() {
     m_mapped = true;
     m_tiled = looksTiled(m_toplevel);
+    const wlr_box& mapGeo = m_toplevel->base->geometry;
+    m_presentedW = mapGeo.width;
+    m_presentedH = mapGeo.height;
     clearOutputClip();
     if (m_tiled) {
       ensureBorders();
@@ -789,9 +1027,22 @@ namespace umbriel {
     if (m_onActiveWorkspace && !m_server->sessionLocked()) {
       m_server->focusView(this);
     }
+    if (m_onActiveWorkspace) {
+      setFadeAlpha(0.0F);
+      m_fadeAnim = m_server->animator().animate(
+          0.0, 1.0, std::max(1, config().appearance.animationMs / 2), Easing::EaseOutCubic,
+          [this](double v) { setFadeAlpha(static_cast<float>(v)); }, [this] { m_fadeAnim = 0; }
+      );
+      if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+        wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
+      }
+    }
   }
 
   void View::handleUnmap() {
+    beginCloseAnimation();
+    cancelFadeAnimation();
+    cancelSizeAnimation();
     cancelPositionAnimation();
     if (m_borderTree != nullptr) {
       wlr_scene_node_set_enabled(&m_borderTree->node, false);
@@ -828,7 +1079,7 @@ namespace umbriel {
         wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
       }
     }
-    if (m_borderTree != nullptr) {
+    if (m_borderTree != nullptr && m_sizeAnim == 0) {
       const wlr_box& geometry = m_toplevel->base->geometry;
       if (m_borderRects[0]->width != geometry.width + 2 * config().appearance.borderWidth
           || m_borderRects[2]->height != std::max(0, geometry.height - 2 * config().appearance.cornerRadius)
@@ -841,6 +1092,80 @@ namespace umbriel {
       }
     }
     applyCornerRadius();
+    // Size animation trigger: animate presented size when the client's geometry
+    // changes due to a layout resize (not during an interactive resize grab).
+    if (m_mapped
+        && m_tiled
+        && m_onActiveWorkspace
+        && m_workspace != nullptr
+        && !m_toplevel->scheduled.fullscreen
+        && !m_toplevel->current.fullscreen
+        && m_presentedW > 0
+        && m_presentedH > 0) {
+      const wlr_box& geometry = m_toplevel->base->geometry;
+      if (m_server->cursor()->mode() != CursorMode::Passthrough) {
+        // During interactive resize, track geometry so no spurious animation
+        // replays the drag when the grab ends and mode returns to Passthrough.
+        if (geometry.width > 0 && geometry.height > 0) {
+          m_presentedW = geometry.width;
+          m_presentedH = geometry.height;
+        }
+      } else if (
+          geometry.width > 0
+          && geometry.height > 0
+          && (geometry.width != m_presentedW || geometry.height != m_presentedH)
+          && !(m_sizeAnim != 0 && geometry.width == m_sizeTargetW && geometry.height == m_sizeTargetH)
+      ) {
+        if (m_sizeAnim != 0) {
+          m_server->animator().cancel(m_sizeAnim);
+          m_sizeAnim = 0;
+        }
+        const int fromW = m_presentedW;
+        const int fromH = m_presentedH;
+        const int toW = geometry.width;
+        const int toH = geometry.height;
+        m_sizeTargetW = toW;
+        m_sizeTargetH = toH;
+        m_sizeAnim = m_server->animator().animate(
+            0.0, 1.0, config().appearance.animationMs, Easing::EaseOutCubic,
+            [this, fromW, fromH, toW, toH](double t) {
+              m_presentedW = static_cast<int>(std::lround(fromW + (toW - fromW) * t));
+              m_presentedH = static_cast<int>(std::lround(fromH + (toH - fromH) * t));
+              applyPresentedSize();
+            },
+            [this] {
+              m_sizeAnim = 0;
+              const wlr_box& geo = m_toplevel->base->geometry;
+              m_presentedW = geo.width;
+              m_presentedH = geo.height;
+              // Restore real surface size.
+              wlr_scene_node_for_each_buffer(
+                  &m_sceneTree->node,
+                  [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+                    auto* self = static_cast<View*>(data);
+                    wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+                    if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
+                      return;
+                    }
+                    wlr_scene_buffer_set_dest_size(
+                        buffer, sceneSurface->surface->current.width, sceneSurface->surface->current.height
+                    );
+                  },
+                  this
+              );
+              updateBorderGeometry();
+              updateBlur();
+              updateShadow();
+              if (m_workspace != nullptr) {
+                m_workspace->syncViewPresentation(this);
+              }
+            }
+        );
+        if (m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+          wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
+        }
+      }
+    }
     // Re-apply output clip after configure ack so Super+F / resize sizes show
     // without needing a workspace switch (clip boxes are copied, not live).
     if (m_mapped && m_tiled && m_workspace != nullptr && m_workspace->active()) {
@@ -855,6 +1180,7 @@ namespace umbriel {
   }
 
   void View::handleDestroy() {
+    cancelFadeAnimation();
     cancelPositionAnimation();
     leaveForeignOutput();
     if (m_foreign != nullptr) {
@@ -948,6 +1274,7 @@ namespace umbriel {
     if (!m_mapped || !m_toplevel->base->initialized) {
       return;
     }
+    cancelSizeAnimation();
     // Fullscreen owns its own scene tree; leave it before changing tile/float.
     if (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen) {
       setFullscreen(false);
@@ -1057,8 +1384,8 @@ namespace umbriel {
         wlr_xdg_toplevel_set_maximized(m_toplevel, false);
       }
     }
-
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
+    cancelSizeAnimation();
     if (fullscreen) {
       // scheduled.fullscreen is set; drop any tile clip and cover the full output
       // (exclusive zones / usable area do not apply to fullscreen).

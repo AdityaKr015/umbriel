@@ -1,11 +1,13 @@
 #pragma once
 #include "core/animation.h"
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <sys/types.h>
+#include <utility>
 #include <vector>
 #include <wayland-server-core.h>
 
@@ -146,6 +148,8 @@ namespace umbriel {
     void prepareSceneForOutput(Output* rendering);
     // Re-enable home-output visibility after a render pass (for hit-testing).
     void restoreSceneVisibility();
+    void
+    animateCloseSnapshot(wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects);
 
   private:
     friend class Output;
@@ -244,6 +248,13 @@ namespace umbriel {
     wlr_scene_rect* m_lockBlank = nullptr;
     bool m_sessionLocked = false;
     Animator m_animator;
+
+    struct CloseSnapshot {
+      wlr_scene_tree* tree = nullptr;
+      AnimId anim = 0;
+      std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects;
+    };
+    std::vector<CloseSnapshot> m_closeSnapshots;
 
     std::unique_ptr<Seat> m_seat;
     std::unique_ptr<Cursor> m_cursor;

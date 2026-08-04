@@ -34,6 +34,9 @@ namespace umbriel {
     [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
+    [[nodiscard]] bool sizeAnimActive() const { return m_sizeAnim != 0; }
+    [[nodiscard]] int presentedWidth(const wlr_box& target) const;
+    [[nodiscard]] int presentedHeight(const wlr_box& target) const;
 
     // Mechanism only — applies seat keyboard, activation chrome, and raise.
     // Policy lives in Server::focusView; do not call from input/event code.
@@ -45,6 +48,8 @@ namespace umbriel {
     void animateTo(int x, int y);
     void setPosition(int x, int y);
     void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
+    void setFadeAlpha(float alpha);
+    void cancelFadeAnimation();
     void cancelPositionAnimation();
     // Size/position to the full output and drop tile clips (exclusive zones do not apply).
     void applyFullscreenLayout();
@@ -101,6 +106,9 @@ namespace umbriel {
     void applyCornerRadius();
     void updateBlur();
     void updateShadow();
+    void beginCloseAnimation();
+    void applyPresentedSize();
+    void cancelSizeAnimation();
     void clearOutputClip();
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
@@ -126,6 +134,14 @@ namespace umbriel {
     bool m_tiled = false;
     bool m_onActiveWorkspace = false;
     AnimId m_posAnim = 0;
+    AnimId m_fadeAnim = 0;
+    float m_fadeAlpha = 1.0F;
+    bool m_borderFocusedState = false;
+    AnimId m_sizeAnim = 0;
+    int m_presentedW = 0;
+    int m_presentedH = 0;
+    int m_sizeTargetW = 0;
+    int m_sizeTargetH = 0;
 
     wl_listener m_map{};
     wl_listener m_unmap{};

@@ -91,6 +91,7 @@ namespace umbriel {
     const int removedColumn = m_layout.columnOf(view);
     m_layout.removeView(view);
     std::erase(m_views, view);
+    std::erase(m_switchViews, view);
 
     View* replacement = nullptr;
     if (m_focusedView == view) {
@@ -169,7 +170,7 @@ namespace umbriel {
         }
       }
       m_scrollAnim = m_group->server()->animator().animate(
-          m_visualScroll, targetScroll, config().appearance.animationMs,
+          m_visualScroll, targetScroll, config().appearance.animationMs, Easing::EaseOutCubic,
           [this](double value) {
             m_visualScroll = value;
             applyPositions(false);
@@ -186,7 +187,11 @@ namespace umbriel {
   }
 
   void Workspace::syncViewPresentation(View* view) {
-    if (!m_active || view == nullptr || !view->mapped() || m_group == nullptr || m_group->output() == nullptr) {
+    if ((!m_active && !m_inSwitchTransition)
+        || view == nullptr
+        || !view->mapped()
+        || m_group == nullptr
+        || m_group->output() == nullptr) {
       return;
     }
     if (view->toplevel()->scheduled.fullscreen) {
@@ -203,10 +208,9 @@ namespace umbriel {
     const int scrollOffset = static_cast<int>(std::lround(m_layout.scroll() - m_visualScroll));
     wlr_box target = m_layout.targetBox(view);
     target.x += scrollOffset;
-    const wlr_box& geometry = view->toplevel()->base->geometry;
     const int border = config().appearance.totalBorderWidth();
-    const int presentW = std::min(geometry.width, target.width);
-    const int presentH = std::min(geometry.height, target.height);
+    const int presentW = view->presentedWidth(target);
+    const int presentH = view->presentedHeight(target);
     wlr_box decorated{target.x - border, target.y - border, presentW + 2 * border, presentH + 2 * border};
     wlr_box intersection{};
     const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
@@ -241,9 +245,8 @@ namespace umbriel {
           view->setPosition(target.x, target.y);
         }
         // Include borders so near-edge windows stay clipped to this output.
-        const wlr_box& geometry = view->toplevel()->base->geometry;
-        const int presentW = std::min(geometry.width, target.width);
-        const int presentH = std::min(geometry.height, target.height);
+        const int presentW = view->presentedWidth(target);
+        const int presentH = view->presentedHeight(target);
         wlr_box decorated{target.x - border, target.y - border, presentW + 2 * border, presentH + 2 * border};
         wlr_box intersection{};
         const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
@@ -376,6 +379,41 @@ namespace umbriel {
     }
   }
 
+  bool Workspace::isSwitchTransitionView(const View* view) const {
+    return std::ranges::find(m_switchViews, view) != m_switchViews.end();
+  }
+
+  void Workspace::beginSwitchTransition() {
+    m_inSwitchTransition = true;
+    m_switchViews.clear();
+    for (View* view : m_views) {
+      if (view->mapped() && (view->sceneTree()->node.enabled || !m_active)) {
+        view->cancelFadeAnimation();
+        m_switchViews.push_back(view);
+      }
+    }
+  }
+
+  void Workspace::applySwitchAlpha(float alpha) {
+    for (View* view : m_switchViews) {
+      view->setFadeAlpha(alpha);
+      if (!m_active) {
+        wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
+      }
+    }
+  }
+
+  void Workspace::endSwitchTransition() {
+    m_inSwitchTransition = false;
+    for (View* view : m_switchViews) {
+      view->setFadeAlpha(1.0F);
+      if (!m_active) {
+        wlr_scene_node_set_enabled(&view->sceneTree()->node, false);
+      }
+    }
+    m_switchViews.clear();
+  }
+
   WorkspaceGroup::WorkspaceGroup(Server& server, Output& output) : m_server(&server), m_output(&output) {
     wlr_ext_workspace_manager_v1* manager = m_server->workspaceManager();
     m_handle = wlr_ext_workspace_group_handle_v1_create(manager, kGroupCaps);
@@ -397,6 +435,7 @@ namespace umbriel {
   }
 
   WorkspaceGroup::~WorkspaceGroup() {
+    finishSwitchTransition();
     m_active = nullptr;
     m_previous = nullptr;
     if (m_handle != nullptr && m_output != nullptr && m_output->wlr() != nullptr) {
@@ -428,20 +467,60 @@ namespace umbriel {
     return nullptr;
   }
 
-  void WorkspaceGroup::activate(Workspace* workspace) {
+  void WorkspaceGroup::finishSwitchTransition() {
+    if (m_switchAnim != 0) {
+      m_server->animator().cancel(m_switchAnim);
+      m_switchAnim = 0;
+    }
+    if (m_switchFrom != nullptr) {
+      m_switchFrom->endSwitchTransition();
+      m_switchFrom = nullptr;
+    }
+    if (m_active != nullptr && m_active->switchTransitionActive()) {
+      m_active->endSwitchTransition();
+    }
+  }
+
+  void WorkspaceGroup::activate(Workspace* workspace, bool animate) {
     if (workspace == nullptr || workspace->group() != this) {
       return;
     }
     if (m_active == workspace) {
       return;
     }
-    if (m_active != nullptr) {
-      m_previous = m_active;
-      m_active->setActive(false);
+    finishSwitchTransition();
+    const bool doAnimate = animate && m_active != nullptr && !m_server->sessionLocked();
+    if (!doAnimate) {
+      if (m_active != nullptr) {
+        m_previous = m_active;
+        m_active->setActive(false);
+      }
+      m_active = workspace;
+      m_active->setActive(true);
+      kLog.debug("activate workspace {} on {}", m_active->name(), m_output->wlr()->name);
+      return;
     }
+    // Crossfade path.
+    Workspace* from = m_active;
+    m_previous = from;
+    from->beginSwitchTransition();
+    workspace->beginSwitchTransition();
+    from->setActive(false);
     m_active = workspace;
     m_active->setActive(true);
-    kLog.debug("activate workspace {} on {}", m_active->name(), m_output->wlr()->name);
+    from->applySwitchAlpha(1.0F);
+    m_active->applySwitchAlpha(0.0F);
+    m_switchFrom = from;
+    m_switchAnim = m_server->animator().animate(
+        0.0, 1.0, config().appearance.animationMs, Easing::Linear,
+        [from, ws = m_active](double t) {
+          from->applySwitchAlpha(static_cast<float>(1.0 - t));
+          ws->applySwitchAlpha(static_cast<float>(t));
+        },
+        [this] { finishSwitchTransition(); }
+    );
+    wlr_output_schedule_frame(m_output->wlr());
+    kLog.debug("crossfade workspace {} → {} on {}", from->name(), m_active->name(), m_output->wlr()->name);
   }
 
   void WorkspaceGroup::activateIndex(size_t index) {
@@ -471,7 +550,7 @@ namespace umbriel {
       fallback = workspaceAt(1);
     }
     if (fallback != nullptr) {
-      activate(fallback);
+      activate(fallback, false);
       m_server->cursor()->clearConstraint();
       m_server->refocus(m_output);
       return;

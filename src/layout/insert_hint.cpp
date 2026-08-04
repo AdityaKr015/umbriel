@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "layout/scrolling.h"
 #include "output/output.h"
+#include "scene/color.h"
 #include "server/server.h"
 // clang-format off
 #include <algorithm>
@@ -25,15 +26,6 @@ namespace umbriel {
     constexpr int kRowHintEdgeHeight = 150;
     constexpr int kRowHintMidHeight = 300;
 
-    // Build a premultiplied RGBA color from straight-alpha RGBA + an opacity
-    // multiplier (used for the fade-in animation).
-    void premultiplied(float out[4], const std::array<float, 4>& base, float opacity) {
-      const float a = base[3] * opacity;
-      out[0] = base[0] * a;
-      out[1] = base[1] * a;
-      out[2] = base[2] * a;
-      out[3] = a;
-    }
   } // namespace
 
   InsertHint::InsertHint(Server& server) : m_server(&server) {}
@@ -190,7 +182,7 @@ namespace umbriel {
         m_server->animator().cancel(m_fadeAnim);
       }
       m_fadeAnim = m_server->animator().animate(
-          0.0, 1.0, kHintFadeMs, [this](double alpha) { setAlpha(static_cast<float>(alpha)); },
+          0.0, 1.0, kHintFadeMs, Easing::EaseOutCubic, [this](double alpha) { setAlpha(static_cast<float>(alpha)); },
           [this] { m_fadeAnim = 0; }
       );
       m_visible = true;

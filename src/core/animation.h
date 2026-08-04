@@ -8,10 +8,13 @@ namespace umbriel {
 
   using AnimId = uint64_t;
 
+  enum class Easing { Linear, EaseOutCubic, EaseInOutCubic };
+
   class Animator {
   public:
     AnimId animate(
-        double from, double to, int durationMs, std::function<void(double)> onUpdate, std::function<void()> onDone = {}
+        double from, double to, int durationMs, Easing easing, std::function<void(double)> onUpdate,
+        std::function<void()> onDone = {}
     );
     void cancel(AnimId id);
     [[nodiscard]] double currentValue(AnimId id) const;
@@ -26,6 +29,7 @@ namespace umbriel {
       double current = 0;
       uint64_t startMsec = 0;
       uint64_t durationMsec = 1;
+      Easing easing = Easing::EaseOutCubic;
       std::function<void(double)> onUpdate;
       std::function<void()> onDone;
     };

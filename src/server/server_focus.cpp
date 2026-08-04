@@ -538,6 +538,9 @@ namespace umbriel {
         wlr_scene_node_set_enabled(&view->sceneTree()->node, false);
         continue;
       }
+      if (!view->onActiveWorkspace() && view->workspace() != nullptr && view->workspace()->switchTransitionActive()) {
+        continue;
+      }
       if (!view->onActiveWorkspace()) {
         wlr_scene_node_set_enabled(&view->sceneTree()->node, false);
         continue;
@@ -577,6 +580,14 @@ namespace umbriel {
         continue;
       }
       if (!view->onActiveWorkspace() && view != grabbed) {
+        if (view->workspace() != nullptr && view->workspace()->switchTransitionActive()) {
+          if (view->tiled()) {
+            view->workspace()->syncViewPresentation(view);
+          } else {
+            wlr_scene_node_set_enabled(&view->sceneTree()->node, view->workspace()->isSwitchTransitionView(view));
+          }
+          continue;
+        }
         wlr_scene_node_set_enabled(&view->sceneTree()->node, false);
         continue;
       }

@@ -36,6 +36,8 @@ namespace umbriel {
     [[nodiscard]] const ScrollingLayout& layout() const { return m_layout; }
     [[nodiscard]] View* focusedView() const { return m_focusedView; }
     [[nodiscard]] double visualScroll() const { return m_visualScroll; }
+    [[nodiscard]] bool switchTransitionActive() const { return m_inSwitchTransition; }
+    [[nodiscard]] bool isSwitchTransitionView(const View* view) const;
 
     void setActive(bool active);
     void setFocusedView(View* view);
@@ -59,6 +61,9 @@ namespace umbriel {
     // Fraction of viewport width that revealing `view` would scroll (0.0 = already visible).
     [[nodiscard]] double scrollFractionToReveal(const View* view) const;
     void applyVisibility();
+    void beginSwitchTransition();
+    void applySwitchAlpha(float alpha);
+    void endSwitchTransition();
 
   private:
     void applyPositions(bool animate);
@@ -72,6 +77,8 @@ namespace umbriel {
     View* m_focusedView = nullptr;
     double m_visualScroll = 0;
     AnimId m_scrollAnim = 0;
+    bool m_inSwitchTransition = false;
+    std::vector<View*> m_switchViews;
   };
 
   class WorkspaceGroup {
@@ -92,7 +99,7 @@ namespace umbriel {
     [[nodiscard]] Workspace* workspaceAt(size_t index) const;
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
 
-    void activate(Workspace* workspace);
+    void activate(Workspace* workspace, bool animate = true);
     void activateIndex(size_t index);
     void deactivate(Workspace* workspace);
     Workspace* createWorkspace(const char* name);
@@ -104,6 +111,9 @@ namespace umbriel {
     Workspace* m_active = nullptr;
     Workspace* m_previous = nullptr;
     std::vector<std::unique_ptr<Workspace>> m_workspaces;
+    AnimId m_switchAnim = 0;
+    Workspace* m_switchFrom = nullptr;
+    void finishSwitchTransition();
   };
 
 } // namespace umbriel

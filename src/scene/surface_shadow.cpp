@@ -29,7 +29,8 @@ namespace umbriel {
 
     // Lazy create: first time only.
     if (m_node == nullptr) {
-      m_node = wlr_scene_shadow_create(parent, 0, 0, 0, static_cast<float>(sigma), cfg.color.data());
+      const float initColor[4] = {cfg.color[0], cfg.color[1], cfg.color[2], cfg.color[3] * m_alpha};
+      m_node = wlr_scene_shadow_create(parent, 0, 0, 0, static_cast<float>(sigma), initColor);
       if (m_node == nullptr) {
         return;
       }
@@ -51,8 +52,9 @@ namespace umbriel {
     if (m_node->blur_sigma != static_cast<float>(sigma)) {
       wlr_scene_shadow_set_blur_sigma(m_node, static_cast<float>(sigma));
     }
-    if (std::memcmp(m_node->color, cfg.color.data(), sizeof(m_node->color)) != 0) {
-      wlr_scene_shadow_set_color(m_node, cfg.color.data());
+    const float color[4] = {cfg.color[0], cfg.color[1], cfg.color[2], cfg.color[3] * m_alpha};
+    if (std::memcmp(m_node->color, color, sizeof(m_node->color)) != 0) {
+      wlr_scene_shadow_set_color(m_node, color);
     }
     if (m_node->corner_radius != cornerRadius) {
       wlr_scene_shadow_set_corner_radius(m_node, cornerRadius);
@@ -75,6 +77,15 @@ namespace umbriel {
   void SurfaceShadow::hide() {
     if (m_node != nullptr) {
       wlr_scene_node_set_enabled(&m_node->node, false);
+    }
+  }
+
+  void SurfaceShadow::setAlpha(float alpha) {
+    m_alpha = alpha;
+    if (m_node != nullptr) {
+      const auto& cfg = config().appearance.shadow;
+      const float color[4] = {cfg.color[0], cfg.color[1], cfg.color[2], cfg.color[3] * m_alpha};
+      wlr_scene_shadow_set_color(m_node, color);
     }
   }
 

@@ -15,9 +15,12 @@ namespace umbriel {
     void update(wlr_scene_tree* parent, int contentWidth, int contentHeight, int borderTotal, int cornerRadius);
     // Disable the node (unmap/fullscreen/off-output path); update() re-enables.
     void hide();
+    // Set an opacity multiplier applied to the shadow color (for fade animations).
+    void setAlpha(float alpha);
 
   private:
     wlr_scene_shadow* m_node = nullptr;
+    float m_alpha = 1.0F;
   };
 
 } // namespace umbriel

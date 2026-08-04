@@ -1,6 +1,7 @@
 #include "core/animation.h"
 
 #include <algorithm>
+#include <cmath>
 #include <ctime>
 #include <ranges>
 #include <utility>
@@ -14,7 +15,8 @@ namespace umbriel {
   }
 
   AnimId Animator::animate(
-      double from, double to, int durationMs, std::function<void(double)> onUpdate, std::function<void()> onDone
+      double from, double to, int durationMs, Easing easing, std::function<void(double)> onUpdate,
+      std::function<void()> onDone
   ) {
     AnimId id = m_nextId++;
     if (id == 0) {
@@ -27,6 +29,7 @@ namespace umbriel {
         .current = from,
         .startMsec = monotonicMsec(),
         .durationMsec = static_cast<uint64_t>(std::max(1, durationMs)),
+        .easing = easing,
         .onUpdate = std::move(onUpdate),
         .onDone = std::move(onDone),
     });
@@ -66,8 +69,20 @@ namespace umbriel {
           static_cast<double>(nowMsec - std::min(nowMsec, it->startMsec)) / static_cast<double>(it->durationMsec), 0.0,
           1.0
       );
-      const double remaining = 1.0 - linear;
-      const double eased = 1.0 - remaining * remaining * remaining;
+      double eased = 0.0;
+      switch (it->easing) {
+      case Easing::Linear:
+        eased = linear;
+        break;
+      case Easing::EaseOutCubic: {
+        const double remaining = 1.0 - linear;
+        eased = 1.0 - remaining * remaining * remaining;
+        break;
+      }
+      case Easing::EaseInOutCubic:
+        eased = linear < 0.5 ? 4.0 * linear * linear * linear : 1.0 - std::pow(-2.0 * linear + 2.0, 3) / 2.0;
+        break;
+      }
       it->current = it->from + (it->to - it->from) * eased;
       const double value = it->current;
       const bool done = linear >= 1.0;

@@ -11,6 +11,7 @@
 #include "layout/insert_hint.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
+#include "scene/color.h"
 #include "scene/config_banner.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -21,6 +22,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <sys/syscall.h>
@@ -223,6 +225,11 @@ namespace umbriel {
     m_configWatcher.reset();
 
     m_insertHint.reset();
+    for (auto& snap : m_closeSnapshots) {
+      m_animator.cancel(snap.anim);
+      wlr_scene_node_destroy(&snap.tree->node);
+    }
+    m_closeSnapshots.clear();
     m_configBanner.reset();
     m_sessionLock.reset();
     m_layerSurfaces.clear();
@@ -475,6 +482,41 @@ namespace umbriel {
   int Server::onXwaylandRespawnTimer(void* data) {
     static_cast<Server*>(data)->spawnXwaylandSatellite();
     return 0;
+  }
+
+  void Server::animateCloseSnapshot(
+      wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
+  ) {
+    CloseSnapshot& snap = m_closeSnapshots.emplace_back();
+    snap.tree = tree;
+    snap.rects = std::move(rects);
+    wlr_scene_tree* snapTree = snap.tree;
+    snap.anim = m_animator.animate(
+        1.0, 0.0, std::max(1, config().appearance.animationMs / 2), Easing::EaseOutCubic,
+        [this, snapTree](double v) {
+          const auto alpha = static_cast<float>(v);
+          wlr_scene_node_for_each_buffer(
+              &snapTree->node,
+              [](wlr_scene_buffer* buf, int /*sx*/, int /*sy*/, void* data) {
+                wlr_scene_buffer_set_opacity(buf, *static_cast<float*>(data));
+              },
+              const_cast<float*>(&alpha)
+          );
+          auto it =
+              std::ranges::find_if(m_closeSnapshots, [snapTree](const CloseSnapshot& s) { return s.tree == snapTree; });
+          if (it != m_closeSnapshots.end()) {
+            for (auto& [rect, base] : it->rects) {
+              float color[4];
+              premultiplied(color, base, alpha);
+              wlr_scene_rect_set_color(rect, color);
+            }
+          }
+        },
+        [this, snapTree] {
+          wlr_scene_node_destroy(&snapTree->node);
+          std::erase_if(m_closeSnapshots, [snapTree](const CloseSnapshot& s) { return s.tree == snapTree; });
+        }
+    );
   }
 
 } // namespace umbriel

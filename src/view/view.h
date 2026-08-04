@@ -32,6 +32,7 @@ namespace umbriel {
     [[nodiscard]] Workspace* workspace() const { return m_workspace; }
     [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
     [[nodiscard]] bool tiled() const { return m_tiled; }
+    [[nodiscard]] bool floating() const { return !m_tiled; }
 
     void focus();
     void setForeignActivated(bool activated);
@@ -46,6 +47,9 @@ namespace umbriel {
     void applyFullscreenLayout();
     // Compositor-driven fullscreen toggle (keybind); client requests use handleRequestFullscreen.
     void toggleFullscreen();
+    // Detach from the scrolling layout (float) or re-insert as a tiled column.
+    void setFloating(bool floating);
+    void toggleFloating();
 
   private:
     friend class Cursor;
@@ -94,7 +98,10 @@ namespace umbriel {
     void applyCornerRadius();
     void updateBlur();
     void clearOutputClip();
+    // Keep floats visually at the last requested size while client geometry lags.
+    void syncFloatingSurfaceClip();
     void placeInUsableArea();
+    void ensureBorders();
     void updateForeignIdentity();
     void updateForeignState();
     void enterForeignOutput();

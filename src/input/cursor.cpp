@@ -356,9 +356,13 @@ namespace umbriel {
       beginInteractive(view, view->tiled() ? CursorMode::MoveTile : CursorMode::Move, 0);
       return;
     }
-    if (event->button == BTN_RIGHT && modHeld && view != nullptr && view->tiled()) {
+    if (event->button == BTN_RIGHT && modHeld && view != nullptr) {
       m_server->focusView(view);
-      beginInteractive(view, CursorMode::ResizeTile, 0);
+      if (view->tiled()) {
+        beginInteractive(view, CursorMode::ResizeTile, 0);
+      } else {
+        beginInteractive(view, CursorMode::Resize, floatResizeEdges(view));
+      }
       return;
     }
 
@@ -786,6 +790,37 @@ namespace umbriel {
       return distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
     }
     return distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+  }
+
+  uint32_t Cursor::floatResizeEdges(View* view) const {
+    if (view == nullptr || view->sceneTree() == nullptr) {
+      return WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM;
+    }
+    const wlr_box& geo = view->toplevel()->base->geometry;
+    const int x = view->sceneTree()->node.x + geo.x;
+    const int y = view->sceneTree()->node.y + geo.y;
+    const double cx = m_cursor->x;
+    const double cy = m_cursor->y;
+    const double distLeft = std::abs(cx - x);
+    const double distRight = std::abs(cx - (x + geo.width));
+    const double distTop = std::abs(cy - y);
+    const double distBottom = std::abs(cy - (y + geo.height));
+    const double nearestH = std::min(distLeft, distRight);
+    const double nearestV = std::min(distTop, distBottom);
+
+    uint32_t edges = 0;
+    if (nearestH <= nearestV) {
+      edges |= distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
+    } else {
+      edges |= distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+    }
+    // Prefer a corner when the cursor is near both axes.
+    constexpr double kCornerSlop = 32.0;
+    if (nearestH < kCornerSlop && nearestV < kCornerSlop) {
+      edges = (distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT)
+          | (distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM);
+    }
+    return edges;
   }
 
   void Cursor::processResizeTile() {

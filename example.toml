@@ -119,12 +119,14 @@ follows_mouse = false
 #   window-focus-left, window-focus-right, window-focus-up, window-focus-down,
 #   column-move-left, column-move-right, window-move-up, window-move-down,
 #   window-consume-left, window-expel-right, window-cycle-width,
-#   window-toggle-maximize, window-toggle-fullscreen, window-focus-next, config-reload,
+#   window-toggle-maximize, window-toggle-fullscreen, window-toggle-floating,
+#   window-focus-next, config-reload,
 #   layout-scroll-left, layout-scroll-right,
 #   workspace-switch:N, window-move-to-workspace:N (N is 1-9),
 #   spawn:<shell command>
 # Defaults: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
-"Mod+T" = "terminal-spawn"
+"Mod+Return" = "terminal-spawn"
+"Mod+T" = "window-toggle-floating"
 "Mod+Shift+Q" = "window-close"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"
 # "Mod+Escape" = "none"

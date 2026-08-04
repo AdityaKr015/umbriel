@@ -317,6 +317,11 @@ namespace umbriel {
         workspace->toggleFocusedFullscreen();
       }
       return true;
+    case KeybindAction::ToggleFloating:
+      if (Workspace* workspace = activeWorkspace()) {
+        workspace->toggleFocusedFloating();
+      }
+      return true;
     case KeybindAction::WindowFocusNext:
       if (m_views.size() >= 2) {
         for (size_t n = 0; n < m_views.size(); ++n) {

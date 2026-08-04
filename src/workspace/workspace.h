@@ -54,6 +54,7 @@ namespace umbriel {
     bool cycleFocusedWidth();
     bool toggleFocusedFullWidth();
     bool toggleFocusedFullscreen();
+    bool toggleFocusedFloating();
     void ensureFocusedVisible();
     void applyVisibility();
 

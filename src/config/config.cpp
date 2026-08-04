@@ -63,7 +63,7 @@ namespace umbriel {
 
     std::vector<Keybind> defaultKeybinds() {
       std::vector<Keybind> keybinds;
-      keybinds.reserve(59);
+      keybinds.reserve(60);
       auto add = [&keybinds](KeybindAction action, uint32_t keysym, uint32_t modifiers = 0) {
         keybinds.push_back({
             .modifiers = modifiers,
@@ -102,6 +102,7 @@ namespace umbriel {
       add(KeybindAction::WindowCycleWidth, XKB_KEY_r);
       add(KeybindAction::ToggleFullscreen, XKB_KEY_f);
       add(KeybindAction::ToggleMaximize, XKB_KEY_f, WLR_MODIFIER_CTRL);
+      add(KeybindAction::ToggleFloating, XKB_KEY_t);
 
       for (int index = 0; index < 9; ++index) {
         const uint32_t digit = XKB_KEY_1 + static_cast<uint32_t>(index);
@@ -256,6 +257,7 @@ namespace umbriel {
           {"window-move-down", KeybindAction::WindowMoveDown},
           {"window-toggle-maximize", KeybindAction::ToggleMaximize},
           {"window-toggle-fullscreen", KeybindAction::ToggleFullscreen},
+          {"window-toggle-floating", KeybindAction::ToggleFloating},
           {"window-consume-left", KeybindAction::WindowConsumeLeft},
           {"window-expel-right", KeybindAction::WindowExpelRight},
           {"window-cycle-width", KeybindAction::WindowCycleWidth},

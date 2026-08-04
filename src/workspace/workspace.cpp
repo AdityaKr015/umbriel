@@ -342,6 +342,14 @@ namespace umbriel {
     return true;
   }
 
+  bool Workspace::toggleFocusedFloating() {
+    if (m_focusedView == nullptr || !m_focusedView->mapped()) {
+      return false;
+    }
+    m_focusedView->toggleFloating();
+    return true;
+  }
+
   void Workspace::ensureFocusedVisible() {
     if (m_group == nullptr || m_group->output() == nullptr) {
       return;

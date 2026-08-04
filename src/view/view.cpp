@@ -6,6 +6,7 @@
 #include "layout/scrolling.h"
 #include "output/output.h"
 #include "server/server.h"
+#include "view/xdg_size.h"
 // clang-format off
 #include <algorithm>
 #include <cmath>
@@ -316,12 +317,10 @@ namespace umbriel {
       return;
     }
 
-    wlr_box* geo = &m_toplevel->base->geometry;
-    const int width = std::clamp(geo->width > 0 ? geo->width : usable.width, 1, usable.width);
-    const int height = std::clamp(geo->height > 0 ? geo->height : usable.height, 1, usable.height);
-    if (width != geo->width || height != geo->height) {
-      wlr_xdg_toplevel_set_size(m_toplevel, width, height);
-    }
+    // Floats keep their own size; only center within the usable area.
+    const wlr_box& geo = m_toplevel->base->geometry;
+    const int width = geo.width > 0 ? geo.width : usable.width;
+    const int height = geo.height > 0 ? geo.height : usable.height;
     const int x = usable.x + (usable.width - width) / 2;
     const int y = usable.y + (usable.height - height) / 2;
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
@@ -526,7 +525,9 @@ namespace umbriel {
             return;
           }
 
-          const bool rounded = self->m_tiled && !self->m_toplevel->scheduled.fullscreen;
+          const bool rounded = self->m_borderTree != nullptr
+              && self->m_borderTree->node.enabled
+              && !self->m_toplevel->scheduled.fullscreen;
           wlr_scene_buffer_set_corner_radius(buffer, rounded ? config().appearance.cornerRadius : 0);
         },
         this
@@ -536,7 +537,7 @@ namespace umbriel {
   void View::updateBlur() {
     const wlr_box& geometry = m_toplevel->base->geometry;
     const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
-    const bool rounded = m_tiled && !m_toplevel->scheduled.fullscreen;
+    const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
     m_blur.update(
         m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0
     );
@@ -547,10 +548,41 @@ namespace umbriel {
     // leaves a bar-sized gap). Use scheduled (not current): on leave, scheduled clears
     // immediately while current lags until the client acks.
     const bool fullscreen = m_toplevel->scheduled.fullscreen;
+    if (!fullscreen && !m_tiled) {
+      syncFloatingSurfaceClip();
+      if (m_borderTree != nullptr) {
+        updateBorderGeometry();
+      }
+      return;
+    }
     const wlr_box* clip = (!fullscreen && m_tiled) ? &m_toplevel->base->geometry : nullptr;
     wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, clip);
     if (m_borderTree != nullptr) {
       updateBorderGeometry();
+    }
+    updateBlur();
+  }
+
+  void View::syncFloatingSurfaceClip() {
+    if (m_tiled || m_toplevel->scheduled.fullscreen) {
+      return;
+    }
+    const wlr_box& geo = m_toplevel->base->geometry;
+    int width = m_toplevel->scheduled.width;
+    int height = m_toplevel->scheduled.height;
+    if (width <= 0) {
+      width = m_toplevel->current.width;
+    }
+    if (height <= 0) {
+      height = m_toplevel->current.height;
+    }
+    // Electron often keeps a wide buffer while tiled; without a clip, toggling float
+    // would suddenly show the full surface.
+    if (width > 0 && height > 0 && (geo.width > width || geo.height > height)) {
+      const wlr_box clip{geo.x, geo.y, std::min(geo.width, width), std::min(geo.height, height)};
+      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, &clip);
+    } else {
+      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
     }
     updateBlur();
   }
@@ -645,7 +677,7 @@ namespace umbriel {
     }
 
     const wlr_box nodeBox{0, 0, content.width, content.height};
-    const bool rounded = m_tiled && !m_toplevel->scheduled.fullscreen;
+    const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
     if (!contentOnOutput) {
       m_blur.hide();
       return;
@@ -698,23 +730,28 @@ namespace umbriel {
     );
   }
 
+  void View::ensureBorders() {
+    if (m_borderTree != nullptr) {
+      return;
+    }
+    m_borderTree = wlr_scene_tree_create(m_sceneTree);
+    // Outer below, then inner on top so the focus ring stays visible.
+    m_outerBorderRect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.outerBorderColor.data());
+    for (auto*& rect : m_borderRects) {
+      rect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.borderUnfocused.data());
+    }
+    for (wlr_scene_rect* rect : m_borderRects) {
+      wlr_scene_node_raise_to_top(&rect->node);
+    }
+    wlr_scene_node_lower_to_bottom(&m_borderTree->node);
+  }
+
   void View::handleMap() {
     m_mapped = true;
     m_tiled = looksTiled(m_toplevel);
     clearOutputClip();
     if (m_tiled) {
-      if (m_borderTree == nullptr) {
-        m_borderTree = wlr_scene_tree_create(m_sceneTree);
-        // Outer below, then inner on top so the focus ring stays visible.
-        m_outerBorderRect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.outerBorderColor.data());
-        for (auto*& rect : m_borderRects) {
-          rect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.borderUnfocused.data());
-        }
-        for (wlr_scene_rect* rect : m_borderRects) {
-          wlr_scene_node_raise_to_top(&rect->node);
-        }
-        wlr_scene_node_lower_to_bottom(&m_borderTree->node);
-      }
+      ensureBorders();
       wlr_scene_node_set_enabled(&m_borderTree->node, !m_toplevel->current.fullscreen);
       updateBorderGeometry();
     } else if (m_borderTree != nullptr) {
@@ -796,6 +833,8 @@ namespace umbriel {
     // without needing a workspace switch (clip boxes are copied, not live).
     if (m_mapped && m_tiled && m_workspace != nullptr && m_workspace->active()) {
       m_workspace->syncViewPresentation(this);
+    } else if (m_mapped && !m_tiled) {
+      syncFloatingSurfaceClip();
     } else {
       updateBlur();
     }
@@ -890,6 +929,94 @@ namespace umbriel {
     setFullscreen(!m_toplevel->scheduled.fullscreen);
   }
 
+  void View::toggleFloating() { setFloating(m_tiled); }
+
+  void View::setFloating(bool floating) {
+    if (!m_mapped || !m_toplevel->base->initialized) {
+      return;
+    }
+    // Fullscreen owns its own scene tree; leave it before changing tile/float.
+    if (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen) {
+      setFullscreen(false);
+    }
+
+    const bool wantTiled = !floating;
+    if (m_tiled == wantTiled) {
+      return;
+    }
+
+    if (floating) {
+      // Prefer the last acked/scheduled configure size (what the user already sees),
+      // not the raw layout target (may be unclamped) or surface geometry (may lag).
+      int keepWidth = m_toplevel->current.width;
+      int keepHeight = m_toplevel->current.height;
+      if (keepWidth <= 0 || keepHeight <= 0) {
+        keepWidth = m_toplevel->scheduled.width;
+        keepHeight = m_toplevel->scheduled.height;
+      }
+      if (m_workspace != nullptr) {
+        const wlr_box target = m_workspace->layout().targetBox(this);
+        if (target.width > 0 && target.height > 0) {
+          const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+          const int tw = clampXdgWidth(target.width, hints);
+          const int th = clampXdgHeight(target.height, hints);
+          if (keepWidth <= 0 || keepHeight <= 0) {
+            keepWidth = tw;
+            keepHeight = th;
+          } else {
+            keepWidth = std::min(keepWidth, tw);
+            keepHeight = std::min(keepHeight, th);
+          }
+        }
+        const int column = m_workspace->layout().columnOf(this);
+        if (column >= 0 && m_workspace->layout().isFullWidth(column)) {
+          m_workspace->layout().clearFullWidthState(column);
+          wlr_xdg_toplevel_set_maximized(m_toplevel, false);
+        }
+        m_workspace->layoutDetach(this);
+      }
+      if (keepWidth <= 0 || keepHeight <= 0) {
+        const wlr_box& geo = m_toplevel->base->geometry;
+        keepWidth = geo.width;
+        keepHeight = geo.height;
+      }
+      const int keepX = m_sceneTree->node.x;
+      const int keepY = m_sceneTree->node.y;
+      m_tiled = false;
+      // Do not clear xdg tiled edges: GTK/Qt often resize (CSD / preferred size) when
+      // tiled state is dropped. Floating is a compositor layout concern.
+      if (keepWidth > 0
+          && keepHeight > 0
+          && (m_toplevel->scheduled.width != keepWidth || m_toplevel->scheduled.height != keepHeight)) {
+        wlr_xdg_toplevel_set_size(m_toplevel, keepWidth, keepHeight);
+      }
+      wlr_scene_node_set_position(&m_sceneTree->node, keepX, keepY);
+      syncFloatingSurfaceClip();
+      // Keep the focus ring when floating a tiled window.
+      ensureBorders();
+      wlr_scene_node_set_enabled(&m_borderTree->node, true);
+      updateBorderGeometry();
+      applyCornerRadius();
+      updateBlur();
+      m_server->focusView(this);
+      updateForeignState();
+      return;
+    }
+
+    m_tiled = true;
+    wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
+    wlr_xdg_toplevel_set_maximized(m_toplevel, false);
+    ensureBorders();
+    wlr_scene_node_set_enabled(&m_borderTree->node, true);
+    updateBorderGeometry();
+    if (m_workspace != nullptr) {
+      m_workspace->layoutAttach(this);
+    }
+    applyCornerRadius();
+    m_server->focusView(this);
+    updateForeignState();
+  }
+
   void View::setFullscreen(bool fullscreen) {
     // Leaving column maximize when entering real fullscreen avoids a stale
     // widthFrac=1.0 column after the client leaves fullscreen.
@@ -917,7 +1044,7 @@ namespace umbriel {
     applyCornerRadius();
     if (!fullscreen) {
       // scheduled.fullscreen is already false; arrange into usable area (exclusive zones).
-      if (m_workspace != nullptr) {
+      if (m_tiled && m_workspace != nullptr) {
         m_workspace->arrange(false);
       } else {
         placeInUsableArea();

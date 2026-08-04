@@ -67,6 +67,7 @@ namespace umbriel {
     void processResize();
     void processResizeTile();
     [[nodiscard]] uint32_t tileResizeEdges(View* view) const;
+    [[nodiscard]] uint32_t floatResizeEdges(View* view) const;
     void setActiveConstraint(wlr_pointer_constraint_v1* constraint);
     void updateConstraintForSurface(wlr_surface* surface);
     void warpToConstraintHint(wlr_pointer_constraint_v1* constraint);

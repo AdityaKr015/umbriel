@@ -51,6 +51,14 @@ saturation = 1.1         # 0.0-2.0
 # regions unblurred. 0.5 skips pixels that are less than half-opaque.
 ignore_alpha = 0.5
 
+# Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
+[appearance.shadow]
+enabled = true
+softness = 20            # 0-200; gaussian blur sigma in px, 0 disables
+offset_x = 0             # -200-200
+offset_y = 4             # -200-200
+color = "#0000008C"      # #RRGGBB or #RRGGBBAA
+
 [layout]
 gap = 8                         # 0-500
 # Initial width assigned to new columns.

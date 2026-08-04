@@ -173,6 +173,7 @@ namespace umbriel {
       view->updateBorderGeometry();
       view->applyCornerRadius();
       view->updateBlur();
+      view->updateShadow();
     }
     for (const auto& layer : m_layerSurfaces) {
       if (layer->mapped()) {

@@ -543,6 +543,18 @@ namespace umbriel {
     );
   }
 
+  void View::updateShadow() {
+    if (m_toplevel->scheduled.fullscreen) {
+      m_shadow.hide();
+      return;
+    }
+    const wlr_box& geometry = m_toplevel->base->geometry;
+    const bool decorated = m_borderTree != nullptr && m_borderTree->node.enabled;
+    const int total = decorated ? config().appearance.totalBorderWidth() : 0;
+    const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
+    m_shadow.update(m_sceneTree, geometry.width, geometry.height, total, radius);
+  }
+
   void View::clearOutputClip() {
     // Fullscreen must not keep a copied tile clip (that freezes usable-area size and
     // leaves a bar-sized gap). Use scheduled (not current): on leave, scheduled clears
@@ -561,6 +573,7 @@ namespace umbriel {
       updateBorderGeometry();
     }
     updateBlur();
+    updateShadow();
   }
 
   void View::syncFloatingSurfaceClip() {
@@ -585,6 +598,7 @@ namespace umbriel {
       wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
     }
     updateBlur();
+    updateShadow();
   }
 
   void View::applyFullscreenLayout() {
@@ -607,6 +621,7 @@ namespace umbriel {
     wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
     wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
     updateBlur();
+    updateShadow();
   }
 
   void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
@@ -674,6 +689,11 @@ namespace umbriel {
           }
         }
       }
+    }
+    if (decoratedFullyVisible) {
+      updateShadow();
+    } else {
+      m_shadow.hide();
     }
 
     const wlr_box nodeBox{0, 0, content.width, content.height};
@@ -759,6 +779,7 @@ namespace umbriel {
     }
     applyCornerRadius();
     updateBlur();
+    updateShadow();
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this);
     } else if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
@@ -786,6 +807,7 @@ namespace umbriel {
       wlr_scene_node_set_enabled(&m_borderTree->node, false);
     }
     m_blur.hide();
+    m_shadow.hide();
     if (m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
       wlr_scene_node_reparent(&m_sceneTree->node, m_server->xdgTree());
     }
@@ -837,6 +859,7 @@ namespace umbriel {
       syncFloatingSurfaceClip();
     } else {
       updateBlur();
+      updateShadow();
     }
     updateForeignState();
   }
@@ -998,6 +1021,7 @@ namespace umbriel {
       updateBorderGeometry();
       applyCornerRadius();
       updateBlur();
+      updateShadow();
       m_server->focusView(this);
       updateForeignState();
       return;
@@ -1013,6 +1037,7 @@ namespace umbriel {
       m_workspace->layoutAttach(this);
     }
     applyCornerRadius();
+    updateShadow();
     m_server->focusView(this);
     updateForeignState();
   }
@@ -1042,6 +1067,7 @@ namespace umbriel {
       wlr_scene_node_set_enabled(&m_borderTree->node, !fullscreen);
     }
     applyCornerRadius();
+    updateShadow();
     if (!fullscreen) {
       // scheduled.fullscreen is already false; arrange into usable area (exclusive zones).
       if (m_tiled && m_workspace != nullptr) {

@@ -2,6 +2,7 @@
 #include "core/animation.h"
 #include "scene/node.h"
 #include "scene/surface_blur.h"
+#include "scene/surface_shadow.h"
 
 #include <array>
 #include <wayland-server-core.h>
@@ -97,6 +98,7 @@ namespace umbriel {
     void applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight);
     void applyCornerRadius();
     void updateBlur();
+    void updateShadow();
     void clearOutputClip();
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
@@ -114,6 +116,7 @@ namespace umbriel {
     wlr_scene_rect* m_borderRects[4] = {};       // top, bottom, left, right (inner)
     wlr_scene_rect* m_outerBorderRect = nullptr; // single rounded ring outside the inner border
     SurfaceBlur m_blur;
+    SurfaceShadow m_shadow;
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
     Workspace* m_workspace = nullptr;

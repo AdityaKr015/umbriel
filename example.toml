@@ -64,7 +64,7 @@ scroll_wheel_step = 60           # 1-1000
 # Output names must exactly match connector names such as DP-1 or HDMI-A-1.
 # Nested outputs use WL-1; headless outputs use HEADLESS-1. Mode is ignored in
 # nested sessions because the parent compositor controls the output size.
-# Check the startup log for connector names (e.g. "output 'DP-1': applied ...").
+# Run `umbriel outputs` inside the session to list connector names and modes.
 
 # [output."DP-1"]
 # mode = "2560x1440@144"   # WIDTHxHEIGHT or WIDTHxHEIGHT@HZ; fractional HZ allowed

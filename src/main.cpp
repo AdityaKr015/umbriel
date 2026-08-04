@@ -1,3 +1,4 @@
+#include "cli/outputs.h"
 #include "config/config.h"
 #include "config/config_diag.h"
 #include "core/log.h"
@@ -70,13 +71,19 @@ namespace {
   }
 
   void printUsage(const char* argv0) {
-    kLog.error("Usage: {} [-s startup_command] [-c config_file]\n       {} validate [-c config_file]", argv0, argv0);
+    kLog.error(
+        "Usage: {} [-s startup_command] [-c config_file]\n       {} validate [-c config_file]\n       {} outputs",
+        argv0, argv0, argv0
+    );
   }
 } // namespace
 
 int main(int argc, char** argv) {
   if (argc >= 2 && std::strcmp(argv[1], "validate") == 0) {
     return validateConfig(argc, argv);
+  }
+  if (argc >= 2 && std::strcmp(argv[1], "outputs") == 0) {
+    return umbriel::runOutputsCommand();
   }
 
   initLogFile();

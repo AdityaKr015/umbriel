@@ -176,6 +176,14 @@ namespace umbriel {
     wlr_screencopy_manager_v1_create(m_display);
     wlr_export_dmabuf_manager_v1_create(m_display);
 
+    m_outputManager = wlr_output_manager_v1_create(m_display);
+    m_outputManagerApply.notify = onOutputManagerApply;
+    wl_signal_add(&m_outputManager->events.apply, &m_outputManagerApply);
+    m_outputManagerTest.notify = onOutputManagerTest;
+    wl_signal_add(&m_outputManager->events.test, &m_outputManagerTest);
+    m_outputLayoutChange.notify = onOutputLayoutChange;
+    wl_signal_add(&m_outputLayout->events.change, &m_outputLayoutChange);
+
     m_xdgActivation = wlr_xdg_activation_v1_create(m_display);
     m_requestActivate.notify = onRequestActivate;
     wl_signal_add(&m_xdgActivation->events.request_activate, &m_requestActivate);
@@ -206,6 +214,9 @@ namespace umbriel {
     wl_list_remove(&m_requestActivate.link);
     wl_list_remove(&m_workspaceCommit.link);
     wl_list_remove(&m_setGamma.link);
+    wl_list_remove(&m_outputManagerApply.link);
+    wl_list_remove(&m_outputManagerTest.link);
+    wl_list_remove(&m_outputLayoutChange.link);
     m_configWatcher.reset();
 
     m_insertHint.reset();

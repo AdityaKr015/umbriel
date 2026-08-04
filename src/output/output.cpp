@@ -133,6 +133,13 @@ namespace umbriel {
     wlr_output_schedule_frame(m_output);
   }
 
+  void Output::handleExternalConfigChange() {
+    // Mode changes can drop the DRM gamma LUT; re-apply on the next frame.
+    m_gammaDirty = true;
+    arrangeLayers();
+    wlr_output_schedule_frame(m_output);
+  }
+
   Output::~Output() {
     if (m_output != nullptr && m_output->data == this) {
       m_output->data = nullptr;

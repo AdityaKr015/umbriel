@@ -527,6 +527,17 @@ namespace umbriel {
     LayerSurface* layer = nullptr;
     View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
 
+    // Implicit pointer grab: while any button is held, keep focus on the
+    // surface that received the press so it receives the matching release.
+    // Without this, crossing a border/gap/other surface clears or retargets
+    // focus and the release is lost — the client never sees button-up.
+    // The next motion after all buttons are up refreshes focus naturally.
+    wlr_seat* seat = m_server->seat()->wlr();
+    if (seat->pointer_state.button_count > 0 && surface != seat->pointer_state.focused_surface) {
+      updateConstraintForSurface(seat->pointer_state.focused_surface);
+      return;
+    }
+
     if (config().input.focus.followsMouse
         && !m_server->sessionLocked()
         && layer == nullptr
@@ -567,7 +578,6 @@ namespace umbriel {
       }
     }
 
-    wlr_seat* seat = m_server->seat()->wlr();
     if (surface != nullptr) {
       wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
       wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);

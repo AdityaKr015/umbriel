@@ -910,10 +910,37 @@ namespace umbriel {
       };
       for (const auto& [key, entry] : *section) {
         const std::string chord(key.str());
-        const auto value = entry.value<std::string>();
-        if (!value) {
-          warnAt(entry.source(), "ignoring keybind '{}' (expected string)", chord);
-          continue;
+        std::string actionStr;
+        bool repeatBind = true;
+
+        if (const auto* tbl = entry.as_table()) {
+          warnUnknownKeys(*tbl, "keybinds." + chord, {"action", "repeat"});
+          const toml::node* actionNode = tbl->get("action");
+          if (actionNode == nullptr) {
+            warnAt(entry.source(), "ignoring keybind '{}' (table needs an 'action' string)", chord);
+            continue;
+          }
+          const auto actionVal = actionNode->value<std::string>();
+          if (!actionVal) {
+            warnAt(entry.source(), "ignoring keybind '{}' (table needs an 'action' string)", chord);
+            continue;
+          }
+          actionStr = *actionVal;
+          if (const toml::node* repeatNode = tbl->get("repeat")) {
+            const auto repeatVal = repeatNode->value<bool>();
+            if (repeatVal) {
+              repeatBind = *repeatVal;
+            } else {
+              warnAt(repeatNode->source(), "ignoring keybinds.{}.repeat (expected boolean)", chord);
+            }
+          }
+        } else {
+          const auto value = entry.value<std::string>();
+          if (!value) {
+            warnAt(entry.source(), "ignoring keybind '{}' (expected string or table)", chord);
+            continue;
+          }
+          actionStr = *value;
         }
 
         Keybind binding;
@@ -925,8 +952,9 @@ namespace umbriel {
           }
           continue;
         }
-        if (!parseAction(*value, binding)) {
-          warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, *value);
+        binding.repeat = repeatBind;
+        if (!parseAction(actionStr, binding)) {
+          warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, actionStr);
           continue;
         }
 

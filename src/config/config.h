@@ -54,6 +54,7 @@ namespace umbriel {
     KeybindAction action = KeybindAction::None;
     std::string spawnCommand;
     int workspace = 0;
+    bool repeat = true;
   };
   struct OutputMode {
     int width = 0;

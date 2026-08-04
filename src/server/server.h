@@ -125,7 +125,7 @@ namespace umbriel {
 
     void focusView(View* view, FocusReason reason = FocusReason::Startup);
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
-    bool handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
+    const Keybind* handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
     bool handleWheelBind(WheelDirection direction, uint32_t modifiers);
     bool handleVtSwitch(uint32_t keysym, uint32_t modifiers);
     void arrangeLayers(wlr_output* output);

@@ -133,6 +133,9 @@ follows_mouse = false
 #   workspace-switch:N, window-move-to-workspace:N (N is 1-9),
 #   spawn:<shell command>
 # Defaults: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
+# Binds repeat while held (using input.keyboard repeat_rate/repeat_delay).
+# Opt out per bind with the table form:
+#   "Mod+Return" = { action = "terminal-spawn", repeat = false }
 "Mod+Return" = "terminal-spawn"
 "Mod+T" = "window-toggle-floating"
 "Mod+Shift+Q" = "window-close"

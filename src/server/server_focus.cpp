@@ -392,9 +392,9 @@ namespace umbriel {
     return false;
   }
 
-  bool Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {
+  const Keybind* Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {
     if (m_sessionLocked) {
-      return false;
+      return nullptr;
     }
 
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
@@ -408,10 +408,10 @@ namespace umbriel {
       if (effective != expected || (lowered != bind.keysym && rawKeysym != bind.keysym)) {
         continue;
       }
-      return executeKeybindAction(bind);
+      return executeKeybindAction(bind) ? &bind : nullptr;
     }
 
-    return false;
+    return nullptr;
   }
 
   bool Server::handleWheelBind(WheelDirection direction, uint32_t modifiers) {

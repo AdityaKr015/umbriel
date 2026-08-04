@@ -1,5 +1,6 @@
 #include "input/keyboard.h"
 
+#include <algorithm>
 #include "config/config.h"
 #include "input/cursor.h"
 #include "input/seat.h"
@@ -22,6 +23,7 @@ namespace umbriel {
     wlr_seat_set_keyboard(m_server->seat()->wlr(), m_keyboard);
   }
   void Keyboard::applyConfig() {
+    cancelRepeat();
     const Config::Input::Keyboard& configured = config().input.keyboard;
     xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     const xkb_rule_names names{
@@ -46,6 +48,10 @@ namespace umbriel {
   }
 
   Keyboard::~Keyboard() {
+    if (m_repeatTimer != nullptr) {
+      wl_event_source_remove(m_repeatTimer);
+      m_repeatTimer = nullptr;
+    }
     if (m_modifiers.link.next != nullptr) {
       wl_list_remove(&m_modifiers.link);
       wl_list_remove(&m_key.link);
@@ -72,6 +78,7 @@ namespace umbriel {
   }
 
   void Keyboard::handleModifiers() {
+    cancelRepeat();
     m_server->notifyIdleActivity();
     wlr_seat* seat = m_server->seat()->wlr();
     wlr_seat_set_keyboard(seat, m_keyboard);
@@ -96,11 +103,25 @@ namespace umbriel {
     bool handled = false;
     uint32_t modifiers = wlr_keyboard_get_modifiers(m_keyboard);
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+      cancelRepeat();
       for (int i = 0; i < nsyms; ++i) {
         handled = m_server->handleVtSwitch(syms[i], modifiers) || handled;
       }
+      const Keybind* matched = nullptr;
       for (int i = 0; i < nsyms; ++i) {
-        handled = m_server->handleKeybind(syms[i], rawSym, modifiers) || handled;
+        const Keybind* result = m_server->handleKeybind(syms[i], rawSym, modifiers);
+        if (result != nullptr) {
+          matched = result;
+          handled = true;
+          break;
+        }
+      }
+      if (matched != nullptr) {
+        armRepeat(*matched, event->keycode);
+      }
+    } else if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
+      if (m_repeatArmed && event->keycode == m_repeatKeycode) {
+        cancelRepeat();
       }
     }
 
@@ -111,6 +132,10 @@ namespace umbriel {
   }
 
   void Keyboard::handleDestroy() {
+    if (m_repeatTimer != nullptr) {
+      wl_event_source_remove(m_repeatTimer);
+      m_repeatTimer = nullptr;
+    }
     wl_list_remove(&m_modifiers.link);
     wl_list_remove(&m_key.link);
     wl_list_remove(&m_destroy.link);
@@ -118,6 +143,49 @@ namespace umbriel {
     m_key.link.next = nullptr;
     m_destroy.link.next = nullptr;
     m_server->removeKeyboard(this);
+  }
+
+  void Keyboard::armRepeat(const Keybind& bind, uint32_t keycode) {
+    const int32_t rate = m_keyboard->repeat_info.rate;
+    const int32_t delay = m_keyboard->repeat_info.delay;
+    if (!bind.repeat || rate <= 0 || delay <= 0) {
+      cancelRepeat();
+      return;
+    }
+    m_repeatBind = bind;
+    m_repeatKeycode = keycode;
+    m_repeatIntervalMs = std::max(1, 1000 / rate);
+    if (m_repeatTimer == nullptr) {
+      wl_event_loop* loop = wl_display_get_event_loop(m_server->display());
+      m_repeatTimer = wl_event_loop_add_timer(loop, onRepeatTimer, this);
+      if (m_repeatTimer == nullptr) {
+        return;
+      }
+    }
+    wl_event_source_timer_update(m_repeatTimer, delay);
+    m_repeatArmed = true;
+  }
+
+  void Keyboard::cancelRepeat() {
+    if (m_repeatArmed) {
+      wl_event_source_timer_update(m_repeatTimer, 0);
+      m_repeatArmed = false;
+    }
+  }
+
+  int Keyboard::onRepeatTimer(void* data) {
+    auto* self = static_cast<Keyboard*>(data);
+    if (!self->m_repeatArmed) {
+      return 0;
+    }
+    if (self->m_server->sessionLocked()) {
+      self->cancelRepeat();
+      return 0;
+    }
+    self->m_server->notifyIdleActivity();
+    self->m_server->executeKeybindAction(self->m_repeatBind);
+    wl_event_source_timer_update(self->m_repeatTimer, self->m_repeatIntervalMs);
+    return 0;
   }
 
 } // namespace umbriel

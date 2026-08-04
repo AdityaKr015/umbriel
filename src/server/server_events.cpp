@@ -529,7 +529,11 @@ namespace umbriel {
     }
     const bool hadKeyboardFocus = m_seat->wlr()->keyboard_state.focused_surface == view->toplevel()->base->surface;
     View* replacement = nullptr;
+    Output* output = nullptr;
     if (Workspace* workspace = view->workspace()) {
+      if (workspace->group() != nullptr) {
+        output = workspace->group()->output();
+      }
       replacement = workspace->removeView(view);
       view->detachWorkspace();
     }
@@ -539,7 +543,7 @@ namespace umbriel {
       if (replacement != nullptr) {
         focusView(replacement);
       } else {
-        refocus();
+        refocus(output);
       }
     }
   }
@@ -570,6 +574,11 @@ namespace umbriel {
     if (m_outputManager == nullptr) {
       return;
     }
+    // Broadcast disabled: the first client bind after set_configuration sends
+    // mode + current_mode in one burst and aborts the desktop shell from this
+    // flake (unchanged noctalia package). Empty heads restore pre-protocol
+    // shell startup; re-enable the block below when that client can consume it.
+#if 0
     wlr_output_configuration_v1* cfg = wlr_output_configuration_v1_create();
     for (const auto& output : m_outputs) {
       wlr_output_configuration_head_v1* head = wlr_output_configuration_head_v1_create(cfg, output->wlr());
@@ -579,6 +588,7 @@ namespace umbriel {
       }
     }
     wlr_output_manager_v1_set_configuration(m_outputManager, cfg);
+#endif
   }
 
   void Server::applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly) {

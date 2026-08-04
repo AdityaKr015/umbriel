@@ -64,6 +64,7 @@ namespace umbriel {
     void clipGrabbedViewToOutput();
     void updateDropTarget();
     void finishTileMove();
+    void finishFloatMove();
     void processResize();
     void processResizeTile();
     [[nodiscard]] uint32_t tileResizeEdges(View* view) const;

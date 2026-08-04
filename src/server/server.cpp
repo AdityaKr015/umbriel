@@ -176,6 +176,9 @@ namespace umbriel {
     wlr_screencopy_manager_v1_create(m_display);
     wlr_export_dmabuf_manager_v1_create(m_display);
 
+    // Create the manager so apply/test listeners stay wired, but leave heads empty
+    // (see updateOutputManagerConfig). Advertising a full configuration on bind
+    // currently takes down the desktop shell from this flake.
     m_outputManager = wlr_output_manager_v1_create(m_display);
     m_outputManagerApply.notify = onOutputManagerApply;
     wl_signal_add(&m_outputManager->events.apply, &m_outputManagerApply);

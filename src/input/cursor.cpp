@@ -345,6 +345,24 @@ namespace umbriel {
         return;
       }
       wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
+
+      // After the final release, refresh pointer focus so it matches the
+      // surface actually under the cursor.  The implicit-grab guard in
+      // processMotion kept focus pinned while buttons were held; realign
+      // now so a subsequent press without intervening motion targets the
+      // correct surface.
+      if (m_server->seat()->wlr()->pointer_state.button_count == 0) {
+        double sx2 = 0;
+        double sy2 = 0;
+        wlr_surface* surf = nullptr;
+        m_server->viewAt(m_cursor->x, m_cursor->y, &surf, &sx2, &sy2);
+        if (surf != nullptr) {
+          wlr_seat_pointer_notify_enter(m_server->seat()->wlr(), surf, sx2, sy2);
+        } else {
+          wlr_seat_pointer_clear_focus(m_server->seat()->wlr());
+        }
+      }
+
       resetMode();
       return;
     }

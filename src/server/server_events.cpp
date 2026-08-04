@@ -192,6 +192,7 @@ namespace umbriel {
     if (m_sessionLocked) {
       updateLockBlank();
     }
+    updateOutputManagerConfig();
   }
 
   void Server::handleConfigReload() {
@@ -545,6 +546,88 @@ namespace umbriel {
       return entry.get() == layerSurface;
     });
     arrangeLayers(output);
+  }
+
+  void Server::onOutputManagerApply(wl_listener* listener, void* data) {
+    Server* self = wl_container_of(listener, self, m_outputManagerApply);
+    self->applyOutputManagerConfig(static_cast<wlr_output_configuration_v1*>(data), false);
+  }
+
+  void Server::onOutputManagerTest(wl_listener* listener, void* data) {
+    Server* self = wl_container_of(listener, self, m_outputManagerTest);
+    self->applyOutputManagerConfig(static_cast<wlr_output_configuration_v1*>(data), true);
+  }
+
+  void Server::onOutputLayoutChange(wl_listener* listener, void* /*data*/) {
+    Server* self = wl_container_of(listener, self, m_outputLayoutChange);
+    self->updateOutputManagerConfig();
+  }
+
+  void Server::updateOutputManagerConfig() {
+    if (m_outputManager == nullptr) {
+      return;
+    }
+    wlr_output_configuration_v1* cfg = wlr_output_configuration_v1_create();
+    for (const auto& output : m_outputs) {
+      wlr_output_configuration_head_v1* head = wlr_output_configuration_head_v1_create(cfg, output->wlr());
+      if (wlr_output_layout_output* lo = wlr_output_layout_get(m_outputLayout, output->wlr())) {
+        head->state.x = lo->x;
+        head->state.y = lo->y;
+      }
+    }
+    wlr_output_manager_v1_set_configuration(m_outputManager, cfg);
+  }
+
+  void Server::applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly) {
+    // Reject disabling outputs: umbriel has no disabled-output state model.
+    wlr_output_configuration_head_v1* head = nullptr;
+    wl_list_for_each(head, &config->heads, link) {
+      if (!head->state.enabled) {
+        kLog.warn("output-management: disabling outputs is not supported");
+        wlr_output_configuration_v1_send_failed(config);
+        wlr_output_configuration_v1_destroy(config);
+        return;
+      }
+    }
+
+    size_t statesLen = 0;
+    wlr_backend_output_state* states = wlr_output_configuration_v1_build_state(config, &statesLen);
+    if (states == nullptr) {
+      wlr_output_configuration_v1_send_failed(config);
+      wlr_output_configuration_v1_destroy(config);
+      return;
+    }
+
+    bool ok = wlr_backend_test(m_backend, states, statesLen);
+    if (ok && !testOnly) {
+      ok = wlr_backend_commit(m_backend, states, statesLen);
+    }
+
+    if (ok && !testOnly) {
+      // Apply layout positions and refresh affected outputs.
+      wl_list_for_each(head, &config->heads, link) {
+        wlr_output_layout_add(m_outputLayout, head->state.output, head->state.x, head->state.y);
+        if (Output* out = outputFromWlr(head->state.output)) {
+          out->handleExternalConfigChange();
+        }
+      }
+      relayoutBanner();
+      if (m_sessionLocked) {
+        updateLockBlank();
+      }
+    }
+
+    free(states);
+    if (ok) {
+      wlr_output_configuration_v1_send_succeeded(config);
+    } else {
+      wlr_output_configuration_v1_send_failed(config);
+    }
+    wlr_output_configuration_v1_destroy(config);
+
+    if (ok && !testOnly) {
+      updateOutputManagerConfig();
+    }
   }
 
 } // namespace umbriel

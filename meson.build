@@ -1,6 +1,6 @@
 project(
   'umbriel',
-  ['cpp'],
+  ['c', 'cpp'],
   version: '0.1.0',
   meson_version: '>=1.3',
   default_options: [
@@ -15,8 +15,13 @@ add_project_arguments(
   '-DWLR_USE_UNSTABLE',
   language: 'cpp',
 )
+add_project_arguments(
+  '-DWLR_USE_UNSTABLE',
+  language: 'c',
+)
 
 wayland_server_dep = dependency('wayland-server')
+wayland_client_dep = dependency('wayland-client')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')
 # Umbriel needs ignore_alpha (not in upstream SceneFX 0.5). Prefer a system
@@ -80,6 +85,19 @@ layer_shell_protocol_h = custom_target(
   command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
 )
 
+output_mgmt_client_h = custom_target(
+  'wlr-output-management-unstable-v1-client-protocol.h',
+  input: 'protocols/wlr-output-management-unstable-v1.xml',
+  output: 'wlr-output-management-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+output_mgmt_client_c = custom_target(
+  'wlr-output-management-unstable-v1-protocol.c',
+  input: 'protocols/wlr-output-management-unstable-v1.xml',
+  output: 'wlr-output-management-unstable-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 sources = files(
   'src/main.cpp',
   'src/core/animation.cpp',
@@ -106,16 +124,18 @@ sources = files(
   'src/scene/text_buffer.cpp',
   'src/lock/session_lock.cpp',
   'src/workspace/workspace.cpp',
+  'src/cli/outputs.cpp',
 )
 
 umbriel = executable(
   'umbriel',
-  sources + [layer_shell_protocol_h],
+  sources + [layer_shell_protocol_h, output_mgmt_client_h, output_mgmt_client_c],
   include_directories: include_directories('src'),
   dependencies: [
     scenefx_dep,
     wlroots_dep,
     wayland_server_dep,
+    wayland_client_dep,
     wayland_protocols_enums,
     xkbcommon_dep,
     libinput_dep,

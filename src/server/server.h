@@ -39,6 +39,8 @@ struct wlr_ext_workspace_group_handle_v1;
 struct wlr_ext_workspace_handle_v1;
 struct wlr_ext_workspace_manager_v1;
 struct wlr_gamma_control_manager_v1;
+struct wlr_output_manager_v1;
+struct wlr_output_configuration_v1;
 struct wlr_scene_tree;
 
 namespace umbriel {
@@ -160,6 +162,9 @@ namespace umbriel {
     static void onWorkspaceCommit(wl_listener* listener, void* data);
     static void onSetGamma(wl_listener* listener, void* data);
     static void onPointerDestroy(wl_listener* listener, void* data);
+    static void onOutputManagerApply(wl_listener* listener, void* data);
+    static void onOutputManagerTest(wl_listener* listener, void* data);
+    static void onOutputLayoutChange(wl_listener* listener, void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -177,6 +182,8 @@ namespace umbriel {
     void updateIdleInhibit();
     void handleWorkspaceCommit(void* data);
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
+    void updateOutputManagerConfig();
+    void applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly);
     [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 
     // xwayland-satellite lifecycle
@@ -218,6 +225,7 @@ namespace umbriel {
     wlr_idle_notifier_v1* m_idleNotifier = nullptr;
     wlr_xdg_activation_v1* m_xdgActivation = nullptr;
     wlr_gamma_control_manager_v1* m_gammaManager = nullptr;
+    wlr_output_manager_v1* m_outputManager = nullptr;
     wlr_scene_tree* m_shellLayerTrees[kLayerCount]{};
     wlr_scene_tree* m_xdgTree = nullptr;
     wlr_scene_tree* m_dragTree = nullptr;
@@ -260,6 +268,9 @@ namespace umbriel {
     wl_listener m_requestActivate{};
     wl_listener m_workspaceCommit{};
     wl_listener m_setGamma{};
+    wl_listener m_outputManagerApply{};
+    wl_listener m_outputManagerTest{};
+    wl_listener m_outputLayoutChange{};
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;

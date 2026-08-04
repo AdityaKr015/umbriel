@@ -39,6 +39,7 @@ namespace umbriel {
     void arrangeLayers();
     void onGammaChanged(wlr_gamma_control_v1* control);
     void applyConfig();
+    void handleExternalConfigChange();
 
   private:
     static void onFrame(wl_listener* listener, void* data);

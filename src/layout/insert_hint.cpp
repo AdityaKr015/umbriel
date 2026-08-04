@@ -155,6 +155,26 @@ namespace umbriel {
 
   void InsertHint::showGeometry(Workspace* workspace, int x, int y, int width, int height) {
     ensureScene();
+
+    // Clamp the hint rectangle to the output's usable area so it never bleeds
+    // onto an adjacent monitor (e.g. inserting at the first column of a screen
+    // that sits to the right of another).
+    const wlr_box usable = workspace->group()->output()->usableArea();
+    const int x2 = x + width;
+    const int y2 = y + height;
+    const int clampedX = std::max(x, usable.x);
+    const int clampedY = std::max(y, usable.y);
+    const int clampedX2 = std::min(x2, usable.x + usable.width);
+    const int clampedY2 = std::min(y2, usable.y + usable.height);
+    if (clampedX >= clampedX2 || clampedY >= clampedY2) {
+      hide();
+      return;
+    }
+    x = clampedX;
+    y = clampedY;
+    width = clampedX2 - clampedX;
+    height = clampedY2 - clampedY;
+
     wlr_scene_rect_set_size(m_rect, width, height);
     const int radius = config().appearance.cornerRadius;
     wlr_scene_rect_set_corner_radius(m_rect, radius);

@@ -527,7 +527,7 @@ namespace umbriel {
       warnUnknownKeys(
           *section, "appearance",
           {"border_width", "outer_border_width", "corner_radius", "border_focused", "border_unfocused",
-           "outer_border_color", "insert_hint_color", "animation_ms", "blur"}
+           "outer_border_color", "insert_hint_color", "animation_ms", "blur", "shadow"}
       );
       readInteger(*section, "border_width", "appearance.border_width", 0, 100, loaded.appearance.borderWidth);
       readInteger(
@@ -564,6 +564,25 @@ namespace umbriel {
           );
         } else {
           warnAt(blurNode->source(), "ignoring appearance.blur (expected table)");
+        }
+      }
+
+      if (const toml::node* shadowNode = section->get("shadow")) {
+        if (const auto* shadow = shadowNode->as_table()) {
+          warnUnknownKeys(*shadow, "appearance.shadow", {"enabled", "softness", "offset_x", "offset_y", "color"});
+          if (const toml::node* enabledNode = shadow->get("enabled")) {
+            if (enabledNode->is_boolean()) {
+              loaded.appearance.shadow.enabled = enabledNode->value<bool>().value();
+            } else {
+              warnAt(enabledNode->source(), "ignoring appearance.shadow.enabled (expected boolean)");
+            }
+          }
+          readInteger(*shadow, "softness", "appearance.shadow.softness", 0, 200, loaded.appearance.shadow.softness);
+          readInteger(*shadow, "offset_x", "appearance.shadow.offset_x", -200, 200, loaded.appearance.shadow.offsetX);
+          readInteger(*shadow, "offset_y", "appearance.shadow.offset_y", -200, 200, loaded.appearance.shadow.offsetY);
+          readColor(*shadow, "color", "appearance.shadow.color", loaded.appearance.shadow.color);
+        } else {
+          warnAt(shadowNode->source(), "ignoring appearance.shadow (expected table)");
         }
       }
     }

@@ -120,6 +120,7 @@ sources = files(
   'src/view/popup.cpp',
   'src/layer/surface.cpp',
   'src/scene/surface_blur.cpp',
+  'src/scene/surface_shadow.cpp',
   'src/scene/config_banner.cpp',
   'src/scene/text_buffer.cpp',
   'src/lock/session_lock.cpp',

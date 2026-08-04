@@ -89,6 +89,13 @@ namespace umbriel {
         double saturation = 1.1;
         double ignoreAlpha = 0.5;
       } blur;
+      struct Shadow {
+        bool enabled = true;
+        int softness = 20;
+        int offsetX = 0;
+        int offsetY = 4;
+        std::array<float, 4> color{0.0F, 0.0F, 0.0F, 0.55F};
+      } shadow;
 
       [[nodiscard]] int totalBorderWidth() const { return borderWidth + outerBorderWidth; }
     } appearance;

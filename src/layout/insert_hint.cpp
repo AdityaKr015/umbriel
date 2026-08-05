@@ -85,8 +85,11 @@ namespace umbriel {
       // Empty workspace: center the hint.
       hintX = 0;
     } else if (clampedGap <= 0) {
-      // Before the first column.
-      hintX = -kColumnHintWidth - gap;
+      // Before the first column: flush with the left edge of the layout.
+      // The viewport cannot scroll to negative offsets, so the previous
+      // position (-kColumnHintWidth - gap) fell entirely outside the
+      // usable area and was clipped away by showGeometry.
+      hintX = 0;
     } else if (clampedGap >= columnCount) {
       // After the last column.
       hintX = workspace->layout().columnX(columnCount - 1, viewportWidth)

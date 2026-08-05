@@ -595,10 +595,12 @@ namespace umbriel {
   }
 
   void Cursor::processMove() {
-    wlr_scene_node_set_position(
-        &m_grabbedView->sceneTree()->node, static_cast<int>(m_cursor->x - m_grabX),
-        static_cast<int>(m_cursor->y - m_grabY)
-    );
+    const int nx = static_cast<int>(m_cursor->x - m_grabX);
+    const int ny = static_cast<int>(m_cursor->y - m_grabY);
+    wlr_scene_node_set_position(&m_grabbedView->sceneTree()->node, nx, ny);
+    if (m_grabbedView->m_shadowContainer != nullptr) {
+      wlr_scene_node_set_position(&m_grabbedView->m_shadowContainer->node, nx, ny);
+    }
     if (m_mode == CursorMode::MoveTile) {
       clipGrabbedViewToOutput();
     }
@@ -630,10 +632,10 @@ namespace umbriel {
     decorated.height += 2 * border;
     wlr_box intersection{};
     if (!wlr_box_intersection(&intersection, &decorated, &outputBox)) {
-      wlr_scene_node_set_enabled(&m_grabbedView->sceneTree()->node, false);
+      m_grabbedView->setNodeEnabled(false);
       return;
     }
-    wlr_scene_node_set_enabled(&m_grabbedView->sceneTree()->node, true);
+    m_grabbedView->setNodeEnabled(true);
     m_grabbedView->setOutputClip(&intersection, target, outputBox);
   }
 
@@ -761,7 +763,7 @@ namespace umbriel {
           }
         }
       }
-      wlr_scene_node_set_enabled(&view->sceneTree()->node, true);
+      view->setNodeEnabled(true);
       m_server->focusView(view, FocusReason::DragDrop);
     }
     resetMode();

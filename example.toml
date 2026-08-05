@@ -54,9 +54,9 @@ ignore_alpha = 0.5
 # Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
 [appearance.shadow]
 enabled = true
-softness = 20            # 0-200; gaussian blur sigma in px, 0 disables
-offset_x = 0             # -200-200
-offset_y = 4             # -200-200
+softness = 10            # 0-200; gaussian blur sigma in px, 0 disables
+offset_x = 2             # -200-200
+offset_y = 2             # -200-200
 color = "#0000008C"      # #RRGGBB or #RRGGBBAA
 
 [layout]

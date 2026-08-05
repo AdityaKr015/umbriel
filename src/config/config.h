@@ -92,9 +92,9 @@ namespace umbriel {
       } blur;
       struct Shadow {
         bool enabled = true;
-        int softness = 20;
-        int offsetX = 0;
-        int offsetY = 4;
+        int softness = 10;
+        int offsetX = 2;
+        int offsetY = 2;
         std::array<float, 4> color{0.0F, 0.0F, 0.0F, 0.55F};
       } shadow;
 

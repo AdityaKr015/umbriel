@@ -149,3 +149,9 @@ umbriel = executable(
   ],
   install: true,
 )
+
+install_data(
+  'data/umbriel.desktop',
+  install_dir: get_option('datadir') / 'wayland-sessions',
+)
+

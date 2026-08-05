@@ -63,16 +63,13 @@ stdenv.mkDerivation {
 
   mesonBuildType = "release";
 
+  # Session desktop comes from meson (`data/umbriel.desktop`).
+  # Rewrite Exec= so display managers invoke the wrapped binary in this store path.
   postInstall = ''
-    mkdir -p "$out/share/wayland-sessions"
-    cat > "$out/share/wayland-sessions/umbriel.desktop" <<EOF
-[Desktop Entry]
-Name=Umbriel
-Comment=Umbriel Wayland Compositor
-Exec=$out/bin/umbriel
-Type=Application
-DesktopNames=Umbriel
-EOF
+    if [ -f "$out/share/wayland-sessions/umbriel.desktop" ]; then
+      substituteInPlace "$out/share/wayland-sessions/umbriel.desktop" \
+        --replace-fail 'Exec=umbriel' "Exec=$out/bin/umbriel"
+    fi
     wrapProgram $out/bin/umbriel --prefix PATH : ${lib.makeBinPath [ xwayland-satellite ]}
   '';
 

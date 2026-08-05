@@ -202,6 +202,7 @@ src/
   core/       animation, logging
   cli/        output listing subcommand
 protocols/    vendored Wayland protocol XML
+data/         wayland-sessions desktop entry
 nix/
   package.nix
   devshell.nix

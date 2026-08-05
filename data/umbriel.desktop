@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Umbriel
+Comment=Umbriel Wayland Compositor
+Exec=umbriel
+Type=Application
+DesktopNames=Umbriel

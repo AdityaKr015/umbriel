@@ -1,11 +1,38 @@
 #include "view/popup.h"
 
 #include "layer/surface.h"
+#include "scene/node.h"
+#include "view/view.h"
 #include "wlr.h"
 
 #include <cassert>
 
 namespace umbriel {
+
+  namespace {
+    View* toplevelViewFromSurface(wlr_surface* surface) {
+      wlr_surface* walk = surface;
+      while (walk != nullptr) {
+        if (wlr_xdg_toplevel* toplevel = wlr_xdg_toplevel_try_from_wlr_surface(walk)) {
+          auto* tree = static_cast<wlr_scene_tree*>(toplevel->base->data);
+          if (tree == nullptr || tree->node.data == nullptr) {
+            return nullptr;
+          }
+          auto* node = static_cast<SceneNode*>(tree->node.data);
+          if (node->kind != SceneNodeKind::View) {
+            return nullptr;
+          }
+          return static_cast<View*>(node);
+        }
+        if (wlr_xdg_popup* popup = wlr_xdg_popup_try_from_wlr_surface(walk)) {
+          walk = popup->parent;
+          continue;
+        }
+        break;
+      }
+      return nullptr;
+    }
+  } // namespace
 
   Popup::Popup(wlr_xdg_popup* popup, wlr_scene_tree* parentTree) : m_popup(popup) {
     if (parentTree == nullptr) {
@@ -32,20 +59,17 @@ namespace umbriel {
   }
 
   void Popup::onCommit(wl_listener* listener, void* /*data*/) {
-    Popup* self;
-    self = wl_container_of(listener, self, m_commit);
+    Popup* self = wl_container_of(listener, self, m_commit);
     self->handleCommit();
   }
 
   void Popup::onUnmap(wl_listener* listener, void* /*data*/) {
-    Popup* self;
-    self = wl_container_of(listener, self, m_unmap);
+    Popup* self = wl_container_of(listener, self, m_unmap);
     self->m_blur.hide();
   }
 
   void Popup::onDestroy(wl_listener* listener, void* /*data*/) {
-    Popup* self;
-    self = wl_container_of(listener, self, m_destroy);
+    Popup* self = wl_container_of(listener, self, m_destroy);
     self->handleDestroy();
   }
 
@@ -63,6 +87,8 @@ namespace umbriel {
       if (auto* surface = static_cast<LayerSurface*>(layer->data)) {
         surface->unconstrainPopup(m_popup);
       }
+    } else if (View* view = toplevelViewFromSurface(m_popup->parent)) {
+      view->unconstrainPopup(m_popup);
     }
 
     wlr_xdg_surface_schedule_configure(m_popup->base);

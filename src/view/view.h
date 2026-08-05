@@ -12,6 +12,7 @@ struct wlr_foreign_toplevel_handle_v1;
 struct wlr_output;
 struct wlr_scene_tree;
 struct wlr_scene_rect;
+struct wlr_xdg_popup;
 struct wlr_xdg_toplevel;
 
 namespace umbriel {
@@ -67,6 +68,7 @@ namespace umbriel {
   private:
     friend class Cursor;
     friend class Server;
+    friend class Popup;
 
     static void onMap(wl_listener* listener, void* data);
     static void onUnmap(wl_listener* listener, void* data);
@@ -115,6 +117,9 @@ namespace umbriel {
     void applyPresentedSize();
     void cancelSizeAnimation();
     void clearOutputClip();
+    // Apply subsurface clip to the toplevel surface only, not xdg popup children.
+    void setSurfaceTreeClip(const wlr_box* clip);
+    void unconstrainPopup(wlr_xdg_popup* popup);
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
     void placeInUsableArea();

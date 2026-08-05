@@ -33,6 +33,39 @@ namespace umbriel {
     }
 
     int expandedRadius(int radius, int thickness) { return radius > 0 ? radius + thickness : 0; }
+
+    bool sceneNodeShowsSurface(wlr_scene_node* node, wlr_surface* surface) {
+      switch (node->type) {
+      case WLR_SCENE_NODE_BUFFER: {
+        wlr_scene_buffer* buffer = wlr_scene_buffer_from_node(node);
+        wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+        return sceneSurface != nullptr && sceneSurface->surface == surface;
+      }
+      case WLR_SCENE_NODE_TREE: {
+        wlr_scene_tree* tree = wlr_scene_tree_from_node(node);
+        wlr_scene_node* child = nullptr;
+        wl_list_for_each(child, &tree->children, link) {
+          if (sceneNodeShowsSurface(child, surface)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      default:
+        return false;
+      }
+    }
+
+    // Direct child of the xdg scene tree that holds the toplevel subsurface tree.
+    wlr_scene_node* toplevelSurfaceTreeNode(wlr_scene_tree* xdgTree, wlr_surface* mainSurface) {
+      wlr_scene_node* child = nullptr;
+      wl_list_for_each(child, &xdgTree->children, link) {
+        if (child->type == WLR_SCENE_NODE_TREE && sceneNodeShowsSurface(child, mainSurface)) {
+          return child;
+        }
+      }
+      return nullptr;
+    }
   } // namespace
 
   std::array<View::BorderEdge, 4> View::makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness) {
@@ -824,6 +857,61 @@ namespace umbriel {
     }
   }
 
+  void View::setSurfaceTreeClip(const wlr_box* clip) {
+    // Clip only the toplevel subsurface tree. Calling set_clip on the xdg root also
+    // stamps that clip onto popup children (wrong coords → cut-off menus), and clearing
+    // clip on border/popup trees asserts when they have no subsurface tree.
+    if (wlr_scene_node* surfaceNode = toplevelSurfaceTreeNode(m_sceneTree, m_toplevel->base->surface)) {
+      wlr_scene_subsurface_tree_set_clip(surfaceNode, clip);
+      return;
+    }
+    if (clip == nullptr) {
+      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
+    }
+  }
+
+  void View::unconstrainPopup(wlr_xdg_popup* popup) {
+    if (popup == nullptr || m_sceneTree == nullptr) {
+      return;
+    }
+    wlr_output* wlrOutput = nullptr;
+    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+      wlrOutput = m_workspace->group()->output()->wlr();
+    }
+    if (wlrOutput == nullptr) {
+      wlrOutput = m_server->preferredOutput();
+    }
+    if (wlrOutput == nullptr) {
+      return;
+    }
+
+    wlr_box outputBox{};
+    wlr_output_layout_get_box(m_server->outputLayout(), wlrOutput, &outputBox);
+    if (outputBox.width <= 0 || outputBox.height <= 0) {
+      return;
+    }
+
+    wlr_xdg_surface* parentXdg = wlr_xdg_surface_try_from_wlr_surface(popup->parent);
+    if (parentXdg == nullptr || parentXdg->data == nullptr) {
+      return;
+    }
+    auto* parentTree = static_cast<wlr_scene_tree*>(parentXdg->data);
+    int lx = 0;
+    int ly = 0;
+    if (!wlr_scene_node_coords(&parentTree->node, &lx, &ly)) {
+      return;
+    }
+
+    // Box is relative to the popup parent surface (xdg scene origin = geometry top-left).
+    const wlr_box box{
+        .x = outputBox.x - lx,
+        .y = outputBox.y - ly,
+        .width = outputBox.width,
+        .height = outputBox.height,
+    };
+    wlr_xdg_popup_unconstrain_from_box(popup, &box);
+  }
+
   void View::clearOutputClip() {
     // Fullscreen must not keep a copied tile clip (that freezes usable-area size and
     // leaves a bar-sized gap). Use scheduled (not current): on leave, scheduled clears
@@ -837,7 +925,7 @@ namespace umbriel {
       return;
     }
     const wlr_box* clip = (!fullscreen && m_tiled) ? &m_toplevel->base->geometry : nullptr;
-    wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, clip);
+    setSurfaceTreeClip(clip);
     if (m_borderTree != nullptr) {
       updateBorderGeometry();
     }
@@ -862,9 +950,9 @@ namespace umbriel {
     // would suddenly show the full surface.
     if (width > 0 && height > 0 && (geo.width > width || geo.height > height)) {
       const wlr_box clip{geo.x, geo.y, std::min(geo.width, width), std::min(geo.height, height)};
-      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, &clip);
+      setSurfaceTreeClip(&clip);
     } else {
-      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
+      setSurfaceTreeClip(nullptr);
     }
     updateBlur();
     updateShadow();
@@ -899,7 +987,7 @@ namespace umbriel {
     if (m_shadowContainer != nullptr) {
       wlr_scene_node_set_position(&m_shadowContainer->node, fullArea.x, fullArea.y);
     }
-    wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
+    setSurfaceTreeClip(nullptr);
     updateBlur();
     updateShadow();
   }
@@ -948,13 +1036,13 @@ namespace umbriel {
       if ((surfaceClip.width & 1) != 0) {
         ++surfaceClip.width;
       }
-      // This also reaches popup subsurface trees, whose popup-local clip coordinates
-      // can be wrong while the parent is partially off-output. This rare case is accepted.
-      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, &surfaceClip);
+      // Crop the toplevel surface to the visible tile; popup children are unclipped in
+      // setSurfaceTreeClip so context menus can extend past the window edge.
+      setSurfaceTreeClip(&surfaceClip);
     } else {
       // Only the border/decoration remains on this output.
       const wlr_box empty{geometry.x, geometry.y, 0, 0};
-      wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, &empty);
+      setSurfaceTreeClip(&empty);
     }
 
     if (m_borderTree != nullptr) {

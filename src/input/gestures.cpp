@@ -32,35 +32,43 @@ namespace umbriel {
   // ----- trampolines (same pattern as Cursor) -----
 
   void Gestures::onSwipeBegin(wl_listener* listener, void* data) {
-    Gestures* self = wl_container_of(listener, self, m_swipeBegin);
+    Gestures* self;
+    self = wl_container_of(listener, self, m_swipeBegin);
     self->handleSwipeBegin(data);
   }
   void Gestures::onSwipeUpdate(wl_listener* listener, void* data) {
-    Gestures* self = wl_container_of(listener, self, m_swipeUpdate);
+    Gestures* self;
+    self = wl_container_of(listener, self, m_swipeUpdate);
     self->handleSwipeUpdate(data);
   }
   void Gestures::onSwipeEnd(wl_listener* listener, void* data) {
-    Gestures* self = wl_container_of(listener, self, m_swipeEnd);
+    Gestures* self;
+    self = wl_container_of(listener, self, m_swipeEnd);
     self->handleSwipeEnd(data);
   }
   void Gestures::onPinchBegin(wl_listener* listener, void* data) {
-    Gestures* self = wl_container_of(listener, self, m_pinchBegin);
+    Gestures* self;
+    self = wl_container_of(listener, self, m_pinchBegin);
     self->handlePinchBegin(data);
   }
   void Gestures::onPinchUpdate(wl_listener* listener, void* data) {
-    Gestures* self = wl_container_of(listener, self, m_pinchUpdate);
+    Gestures* self;
+    self = wl_container_of(listener, self, m_pinchUpdate);
     self->handlePinchUpdate(data);
   }
   void Gestures::onPinchEnd(wl_listener* listener, void* data) {
-    Gestures* self = wl_container_of(listener, self, m_pinchEnd);
+    Gestures* self;
+    self = wl_container_of(listener, self, m_pinchEnd);
     self->handlePinchEnd(data);
   }
   void Gestures::onHoldBegin(wl_listener* listener, void* data) {
-    Gestures* self = wl_container_of(listener, self, m_holdBegin);
+    Gestures* self;
+    self = wl_container_of(listener, self, m_holdBegin);
     self->handleHoldBegin(data);
   }
   void Gestures::onHoldEnd(wl_listener* listener, void* data) {
-    Gestures* self = wl_container_of(listener, self, m_holdEnd);
+    Gestures* self;
+    self = wl_container_of(listener, self, m_holdEnd);
     self->handleHoldEnd(data);
   }
 
@@ -243,7 +251,7 @@ namespace umbriel {
       m_accumX += event->dx;
       // Natural: fingers left → content moves left → scroll increases.
       double target = m_scrollStart - m_accumX * kScrollFactor;
-      const double maxScroll = static_cast<double>(m_scrollWorkspace->layout().maxScroll(m_viewportWidth));
+      const auto maxScroll = static_cast<double>(m_scrollWorkspace->layout().maxScroll(m_viewportWidth));
       if (target < 0) {
         target = std::max(target * kOverscrollCompress, -0.1 * m_viewportWidth);
       }
@@ -335,7 +343,7 @@ namespace umbriel {
     } else {
       // Snap to the column nearest the viewport center.
       const auto& layout = m_scrollWorkspace->layout();
-      const double maxScroll = static_cast<double>(layout.maxScroll(m_viewportWidth));
+      const auto maxScroll = static_cast<double>(layout.maxScroll(m_viewportWidth));
       const double currentScroll = std::clamp(layout.scroll(), 0.0, maxScroll);
       const double center = currentScroll + m_viewportWidth / 2.0;
       int best = -1;

@@ -762,7 +762,7 @@ namespace umbriel {
         );
         wlr_scene_rect_set_corner_radii(copy, srcRect->corners);
         wlr_scene_rect_set_clipped_region(copy, srcRect->clipped_region);
-        snapRects.push_back({copy, focusedColor});
+        snapRects.emplace_back(copy, focusedColor);
       }
       if (m_outerBorderRect != nullptr && config().appearance.outerBorderWidth > 0) {
         wlr_scene_rect* copy =
@@ -774,7 +774,7 @@ namespace umbriel {
           );
           wlr_scene_rect_set_corner_radii(copy, m_outerBorderRect->corners);
           wlr_scene_rect_set_clipped_region(copy, m_outerBorderRect->clipped_region);
-          snapRects.push_back({copy, config().appearance.outerBorderColor});
+          snapRects.emplace_back(copy, config().appearance.outerBorderColor);
         }
       }
     }

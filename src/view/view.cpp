@@ -723,10 +723,12 @@ namespace umbriel {
       return;
     }
     const wlr_box& geometry = m_toplevel->base->geometry;
+    const int w = (m_sizeAnim != 0 && m_presentedW > 0) ? m_presentedW : geometry.width;
+    const int h = (m_sizeAnim != 0 && m_presentedH > 0) ? m_presentedH : geometry.height;
     const bool decorated = m_borderTree != nullptr && m_borderTree->node.enabled;
     const int total = decorated ? config().appearance.totalBorderWidth() : 0;
     const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
-    m_shadow.update(m_shadowContainer, geometry.width, geometry.height, total, radius);
+    m_shadow.update(m_shadowContainer, w, h, total, radius);
   }
 
   void View::beginCloseAnimation() {

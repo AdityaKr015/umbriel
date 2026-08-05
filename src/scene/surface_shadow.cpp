@@ -89,4 +89,6 @@ namespace umbriel {
     }
   }
 
+
+  void SurfaceShadow::reset() { m_node = nullptr; }
 } // namespace umbriel

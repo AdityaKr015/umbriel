@@ -59,6 +59,10 @@ namespace umbriel {
     // Detach from the scrolling layout (float) or re-insert as a tiled column.
     void setFloating(bool floating);
     void toggleFloating();
+    // Enable/disable the view's scene tree and its shadow container together.
+    void setNodeEnabled(bool enabled);
+    // Create or destroy the shadow container in the given workspace shadow layer.
+    void reparentShadow(wlr_scene_tree* shadowLayer);
 
   private:
     friend class Cursor;
@@ -128,6 +132,7 @@ namespace umbriel {
     wlr_scene_rect* m_outerBorderRect = nullptr; // single rounded ring outside the inner border
     SurfaceBlur m_blur;
     SurfaceShadow m_shadow;
+    wlr_scene_tree* m_shadowContainer = nullptr; // child of workspace shadow layer
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
     Workspace* m_workspace = nullptr;

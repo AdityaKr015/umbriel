@@ -175,6 +175,7 @@ namespace umbriel {
   }
 
   void View::detachWorkspace() {
+    reparentShadow(nullptr);
     m_workspace = nullptr;
     setOnActiveWorkspace(true);
   }
@@ -187,6 +188,9 @@ namespace umbriel {
     if (m_sceneTree != nullptr) {
       wlr_scene_node_set_enabled(&m_sceneTree->node, active);
     }
+    if (m_shadowContainer != nullptr) {
+      wlr_scene_node_set_enabled(&m_shadowContainer->node, active);
+    }
     if (!m_mapped) {
       return;
     }
@@ -197,6 +201,32 @@ namespace umbriel {
       setForeignActivated(false);
       setBorderFocused(false);
     }
+  }
+
+  void View::setNodeEnabled(bool enabled) {
+    wlr_scene_node_set_enabled(&m_sceneTree->node, enabled);
+    if (m_shadowContainer != nullptr) {
+      wlr_scene_node_set_enabled(&m_shadowContainer->node, enabled);
+    }
+  }
+
+  void View::reparentShadow(wlr_scene_tree* shadowLayer) {
+    if (shadowLayer == nullptr) {
+      m_shadow.reset();
+      if (m_shadowContainer != nullptr) {
+        wlr_scene_node_destroy(&m_shadowContainer->node);
+        m_shadowContainer = nullptr;
+      }
+      return;
+    }
+    if (m_shadowContainer == nullptr) {
+      m_shadowContainer = wlr_scene_tree_create(shadowLayer);
+    } else {
+      wlr_scene_node_reparent(&m_shadowContainer->node, shadowLayer);
+    }
+    wlr_scene_node_set_position(&m_shadowContainer->node, m_sceneTree->node.x, m_sceneTree->node.y);
+    wlr_scene_node_set_enabled(&m_shadowContainer->node, m_sceneTree->node.enabled);
+    updateShadow();
   }
 
   void View::applySeatFocus() {
@@ -305,11 +335,11 @@ namespace umbriel {
     );
     updateBorderGeometry(m_presentedW, m_presentedH);
     // Shadow with presented size.
-    if (!m_toplevel->scheduled.fullscreen) {
+    if (!m_toplevel->scheduled.fullscreen && m_shadowContainer != nullptr) {
       const bool decorated = m_borderTree != nullptr && m_borderTree->node.enabled;
       const int total = decorated ? config().appearance.totalBorderWidth() : 0;
       const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
-      m_shadow.update(m_sceneTree, m_presentedW, m_presentedH, total, radius);
+      m_shadow.update(m_shadowContainer, m_presentedW, m_presentedH, total, radius);
     }
     // Blur with presented size.
     const wlr_box nodeBox{0, 0, m_presentedW, m_presentedH};
@@ -357,6 +387,9 @@ namespace umbriel {
   void View::setPosition(int x, int y) {
     cancelPositionAnimation();
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
+    if (m_shadowContainer != nullptr) {
+      wlr_scene_node_set_position(&m_shadowContainer->node, x, y);
+    }
   }
 
   void View::animateTo(int x, int y) {
@@ -374,10 +407,12 @@ namespace umbriel {
     m_posAnim = m_server->animator().animate(
         0.0, 1.0, config().appearance.animationMs, Easing::EaseOutCubic,
         [this, fromX, fromY, x, y](double progress) {
-          wlr_scene_node_set_position(
-              &m_sceneTree->node, static_cast<int>(std::lround(fromX + (x - fromX) * progress)),
-              static_cast<int>(std::lround(fromY + (y - fromY) * progress))
-          );
+          const int cx = static_cast<int>(std::lround(fromX + (x - fromX) * progress));
+          const int cy = static_cast<int>(std::lround(fromY + (y - fromY) * progress));
+          wlr_scene_node_set_position(&m_sceneTree->node, cx, cy);
+          if (m_shadowContainer != nullptr) {
+            wlr_scene_node_set_position(&m_shadowContainer->node, cx, cy);
+          }
         },
         [this] { m_posAnim = 0; }
     );
@@ -449,6 +484,9 @@ namespace umbriel {
     const int x = usable.x + (usable.width - width) / 2;
     const int y = usable.y + (usable.height - height) / 2;
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
+    if (m_shadowContainer != nullptr) {
+      wlr_scene_node_set_position(&m_shadowContainer->node, x, y);
+    }
   }
 
   std::array<View::BorderEdge, 4> View::borderEdges() const {
@@ -681,11 +719,14 @@ namespace umbriel {
       m_shadow.hide();
       return;
     }
+    if (m_shadowContainer == nullptr) {
+      return;
+    }
     const wlr_box& geometry = m_toplevel->base->geometry;
     const bool decorated = m_borderTree != nullptr && m_borderTree->node.enabled;
     const int total = decorated ? config().appearance.totalBorderWidth() : 0;
     const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
-    m_shadow.update(m_sceneTree, geometry.width, geometry.height, total, radius);
+    m_shadow.update(m_shadowContainer, geometry.width, geometry.height, total, radius);
   }
 
   void View::beginCloseAnimation() {
@@ -852,6 +893,9 @@ namespace umbriel {
       wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
     }
     wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
+    if (m_shadowContainer != nullptr) {
+      wlr_scene_node_set_position(&m_shadowContainer->node, fullArea.x, fullArea.y);
+    }
     wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
     updateBlur();
     updateShadow();
@@ -878,7 +922,7 @@ namespace umbriel {
         || !wlr_box_intersection(&decoratedVisible, &decorated, &outputBox)
         || decoratedVisible.width <= 0
         || decoratedVisible.height <= 0) {
-      wlr_scene_node_set_enabled(&m_sceneTree->node, false);
+      setNodeEnabled(false);
       return;
     }
 
@@ -923,11 +967,7 @@ namespace umbriel {
         }
       }
     }
-    if (decoratedFullyVisible) {
-      updateShadow();
-    } else {
-      m_shadow.hide();
-    }
+    updateShadow();
 
     const wlr_box nodeBox{0, 0, content.width, content.height};
     const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
@@ -1255,6 +1295,9 @@ namespace umbriel {
       if (usable.width > 0 && usable.height > 0) {
         wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
         wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
+        if (m_shadowContainer != nullptr) {
+          wlr_scene_node_set_position(&m_shadowContainer->node, usable.x, usable.y);
+        }
       }
     }
     wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);

@@ -15,6 +15,8 @@ namespace umbriel {
     void update(wlr_scene_tree* parent, int contentWidth, int contentHeight, int borderTotal, int cornerRadius);
     // Disable the node (unmap/fullscreen/off-output path); update() re-enables.
     void hide();
+    // Forget the node pointer (caller is destroying the parent tree externally).
+    void reset();
     // Set an opacity multiplier applied to the shadow color (for fade animations).
     void setAlpha(float alpha);
 

@@ -3,7 +3,7 @@
 A Wayland compositor built on [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) 0.20 and
 [SceneFX](https://github.com/wlrfx/scenefx).
 
-Early stage. Clean modular C++23 compositor with a scrolling layout, workspaces, shell protocols, and TOML configuration.
+Clean modular C++23 compositor with a scrolling layout, workspaces, window rules, shell protocols, and TOML configuration.
 
 ## Status
 
@@ -14,6 +14,11 @@ What works today:
 - Seat, keyboard, pointer/cursor, xdg-shell toplevels and popups
 - Per-monitor workspaces via `ext_workspace_manager_v1` (9 workspaces each, isolated per output)
 - Scrolling column layout with keyboard/mouse focus, movement, width presets, and animated transitions
+- Floating windows with mouse move/resize, mod+drag tile reorder with drop-target preview
+- Window rules: per-app float, size, column width, workspace, fullscreen, and opacity via `[[rule]]` with regex matching on app_id and title
+- Blur, shadows, rounded corners, double borders (inner + outer ring), animated position/size/fade transitions, close animation snapshots
+- Touchpad/trackpad gestures: 3-finger horizontal swipe (scroll layout), 3-finger vertical swipe (workspace switch), pinch/hold forwarding
+- Xwayland support via xwayland-satellite (managed lifecycle with respawn)
 - `zwlr_layer_shell_v1` (anchors, exclusive zones, keyboard interactivity)
 - `zwlr_foreign_toplevel_manager_v1` (active window / task list for shell clients)
 - `zxdg_output_manager_v1` (logical size/position for shell clients)
@@ -23,12 +28,19 @@ What works today:
 - `zwp_idle_inhibit_manager_v1` (+ `ext_idle_notifier_v1` for idle timers)
 - `zwlr_screencopy_manager_v1` / `zwlr_export_dmabuf_manager_v1` (screenshots / capture)
 - `xdg_activation_v1` (token-based window activation / focus)
-- `wp_viewporter` / `wp_fractional_scale_v1` (viewport crop + fractional scale; needed for Noctalia panel click shield)
+- `wp_viewporter` / `wp_fractional_scale_v1` (viewport crop + fractional scale)
 - `ext_data_control_v1` (+ primary selection) for clipboard managers / history
-- `zwlr_gamma_control_v1` (Noctalia night light / color temperature)
-- Nested sessions use **Alt** as mod, native DRM uses **Super**
+- `zwlr_gamma_control_v1` (color temperature / night light)
+- `zwlr_output_management_v1` (output configuration for shell clients)
+- `xdg_decoration` / `server_decoration` (CSD/SSD preference with `prefer_no_csd`)
 - Configurable keybinds with compiled defaults for focus/move, layout actions, applications, and workspaces
+- Scroll-wheel bindings (mod+WheelUp/Down for focus navigation)
+- Output configuration: mode, position, scale, and transform per connector
+- Sloppy focus (follows_mouse) with configurable scroll threshold
+- Nested sessions use **Alt** as mod, native DRM uses **Super**
 - Native DRM: Ctrl+Alt+F1..F12 switches VT
+- Live config reload with file watcher, diagnostics banner, and include files
+- `umbriel outputs` CLI subcommand for listing connectors and modes
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
 - Noctalia shell runs against the protocols above
 
@@ -37,10 +49,9 @@ Still open / planned:
 | Area | Direction |
 |------|-----------|
 | Layouts | Vertical scrolling, dwindle, master |
-| Eyecandy | Blur, shadows, rounded corners, double borders |
-| Xwayland | Native vs satellite |
-| Shell | Remaining Noctalia polish (output management, IME, …) |
+| Shell | IME, remaining Noctalia polish |
 | Overview | Undecided |
+| Input | Touch, tablet |
 | Protocols | See roadmap below |
 
 ## Dependencies
@@ -165,14 +176,11 @@ programs.umbriel = {
 `settings` also accepts a raw TOML string or a path to a `.toml` file. A hjem module is exported as
 `inputs.umbriel.hjemModules.default`.
 
-The `appearance`, `layout`, `general`, `input`, and `keybinds` sections overlay compiled defaults, so a config file is
-optional. Keyboard input supports XKB layout/variant and repeat settings; touchpads support tap-to-click and natural
-scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput options are applied only
-when supported by the device.
-
-Key names and modifiers are case-insensitive. `Mod` resolves to Alt in nested sessions and Super on DRM.
-Bindings use `option-action` names (for example `window-close`, `config-reload`),
-plus `workspace-switch:N`, `window-move-to-workspace:N`, and arbitrary shell commands with `spawn:command`.
+The `appearance`, `layout`, `general`, `input`, `keybinds`, and `[[rule]]` sections overlay compiled defaults, so a
+config file is optional. Window rules match on `app_id` and `title` (regex) and can set floating, size, column width,
+workspace, fullscreen, and opacity. Keyboard input supports XKB layout/variant and repeat settings; touchpads support
+tap-to-click and natural scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput
+options are applied only when supported by the device.
 
 ## Project layout
 
@@ -182,11 +190,16 @@ src/
   wlr.h
   server/     display, backend, scene, xdg/layer/lock wiring
   output/     per-output lifecycle and frame commits
-  input/      seat, keyboard, cursor
-  view/       xdg toplevels and popups
+  input/      seat, keyboard, cursor, gestures
+  view/       xdg toplevels and popups, window rules
   layer/      layer-shell surfaces
   lock/       ext-session-lock surfaces
   workspace/  per-monitor workspaces (ext-workspace)
+  layout/     scrolling column layout, insert hint
+  scene/      blur, shadows, text buffer, config banner
+  config/     TOML parsing, live reload, file watcher, merge
+  core/       animation, logging
+  cli/        output listing subcommand
 protocols/    vendored Wayland protocol XML
 nix/
   package.nix
@@ -219,6 +232,6 @@ Target support:
 - `ext_data_control_v1` (done)
 - `wp_primary_selection` / primary selection v1 (done)
 - `zwlr_gamma_control_v1` (done)
-- `zwlr_output_management_v1`
+- `zwlr_output_management_v1` (done)
 - `zwp_text_input_v3`
 - `ext_foreign_toplevel_list_v1`

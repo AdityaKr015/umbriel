@@ -154,3 +154,51 @@ follows_mouse = false
 # "XF86AudioPlay" = "spawn:playerctl play-pause"
 # "XF86AudioNext" = "spawn:playerctl next"
 # "XF86AudioPrev" = "spawn:playerctl previous"
+
+# ── Window rules ─────────────────────────────────────────────────────────────
+# Each [[rule]] matches windows by app_id and/or title (regex, ECMAScript).
+# All matching rules are merged top-to-bottom; later rules override earlier ones
+# for each field they set (last-writer-wins).
+#
+# match.app_id and match.title are optional; omitting both matches everything.
+# Use ^ and $ to anchor patterns. Matching uses regex search (partial match).
+#
+# Available effects:
+#   default_floating    = true/false    Force floating / force tiling
+#   default_size        = [w, h]        Initial size (pixels); floats use both,
+#                                       tiled windows ignore height
+#   default_width       = 0.5           Column width fraction (0.1-1.0);
+#                                       overrides layout.default_width_fraction
+#   default_workspace   = 3             Place on workspace N (1-9)
+#   default_fullscreen  = true          Map fullscreen
+#   opacity             = 0.95          Surface opacity (0.0-1.0)
+#
+# One-shot effects (floating, workspace, fullscreen, size, width) are applied
+# at map time. If a window's title arrives after mapping, rules are re-evaluated
+# once. Opacity updates continuously on title/app_id changes.
+
+# [[rule]]
+# match.app_id = "firefox"
+# match.title = "^Library$"
+# default_floating = true
+
+# [[rule]]
+# match.app_id = "pavucontrol"
+# default_floating = true
+# default_size = [800, 600]
+
+# [[rule]]
+# match.app_id = "Slack"
+# default_workspace = 3
+
+# [[rule]]
+# match.app_id = "mpv"
+# default_fullscreen = true
+
+# [[rule]]
+# match.app_id = "ghostty"
+# default_width = 0.667
+
+# [[rule]]
+# match.app_id = "org\\.gnome\\."
+# opacity = 0.95

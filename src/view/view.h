@@ -8,6 +8,7 @@
 #include <wayland-server-core.h>
 
 struct wlr_box;
+struct wlr_ext_foreign_toplevel_handle_v1;
 struct wlr_foreign_toplevel_handle_v1;
 struct wlr_output;
 struct wlr_scene_tree;
@@ -83,6 +84,7 @@ namespace umbriel {
     static void onForeignActivate(wl_listener* listener, void* data);
     static void onForeignClose(wl_listener* listener, void* data);
     static void onForeignDestroy(wl_listener* listener, void* data);
+    static void onExtForeignDestroy(wl_listener* listener, void* data);
 
     void handleMap();
     void handleUnmap();
@@ -98,6 +100,7 @@ namespace umbriel {
     void handleForeignActivate();
     void handleForeignClose();
     void handleForeignDestroy();
+    void handleExtForeignDestroy();
     struct BorderEdge;
     static std::array<BorderEdge, 4> makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness);
     [[nodiscard]] std::array<BorderEdge, 4> borderEdges() const;
@@ -141,6 +144,7 @@ namespace umbriel {
     SurfaceShadow m_shadow;
     wlr_scene_tree* m_shadowContainer = nullptr; // child of workspace shadow layer
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
+    wlr_ext_foreign_toplevel_handle_v1* m_extForeign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
     Workspace* m_workspace = nullptr;
     bool m_mapped = false;
@@ -173,6 +177,7 @@ namespace umbriel {
     wl_listener m_foreignActivate{};
     wl_listener m_foreignClose{};
     wl_listener m_foreignDestroy{};
+    wl_listener m_extForeignDestroy{};
   };
 
 } // namespace umbriel

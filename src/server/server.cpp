@@ -157,6 +157,7 @@ namespace umbriel {
     wl_signal_add(&m_layerShell->events.new_surface, &m_newLayerSurface);
 
     m_foreignToplevelManager = wlr_foreign_toplevel_manager_v1_create(m_display);
+    m_extForeignToplevelList = wlr_ext_foreign_toplevel_list_v1_create(m_display, 1);
 
     m_workspaceManager = wlr_ext_workspace_manager_v1_create(m_display, 1);
     m_workspaceCommit.notify = onWorkspaceCommit;

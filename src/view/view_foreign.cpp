@@ -19,11 +19,17 @@ namespace umbriel {
   }
 
   void View::updateForeignIdentity() {
-    if (m_foreign == nullptr) {
-      return;
+    if (m_foreign != nullptr) {
+      wlr_foreign_toplevel_handle_v1_set_title(m_foreign, m_toplevel->title != nullptr ? m_toplevel->title : "");
+      wlr_foreign_toplevel_handle_v1_set_app_id(m_foreign, m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
     }
-    wlr_foreign_toplevel_handle_v1_set_title(m_foreign, m_toplevel->title != nullptr ? m_toplevel->title : "");
-    wlr_foreign_toplevel_handle_v1_set_app_id(m_foreign, m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
+    if (m_extForeign != nullptr) {
+      const wlr_ext_foreign_toplevel_handle_v1_state state = {
+          .title = m_toplevel->title,
+          .app_id = m_toplevel->app_id,
+      };
+      wlr_ext_foreign_toplevel_handle_v1_update_state(m_extForeign, &state);
+    }
   }
 
   void View::updateForeignState() {
@@ -128,6 +134,17 @@ namespace umbriel {
     m_foreignDestroy.link.next = nullptr;
     m_foreign = nullptr;
     m_foreignOutput = nullptr;
+  }
+
+  void View::onExtForeignDestroy(wl_listener* listener, void* /*data*/) {
+    View* self = wl_container_of(listener, self, m_extForeignDestroy);
+    self->handleExtForeignDestroy();
+  }
+
+  void View::handleExtForeignDestroy() {
+    wl_list_remove(&m_extForeignDestroy.link);
+    m_extForeignDestroy.link.next = nullptr;
+    m_extForeign = nullptr;
   }
 
 } // namespace umbriel

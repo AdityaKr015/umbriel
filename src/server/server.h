@@ -15,6 +15,8 @@ struct wlr_allocator;
 struct wlr_backend;
 struct wlr_box;
 struct wlr_compositor;
+struct wlr_ext_foreign_toplevel_handle_v1;
+struct wlr_ext_foreign_toplevel_list_v1;
 struct wlr_foreign_toplevel_manager_v1;
 struct wlr_idle_inhibit_manager_v1;
 struct wlr_idle_notifier_v1;
@@ -114,6 +116,7 @@ namespace umbriel {
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
     [[nodiscard]] bool sessionLocked() const { return m_sessionLocked; }
     [[nodiscard]] wlr_foreign_toplevel_manager_v1* foreignToplevelManager() const { return m_foreignToplevelManager; }
+    [[nodiscard]] wlr_ext_foreign_toplevel_list_v1* extForeignToplevelList() const { return m_extForeignToplevelList; }
     [[nodiscard]] wlr_ext_workspace_manager_v1* workspaceManager() const { return m_workspaceManager; }
     [[nodiscard]] wlr_gamma_control_manager_v1* gammaManager() const { return m_gammaManager; }
     [[nodiscard]] wlr_pointer_constraints_v1* pointerConstraints() const { return m_pointerConstraints; }
@@ -241,6 +244,7 @@ namespace umbriel {
     wlr_server_decoration_manager* m_serverDecorationManager = nullptr;
     wlr_layer_shell_v1* m_layerShell = nullptr;
     wlr_foreign_toplevel_manager_v1* m_foreignToplevelManager = nullptr;
+    wlr_ext_foreign_toplevel_list_v1* m_extForeignToplevelList = nullptr;
     wlr_ext_workspace_manager_v1* m_workspaceManager = nullptr;
     wlr_session_lock_manager_v1* m_sessionLockManager = nullptr;
     wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;

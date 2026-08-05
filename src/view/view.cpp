@@ -157,6 +157,19 @@ namespace umbriel {
         updateForeignState();
       }
     }
+
+    if (wlr_ext_foreign_toplevel_list_v1* list = m_server->extForeignToplevelList()) {
+      const wlr_ext_foreign_toplevel_handle_v1_state state = {
+          .title = m_toplevel->title,
+          .app_id = m_toplevel->app_id,
+      };
+      m_extForeign = wlr_ext_foreign_toplevel_handle_v1_create(list, &state);
+      if (m_extForeign != nullptr) {
+        m_extForeign->data = this;
+        m_extForeignDestroy.notify = onExtForeignDestroy;
+        wl_signal_add(&m_extForeign->events.destroy, &m_extForeignDestroy);
+      }
+    }
   }
 
   View::~View() {
@@ -186,6 +199,11 @@ namespace umbriel {
       leaveForeignOutput();
       wlr_foreign_toplevel_handle_v1_destroy(m_foreign);
       m_foreign = nullptr;
+    }
+    if (m_extForeign != nullptr) {
+      wl_list_remove(&m_extForeignDestroy.link);
+      wlr_ext_foreign_toplevel_handle_v1_destroy(m_extForeign);
+      m_extForeign = nullptr;
     }
   }
 
@@ -1382,6 +1400,11 @@ namespace umbriel {
       wl_list_remove(&m_foreignDestroy.link);
       wlr_foreign_toplevel_handle_v1_destroy(m_foreign);
       m_foreign = nullptr;
+    }
+    if (m_extForeign != nullptr) {
+      wl_list_remove(&m_extForeignDestroy.link);
+      wlr_ext_foreign_toplevel_handle_v1_destroy(m_extForeign);
+      m_extForeign = nullptr;
     }
 
     wl_list_remove(&m_map.link);

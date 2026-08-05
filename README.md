@@ -235,5 +235,5 @@ Target support:
 - `wp_primary_selection` / primary selection v1 (done)
 - `zwlr_gamma_control_v1` (done)
 - `zwlr_output_management_v1` (done)
+- `ext_foreign_toplevel_list_v1` (done)
 - `zwp_text_input_v3`
-- `ext_foreign_toplevel_list_v1`

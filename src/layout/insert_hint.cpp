@@ -65,7 +65,10 @@ namespace umbriel {
   }
 
   void InsertHint::show(Workspace* workspace, int gapIndex) {
-    if (workspace == nullptr || workspace->group() == nullptr || workspace->group()->output() == nullptr) {
+    if (workspace == nullptr
+        || workspace->group() == nullptr
+        || workspace->group()->output() == nullptr
+        || workspace->layoutMode() != LayoutMode::Scrolling) {
       return;
     }
     Output* output = workspace->group()->output();
@@ -109,6 +112,7 @@ namespace umbriel {
     if (workspace == nullptr
         || workspace->group() == nullptr
         || workspace->group()->output() == nullptr
+        || workspace->layoutMode() != LayoutMode::Scrolling
         || columnIndex < 0
         || columnIndex >= static_cast<int>(workspace->layout().columns().size())) {
       return;
@@ -146,6 +150,15 @@ namespace umbriel {
         - static_cast<int>(std::lround(workspace->visualScroll()));
     const int width = workspace->layout().columnWidth(columnIndex, viewportWidth);
     showGeometry(workspace, targetX, hintY, width, hintHeight);
+  }
+
+  void InsertHint::showBox(Workspace* workspace, const wlr_box& geometry) {
+    if (workspace == nullptr
+        || workspace->group() == nullptr
+        || workspace->group()->output() == nullptr) {
+      return;
+    }
+    showGeometry(workspace, geometry.x, geometry.y, geometry.width, geometry.height);
   }
 
   void InsertHint::showGeometry(Workspace* workspace, int x, int y, int width, int height) {

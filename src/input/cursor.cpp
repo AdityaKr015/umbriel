@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "input/seat.h"
 #include "layer/surface.h"
+#include "layout/dwindle.h"
 #include "layout/insert_hint.h"
 #include "layout/scrolling.h"
 #include "lock/session_lock.h"
@@ -96,6 +97,10 @@ namespace umbriel {
 
     if (mode == CursorMode::ResizeTile) {
       m_resizeWorkspace = view->workspace();
+      if (m_resizeWorkspace != nullptr && m_resizeWorkspace->layoutMode() != LayoutMode::Scrolling) {
+        resetMode();
+        return;
+      }
       m_resizeColumn = m_resizeWorkspace != nullptr ? m_resizeWorkspace->layout().columnOf(view) : -1;
       m_resizeRow = m_resizeWorkspace != nullptr ? m_resizeWorkspace->layout().rowOf(view) : -1;
       if (m_resizeEdges == 0) {
@@ -810,6 +815,38 @@ namespace umbriel {
     }
 
     Workspace* workspace = output->workspaceGroup()->active();
+    if (workspace->layoutMode() == LayoutMode::Dwindle) {
+      auto* dwindle = dynamic_cast<DwindleLayout*>(&workspace->layout());
+      if (dwindle == nullptr) {
+        return;
+      }
+      if (m_dropWorkspace != nullptr && m_dropWorkspace != workspace) {
+        m_server->hideInsertHint();
+      }
+      const int leafIndex = dwindle->leafIndexAt(m_cursor->x, m_cursor->y);
+      if (leafIndex < 0) {
+        const int leafCount = static_cast<int>(workspace->layout().columns().size());
+        m_dropWorkspace = workspace;
+        m_dropColumn = leafCount;
+        m_dropRow = -1;
+        m_server->hideInsertHint();
+        wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
+        return;
+      }
+      const wlr_box targetBox = dwindle->targetBoxByIndex(leafIndex);
+      if (targetBox.width <= 0 || targetBox.height <= 0) {
+        return;
+      }
+      m_dropWorkspace = workspace;
+      m_dropColumn = leafIndex;
+      m_dropRow = -1;
+      m_server->insertHint().showBox(workspace, targetBox);
+      wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
+      return;
+    }
+    if (workspace->layoutMode() != LayoutMode::Scrolling) {
+      return;
+    }
     const wlr_box usable = output->usableArea();
     if (usable.width <= 0 || usable.height <= 0) {
       return;
@@ -885,7 +922,6 @@ namespace umbriel {
     if (view != nullptr && view->mapped() && target != nullptr) {
       if (view->workspace() != target) {
         view->setWorkspace(target);
-        target->layoutDetach(view);
       }
       if (m_dropRow >= 0) {
         target->layout().insertViewIntoColumn(view, column, m_dropRow);
@@ -988,11 +1024,14 @@ namespace umbriel {
     const double nearestV = std::min(distTop, distBottom);
 
     bool allowVertical = false;
-    const int columnIndex = view->workspace()->layout().columnOf(view);
-    if (columnIndex >= 0) {
-      const auto& columns = view->workspace()->layout().columns();
-      allowVertical =
-          columnIndex < static_cast<int>(columns.size()) && columns[static_cast<size_t>(columnIndex)].views.size() >= 2;
+    if (view->workspace()->layoutMode() == LayoutMode::Scrolling) {
+      const int columnIndex = view->workspace()->layout().columnOf(view);
+      if (columnIndex >= 0) {
+        const auto& columns = view->workspace()->layout().columns();
+        allowVertical =
+            columnIndex < static_cast<int>(columns.size())
+            && columns[static_cast<size_t>(columnIndex)].views.size() >= 2;
+      }
     }
 
     if (!allowVertical || nearestH <= nearestV) {
@@ -1168,8 +1207,12 @@ namespace umbriel {
       resetMode();
       return;
     }
+    if (m_resizeWorkspace->layoutMode() != LayoutMode::Scrolling) {
+      resetMode();
+      return;
+    }
 
-    ScrollingLayout& layout = m_resizeWorkspace->layout();
+    Layout& layout = m_resizeWorkspace->layout();
     const int viewportWidth =
         std::max(1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * config().layoutEdgePad());
     const int availableHeight =

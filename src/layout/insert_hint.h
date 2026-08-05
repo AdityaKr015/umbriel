@@ -2,6 +2,7 @@
 
 #include "core/animation.h"
 
+struct wlr_box;
 struct wlr_scene_rect;
 struct wlr_scene_tree;
 
@@ -20,6 +21,7 @@ namespace umbriel {
 
     void show(Workspace* workspace, int gapIndex);
     void showRow(Workspace* workspace, int columnIndex, int rowIndex);
+    void showBox(Workspace* workspace, const wlr_box& geometry);
     void hide();
     [[nodiscard]] bool visible() const { return m_visible; }
 

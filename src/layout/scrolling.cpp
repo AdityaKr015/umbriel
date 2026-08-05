@@ -145,6 +145,7 @@ namespace umbriel {
     }
     const int index = std::clamp(columnIndex, 0, static_cast<int>(m_columns.size()));
     Column column;
+    column.widthFrac = config().layout.defaultWidthFraction;
     column.views.push_back(view);
     column.heightWeights.push_back(1.0);
     m_columns.insert(m_columns.begin() + index, std::move(column));
@@ -204,6 +205,7 @@ namespace umbriel {
       source.heightWeights.erase(source.heightWeights.begin() + row);
     }
     Column column;
+    column.widthFrac = config().layout.defaultWidthFraction;
     column.views.push_back(view);
     column.heightWeights.push_back(weight);
     m_columns.insert(m_columns.begin() + sourceColumn + 1, std::move(column));

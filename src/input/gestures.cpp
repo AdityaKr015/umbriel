@@ -211,7 +211,7 @@ namespace umbriel {
       if (std::abs(m_accumX) > std::abs(m_accumY)) {
         // ----- Horizontal lock → Scroll -----
         Workspace* ws = out->workspaceGroup()->active();
-        if (ws == nullptr || ws->layout().columns().empty()) {
+        if (ws == nullptr || ws->layout().columns().empty() || ws->layoutMode() != LayoutMode::Scrolling) {
           m_state = State::Idle;
           return;
         }

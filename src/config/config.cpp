@@ -604,7 +604,24 @@ namespace umbriel {
         warnAt(node->source(), "ignoring layout (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "layout", {"gap", "default_width_fraction", "width_presets", "scroll_wheel_step"});
+      warnUnknownKeys(
+          *section, "layout",
+          {"mode", "gap", "default_width_fraction", "width_presets", "scroll_wheel_step"}
+      );
+      if (const toml::node* modeNode = section->get("mode")) {
+        if (const auto* modeStr = modeNode->as_string()) {
+          const std::string_view sv = modeStr->get();
+          if (sv == "dwindle") {
+            loaded.layout.mode = LayoutMode::Dwindle;
+          } else if (sv == "scrolling") {
+            loaded.layout.mode = LayoutMode::Scrolling;
+          } else {
+            warnAt(modeNode->source(), "unknown layout.mode \"{}\" (expected \"scrolling\" or \"dwindle\")", sv);
+          }
+        } else {
+          warnAt(modeNode->source(), "layout.mode must be a string (\"scrolling\" or \"dwindle\")");
+        }
+      }
       readInteger(*section, "gap", "layout.gap", 0, 500, loaded.layout.gap);
       readDouble(
           *section, "default_width_fraction", "layout.default_width_fraction", 0.1, 1.0,

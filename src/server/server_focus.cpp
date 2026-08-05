@@ -382,10 +382,12 @@ namespace umbriel {
     case KeybindAction::LayoutScrollLeft:
     case KeybindAction::LayoutScrollRight:
       if (Workspace* workspace = activeWorkspace()) {
-        const auto step = static_cast<double>(config().layout.scrollWheelStep);
-        const double delta = bind.action == KeybindAction::LayoutScrollLeft ? -step : step;
-        workspace->layout().setScroll(workspace->layout().scroll() + delta);
-        workspace->arrange();
+        if (workspace->layoutMode() == LayoutMode::Scrolling) {
+          const auto step = static_cast<double>(config().layout.scrollWheelStep);
+          const double delta = bind.action == KeybindAction::LayoutScrollLeft ? -step : step;
+          workspace->layout().setScroll(workspace->layout().scroll() + delta);
+          workspace->arrange();
+        }
       }
       return true;
     }

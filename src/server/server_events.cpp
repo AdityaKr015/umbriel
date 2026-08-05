@@ -168,6 +168,13 @@ namespace umbriel {
     m_cursor->applyConfig();
     for (const auto& output : m_outputs) {
       output->applyConfig();
+      if (WorkspaceGroup* group = output->workspaceGroup()) {
+        for (size_t i = 0; i < group->workspaceCount(); ++i) {
+          if (Workspace* workspace = group->workspaceAt(i)) {
+            workspace->recreateLayout();
+          }
+        }
+      }
     }
     for (const auto& view : m_views) {
       if (!view->mapped()) {

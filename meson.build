@@ -107,6 +107,8 @@ sources = files(
   'src/config/config_watcher.cpp',
   'src/layout/insert_hint.cpp',
   'src/layout/scrolling.cpp',
+  'src/layout/dwindle.cpp',
+  'src/layout/layout.cpp',
   'src/server/server.cpp',
   'src/server/server_events.cpp',
   'src/server/server_focus.cpp',

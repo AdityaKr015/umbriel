@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/config_diag.h"
+#include "layout/layout.h"
 
 #include <array>
 #include <cstdint>
@@ -127,6 +128,7 @@ namespace umbriel {
     } appearance;
 
     struct Layout {
+      LayoutMode mode = LayoutMode::Scrolling;
       int gap = 8;
       double defaultWidthFraction = 0.5;
       std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};

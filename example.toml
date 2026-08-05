@@ -60,6 +60,8 @@ offset_y = 2             # -200-200
 color = "#0000008C"      # #RRGGBB or #RRGGBBAA
 
 [layout]
+# Layout algorithm: "scrolling" or "dwindle".
+mode = "scrolling"
 gap = 8                         # 0-500
 # Initial width assigned to new columns.
 default_width_fraction = 0.5    # 0.1-1.0

@@ -1,6 +1,6 @@
 #pragma once
 #include "core/animation.h"
-#include "layout/scrolling.h"
+#include "layout/layout.h"
 
 #include <cstddef>
 #include <memory>
@@ -32,8 +32,9 @@ namespace umbriel {
     [[nodiscard]] const std::string& name() const { return m_name; }
     [[nodiscard]] size_t index() const { return m_index; }
     [[nodiscard]] bool active() const { return m_active; }
-    [[nodiscard]] ScrollingLayout& layout() { return m_layout; }
-    [[nodiscard]] const ScrollingLayout& layout() const { return m_layout; }
+    [[nodiscard]] Layout& layout() { return *m_layout; }
+    [[nodiscard]] const Layout& layout() const { return *m_layout; }
+    [[nodiscard]] LayoutMode layoutMode() const { return m_layoutMode; }
     [[nodiscard]] View* focusedView() const { return m_focusedView; }
     [[nodiscard]] double visualScroll() const { return m_visualScroll; }
     [[nodiscard]] int slideOffsetY() const { return m_slideOffsetY; }
@@ -62,13 +63,15 @@ namespace umbriel {
     bool toggleFocusedFullscreen();
     bool toggleFocusedFloating();
     void ensureFocusedVisible();
-    // Fraction of viewport width that revealing `view` would scroll (0.0 = already visible).
     [[nodiscard]] double scrollFractionToReveal(const View* view) const;
     void applyVisibility();
     void beginSwitchTransition();
     void showSwitchViews();
     void endSwitchTransition();
     void setSlideOffset(double y);
+    void recreateLayout();
+
+    [[nodiscard]] std::vector<View*> allViews() const { return m_views; }
 
   private:
     void applyPositions(bool animate);
@@ -78,7 +81,8 @@ namespace umbriel {
     size_t m_index = 0;
     bool m_active = false;
     std::vector<View*> m_views;
-    ScrollingLayout m_layout;
+    std::unique_ptr<Layout> m_layout;
+    LayoutMode m_layoutMode = LayoutMode::Scrolling;
     View* m_focusedView = nullptr;
     double m_visualScroll = 0;
     AnimId m_scrollAnim = 0;
@@ -107,6 +111,7 @@ namespace umbriel {
     [[nodiscard]] Workspace* previous() const { return m_previous; }
     [[nodiscard]] Workspace* workspaceAt(size_t index) const;
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
+    [[nodiscard]] size_t workspaceCount() const { return m_workspaces.size(); }
 
     void activate(Workspace* workspace, bool animate = true);
     void activateIndex(size_t index);

@@ -121,6 +121,7 @@ namespace umbriel {
         int offsetY = 2;
         std::array<float, 4> color{0.0F, 0.0F, 0.0F, 0.55F};
       } shadow;
+      bool preferNoCsd = true;
 
       [[nodiscard]] int totalBorderWidth() const { return borderWidth + outerBorderWidth; }
     } appearance;
@@ -140,7 +141,6 @@ namespace umbriel {
     struct General {
       std::string terminal;
       std::vector<std::string> autostart;
-      bool preferNoCsd = false;
       // Re-selecting the active workspace jumps back to the previous one.
       bool workspaceBackAndForth = false;
       // Spawn and manage xwayland-satellite for X11 app support. Requires restart.

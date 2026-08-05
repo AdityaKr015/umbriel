@@ -148,8 +148,8 @@ namespace umbriel {
     m_serverDecorationManager = wlr_server_decoration_manager_create(m_display);
     wlr_server_decoration_manager_set_default_mode(
         m_serverDecorationManager,
-        config().general.preferNoCsd ? WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
-                                     : WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT
+        config().appearance.preferNoCsd ? WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
+                                        : WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT
     );
 
     m_layerShell = wlr_layer_shell_v1_create(m_display, 4);

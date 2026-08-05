@@ -14,10 +14,6 @@ files = []
 terminal = ""
 # Shell commands run once after startup; they are never re-run on config reload.
 autostart = []
-# Ask clients to omit client-side decorations (xdg-decoration server-side).
-# Clients that explicitly request CSD are still honored. Restart apps after
-# changing this for full effect.
-prefer_no_csd = false
 # Re-selecting the active workspace (e.g. Mod+2 while already on 2) jumps back
 # to the previously active workspace on that output.
 workspace_back_and_forth = false
@@ -27,6 +23,10 @@ workspace_back_and_forth = false
 xwayland = true
 
 [appearance]
+# Ask clients to omit client-side decorations (xdg-decoration server-side).
+# Clients that explicitly request CSD are still honored. Restart apps after
+# changing this for full effect.
+prefer_no_csd = true
 border_width = 2          # 0-100
 outer_border_width = 0    # 0-100; ring outside the inner border
 corner_radius = 10        # 0-500; 0 disables rounded corners

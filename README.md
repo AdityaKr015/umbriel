@@ -33,7 +33,7 @@ What works today:
 - `ext_data_control_v1` (+ primary selection) for clipboard managers / history
 - `zwlr_gamma_control_v1` (color temperature / night light)
 - `zwlr_output_management_v1` (output configuration for shell clients)
-- `xdg_decoration` / `server_decoration` (CSD/SSD preference with `prefer_no_csd`)
+- `xdg_decoration` / `server_decoration` (CSD/SSD preference via `appearance.prefer_no_csd`, default true)
 - Configurable keybinds with compiled defaults for focus/move, layout actions, applications, and workspaces
 - Scroll-wheel bindings (mod+WheelUp/Down for focus navigation)
 - Output configuration: mode, position, scale, and transform per connector

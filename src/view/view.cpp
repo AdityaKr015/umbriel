@@ -264,16 +264,17 @@ namespace umbriel {
 
   void View::setFadeAlpha(float alpha) {
     m_fadeAlpha = alpha;
+    float effective = m_fadeAlpha * m_ruleOpacity;
     wlr_scene_node_for_each_buffer(
         &m_sceneTree->node,
         [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
           wlr_scene_buffer_set_opacity(buffer, *static_cast<float*>(data));
         },
-        &m_fadeAlpha
+        &effective
     );
     setBorderFocused(m_borderFocusedState);
-    m_shadow.setAlpha(alpha);
-    if (alpha < 1.0F) {
+    m_shadow.setAlpha(effective);
+    if (effective < 1.0F) {
       m_blur.hide();
     } else {
       updateBlur();
@@ -1040,7 +1041,6 @@ namespace umbriel {
     }
     wlr_scene_node_lower_to_bottom(&m_borderTree->node);
   }
-
   void View::handleMap() {
     m_mapped = true;
     m_tiled = looksTiled(m_toplevel);
@@ -1048,6 +1048,17 @@ namespace umbriel {
     m_presentedW = mapGeo.width;
     m_presentedH = mapGeo.height;
     clearOutputClip();
+
+    // Resolve window rules and apply one-shot effects.
+    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
+    if (rule.defaultFloating) {
+      m_tiled = !*rule.defaultFloating;
+    }
+    // Unsettled when any rule uses a title pattern: the first handleSetTitle
+    // after map re-applies disruptive effects with the real title, even if
+    // the client mapped with a placeholder.
+    m_initialRulesSettled = !anyWindowRuleHasTitlePattern();
+
     if (m_tiled) {
       ensureBorders();
       wlr_scene_node_set_enabled(&m_borderTree->node, !m_toplevel->current.fullscreen);
@@ -1058,11 +1069,20 @@ namespace umbriel {
     applyCornerRadius();
     updateBlur();
     updateShadow();
+
+    // Workspace placement: rule.defaultWorkspace overrides the default "focused output, active workspace".
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this);
     } else if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
       if (WorkspaceGroup* group = out->workspaceGroup()) {
-        setWorkspace(group->active());
+        Workspace* target = group->active();
+        if (rule.defaultWorkspace) {
+          Workspace* ruleTarget = group->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1));
+          if (ruleTarget != nullptr) {
+            target = ruleTarget;
+          }
+        }
+        setWorkspace(target);
       } else {
         setOnActiveWorkspace(true);
       }
@@ -1070,8 +1090,25 @@ namespace umbriel {
       setOnActiveWorkspace(true);
     }
     if (!m_tiled) {
+      if (rule.defaultSize) {
+        wlr_xdg_toplevel_set_size(m_toplevel, (*rule.defaultSize)[0], (*rule.defaultSize)[1]);
+      }
       placeInUsableArea();
+    } else if (rule.defaultWidth && m_workspace != nullptr) {
+      const int column = m_workspace->layout().columnOf(this);
+      if (column >= 0) {
+        m_workspace->layout().setWidthFraction(column, *rule.defaultWidth);
+        m_workspace->arrange();
+      }
     }
+
+    // Apply rule opacity — flush to scene buffers immediately so views on
+    // inactive workspaces get the correct opacity when they become visible.
+    if (rule.opacity) {
+      m_ruleOpacity = static_cast<float>(*rule.opacity);
+      setFadeAlpha(m_fadeAlpha);
+    }
+
     updateForeignIdentity();
     updateForeignState();
     if (m_onActiveWorkspace && !m_server->sessionLocked()) {
@@ -1086,6 +1123,11 @@ namespace umbriel {
       if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
         wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
       }
+    }
+
+    // Fullscreen after workspace + focus so the view lands in the right place.
+    if (rule.defaultFullscreen && *rule.defaultFullscreen) {
+      setFullscreen(true);
     }
   }
 
@@ -1112,22 +1154,35 @@ namespace umbriel {
     if (m_server->cursor()->mode() != CursorMode::Passthrough) {
       m_server->cursor()->resetMode();
     }
+    m_initialRulesSettled = false;
+    m_ruleOpacity = 1.0F;
   }
 
   void View::handleCommit() {
     if (m_toplevel->base->initial_commit) {
-      if (looksTiled(m_toplevel)) {
+      // Resolve window rules early to influence initial tiled/float decision and size.
+      const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
+      const bool wantTiled =
+          rule.defaultFloating ? !*rule.defaultFloating : looksTiled(m_toplevel);
+
+      if (wantTiled) {
         wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
         const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
         const int viewportWidth = std::max(1, usable.width - 2 * config().layoutEdgePad());
         const int height = std::max(1, usable.height - 2 * config().layoutEdgePad());
-        wlr_xdg_toplevel_set_size(
-            m_toplevel,
-            std::max(1, static_cast<int>(std::lround(config().layout.defaultWidthFraction * viewportWidth))), height
-        );
+        const double widthFrac = rule.defaultWidth ? *rule.defaultWidth : config().layout.defaultWidthFraction;
+        int width = std::max(1, static_cast<int>(std::lround(widthFrac * viewportWidth)));
+        if (rule.defaultSize) {
+          width = (*rule.defaultSize)[0];
+        }
+        wlr_xdg_toplevel_set_size(m_toplevel, width, height);
       } else {
         wlr_xdg_toplevel_set_tiled(m_toplevel, 0);
-        wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
+        if (rule.defaultSize) {
+          wlr_xdg_toplevel_set_size(m_toplevel, (*rule.defaultSize)[0], (*rule.defaultSize)[1]);
+        } else {
+          wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
+        }
       }
     }
     if (m_borderTree != nullptr && m_sizeAnim == 0) {
@@ -1468,6 +1523,63 @@ namespace umbriel {
       }
     }
     updateForeignState();
+  }
+
+  void View::applyWindowRules(bool allowDisruptive) {
+    if (!m_mapped) {
+      return;
+    }
+    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
+
+    if (allowDisruptive) {
+      // Float/tile override.
+      if (rule.defaultFloating) {
+        const bool wantFloat = *rule.defaultFloating;
+        if (wantFloat != !m_tiled) {
+          setFloating(wantFloat);
+        }
+      }
+
+      // Workspace redirect.
+      if (rule.defaultWorkspace && m_workspace != nullptr && m_workspace->group() != nullptr) {
+        Workspace* target = m_workspace->group()->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1));
+        if (target != nullptr && target != m_workspace) {
+          setWorkspace(target);
+        }
+      }
+
+      // Column width.
+      if (rule.defaultWidth && m_tiled && m_workspace != nullptr) {
+        const int column = m_workspace->layout().columnOf(this);
+        if (column >= 0) {
+          m_workspace->layout().setWidthFraction(column, *rule.defaultWidth);
+          m_workspace->arrange();
+        }
+      }
+
+      // Float size.
+      if (rule.defaultSize && !m_tiled) {
+        wlr_xdg_toplevel_set_size(m_toplevel, (*rule.defaultSize)[0], (*rule.defaultSize)[1]);
+        placeInUsableArea();
+      }
+
+      // Fullscreen.
+      if (rule.defaultFullscreen && *rule.defaultFullscreen && !m_toplevel->scheduled.fullscreen) {
+        setFullscreen(true);
+      }
+    }
+
+    // Opacity is always safe to update.
+    applyRuleOpacity();
+  }
+
+  void View::applyRuleOpacity() {
+    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
+    const float newOpacity = rule.opacity ? static_cast<float>(*rule.opacity) : 1.0F;
+    if (newOpacity != m_ruleOpacity) {
+      m_ruleOpacity = newOpacity;
+      setFadeAlpha(m_fadeAlpha); // refresh effective opacity
+    }
   }
 
 } // namespace umbriel

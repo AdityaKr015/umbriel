@@ -123,6 +123,8 @@ namespace umbriel {
     void updateForeignState();
     void enterForeignOutput();
     void leaveForeignOutput();
+    void applyWindowRules(bool allowDisruptive);
+    void applyRuleOpacity();
 
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
@@ -148,6 +150,10 @@ namespace umbriel {
     int m_presentedH = 0;
     int m_sizeTargetW = 0;
     int m_sizeTargetH = 0;
+    // Window rules: unsettled means title was empty at map, so a later
+    // handleSetTitle re-applies all rule effects one more time.
+    bool m_initialRulesSettled = false;
+    float m_ruleOpacity = 1.0F;
 
     wl_listener m_map{};
     wl_listener m_unmap{};

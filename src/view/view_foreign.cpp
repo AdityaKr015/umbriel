@@ -1,4 +1,5 @@
 #include "core/log.h"
+#include "config/config.h"
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -77,11 +78,36 @@ namespace umbriel {
   void View::handleSetTitle() {
     kLog.debug("title='{}'", m_toplevel->title != nullptr ? m_toplevel->title : "");
     updateForeignIdentity();
+    if (!m_initialRulesSettled) {
+      const bool titlePresent = m_toplevel->title != nullptr && m_toplevel->title[0] != '\0';
+      if (titlePresent) {
+        // Real title just arrived — settle and do the full disruptive re-apply.
+        m_initialRulesSettled = true;
+        applyWindowRules(true);
+      } else {
+        // Still empty title; just refresh opacity with whatever matches now.
+        applyRuleOpacity();
+      }
+    } else {
+      applyRuleOpacity();
+    }
   }
 
   void View::handleSetAppId() {
     kLog.debug("app_id='{}'", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
     updateForeignIdentity();
+    if (!m_initialRulesSettled) {
+      // Title hasn't arrived yet. If no rule cares about title, we can settle now.
+      // Otherwise only update opacity — disruptive rules wait for the title.
+      if (!anyWindowRuleHasTitlePattern()) {
+        m_initialRulesSettled = true;
+        applyWindowRules(true);
+      } else {
+        applyRuleOpacity();
+      }
+    } else {
+      applyRuleOpacity();
+    }
   }
 
   void View::handleForeignActivate() {

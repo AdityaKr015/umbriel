@@ -970,10 +970,145 @@ namespace umbriel {
       }
     }
 
+    void readWindowRules(const toml::table& table, Config& loaded) {
+      const toml::node* node = table.get("rule");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* rules = node->as_array();
+      if (rules == nullptr) {
+        warnAt(node->source(), "ignoring rule (expected [[rule]] array of tables)");
+        return;
+      }
+
+      for (const auto& entry : *rules) {
+        const auto* section = entry.as_table();
+        if (section == nullptr) {
+          warnAt(entry.source(), "ignoring rule entry (expected table)");
+          continue;
+        }
+        warnUnknownKeys(
+            *section, "rule",
+            {"match", "default_floating", "default_size", "default_width", "default_workspace", "default_fullscreen",
+             "opacity"}
+        );
+
+        WindowRule rule;
+
+        if (const toml::node* matchNode = section->get("match")) {
+          if (const auto* match = matchNode->as_table()) {
+            warnUnknownKeys(*match, "rule.match", {"app_id", "title"});
+            if (const toml::node* appIdNode = match->get("app_id")) {
+              if (const auto value = appIdNode->value<std::string>()) {
+                rule.appIdPattern = *value;
+                try {
+                  rule.appIdRegex = std::regex(rule.appIdPattern);
+                } catch (const std::regex_error& error) {
+                  warnAt(appIdNode->source(), "invalid regex in rule.match.app_id: {}", error.what());
+                  continue;
+                }
+              } else {
+                warnAt(appIdNode->source(), "ignoring rule.match.app_id (expected string)");
+              }
+            }
+            if (const toml::node* titleNode = match->get("title")) {
+              if (const auto value = titleNode->value<std::string>()) {
+                rule.titlePattern = *value;
+                try {
+                  rule.titleRegex = std::regex(rule.titlePattern);
+                } catch (const std::regex_error& error) {
+                  warnAt(titleNode->source(), "invalid regex in rule.match.title: {}", error.what());
+                  continue;
+                }
+              } else {
+                warnAt(titleNode->source(), "ignoring rule.match.title (expected string)");
+              }
+            }
+          } else {
+            warnAt(matchNode->source(), "ignoring rule.match (expected table)");
+          }
+        }
+
+        if (const toml::node* n = section->get("default_floating")) {
+          if (n->is_boolean()) {
+            rule.defaultFloating = n->value<bool>();
+          } else {
+            warnAt(n->source(), "ignoring rule.default_floating (expected boolean)");
+          }
+        }
+
+        if (const toml::node* n = section->get("default_size")) {
+          const auto* arr = n->as_array();
+          bool valid = arr != nullptr && arr->size() == 2;
+          std::array<int, 2> parsed{};
+          if (valid) {
+            for (size_t index = 0; index < 2; ++index) {
+              const auto value = (*arr)[index].value<std::int64_t>();
+              if (!value || *value < 1 || *value > 100000) {
+                valid = false;
+                break;
+              }
+              parsed[index] = static_cast<int>(*value);
+            }
+          }
+          if (!valid) {
+            warnAt(n->source(), "ignoring rule.default_size (expected [width, height] positive integers)");
+          } else {
+            rule.defaultSize = parsed;
+          }
+        }
+
+        if (const toml::node* n = section->get("default_width")) {
+          const auto value = n->value<double>();
+          if (!value || std::isnan(*value)) {
+            warnAt(n->source(), "ignoring rule.default_width (expected number 0.1-1.0)");
+          } else {
+            const double used = std::clamp(*value, 0.1, 1.0);
+            if (used != *value) {
+              warnAt(n->source(), "rule.default_width = {} out of range, clamped to {}", *value, used);
+            }
+            rule.defaultWidth = used;
+          }
+        }
+
+        if (const toml::node* n = section->get("default_workspace")) {
+          const auto value = n->value<std::int64_t>();
+          if (!value || *value < 1 || *value > 9) {
+            warnAt(n->source(), "ignoring rule.default_workspace (expected integer 1-9)");
+          } else {
+            rule.defaultWorkspace = static_cast<int>(*value);
+          }
+        }
+
+        if (const toml::node* n = section->get("default_fullscreen")) {
+          if (n->is_boolean()) {
+            rule.defaultFullscreen = n->value<bool>();
+          } else {
+            warnAt(n->source(), "ignoring rule.default_fullscreen (expected boolean)");
+          }
+        }
+
+        if (const toml::node* n = section->get("opacity")) {
+          const auto value = n->value<double>();
+          if (!value || std::isnan(*value)) {
+            warnAt(n->source(), "ignoring rule.opacity (expected number 0.0-1.0)");
+          } else {
+            const double used = std::clamp(*value, 0.0, 1.0);
+            if (used != *value) {
+              warnAt(n->source(), "rule.opacity = {} out of range, clamped to {}", *value, used);
+            }
+            rule.opacity = used;
+          }
+        }
+
+        loaded.windowRules.push_back(std::move(rule));
+      }
+    }
+
     void warnUnknownTopLevel(const toml::table& table) {
       for (const auto& [key, value] : table) {
         (void)value;
-        if (!knownKey(key.str(), {"appearance", "layout", "general", "input", "keybinds", "output"})) {
+        if (!knownKey(key.str(), {"appearance", "layout", "general", "input", "keybinds", "output", "rule"})) {
           warnAt(key.source(), "unknown key {}", key.str());
         }
       }
@@ -1012,6 +1147,7 @@ namespace umbriel {
         readInput(result.merged, loaded);
         readOutputs(result.merged, loaded);
         readKeybinds(result.merged, loaded);
+        readWindowRules(result.merged, loaded);
         out = std::move(loaded);
         return true;
       } catch (const std::exception& exception) {
@@ -1063,5 +1199,50 @@ namespace umbriel {
   }
 
   const std::vector<std::filesystem::path>& configWatchPaths() { return g_watchPaths; }
+
+  ResolvedWindowRule resolveWindowRules(const char* appId, const char* title) {
+    ResolvedWindowRule resolved;
+    const std::string_view appIdView = appId != nullptr ? appId : "";
+    const std::string_view titleView = title != nullptr ? title : "";
+
+    for (const auto& rule : g_config.windowRules) {
+      if (!rule.appIdPattern.empty()) {
+        if (appIdView.empty() || !std::regex_search(appIdView.begin(), appIdView.end(), rule.appIdRegex)) {
+          continue;
+        }
+      }
+      if (!rule.titlePattern.empty()) {
+        if (titleView.empty() || !std::regex_search(titleView.begin(), titleView.end(), rule.titleRegex)) {
+          continue;
+        }
+      }
+      // Last writer wins: overwrite each field the rule sets.
+      if (rule.defaultFloating) {
+        resolved.defaultFloating = rule.defaultFloating;
+      }
+      if (rule.defaultSize) {
+        resolved.defaultSize = rule.defaultSize;
+      }
+      if (rule.defaultWidth) {
+        resolved.defaultWidth = rule.defaultWidth;
+      }
+      if (rule.defaultWorkspace) {
+        resolved.defaultWorkspace = rule.defaultWorkspace;
+      }
+      if (rule.defaultFullscreen) {
+        resolved.defaultFullscreen = rule.defaultFullscreen;
+      }
+      if (rule.opacity) {
+        resolved.opacity = rule.opacity;
+      }
+    }
+    return resolved;
+  }
+
+  bool anyWindowRuleHasTitlePattern() {
+    return std::ranges::any_of(g_config.windowRules, [](const WindowRule& rule) {
+      return !rule.titlePattern.empty();
+    });
+  }
 
 } // namespace umbriel

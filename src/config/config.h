@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -68,6 +69,29 @@ namespace umbriel {
     std::optional<std::array<int, 2>> position;
     std::optional<double> scale;
     std::optional<int> transform;
+  };
+
+  struct WindowRule {
+    std::string appIdPattern;
+    std::string titlePattern;
+    std::regex appIdRegex;
+    std::regex titleRegex;
+    std::optional<bool> defaultFloating;
+    std::optional<std::array<int, 2>> defaultSize; // [width, height]
+    std::optional<double> defaultWidth;             // column width fraction override
+    std::optional<int> defaultWorkspace;            // 1-9
+    std::optional<bool> defaultFullscreen;
+    std::optional<double> opacity;                  // 0.0-1.0
+  };
+
+  // Resolved result: merge of all matching rules (last writer wins per field).
+  struct ResolvedWindowRule {
+    std::optional<bool> defaultFloating;
+    std::optional<std::array<int, 2>> defaultSize;
+    std::optional<double> defaultWidth;
+    std::optional<int> defaultWorkspace;
+    std::optional<bool> defaultFullscreen;
+    std::optional<double> opacity;
   };
 
   struct Config {
@@ -153,6 +177,7 @@ namespace umbriel {
 
     std::vector<Keybind> keybinds;
     std::vector<OutputRule> outputs;
+    std::vector<WindowRule> windowRules;
   };
 
   [[nodiscard]] const Config& config();
@@ -161,5 +186,7 @@ namespace umbriel {
   [[nodiscard]] const std::vector<std::filesystem::path>& configWatchPaths();
   [[nodiscard]] const std::vector<ConfigDiagnostic>& configDiagnostics();
   [[nodiscard]] const std::filesystem::path& configRootPath();
+  [[nodiscard]] ResolvedWindowRule resolveWindowRules(const char* appId, const char* title);
+  [[nodiscard]] bool anyWindowRuleHasTitlePattern();
 
 } // namespace umbriel

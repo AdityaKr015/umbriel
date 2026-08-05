@@ -78,10 +78,10 @@ namespace umbriel {
     std::regex titleRegex;
     std::optional<bool> defaultFloating;
     std::optional<std::array<int, 2>> defaultSize; // [width, height]
-    std::optional<double> defaultWidth;             // column width fraction override
-    std::optional<int> defaultWorkspace;            // 1-9
+    std::optional<double> defaultWidth;            // column width fraction override
+    std::optional<int> defaultWorkspace;           // 1-9
     std::optional<bool> defaultFullscreen;
-    std::optional<double> opacity;                  // 0.0-1.0
+    std::optional<double> opacity; // 0.0-1.0
   };
 
   // Resolved result: merge of all matching rules (last writer wins per field).

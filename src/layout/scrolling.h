@@ -33,7 +33,9 @@ namespace umbriel {
     [[nodiscard]] int columnX(int columnIndex, int viewportWidth) const;
     [[nodiscard]] int columnWidth(int columnIndex, int viewportWidth) const;
     [[nodiscard]] bool isFullWidth(int columnIndex) const;
-    [[nodiscard]] int maxScroll(int viewportWidth) const { return std::max(0, totalWidth(viewportWidth) - viewportWidth); }
+    [[nodiscard]] int maxScroll(int viewportWidth) const {
+      return std::max(0, totalWidth(viewportWidth) - viewportWidth);
+    }
 
     void insertView(View* view, int columnIndex);
     void insertViewIntoColumn(View* view, int columnIndex, int rowIndex);

@@ -1,11 +1,12 @@
 #include "input/keyboard.h"
 
-#include <algorithm>
 #include "config/config.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "server/server.h"
 #include "wlr.h"
+
+#include <algorithm>
 
 namespace umbriel {
 

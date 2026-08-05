@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/config.h"
+
 #include <wayland-server-core.h>
 
 struct wlr_input_device;

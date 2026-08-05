@@ -38,6 +38,17 @@ namespace umbriel {
     m_frame.notify = onFrame;
     wl_signal_add(&m_cursor->events.frame, &m_frame);
 
+    m_touchDown.notify = onTouchDown;
+    wl_signal_add(&m_cursor->events.touch_down, &m_touchDown);
+    m_touchUp.notify = onTouchUp;
+    wl_signal_add(&m_cursor->events.touch_up, &m_touchUp);
+    m_touchMotion.notify = onTouchMotion;
+    wl_signal_add(&m_cursor->events.touch_motion, &m_touchMotion);
+    m_touchCancel.notify = onTouchCancel;
+    wl_signal_add(&m_cursor->events.touch_cancel, &m_touchCancel);
+    m_touchFrame.notify = onTouchFrame;
+    wl_signal_add(&m_cursor->events.touch_frame, &m_touchFrame);
+
     m_constraintDestroy.link.next = nullptr;
   }
 
@@ -50,6 +61,11 @@ namespace umbriel {
     wl_list_remove(&m_button.link);
     wl_list_remove(&m_axis.link);
     wl_list_remove(&m_frame.link);
+    wl_list_remove(&m_touchDown.link);
+    wl_list_remove(&m_touchUp.link);
+    wl_list_remove(&m_touchMotion.link);
+    wl_list_remove(&m_touchCancel.link);
+    wl_list_remove(&m_touchFrame.link);
     wlr_xcursor_manager_destroy(m_xcursorManager);
     wlr_cursor_destroy(m_cursor);
   }
@@ -480,6 +496,141 @@ namespace umbriel {
   }
 
   void Cursor::handleFrame() { wlr_seat_pointer_notify_frame(m_server->seat()->wlr()); }
+
+  void Cursor::onTouchDown(wl_listener* listener, void* data) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_touchDown);
+    self->handleTouchDown(data);
+  }
+
+  void Cursor::onTouchUp(wl_listener* listener, void* data) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_touchUp);
+    self->handleTouchUp(data);
+  }
+
+  void Cursor::onTouchMotion(wl_listener* listener, void* data) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_touchMotion);
+    self->handleTouchMotion(data);
+  }
+
+  void Cursor::onTouchCancel(wl_listener* listener, void* data) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_touchCancel);
+    self->handleTouchCancel(data);
+  }
+
+  void Cursor::onTouchFrame(wl_listener* listener, void* /*data*/) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_touchFrame);
+    self->handleTouchFrame();
+  }
+
+  void Cursor::handleTouchDown(void* data) {
+    auto* event = static_cast<wlr_touch_down_event*>(data);
+    m_server->notifyIdleActivity();
+
+    double lx = 0;
+    double ly = 0;
+    wlr_cursor_absolute_to_layout_coords(m_cursor, &event->touch->base, event->x, event->y, &lx, &ly);
+
+    double sx = 0;
+    double sy = 0;
+    wlr_surface* surface = nullptr;
+    LayerSurface* layer = nullptr;
+    View* view = m_server->viewAt(lx, ly, &surface, &sx, &sy, &layer);
+
+    if (surface != nullptr) {
+      // Focus the touched view (click-to-focus equivalent).
+      if (!m_server->sessionLocked() && m_server->exclusiveKeyboardLayer() == nullptr) {
+        if (layer != nullptr) {
+          layer->focus();
+        } else if (view != nullptr) {
+          m_server->focusView(view, FocusReason::PointerPress);
+        }
+      }
+      wlr_seat_touch_notify_down(m_server->seat()->wlr(), surface, event->time_msec, event->touch_id, sx, sy);
+    }
+  }
+
+  void Cursor::handleTouchUp(void* data) {
+    auto* event = static_cast<wlr_touch_up_event*>(data);
+    m_server->notifyIdleActivity();
+    wlr_seat_touch_notify_up(m_server->seat()->wlr(), event->time_msec, event->touch_id);
+  }
+
+  void Cursor::handleTouchMotion(void* data) {
+    auto* event = static_cast<wlr_touch_motion_event*>(data);
+    m_server->notifyIdleActivity();
+
+    wlr_seat* seat = m_server->seat()->wlr();
+    wlr_touch_point* point = wlr_seat_touch_get_point(seat, event->touch_id);
+    if (point == nullptr || point->focus_surface == nullptr) {
+      return;
+    }
+
+    double lx = 0;
+    double ly = 0;
+    wlr_cursor_absolute_to_layout_coords(m_cursor, &event->touch->base, event->x, event->y, &lx, &ly);
+
+    // Find the scene buffer node backing the focus surface. This works for any
+    // surface type (xdg toplevel, layer shell, session lock, popup).
+    struct FindCtx {
+      wlr_surface* target;
+      int nodeX;
+      int nodeY;
+      bool found;
+    } ctx{point->focus_surface, 0, 0, false};
+
+    wlr_scene_node_for_each_buffer(
+        &m_server->scene()->tree.node,
+        [](wlr_scene_buffer* buffer, int sx, int sy, void* data) {
+          auto* c = static_cast<FindCtx*>(data);
+          if (c->found) {
+            return;
+          }
+          wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+          if (sceneSurface != nullptr && sceneSurface->surface == c->target) {
+            c->nodeX = sx;
+            c->nodeY = sy;
+            c->found = true;
+          }
+        },
+        &ctx
+    );
+
+    if (!ctx.found) {
+      return;
+    }
+
+    const double sx = lx - ctx.nodeX;
+    const double sy = ly - ctx.nodeY;
+    wlr_seat_touch_notify_motion(seat, event->time_msec, event->touch_id, sx, sy);
+  }
+
+  void Cursor::handleTouchCancel(void* data) {
+    auto* event = static_cast<wlr_touch_cancel_event*>(data);
+    (void)event;
+    m_server->notifyIdleActivity();
+
+    wlr_seat* seat = m_server->seat()->wlr();
+    // Find the first client with an active touch point, then cancel outside
+    // the iteration — wlr_seat_touch_notify_cancel may mutate the list.
+    wlr_seat_client* client = nullptr;
+    wlr_touch_point* point;
+    wl_list_for_each(point, &seat->touch_state.touch_points, link) {
+      if (point->client != nullptr) {
+        client = point->client;
+        break;
+      }
+    }
+    if (client != nullptr) {
+      wlr_seat_touch_notify_cancel(seat, client);
+    }
+  }
+
+  void Cursor::handleTouchFrame() { wlr_seat_touch_notify_frame(m_server->seat()->wlr()); }
 
   void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY) {
     // DnD icons are parented under dragIconTree; keep that tree on the cursor (dwl-style).

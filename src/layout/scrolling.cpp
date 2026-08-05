@@ -63,8 +63,7 @@ namespace umbriel {
 
     bool columnIsFullscreen(const Column& column) {
       for (const View* view : column.views) {
-        if (view != nullptr && view->toplevel() != nullptr
-            && view->toplevel()->scheduled.fullscreen) {
+        if (view != nullptr && view->toplevel() != nullptr && view->toplevel()->scheduled.fullscreen) {
           return true;
         }
       }

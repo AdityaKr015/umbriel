@@ -97,8 +97,7 @@ namespace umbriel {
   }
 
   void Gestures::cancelForOutput(Output* output) {
-    if (m_output == output
-        && (m_state == State::Pending || m_state == State::Scroll || m_state == State::Switch)) {
+    if (m_output == output && (m_state == State::Pending || m_state == State::Scroll || m_state == State::Switch)) {
       // Hard reset — do NOT call into workspace/group objects (they may be mid-destruction).
       m_output = nullptr;
       m_scrollWorkspace = nullptr;
@@ -236,8 +235,7 @@ namespace umbriel {
     case State::Scroll: {
       // Abort if active workspace changed under us.
       Output* out = m_server->outputFromWlr(m_server->preferredOutput());
-      if (out == nullptr || out->workspaceGroup() == nullptr
-          || out->workspaceGroup()->active() != m_scrollWorkspace) {
+      if (out == nullptr || out->workspaceGroup() == nullptr || out->workspaceGroup()->active() != m_scrollWorkspace) {
         m_state = State::Idle;
         m_scrollWorkspace = nullptr;
         return;
@@ -358,7 +356,10 @@ namespace umbriel {
           // Snap back / cancel: nearest column is already focused.
           m_scrollWorkspace->ensureFocusedVisible();
           m_scrollWorkspace->arrange(true);
-        } else if (best < static_cast<int>(layout.columns().size()) && !layout.columns()[static_cast<size_t>(best)].views.empty()) {
+        } else if (
+            best < static_cast<int>(layout.columns().size())
+            && !layout.columns()[static_cast<size_t>(best)].views.empty()
+        ) {
           View* target = layout.columns()[static_cast<size_t>(best)].views.front();
           m_server->focusView(target, FocusReason::Directional);
         } else {
@@ -421,8 +422,8 @@ namespace umbriel {
       return;
     }
     wlr_pointer_gestures_v1_send_pinch_update(
-        m_server->pointerGestures(), m_server->seat()->wlr(), event->time_msec, event->dx, event->dy,
-        event->scale, event->rotation
+        m_server->pointerGestures(), m_server->seat()->wlr(), event->time_msec, event->dx, event->dy, event->scale,
+        event->rotation
     );
   }
 

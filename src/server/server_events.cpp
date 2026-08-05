@@ -228,6 +228,9 @@ namespace umbriel {
     case WLR_INPUT_DEVICE_POINTER:
       self->addPointer(device);
       break;
+    case WLR_INPUT_DEVICE_TOUCH:
+      self->addTouch(device);
+      break;
     default:
       break;
     }
@@ -501,6 +504,28 @@ namespace umbriel {
     applyPointerConfig(device);
     m_cursor->attachInputDevice(device);
     m_pointers.push_back(std::move(pointer));
+  }
+
+  void Server::addTouch(wlr_input_device* device) {
+    auto touch = std::make_unique<TouchDevice>();
+    touch->server = this;
+    touch->device = device;
+    touch->destroy.notify = onTouchDestroy;
+    wl_signal_add(&device->events.destroy, &touch->destroy);
+    m_cursor->attachInputDevice(device);
+    m_touchDevices.push_back(std::move(touch));
+    kLog.info("input: added touch device '{}'", deviceName(device));
+  }
+
+  void Server::onTouchDestroy(wl_listener* listener, void* /*data*/) {
+    TouchDevice* watch;
+    watch = wl_container_of(listener, watch, destroy);
+    Server* server = watch->server;
+    wl_list_remove(&watch->destroy.link);
+    std::erase_if(server->m_touchDevices, [watch](const std::unique_ptr<TouchDevice>& entry) {
+      return entry.get() == watch;
+    });
+    server->updateSeatCapabilities();
   }
 
   void Server::removeOutput(Output* output) {

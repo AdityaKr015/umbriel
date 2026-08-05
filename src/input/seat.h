@@ -19,7 +19,7 @@ namespace umbriel {
 
     [[nodiscard]] wlr_seat* wlr() const { return m_seat; }
 
-    void updateCapabilities(bool hasKeyboard);
+    void updateCapabilities(bool hasKeyboard, bool hasTouch);
 
   private:
     static void onRequestCursor(wl_listener* listener, void* data);

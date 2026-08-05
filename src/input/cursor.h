@@ -55,6 +55,11 @@ namespace umbriel {
     static void onAxis(wl_listener* listener, void* data);
     static void onFrame(wl_listener* listener, void* data);
     static void onConstraintDestroy(wl_listener* listener, void* data);
+    static void onTouchDown(wl_listener* listener, void* data);
+    static void onTouchUp(wl_listener* listener, void* data);
+    static void onTouchMotion(wl_listener* listener, void* data);
+    static void onTouchCancel(wl_listener* listener, void* data);
+    static void onTouchFrame(wl_listener* listener, void* data);
 
     void handleMotion(void* data);
     void handleMotionAbsolute(void* data);
@@ -62,6 +67,11 @@ namespace umbriel {
     void handleAxis(void* data);
     void handleFrame();
     void handleConstraintDestroy();
+    void handleTouchDown(void* data);
+    void handleTouchUp(void* data);
+    void handleTouchMotion(void* data);
+    void handleTouchCancel(void* data);
+    void handleTouchFrame();
 
     void processMotion(uint32_t timeMsec, double oldX, double oldY);
     void processMove();
@@ -133,6 +143,11 @@ namespace umbriel {
     wl_listener m_axis{};
     wl_listener m_frame{};
     wl_listener m_constraintDestroy{};
+    wl_listener m_touchDown{};
+    wl_listener m_touchUp{};
+    wl_listener m_touchMotion{};
+    wl_listener m_touchCancel{};
+    wl_listener m_touchFrame{};
   };
 
 } // namespace umbriel

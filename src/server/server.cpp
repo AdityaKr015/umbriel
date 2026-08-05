@@ -374,7 +374,7 @@ namespace umbriel {
     wlr_log(WLR_INFO, "spawned '%s' on WAYLAND_DISPLAY=%s", command, m_socketName.c_str());
   }
 
-  void Server::updateSeatCapabilities() { m_seat->updateCapabilities(!m_keyboards.empty()); }
+  void Server::updateSeatCapabilities() { m_seat->updateCapabilities(!m_keyboards.empty(), !m_touchDevices.empty()); }
 
   void Server::startXwayland() {
     if (!executableOnPath("xwayland-satellite")) {

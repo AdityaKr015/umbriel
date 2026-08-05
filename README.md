@@ -18,6 +18,7 @@ What works today:
 - Window rules: per-app float, size, column width, workspace, fullscreen, and opacity via `[[rule]]` with regex matching on app_id and title
 - Blur, shadows, rounded corners, double borders (inner + outer ring), animated position/size/fade transitions, close animation snapshots
 - Touchpad/trackpad gestures: 3-finger horizontal swipe (scroll layout), 3-finger vertical swipe (workspace switch), pinch/hold forwarding
+- Touch input: tap-to-focus, touch forwarding to clients, hot-plug support
 - Xwayland support via xwayland-satellite (managed lifecycle with respawn)
 - `zwlr_layer_shell_v1` (anchors, exclusive zones, keyboard interactivity)
 - `zwlr_foreign_toplevel_manager_v1` (active window / task list for shell clients)
@@ -51,7 +52,7 @@ Still open / planned:
 | Layouts | Vertical scrolling, dwindle, master |
 | Shell | IME, remaining Noctalia polish |
 | Overview | Undecided |
-| Input | Touch, tablet |
+| Input | Tablet |
 | Protocols | See roadmap below |
 
 ## Dependencies

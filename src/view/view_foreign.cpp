@@ -1,5 +1,5 @@
-#include "core/log.h"
 #include "config/config.h"
+#include "core/log.h"
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"

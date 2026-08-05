@@ -59,9 +59,7 @@ namespace umbriel {
       wlr_scene_tree* fallback = m_group->server()->xdgTree();
       wlr_scene_node* child;
       wlr_scene_node* tmp;
-      wl_list_for_each_safe(child, tmp, &m_tree->children, link) {
-        wlr_scene_node_reparent(child, fallback);
-      }
+      wl_list_for_each_safe(child, tmp, &m_tree->children, link) { wlr_scene_node_reparent(child, fallback); }
       wlr_scene_node_destroy(&m_tree->node);
       m_tree = nullptr;
     }
@@ -69,9 +67,7 @@ namespace umbriel {
       wlr_scene_tree* fallback = m_group->server()->fullscreenTree();
       wlr_scene_node* child;
       wlr_scene_node* tmp;
-      wl_list_for_each_safe(child, tmp, &m_fullscreenTree->children, link) {
-        wlr_scene_node_reparent(child, fallback);
-      }
+      wl_list_for_each_safe(child, tmp, &m_fullscreenTree->children, link) { wlr_scene_node_reparent(child, fallback); }
       wlr_scene_node_destroy(&m_fullscreenTree->node);
       m_fullscreenTree = nullptr;
     }
@@ -186,7 +182,8 @@ namespace umbriel {
         if (view->toplevel()->scheduled.fullscreen) {
           wlr_box fullArea{};
           wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &fullArea);
-          if (fullArea.width > 0 && fullArea.height > 0
+          if (fullArea.width > 0
+              && fullArea.height > 0
               && (view->toplevel()->scheduled.width != fullArea.width
                   || view->toplevel()->scheduled.height != fullArea.height)) {
             wlr_xdg_toplevel_set_size(view->toplevel(), fullArea.width, fullArea.height);
@@ -259,8 +256,7 @@ namespace umbriel {
       // Column-derived fullscreen: enable/clip, do not reposition (applyPositions handles that).
       const int viewportWidth = std::max(1, output->usableArea().width - 2 * config().layoutEdgePad());
       wlr_box target = outputBox;
-      target.x = outputBox.x + m_layout.columnX(col, viewportWidth)
-          - static_cast<int>(std::lround(m_visualScroll));
+      target.x = outputBox.x + m_layout.columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
       wlr_box clipTarget = target;
       clipTarget.y += m_slideOffsetY;
       wlr_box decorated = clipTarget;
@@ -331,8 +327,7 @@ namespace umbriel {
           }
           // Column-derived fullscreen placement.
           wlr_box target = outputBox;
-          target.x = outputBox.x + m_layout.columnX(col, viewportWidth)
-              - static_cast<int>(std::lround(m_visualScroll));
+          target.x = outputBox.x + m_layout.columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
           if (animate) {
             view->animateTo(target.x, target.y);
           } else {

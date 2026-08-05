@@ -1162,8 +1162,7 @@ namespace umbriel {
     if (m_toplevel->base->initial_commit) {
       // Resolve window rules early to influence initial tiled/float decision and size.
       const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
-      const bool wantTiled =
-          rule.defaultFloating ? !*rule.defaultFloating : looksTiled(m_toplevel);
+      const bool wantTiled = rule.defaultFloating ? !*rule.defaultFloating : looksTiled(m_toplevel);
 
       if (wantTiled) {
         wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);

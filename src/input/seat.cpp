@@ -42,10 +42,13 @@ namespace umbriel {
     wl_list_remove(&m_startDrag.link);
   }
 
-  void Seat::updateCapabilities(bool hasKeyboard) {
+  void Seat::updateCapabilities(bool hasKeyboard, bool hasTouch) {
     uint32_t caps = WL_SEAT_CAPABILITY_POINTER;
     if (hasKeyboard) {
       caps |= WL_SEAT_CAPABILITY_KEYBOARD;
+    }
+    if (hasTouch) {
+      caps |= WL_SEAT_CAPABILITY_TOUCH;
     }
     wlr_seat_set_capabilities(m_seat, caps);
   }

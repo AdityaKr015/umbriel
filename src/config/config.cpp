@@ -1240,9 +1240,7 @@ namespace umbriel {
   }
 
   bool anyWindowRuleHasTitlePattern() {
-    return std::ranges::any_of(g_config.windowRules, [](const WindowRule& rule) {
-      return !rule.titlePattern.empty();
-    });
+    return std::ranges::any_of(g_config.windowRules, [](const WindowRule& rule) { return !rule.titlePattern.empty(); });
   }
 
 } // namespace umbriel

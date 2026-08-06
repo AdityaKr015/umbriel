@@ -247,58 +247,72 @@ namespace umbriel {
 
   } // namespace
 
-  bool parseKeybindAction(std::string_view value, Keybind& output) {
-    static constexpr std::pair<std::string_view, KeybindAction> actions[] = {
-        {"none", KeybindAction::None},
-        {"session-quit", KeybindAction::SessionQuit},
-        {"window-close", KeybindAction::WindowClose},
-        {"window-focus-left", KeybindAction::WindowFocusLeft},
-        {"window-focus-right", KeybindAction::WindowFocusRight},
-        {"window-focus-up", KeybindAction::WindowFocusUp},
-        {"window-focus-down", KeybindAction::WindowFocusDown},
-        {"window-focus-next", KeybindAction::WindowFocusNext},
-        {"window-move-up", KeybindAction::WindowMoveUp},
-        {"window-move-down", KeybindAction::WindowMoveDown},
-        {"window-toggle-maximize", KeybindAction::ToggleMaximize},
-        {"window-toggle-fullscreen", KeybindAction::ToggleFullscreen},
-        {"window-toggle-floating", KeybindAction::ToggleFloating},
-        {"window-consume-left", KeybindAction::WindowConsumeLeft},
-        {"window-expel-right", KeybindAction::WindowExpelRight},
-        {"window-cycle-width", KeybindAction::WindowCycleWidth},
-        {"column-move-left", KeybindAction::ColumnMoveLeft},
-        {"column-move-right", KeybindAction::ColumnMoveRight},
-        {"config-reload", KeybindAction::ConfigReload},
-        {"layout-scroll-left", KeybindAction::LayoutScrollLeft},
-        {"layout-scroll-right", KeybindAction::LayoutScrollRight},
-    };
-    for (const auto& [name, action] : actions) {
-      if (value == name) {
-        output.action = action;
-        return true;
+  static constexpr ActionSpec kActionSpecs[] = {
+      {"column-move-left", "", KeybindAction::ColumnMoveLeft},
+      {"column-move-right", "", KeybindAction::ColumnMoveRight},
+      {"config-reload", "", KeybindAction::ConfigReload},
+      {"layout-scroll-left", "", KeybindAction::LayoutScrollLeft},
+      {"layout-scroll-right", "", KeybindAction::LayoutScrollRight},
+      {"none", "", KeybindAction::None},
+      {"session-quit", "", KeybindAction::SessionQuit},
+      {"spawn", "<cmd>", KeybindAction::Spawn, ActionArgKind::Command},
+      {"window-close", "", KeybindAction::WindowClose},
+      {"window-consume-left", "", KeybindAction::WindowConsumeLeft},
+      {"window-cycle-width", "", KeybindAction::WindowCycleWidth},
+      {"window-expel-right", "", KeybindAction::WindowExpelRight},
+      {"window-focus-down", "", KeybindAction::WindowFocusDown},
+      {"window-focus-left", "", KeybindAction::WindowFocusLeft},
+      {"window-focus-next", "", KeybindAction::WindowFocusNext},
+      {"window-focus-right", "", KeybindAction::WindowFocusRight},
+      {"window-focus-up", "", KeybindAction::WindowFocusUp},
+      {"window-move-down", "", KeybindAction::WindowMoveDown},
+      {"window-move-to-workspace", "<1-9>", KeybindAction::WindowMoveToWorkspace, ActionArgKind::Workspace},
+      {"window-move-up", "", KeybindAction::WindowMoveUp},
+      {"window-toggle-floating", "", KeybindAction::ToggleFloating},
+      {"window-toggle-fullscreen", "", KeybindAction::ToggleFullscreen},
+      {"window-toggle-maximize", "", KeybindAction::ToggleMaximize},
+      {"workspace-switch", "<1-9>", KeybindAction::WorkspaceSwitch, ActionArgKind::Workspace},
+  };
+
+  std::span<const ActionSpec> actionSpecs() { return kActionSpecs; }
+
+  bool parseAction(std::string_view value, Keybind& output) {
+    for (const auto& spec : kActionSpecs) {
+      switch (spec.argKind) {
+      case ActionArgKind::None:
+        if (value == spec.name) {
+          output.action = spec.action;
+          return true;
+        }
+        break;
+      case ActionArgKind::Command: {
+        // Match "name:arg"
+        if (value.size() > spec.name.size() + 1
+            && value[spec.name.size()] == ':'
+            && value.substr(0, spec.name.size()) == spec.name) {
+          output.action = spec.action;
+          output.spawnCommand = value.substr(spec.name.size() + 1);
+          return true;
+        }
+        break;
+      }
+      case ActionArgKind::Workspace: {
+        // Match "name:N" where N is 1-9
+        if (value.size() == spec.name.size() + 2
+            && value[spec.name.size()] == ':'
+            && value.substr(0, spec.name.size()) == spec.name) {
+          char ch = value.back();
+          if (ch >= '1' && ch <= '9') {
+            output.action = spec.action;
+            output.workspace = ch - '1';
+            return true;
+          }
+        }
+        break;
+      }
       }
     }
-
-    constexpr std::string_view spawnPrefix = "spawn:";
-    if (value.starts_with(spawnPrefix)) {
-      output.action = KeybindAction::Spawn;
-      output.spawnCommand = value.substr(spawnPrefix.size());
-      return true;
-    }
-
-    auto parseWorkspace = [&](std::string_view prefix, KeybindAction action) {
-      if (!value.starts_with(prefix)) {
-        return false;
-      }
-      const std::string_view number = value.substr(prefix.size());
-      if (number.size() != 1 || number.front() < '1' || number.front() > '9') {
-        return false;
-      }
-      output.action = action;
-      output.workspace = number.front() - '1';
-      return true;
-    };
-    return parseWorkspace("workspace-switch:", KeybindAction::WorkspaceSwitch)
-        || parseWorkspace("window-move-to-workspace:", KeybindAction::WindowMoveToWorkspace);
+    return false;
   }
 
   namespace {
@@ -1312,7 +1326,7 @@ namespace umbriel {
           continue;
         }
         binding.repeat = repeatBind;
-        if (!parseKeybindAction(actionStr, binding)) {
+        if (!parseAction(actionStr, binding)) {
           warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, actionStr);
           continue;
         }

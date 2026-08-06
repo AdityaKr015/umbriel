@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <optional>
 #include <regex>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -226,5 +227,15 @@ namespace umbriel {
   [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();
   [[nodiscard]] std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName);
 
-  bool parseKeybindAction(std::string_view value, Keybind& output);
+  enum class ActionArgKind : uint8_t { None, Command, Workspace };
+
+  struct ActionSpec {
+    std::string_view name;  // e.g. "spawn", "workspace-switch", "window-close"
+    std::string_view param; // "" for simple, "<cmd>" / "<1-9>" for parameterized
+    KeybindAction action;
+    ActionArgKind argKind = ActionArgKind::None;
+  };
+
+  bool parseAction(std::string_view value, Keybind& output);
+  std::span<const ActionSpec> actionSpecs();
 } // namespace umbriel

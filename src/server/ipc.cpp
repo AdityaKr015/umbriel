@@ -204,7 +204,7 @@ namespace umbriel {
       }
       const std::string actionStr = req["action"].get<std::string>();
       Keybind bind{};
-      if (!parseKeybindAction(actionStr, bind)) {
+      if (!parseAction(actionStr, bind)) {
         return nlohmann::json{{"err", "unknown action: " + actionStr}}.dump();
       }
       m_server->executeKeybindAction(bind);

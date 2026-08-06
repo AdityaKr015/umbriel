@@ -70,6 +70,7 @@ namespace {
         "       umbriel apps                             list running application ids\n"
         "       umbriel layers                           list layer-shell surfaces\n"
         "       umbriel msg <action> [args...]           send an action to the compositor\n"
+        "       umbriel actions                           list available actions\n"
         "       umbriel help | -h | --help               show this help\n"
         "       umbriel --version                        print version\n"
         "\n"
@@ -77,15 +78,23 @@ namespace {
         "  -s <command>   spawn <command> once the compositor starts\n"
         "  -c <config>    use <config> instead of the default config path\n"
         "\n"
-        "Actions for `msg` (same strings as keybind actions in the config):\n"
-        "  spawn:<cmd> (or: msg spawn <cmd...>), window-close,\n"
-        "  session-quit, window-focus-left/right/up/down, window-focus-next,\n"
-        "  window-move-up/down, window-consume-left, window-expel-right,\n"
-        "  window-cycle-width, column-move-left/right, window-toggle-maximize,\n"
-        "  window-toggle-fullscreen, window-toggle-floating, workspace-switch:<1-9>,\n"
-        "  window-move-to-workspace:<1-9>, config-reload, layout-scroll-left/right",
+        "Run `umbriel actions` to list all available actions for `msg` and keybinds.",
         UMBRIEL_VERSION
     );
+  }
+
+  int printActions() {
+    for (const auto& spec : umbriel::actionSpecs()) {
+      if (spec.action == umbriel::KeybindAction::None) {
+        continue;
+      }
+      if (spec.param.empty()) {
+        std::println("{}", spec.name);
+      } else {
+        std::println("{}:{}", spec.name, spec.param);
+      }
+    }
+    return EXIT_SUCCESS;
   }
 } // namespace
 
@@ -96,6 +105,9 @@ int main(int argc, char** argv) {
     }
     if (std::strcmp(argv[1], "outputs") == 0) {
       return umbriel::runOutputsCommand();
+    }
+    if (std::strcmp(argv[1], "actions") == 0) {
+      return printActions();
     }
     if (std::strcmp(argv[1], "help") == 0 || std::strcmp(argv[1], "-h") == 0 || std::strcmp(argv[1], "--help") == 0) {
       printHelp(stdout);
@@ -108,10 +120,15 @@ int main(int argc, char** argv) {
 
     // IPC subcommands: apps, layers, msg
     auto isJsonFlag = [](const char* arg) { return std::strcmp(arg, "--json") == 0 || std::strcmp(arg, "-j") == 0; };
+    auto isHelpFlag = [](const char* arg) { return std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0; };
 
     if (std::strcmp(argv[1], "apps") == 0 || std::strcmp(argv[1], "layers") == 0) {
       bool jf = false;
       for (int i = 2; i < argc; ++i) {
+        if (isHelpFlag(argv[i])) {
+          printHelp(stdout);
+          return EXIT_SUCCESS;
+        }
         if (isJsonFlag(argv[i])) {
           jf = true;
         } else {
@@ -123,6 +140,27 @@ int main(int argc, char** argv) {
       return umbriel::runIpcCommand(cmd, {}, jf);
     }
     if (std::strcmp(argv[1], "msg") == 0) {
+      // Help only when -h/--help is the immediate argument (not buried in spawn args).
+      if (argc == 3 && isHelpFlag(argv[2])) {
+        std::println("Usage: umbriel msg <action> [args...]");
+        std::println("");
+        std::println("Send an action to the running compositor.");
+        std::println("Use `msg spawn <cmd...>` as shorthand for `msg spawn:<cmd...>`.");
+        std::println("");
+        std::println("Available actions:");
+        for (const auto& spec : umbriel::actionSpecs()) {
+          if (spec.action == umbriel::KeybindAction::None) {
+            continue;
+          }
+          if (spec.param.empty()) {
+            std::println("  {}", spec.name);
+          } else {
+            std::println("  {}:{}", spec.name, spec.param);
+          }
+        }
+        return EXIT_SUCCESS;
+      }
+
       bool jf = false;
       // Collect non-flag args; for spawn, everything after "spawn" is literal.
       std::vector<const char*> args;

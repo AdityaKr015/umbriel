@@ -95,12 +95,10 @@ just debug
 ./build-debug/umbriel
 ```
 
-Umbriel needs SceneFX patches not upstream in 0.5 yet (`ignore_alpha`, shadow
-output clip, fractional-scale snap). They live under
-`subprojects/packagefiles/`. Meson uses system `scenefx-0.5` only when the
-required APIs are in the headers; otherwise it builds the wrap from
-`subprojects/scenefx.wrap`. Nix packaging applies the same diffs in
-`nix/package.nix`.
+Umbriel uses a patched SceneFX fork (`noctalia-dev/scenefx`, branch `umbriel`)
+tracked as a git submodule in `subprojects/scenefx`. After cloning, run
+`git submodule update --init`. Meson uses system `scenefx-0.5` only when the
+required APIs are present in the headers; otherwise it builds from the submodule.
 ## Running
 
 From an existing Wayland or X11 session, Umbriel opens a nested window (mod = Alt).

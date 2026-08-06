@@ -2,11 +2,9 @@
 build*/
 cmake-build-*/
 
-# Meson wrap downloads
+# Meson subprojects (scenefx is a git submodule, not a wrap download)
 subprojects/*
-!subprojects/*.wrap
-!subprojects/packagefiles/
-!subprojects/packagefiles/**
+!subprojects/scenefx/
 compile_commands.json
 
 # Editor / IDE

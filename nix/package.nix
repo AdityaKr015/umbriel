@@ -23,16 +23,6 @@
 let
   inherit (builtins) head match readFile;
   version = head (match ".*\n  version: '([0-9][^']+)'.*" (readFile ../meson.build));
-
-  scenefxPatched = scenefx.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [
-      ../subprojects/packagefiles/scenefx-blur-ignore-alpha.diff
-      ../subprojects/packagefiles/scenefx-fractional-scale-snap.diff
-      ../subprojects/packagefiles/scenefx-shadow-output-clip.diff
-      ../subprojects/packagefiles/scenefx-blur-offscreen-sync.diff
-      ../subprojects/packagefiles/scenefx-blur-edge-damage.diff
-    ];
-  });
 in
 stdenv.mkDerivation {
   pname = "umbriel";
@@ -52,7 +42,7 @@ stdenv.mkDerivation {
     wayland
     wayland-protocols
     # SceneFX before wlroots so its scene symbols win at link time.
-    scenefxPatched
+    scenefx
     wlroots_0_20
     libxkbcommon
     libinput

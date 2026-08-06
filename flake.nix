@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
     scenefx = {
-      url = "github:wlrfx/scenefx/0.5";
+      url = "github:noctalia-dev/scenefx/umbriel";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

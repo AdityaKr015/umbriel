@@ -24,12 +24,9 @@ wayland_server_dep = dependency('wayland-server')
 wayland_client_dep = dependency('wayland-client')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')
-# Umbriel needs SceneFX APIs not in upstream 0.5 (ignore_alpha, shadow
-# output clip). Prefer a system scenefx-0.5 that already has both (Nix
-# applies the same diffs as scenefx.wrap in package.nix). Otherwise build
-# the wrap subproject so diff_files apply.
-# Probe the header text instead of compiling: SceneFX headers use C99
-# `static` array sizes that break raw C++ compile checks.
+# Umbriel needs patched SceneFX APIs (ignore_alpha, shadow output clip).
+# Prefer a compatible system scenefx-0.5 (e.g. the Nix flake installs the
+# fork). Otherwise build from the git submodule in subprojects/scenefx.
 fs = import('fs')
 pkgconfig = find_program('pkg-config', required: false)
 use_system_scenefx = false
@@ -52,7 +49,7 @@ if pkgconfig.found()
       endif
     endforeach
     if not use_system_scenefx
-      message('system scenefx-0.5 lacks Umbriel patches; using patched wrap subproject')
+      message('system scenefx-0.5 lacks Umbriel patches; building from submodule')
     endif
   endif
 endif

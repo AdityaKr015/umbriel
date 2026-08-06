@@ -14,6 +14,7 @@
 // clang-format off
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <linux/input-event-codes.h>
 #include "wlr.h"
 // clang-format on
@@ -97,6 +98,10 @@ namespace umbriel {
 
     if (mode == CursorMode::ResizeTile) {
       m_resizeWorkspace = view->workspace();
+      if (m_resizeWorkspace != nullptr && m_resizeWorkspace->layoutMode() == LayoutMode::Dwindle) {
+        beginDwindleResize(view);
+        return;
+      }
       if (m_resizeWorkspace != nullptr && m_resizeWorkspace->layoutMode() != LayoutMode::Scrolling) {
         resetMode();
         return;
@@ -233,6 +238,8 @@ namespace umbriel {
     m_dragSourceColumn = -1;
     m_dropColumn = -1;
     m_dropRow = -1;
+    m_dropTargetView = nullptr;
+    m_dropEdge = 0;
     m_tileDragPending = false;
     m_resizeWorkspace = nullptr;
     m_resizeColumn = -1;
@@ -250,6 +257,14 @@ namespace umbriel {
     m_resizeStartLowerWeight = 0;
     m_resizeUpperRow = -1;
     m_resizeSoloHorizontal = false;
+    m_resizeDwindleH = false;
+    m_resizeDwindleV = false;
+    m_resizeDwindleHEdge = 0;
+    m_resizeDwindleVEdge = 0;
+    m_resizeDwindleHRatio = 0;
+    m_resizeDwindleVRatio = 0;
+    m_resizeDwindleHSpan = 0;
+    m_resizeDwindleVSpan = 0;
     refreshInteractiveCursor();
   }
 
@@ -844,18 +859,62 @@ namespace umbriel {
         m_dropWorkspace = workspace;
         m_dropColumn = leafCount;
         m_dropRow = -1;
+        m_dropTargetView = nullptr;
+        m_dropEdge = 0;
         m_server->hideInsertHint();
         wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
         return;
       }
       const wlr_box targetBox = dwindle->targetBoxByIndex(leafIndex);
-      if (targetBox.width <= 0 || targetBox.height <= 0) {
+      const auto& leafColumns = workspace->layout().columns();
+      View* leafView =
+          leafIndex < static_cast<int>(leafColumns.size()) && !leafColumns[static_cast<size_t>(leafIndex)].views.empty()
+          ? leafColumns[static_cast<size_t>(leafIndex)].views.front()
+          : nullptr;
+      if (targetBox.width <= 0 || targetBox.height <= 0 || leafView == nullptr || leafView == m_grabbedView) {
+        // Hovering the dragged window's own slot: no self-split.
+        m_dropWorkspace = workspace;
+        m_dropColumn = leafIndex;
+        m_dropRow = -1;
+        m_dropTargetView = nullptr;
+        m_dropEdge = 0;
+        m_server->hideInsertHint();
+        wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
         return;
+      }
+      // Pick the nearest edge of the hovered leaf; the dropped window takes that
+      // half, matching where the directional split will place it.
+      const double fx = (m_cursor->x - targetBox.x) / static_cast<double>(targetBox.width);
+      const double fy = (m_cursor->y - targetBox.y) / static_cast<double>(targetBox.height);
+      const double distLeft = fx;
+      const double distRight = 1.0 - fx;
+      const double distTop = fy;
+      const double distBottom = 1.0 - fy;
+      wlr_box hint = targetBox;
+      uint32_t edge = 0;
+      if (std::min(distLeft, distRight) <= std::min(distTop, distBottom)) {
+        if (distLeft <= distRight) {
+          edge = WLR_EDGE_LEFT;
+          hint.width = targetBox.width / 2;
+        } else {
+          edge = WLR_EDGE_RIGHT;
+          hint.x = targetBox.x + targetBox.width / 2;
+          hint.width = targetBox.width - targetBox.width / 2;
+        }
+      } else if (distTop <= distBottom) {
+        edge = WLR_EDGE_TOP;
+        hint.height = targetBox.height / 2;
+      } else {
+        edge = WLR_EDGE_BOTTOM;
+        hint.y = targetBox.y + targetBox.height / 2;
+        hint.height = targetBox.height - targetBox.height / 2;
       }
       m_dropWorkspace = workspace;
       m_dropColumn = leafIndex;
       m_dropRow = -1;
-      m_server->insertHint().showBox(workspace, targetBox);
+      m_dropTargetView = leafView;
+      m_dropEdge = edge;
+      m_server->insertHint().showBox(workspace, hint);
       wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
       return;
     }
@@ -936,6 +995,38 @@ namespace umbriel {
       target->layout().clearInsertGap();
     }
     if (view != nullptr && view->mapped() && target != nullptr) {
+      if (target->layoutMode() == LayoutMode::Dwindle) {
+        auto* dwindle = dynamic_cast<DwindleLayout*>(&target->layout());
+        if (dwindle != nullptr) {
+          View* dropTarget = m_dropTargetView;
+          if (dropTarget != nullptr && dwindle->columnOf(dropTarget) < 0) {
+            dropTarget = nullptr;
+          }
+          const bool crossWs = view->workspace() != target;
+          const bool splitDrop = dropTarget != nullptr && dropTarget != view && m_dropEdge != 0;
+          if (crossWs) {
+            view->setWorkspace(target);
+            // setWorkspace → addView auto-inserts; drop that entry so the
+            // explicit placement below decides the position.
+            dwindle->removeView(view);
+            if (splitDrop) {
+              dwindle->insertViewSplitOnView(view, dropTarget, m_dropEdge);
+            } else {
+              dwindle->insertView(view, static_cast<int>(dwindle->columns().size()));
+            }
+            target->arrange();
+            m_server->focusView(view, FocusReason::DragDrop);
+          } else if (splitDrop) {
+            dwindle->removeView(view);
+            dwindle->insertViewSplitOnView(view, dropTarget, m_dropEdge);
+            target->arrange();
+            m_server->focusView(view, FocusReason::DragDrop);
+          }
+          // else: same workspace with no valid target — snap back (no-op).
+        }
+        resetMode();
+        return;
+      }
       if (view->workspace() != target) {
         view->setWorkspace(target);
         // setWorkspace → addView → layoutAttach auto-inserts at the focused
@@ -1042,6 +1133,51 @@ namespace umbriel {
     const double distBottom = std::abs(cy - (box.y + box.height));
     const double nearestH = std::min(distLeft, distRight);
     const double nearestV = std::min(distTop, distBottom);
+
+    if (view->workspace()->layoutMode() == LayoutMode::Dwindle) {
+      auto* dwindle = dynamic_cast<DwindleLayout*>(&view->workspace()->layout());
+      if (dwindle == nullptr) {
+        return 0;
+      }
+      const uint32_t avail = dwindle->resizableEdges(view);
+      if (avail == 0) {
+        return 0;
+      }
+      constexpr double kInfinity = std::numeric_limits<double>::max();
+      uint32_t hEdge = 0;
+      double hDist = kInfinity;
+      if ((avail & WLR_EDGE_LEFT) != 0 && (avail & WLR_EDGE_RIGHT) != 0) {
+        hEdge = distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
+        hDist = nearestH;
+      } else if ((avail & WLR_EDGE_LEFT) != 0) {
+        hEdge = WLR_EDGE_LEFT;
+        hDist = distLeft;
+      } else if ((avail & WLR_EDGE_RIGHT) != 0) {
+        hEdge = WLR_EDGE_RIGHT;
+        hDist = distRight;
+      }
+      uint32_t vEdge = 0;
+      double vDist = kInfinity;
+      if ((avail & WLR_EDGE_TOP) != 0 && (avail & WLR_EDGE_BOTTOM) != 0) {
+        vEdge = distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+        vDist = nearestV;
+      } else if ((avail & WLR_EDGE_TOP) != 0) {
+        vEdge = WLR_EDGE_TOP;
+        vDist = distTop;
+      } else if ((avail & WLR_EDGE_BOTTOM) != 0) {
+        vEdge = WLR_EDGE_BOTTOM;
+        vDist = distBottom;
+      }
+      // Resize both axes at once near a corner; otherwise the nearest boundary.
+      constexpr double kCornerSlop = 60.0;
+      if (hEdge != 0 && vEdge != 0 && hDist < kCornerSlop && vDist < kCornerSlop) {
+        return hEdge | vEdge;
+      }
+      if (hEdge != 0 && (vEdge == 0 || hDist <= vDist)) {
+        return hEdge;
+      }
+      return vEdge;
+    }
 
     bool allowVertical = false;
     if (view->workspace()->layoutMode() == LayoutMode::Scrolling) {
@@ -1217,6 +1353,57 @@ namespace umbriel {
     updateInteractiveCursor(view);
   }
 
+  void Cursor::beginDwindleResize(View* view) {
+    auto* dwindle = m_resizeWorkspace != nullptr ? dynamic_cast<DwindleLayout*>(&m_resizeWorkspace->layout()) : nullptr;
+    if (dwindle == nullptr) {
+      resetMode();
+      return;
+    }
+    if (m_resizeEdges == 0) {
+      m_resizeEdges = tileResizeEdges(view);
+    }
+    if (m_resizeEdges == 0) {
+      resetMode();
+      return;
+    }
+    m_resizeColumn = m_resizeWorkspace->layout().columnOf(view);
+    m_resizeStartX = m_cursor->x;
+    m_resizeStartY = m_cursor->y;
+    m_resizeDwindleH = false;
+    m_resizeDwindleV = false;
+    double ratio = 0;
+    double span = 0;
+    if ((m_resizeEdges & WLR_EDGE_LEFT) != 0 && dwindle->resizeBoundary(view, WLR_EDGE_LEFT, &ratio, &span)) {
+      m_resizeDwindleH = true;
+      m_resizeDwindleHEdge = WLR_EDGE_LEFT;
+      m_resizeDwindleHRatio = ratio;
+      m_resizeDwindleHSpan = span;
+    } else if ((m_resizeEdges & WLR_EDGE_RIGHT) != 0 && dwindle->resizeBoundary(view, WLR_EDGE_RIGHT, &ratio, &span)) {
+      m_resizeDwindleH = true;
+      m_resizeDwindleHEdge = WLR_EDGE_RIGHT;
+      m_resizeDwindleHRatio = ratio;
+      m_resizeDwindleHSpan = span;
+    }
+    if ((m_resizeEdges & WLR_EDGE_TOP) != 0 && dwindle->resizeBoundary(view, WLR_EDGE_TOP, &ratio, &span)) {
+      m_resizeDwindleV = true;
+      m_resizeDwindleVEdge = WLR_EDGE_TOP;
+      m_resizeDwindleVRatio = ratio;
+      m_resizeDwindleVSpan = span;
+    } else if (
+        (m_resizeEdges & WLR_EDGE_BOTTOM) != 0 && dwindle->resizeBoundary(view, WLR_EDGE_BOTTOM, &ratio, &span)
+    ) {
+      m_resizeDwindleV = true;
+      m_resizeDwindleVEdge = WLR_EDGE_BOTTOM;
+      m_resizeDwindleVRatio = ratio;
+      m_resizeDwindleVSpan = span;
+    }
+    if (!m_resizeDwindleH && !m_resizeDwindleV) {
+      resetMode();
+      return;
+    }
+    updateInteractiveCursor(view);
+  }
+
   void Cursor::processResizeTile() {
     if (m_resizeWorkspace == nullptr
         || m_resizeWorkspace->group() == nullptr
@@ -1224,6 +1411,28 @@ namespace umbriel {
         || m_resizeColumn < 0
         || m_grabbedView == nullptr) {
       resetMode();
+      return;
+    }
+    if (m_resizeWorkspace->layoutMode() == LayoutMode::Dwindle) {
+      auto* dwindle = dynamic_cast<DwindleLayout*>(&m_resizeWorkspace->layout());
+      if (dwindle == nullptr) {
+        resetMode();
+        return;
+      }
+      const double dx = m_cursor->x - m_resizeStartX;
+      const double dy = m_cursor->y - m_resizeStartY;
+      if (m_resizeDwindleH && m_resizeDwindleHSpan > 0) {
+        dwindle->setResizeBoundary(
+            m_grabbedView, m_resizeDwindleHEdge, m_resizeDwindleHRatio + dx / m_resizeDwindleHSpan
+        );
+      }
+      if (m_resizeDwindleV && m_resizeDwindleVSpan > 0) {
+        dwindle->setResizeBoundary(
+            m_grabbedView, m_resizeDwindleVEdge, m_resizeDwindleVRatio + dy / m_resizeDwindleVSpan
+        );
+      }
+      wlr_xdg_toplevel_set_maximized(m_grabbedView->toplevel(), false);
+      m_resizeWorkspace->arrange(false);
       return;
     }
     if (m_resizeWorkspace->layoutMode() != LayoutMode::Scrolling) {

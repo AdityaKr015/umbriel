@@ -22,6 +22,10 @@ namespace umbriel {
       Node* parent = nullptr;
       double ratio = 0.5;
       View* view = nullptr;
+      int areaX = 0;
+      int areaY = 0;
+      int areaW = 0;
+      int areaH = 0;
     };
 
     [[nodiscard]] LayoutMode mode() const override { return LayoutMode::Dwindle; }
@@ -46,6 +50,17 @@ namespace umbriel {
     [[nodiscard]] View* verticalSibling(const View* view, int direction) const;
     [[nodiscard]] View* focusVerticalLeaf(const View* view, int direction) const override;
 
+    // Drag-and-drop: split the target leaf and place the new view on the given
+    // WLR edge (0 = default/automatic orientation, new view last).
+    void insertViewSplitOnView(View* newView, View* targetView, uint32_t edge);
+
+    // Interactive resize: which edges of the view border an internal split
+    // (screen-facing edges are excluded), the current ratio/pixel span of the
+    // boundary behind an edge, and a setter for that boundary ratio.
+    [[nodiscard]] uint32_t resizableEdges(const View* view) const;
+    [[nodiscard]] bool resizeBoundary(const View* view, uint32_t edge, double* outRatio, double* outSpan) const;
+    bool setResizeBoundary(View* view, uint32_t edge, double ratio);
+
     bool cycleWidth(int columnIndex) override;
     bool toggleFullWidth(int columnIndex) override;
     bool setWidthFraction(int columnIndex, double fraction) override;
@@ -64,8 +79,10 @@ namespace umbriel {
     [[nodiscard]] Node* findNode(const View* view) const;
     [[nodiscard]] Node* nodeAtFlatIndex(int index) const;
     void splitNode(Node* node, View* newView);
+    void splitNodeDirected(Node* node, View* newView, bool horizontal, bool newFirst);
     [[nodiscard]] bool isHorizontal(const Node* node) const;
-    void arrangeNode(const Node* node, const wlr_box& area);
+    [[nodiscard]] Node* boundaryNode(const View* view, uint32_t edge) const;
+    void arrangeNode(Node* node, const wlr_box& area);
     void collectColumns(const Node* node);
     void rebuildFlatColumns();
     void detachNode(Node* node);

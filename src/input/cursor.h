@@ -81,6 +81,7 @@ namespace umbriel {
     void finishFloatMove();
     void processResize();
     void processResizeTile();
+    void beginDwindleResize(View* view);
     [[nodiscard]] uint32_t tileResizeEdges(View* view) const;
     [[nodiscard]] uint32_t floatResizeEdges(View* view) const;
     [[nodiscard]] uint32_t hoverResizeEdges(View* view) const;
@@ -112,6 +113,10 @@ namespace umbriel {
     int m_dragSourceColumn = -1;
     int m_dropColumn = -1;
     int m_dropRow = -1;
+    // Dwindle drag-and-drop: which leaf the pointer is over and the edge of it
+    // the dropped view will occupy (0 = none/append).
+    View* m_dropTargetView = nullptr;
+    uint32_t m_dropEdge = 0;
     bool m_tileDragPending = false;
     double m_tileDragStartX = 0;
     double m_tileDragStartY = 0;
@@ -131,6 +136,15 @@ namespace umbriel {
     double m_resizeStartLowerWeight = 0;
     int m_resizeUpperRow = -1;
     bool m_resizeSoloHorizontal = false;
+    // Dwindle interactive resize: per-axis split boundary captured at grab start.
+    bool m_resizeDwindleH = false;
+    bool m_resizeDwindleV = false;
+    uint32_t m_resizeDwindleHEdge = 0;
+    uint32_t m_resizeDwindleVEdge = 0;
+    double m_resizeDwindleHRatio = 0;
+    double m_resizeDwindleVRatio = 0;
+    double m_resizeDwindleHSpan = 0;
+    double m_resizeDwindleVSpan = 0;
     // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
     wlr_output* m_pointerOutput = nullptr;
     double m_wheelAccum[2]{};

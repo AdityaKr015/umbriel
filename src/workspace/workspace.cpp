@@ -260,8 +260,7 @@ namespace umbriel {
       if (m_layoutMode == LayoutMode::Scrolling) {
         const int viewportWidth = std::max(1, output->usableArea().width - 2 * config().layoutEdgePad());
         wlr_box target = outputBox;
-        target.x = outputBox.x + m_layout->columnX(col, viewportWidth)
-            - static_cast<int>(std::lround(m_visualScroll));
+        target.x = outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
         wlr_box clipTarget = target;
         clipTarget.y += m_slideOffsetY;
         wlr_box decorated = clipTarget;
@@ -341,8 +340,8 @@ namespace umbriel {
         }
         if (m_layoutMode == LayoutMode::Scrolling) {
           wlr_box target = outputBox;
-          target.x = outputBox.x + m_layout->columnX(col, viewportWidth)
-              - static_cast<int>(std::lround(m_visualScroll));
+          target.x =
+              outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
           if (animate) {
             view->animateTo(target.x, target.y);
           } else {

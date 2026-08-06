@@ -153,9 +153,7 @@ namespace umbriel {
   }
 
   void InsertHint::showBox(Workspace* workspace, const wlr_box& geometry) {
-    if (workspace == nullptr
-        || workspace->group() == nullptr
-        || workspace->group()->output() == nullptr) {
+    if (workspace == nullptr || workspace->group() == nullptr || workspace->group()->output() == nullptr) {
       return;
     }
     showGeometry(workspace, geometry.x, geometry.y, geometry.width, geometry.height);

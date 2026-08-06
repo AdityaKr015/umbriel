@@ -1028,8 +1028,7 @@ namespace umbriel {
       const int columnIndex = view->workspace()->layout().columnOf(view);
       if (columnIndex >= 0) {
         const auto& columns = view->workspace()->layout().columns();
-        allowVertical =
-            columnIndex < static_cast<int>(columns.size())
+        allowVertical = columnIndex < static_cast<int>(columns.size())
             && columns[static_cast<size_t>(columnIndex)].views.size() >= 2;
       }
     }

@@ -605,8 +605,7 @@ namespace umbriel {
         return;
       }
       warnUnknownKeys(
-          *section, "layout",
-          {"mode", "gap", "default_width_fraction", "width_presets", "scroll_wheel_step"}
+          *section, "layout", {"mode", "gap", "default_width_fraction", "width_presets", "scroll_wheel_step"}
       );
       if (const toml::node* modeNode = section->get("mode")) {
         if (const auto* modeStr = modeNode->as_string()) {

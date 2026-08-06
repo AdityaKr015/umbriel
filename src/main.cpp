@@ -1,3 +1,4 @@
+#include "cli/ipc_client.h"
 #include "cli/outputs.h"
 #include "config/config.h"
 #include "config/config_diag.h"
@@ -12,6 +13,11 @@
 #include <filesystem>
 #include <print>
 #include <string>
+#include <vector>
+
+#ifndef UMBRIEL_VERSION
+#define UMBRIEL_VERSION "unknown"
+#endif
 
 namespace {
   umbriel::Server* g_server = nullptr;
@@ -29,61 +35,141 @@ namespace {
       if (std::strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
         configPath = argv[++i];
       } else {
-        std::println(stderr, "Usage: {} validate [-c config_file]", argv[0]);
+        std::println(stderr, "error: unknown option '{}' for validate", argv[i]);
         return EXIT_FAILURE;
       }
     }
 
-    setConsoleLogging(false);
     umbriel::loadConfig(configPath);
-
-    const auto& diagnostics = umbriel::configDiagnostics();
-    const auto& rootPath = umbriel::configRootPath();
-
-    if (configPath == nullptr && diagnostics.empty() && !std::filesystem::is_regular_file(rootPath)) {
-      std::println("no config file found: {} (defaults will be used)", rootPath.c_str());
+    const auto& diags = umbriel::configDiagnostics();
+    if (diags.empty()) {
+      std::println("config: ok ({})", umbriel::configRootPath().string());
       return EXIT_SUCCESS;
     }
-
-    int errors = 0;
-    int warnings = 0;
-    for (const auto& diag : diagnostics) {
-      const char* severity = diag.severity == umbriel::ConfigDiagnostic::Severity::Error ? "error" : "warning";
-      const std::string loc = diag.location();
-      if (loc.empty()) {
-        std::println("{}: {}", severity, diag.message);
+    bool hasError = false;
+    for (const auto& d : diags) {
+      const std::string loc = d.location();
+      if (d.severity == umbriel::ConfigDiagnostic::Severity::Error) {
+        hasError = true;
+        std::println(stderr, "error: {}{}", loc.empty() ? "" : loc + ": ", d.message);
       } else {
-        std::println("{}: {}: {}", loc, severity, diag.message);
-      }
-      if (diag.severity == umbriel::ConfigDiagnostic::Severity::Error) {
-        ++errors;
-      } else {
-        ++warnings;
+        std::println(stderr, "warning: {}{}", loc.empty() ? "" : loc + ": ", d.message);
       }
     }
-
-    if (diagnostics.empty()) {
-      std::println("config OK: {}", rootPath.c_str());
-    } else {
-      std::println("{} error(s), {} warning(s)", errors, warnings);
-    }
-    return errors > 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+    return hasError ? EXIT_FAILURE : EXIT_SUCCESS;
   }
 
-  void printUsage(const char* argv0) {
-    kLog.error(
-        "Usage: {} [-s startup_command] [-c config_file]\n       {} validate [-c config_file]\n       {} outputs",
-        argv0, argv0, argv0
+  void printHelp(FILE* stream) {
+    std::println(
+        stream,
+        "umbriel {} — a wayland compositor\n"
+        "\n"
+        "Usage: umbriel [-s <command>] [-c <config>]   run the compositor\n"
+        "       umbriel validate [-c <config>]          check the config file\n"
+        "       umbriel outputs                          list outputs and modes\n"
+        "       umbriel apps                             list running application ids\n"
+        "       umbriel layers                           list layer-shell surfaces\n"
+        "       umbriel msg <action> [args...]           send an action to the compositor\n"
+        "       umbriel help | -h | --help               show this help\n"
+        "       umbriel --version                        print version\n"
+        "\n"
+        "Options:\n"
+        "  -s <command>   spawn <command> once the compositor starts\n"
+        "  -c <config>    use <config> instead of the default config path\n"
+        "\n"
+        "Actions for `msg` (same strings as keybind actions in the config):\n"
+        "  spawn:<cmd> (or: msg spawn <cmd...>), terminal-spawn, window-close,\n"
+        "  session-quit, window-focus-left/right/up/down, window-focus-next,\n"
+        "  window-move-up/down, window-consume-left, window-expel-right,\n"
+        "  window-cycle-width, column-move-left/right, window-toggle-maximize,\n"
+        "  window-toggle-fullscreen, window-toggle-floating, workspace-switch:<1-9>,\n"
+        "  window-move-to-workspace:<1-9>, config-reload, layout-scroll-left/right",
+        UMBRIEL_VERSION
     );
   }
 } // namespace
 
 int main(int argc, char** argv) {
-  if (argc >= 2 && std::strcmp(argv[1], "validate") == 0) {
-    return validateConfig(argc, argv);
+  if (argc >= 2) {
+    if (std::strcmp(argv[1], "validate") == 0) {
+      return validateConfig(argc, argv);
+    }
+    if (std::strcmp(argv[1], "outputs") == 0) {
+      return umbriel::runOutputsCommand();
+    }
+    if (std::strcmp(argv[1], "help") == 0 || std::strcmp(argv[1], "-h") == 0 || std::strcmp(argv[1], "--help") == 0) {
+      printHelp(stdout);
+      return EXIT_SUCCESS;
+    }
+    if (std::strcmp(argv[1], "--version") == 0 || std::strcmp(argv[1], "-V") == 0) {
+      std::println("umbriel {}", UMBRIEL_VERSION);
+      return EXIT_SUCCESS;
+    }
+
+    // IPC subcommands: apps, layers, msg
+    auto isJsonFlag = [](const char* arg) { return std::strcmp(arg, "--json") == 0 || std::strcmp(arg, "-j") == 0; };
+
+    if (std::strcmp(argv[1], "apps") == 0 || std::strcmp(argv[1], "layers") == 0) {
+      bool jf = false;
+      for (int i = 2; i < argc; ++i) {
+        if (isJsonFlag(argv[i])) {
+          jf = true;
+        } else {
+          printHelp(stderr);
+          return EXIT_FAILURE;
+        }
+      }
+      auto cmd = std::strcmp(argv[1], "apps") == 0 ? umbriel::IpcCommand::Apps : umbriel::IpcCommand::Layers;
+      return umbriel::runIpcCommand(cmd, {}, jf);
+    }
+    if (std::strcmp(argv[1], "msg") == 0) {
+      bool jf = false;
+      // Collect non-flag args; for spawn, everything after "spawn" is literal.
+      std::vector<const char*> args;
+      bool inSpawnTail = false;
+      for (int i = 2; i < argc; ++i) {
+        if (!inSpawnTail && isJsonFlag(argv[i])) {
+          jf = true;
+        } else {
+          args.push_back(argv[i]);
+          // Once we see "spawn" as the first non-flag arg and there are more,
+          // everything after belongs to the command (no flag stripping).
+          if (args.size() == 1 && std::strcmp(argv[i], "spawn") == 0) {
+            inSpawnTail = true;
+          }
+        }
+      }
+
+      if (args.empty()) {
+        printHelp(stderr);
+        return EXIT_FAILURE;
+      }
+
+      std::string actionString;
+      if (std::strcmp(args[0], "spawn") == 0 && args.size() > 1) {
+        actionString = "spawn:";
+        for (size_t i = 1; i < args.size(); ++i) {
+          if (i > 1) {
+            actionString += ' ';
+          }
+          actionString += args[i];
+        }
+      } else {
+        for (size_t i = 0; i < args.size(); ++i) {
+          if (i > 0) {
+            actionString += ' ';
+          }
+          actionString += args[i];
+        }
+      }
+      return umbriel::runIpcCommand(umbriel::IpcCommand::Action, actionString, jf);
+    }
   }
-  if (argc >= 2 && std::strcmp(argv[1], "outputs") == 0) {
-    return umbriel::runOutputsCommand();
+
+  // If argv[1] exists and doesn't start with '-', it's an unknown subcommand.
+  if (argc >= 2 && argv[1][0] != '-') {
+    printHelp(stderr);
+    return EXIT_FAILURE;
   }
 
   initLogFile();
@@ -101,7 +187,7 @@ int main(int argc, char** argv) {
     } else if (std::strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
       configPath = argv[++i];
     } else {
-      printUsage(argv[0]);
+      printHelp(stderr);
       return EXIT_FAILURE;
     }
   }

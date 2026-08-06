@@ -246,60 +246,64 @@ namespace umbriel {
       return true;
     }
 
-    bool parseAction(std::string_view value, Keybind& output) {
-      static constexpr std::pair<std::string_view, KeybindAction> actions[] = {
-          {"none", KeybindAction::None},
-          {"terminal-spawn", KeybindAction::TerminalSpawn},
-          {"session-quit", KeybindAction::SessionQuit},
-          {"window-close", KeybindAction::WindowClose},
-          {"window-focus-left", KeybindAction::WindowFocusLeft},
-          {"window-focus-right", KeybindAction::WindowFocusRight},
-          {"window-focus-up", KeybindAction::WindowFocusUp},
-          {"window-focus-down", KeybindAction::WindowFocusDown},
-          {"window-focus-next", KeybindAction::WindowFocusNext},
-          {"window-move-up", KeybindAction::WindowMoveUp},
-          {"window-move-down", KeybindAction::WindowMoveDown},
-          {"window-toggle-maximize", KeybindAction::ToggleMaximize},
-          {"window-toggle-fullscreen", KeybindAction::ToggleFullscreen},
-          {"window-toggle-floating", KeybindAction::ToggleFloating},
-          {"window-consume-left", KeybindAction::WindowConsumeLeft},
-          {"window-expel-right", KeybindAction::WindowExpelRight},
-          {"window-cycle-width", KeybindAction::WindowCycleWidth},
-          {"column-move-left", KeybindAction::ColumnMoveLeft},
-          {"column-move-right", KeybindAction::ColumnMoveRight},
-          {"config-reload", KeybindAction::ConfigReload},
-          {"layout-scroll-left", KeybindAction::LayoutScrollLeft},
-          {"layout-scroll-right", KeybindAction::LayoutScrollRight},
-      };
-      for (const auto& [name, action] : actions) {
-        if (value == name) {
-          output.action = action;
-          return true;
-        }
-      }
+  } // namespace
 
-      constexpr std::string_view spawnPrefix = "spawn:";
-      if (value.starts_with(spawnPrefix)) {
-        output.action = KeybindAction::Spawn;
-        output.spawnCommand = value.substr(spawnPrefix.size());
-        return true;
-      }
-
-      auto parseWorkspace = [&](std::string_view prefix, KeybindAction action) {
-        if (!value.starts_with(prefix)) {
-          return false;
-        }
-        const std::string_view number = value.substr(prefix.size());
-        if (number.size() != 1 || number.front() < '1' || number.front() > '9') {
-          return false;
-        }
+  bool parseKeybindAction(std::string_view value, Keybind& output) {
+    static constexpr std::pair<std::string_view, KeybindAction> actions[] = {
+        {"none", KeybindAction::None},
+        {"terminal-spawn", KeybindAction::TerminalSpawn},
+        {"session-quit", KeybindAction::SessionQuit},
+        {"window-close", KeybindAction::WindowClose},
+        {"window-focus-left", KeybindAction::WindowFocusLeft},
+        {"window-focus-right", KeybindAction::WindowFocusRight},
+        {"window-focus-up", KeybindAction::WindowFocusUp},
+        {"window-focus-down", KeybindAction::WindowFocusDown},
+        {"window-focus-next", KeybindAction::WindowFocusNext},
+        {"window-move-up", KeybindAction::WindowMoveUp},
+        {"window-move-down", KeybindAction::WindowMoveDown},
+        {"window-toggle-maximize", KeybindAction::ToggleMaximize},
+        {"window-toggle-fullscreen", KeybindAction::ToggleFullscreen},
+        {"window-toggle-floating", KeybindAction::ToggleFloating},
+        {"window-consume-left", KeybindAction::WindowConsumeLeft},
+        {"window-expel-right", KeybindAction::WindowExpelRight},
+        {"window-cycle-width", KeybindAction::WindowCycleWidth},
+        {"column-move-left", KeybindAction::ColumnMoveLeft},
+        {"column-move-right", KeybindAction::ColumnMoveRight},
+        {"config-reload", KeybindAction::ConfigReload},
+        {"layout-scroll-left", KeybindAction::LayoutScrollLeft},
+        {"layout-scroll-right", KeybindAction::LayoutScrollRight},
+    };
+    for (const auto& [name, action] : actions) {
+      if (value == name) {
         output.action = action;
-        output.workspace = number.front() - '1';
         return true;
-      };
-      return parseWorkspace("workspace-switch:", KeybindAction::WorkspaceSwitch)
-          || parseWorkspace("window-move-to-workspace:", KeybindAction::WindowMoveToWorkspace);
+      }
     }
+
+    constexpr std::string_view spawnPrefix = "spawn:";
+    if (value.starts_with(spawnPrefix)) {
+      output.action = KeybindAction::Spawn;
+      output.spawnCommand = value.substr(spawnPrefix.size());
+      return true;
+    }
+
+    auto parseWorkspace = [&](std::string_view prefix, KeybindAction action) {
+      if (!value.starts_with(prefix)) {
+        return false;
+      }
+      const std::string_view number = value.substr(prefix.size());
+      if (number.size() != 1 || number.front() < '1' || number.front() > '9') {
+        return false;
+      }
+      output.action = action;
+      output.workspace = number.front() - '1';
+      return true;
+    };
+    return parseWorkspace("workspace-switch:", KeybindAction::WorkspaceSwitch)
+        || parseWorkspace("window-move-to-workspace:", KeybindAction::WindowMoveToWorkspace);
+  }
+
+  namespace {
 
     std::filesystem::path defaultConfigPath() {
       if (const char* xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
@@ -1320,7 +1324,7 @@ namespace umbriel {
           continue;
         }
         binding.repeat = repeatBind;
-        if (!parseAction(actionStr, binding)) {
+        if (!parseKeybindAction(actionStr, binding)) {
           warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, actionStr);
           continue;
         }

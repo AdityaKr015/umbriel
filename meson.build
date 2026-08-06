@@ -16,6 +16,10 @@ add_project_arguments(
   language: 'cpp',
 )
 add_project_arguments(
+  '-DUMBRIEL_VERSION="' + meson.project_version() + '"',
+  language: 'cpp',
+)
+add_project_arguments(
   '-DWLR_USE_UNSTABLE',
   language: 'c',
 )
@@ -66,6 +70,7 @@ xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput')
 pixman_dep = dependency('pixman-1')
 tomlplusplus_dep = dependency('tomlplusplus')
+nlohmann_json_dep = dependency('nlohmann_json')
 cairo_dep = dependency('cairo')
 pangocairo_dep = dependency('pangocairo')
 libdrm_dep = dependency('libdrm')
@@ -131,6 +136,8 @@ sources = files(
   'src/lock/session_lock.cpp',
   'src/workspace/workspace.cpp',
   'src/cli/outputs.cpp',
+  'src/cli/ipc_client.cpp',
+  'src/server/ipc.cpp',
 )
 
 umbriel = executable(
@@ -150,6 +157,7 @@ umbriel = executable(
     cairo_dep,
     pangocairo_dep,
     libdrm_dep,
+    nlohmann_json_dep,
   ],
   install: true,
 )

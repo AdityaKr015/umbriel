@@ -228,4 +228,5 @@ namespace umbriel {
   [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();
   [[nodiscard]] std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName);
 
+  bool parseKeybindAction(std::string_view value, Keybind& output);
 } // namespace umbriel

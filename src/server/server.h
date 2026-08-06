@@ -76,6 +76,7 @@ namespace umbriel {
   class Workspace;
   class WorkspaceGroup;
   class ConfigBanner;
+  class Ipc;
 
   class Server {
   public:
@@ -168,6 +169,7 @@ namespace umbriel {
     friend class LayerSurface;
     friend class SessionLock;
     friend class LockSurface;
+    friend class Ipc;
 
     static void onNewOutput(wl_listener* listener, void* data);
     static void onNewInput(wl_listener* listener, void* data);
@@ -281,6 +283,7 @@ namespace umbriel {
     std::unique_ptr<SessionLock> m_sessionLock;
     std::unique_ptr<InsertHint> m_insertHint;
     std::unique_ptr<ConfigWatcher> m_configWatcher;
+    std::unique_ptr<Ipc> m_ipc;
     wlr_scene_tree* m_bannerTree = nullptr;
     std::unique_ptr<ConfigBanner> m_configBanner;
 

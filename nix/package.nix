@@ -17,6 +17,7 @@
   libdrm,
   scenefx,
   tomlplusplus,
+  nlohmann_json,
   xwayland-satellite,
   makeBinaryWrapper,
 }:
@@ -49,6 +50,7 @@ stdenv.mkDerivation {
     pixman
     tomlplusplus
     libGL
+    nlohmann_json
     libdrm
     cairo
     pango

@@ -14,6 +14,7 @@
 #include "output/output.h"
 #include "scene/color.h"
 #include "scene/config_banner.h"
+#include "server/ipc.h"
 #include "view/view.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
@@ -232,6 +233,7 @@ namespace umbriel {
     wl_list_remove(&m_outputManagerTest.link);
     wl_list_remove(&m_outputLayoutChange.link);
     m_configWatcher.reset();
+    m_ipc.reset();
 
     m_insertHint.reset();
     for (auto& snap : m_closeSnapshots) {
@@ -288,6 +290,11 @@ namespace umbriel {
     unsetenv("WAYLAND_SOCKET");
     kLog.info("running on WAYLAND_DISPLAY={}", m_socketName);
     wlr_log(WLR_INFO, "running on WAYLAND_DISPLAY=%s", m_socketName.c_str());
+    setenv(
+        "UMBRIEL_SOCKET",
+        (std::string(std::getenv("XDG_RUNTIME_DIR") ?: "") + "/umbriel-" + m_socketName + ".sock").c_str(), true
+    );
+    m_ipc = std::make_unique<Ipc>(*this, m_socketName);
     setenv("XDG_CURRENT_DESKTOP", "umbriel", 1);
 
     // Export cursor settings so X11 clients (via xwayland-satellite) and
@@ -310,7 +317,7 @@ namespace umbriel {
     if (!m_nested) {
       spawn(
           "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY"
-          " XDG_CURRENT_DESKTOP XCURSOR_SIZE XCURSOR_THEME"
+          " XDG_CURRENT_DESKTOP XCURSOR_SIZE XCURSOR_THEME UMBRIEL_SOCKET"
       );
       // Notify systemd that the graphical session is ready so user services
       // gated on graphical-session.target (xdg-desktop-portal, etc.) can start.

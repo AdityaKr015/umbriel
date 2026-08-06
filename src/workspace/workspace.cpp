@@ -39,8 +39,10 @@ namespace umbriel {
     const uint32_t coords[1] = {static_cast<uint32_t>(m_index)};
     wlr_ext_workspace_handle_v1_set_coordinates(m_handle, coords, 1);
     m_tree = wlr_scene_tree_create(m_group->server()->xdgTree());
+    // Focus raises only within a layer: floating views can never fall below tiles.
     m_shadowLayer = wlr_scene_tree_create(m_tree);
-    wlr_scene_node_lower_to_bottom(&m_shadowLayer->node);
+    m_tiledLayer = wlr_scene_tree_create(m_tree);
+    m_floatingLayer = wlr_scene_tree_create(m_tree);
     m_fullscreenTree = wlr_scene_tree_create(m_group->server()->fullscreenTree());
   }
 
@@ -51,26 +53,21 @@ namespace umbriel {
     }
     for (View* view : m_views) {
       view->cancelPositionAnimation();
+      const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
+      wlr_scene_node_reparent(
+          &view->sceneTree()->node, fs ? m_group->server()->fullscreenTree() : m_group->server()->xdgTree()
+      );
       view->detachWorkspace();
     }
     m_views.clear();
-    if (m_shadowLayer != nullptr) {
-      wlr_scene_node_destroy(&m_shadowLayer->node);
-      m_shadowLayer = nullptr;
-    }
     if (m_tree != nullptr) {
-      wlr_scene_tree* fallback = m_group->server()->xdgTree();
-      wlr_scene_node* child;
-      wlr_scene_node* tmp;
-      wl_list_for_each_safe(child, tmp, &m_tree->children, link) { wlr_scene_node_reparent(child, fallback); }
       wlr_scene_node_destroy(&m_tree->node);
       m_tree = nullptr;
+      m_shadowLayer = nullptr;
+      m_tiledLayer = nullptr;
+      m_floatingLayer = nullptr;
     }
     if (m_fullscreenTree != nullptr) {
-      wlr_scene_tree* fallback = m_group->server()->fullscreenTree();
-      wlr_scene_node* child;
-      wlr_scene_node* tmp;
-      wl_list_for_each_safe(child, tmp, &m_fullscreenTree->children, link) { wlr_scene_node_reparent(child, fallback); }
       wlr_scene_node_destroy(&m_fullscreenTree->node);
       m_fullscreenTree = nullptr;
     }
@@ -110,7 +107,7 @@ namespace umbriel {
     }
     m_views.push_back(view);
     const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
-    wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : m_tree);
+    wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : viewLayer(view->tiled()));
     view->reparentShadow(m_shadowLayer);
     applyVisibility();
     layoutAttach(view);
@@ -292,8 +289,12 @@ namespace umbriel {
           .width = geometry.width,
           .height = geometry.height,
       };
+      const int border = config().appearance.totalBorderWidth();
+      const wlr_box decorated{
+          target.x - border, target.y - border, target.width + 2 * border, target.height + 2 * border
+      };
       wlr_box intersection{};
-      const bool visible = wlr_box_intersection(&intersection, &target, &outputBox);
+      const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
       view->setNodeEnabled(visible);
       view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
       return;

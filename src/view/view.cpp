@@ -987,7 +987,7 @@ namespace umbriel {
   wlr_scene_tree* View::homeTree() const {
     const bool fs = m_toplevel->scheduled.fullscreen;
     if (m_workspace != nullptr) {
-      return fs ? m_workspace->fullscreenTree() : m_workspace->tree();
+      return fs ? m_workspace->fullscreenTree() : m_workspace->viewLayer(m_tiled);
     }
     return fs ? m_server->fullscreenTree() : m_server->xdgTree();
   }
@@ -1027,7 +1027,8 @@ namespace umbriel {
         .width = presentedWidth(target),
         .height = presentedHeight(target),
     };
-    const int border = m_tiled ? config().appearance.totalBorderWidth() : 0;
+    const int border =
+        m_borderTree != nullptr && m_borderTree->node.enabled ? config().appearance.totalBorderWidth() : 0;
     wlr_box decorated = content;
     decorated.x -= border;
     decorated.y -= border;
@@ -1177,13 +1178,9 @@ namespace umbriel {
     // the client mapped with a placeholder.
     m_initialRulesSettled = !anyWindowRuleHasTitlePattern();
 
-    if (m_tiled) {
-      ensureBorders();
-      wlr_scene_node_set_enabled(&m_borderTree->node, !m_toplevel->current.fullscreen);
-      updateBorderGeometry();
-    } else if (m_borderTree != nullptr) {
-      wlr_scene_node_set_enabled(&m_borderTree->node, false);
-    }
+    ensureBorders();
+    wlr_scene_node_set_enabled(&m_borderTree->node, !m_toplevel->current.fullscreen);
+    updateBorderGeometry();
     applyCornerRadius();
     updateBlur();
     updateShadow();
@@ -1261,7 +1258,7 @@ namespace umbriel {
     m_shadow.hide();
     if (m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
       // Move out of the fullscreen layer back to the normal workspace/xdg tree.
-      wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->tree() : m_server->xdgTree());
+      wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
     }
     m_mapped = false;
     if (m_workspace != nullptr) {
@@ -1577,6 +1574,9 @@ namespace umbriel {
       const int keepX = m_sceneTree->node.x;
       const int keepY = m_sceneTree->node.y;
       m_tiled = false;
+      if (m_workspace != nullptr) {
+        wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(m_tiled));
+      }
       // Do not clear xdg tiled edges: GTK/Qt often resize (CSD / preferred size) when
       // tiled state is dropped. Floating is a compositor layout concern.
       if (keepWidth > 0
@@ -1615,6 +1615,9 @@ namespace umbriel {
     }
 
     m_tiled = true;
+    if (m_workspace != nullptr) {
+      wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(m_tiled));
+    }
     wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
     wlr_xdg_toplevel_set_maximized(m_toplevel, false);
     ensureBorders();

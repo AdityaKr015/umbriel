@@ -43,7 +43,7 @@ namespace umbriel {
     [[nodiscard]] View* focusedView() const { return m_focusedView; }
     [[nodiscard]] double visualScroll() const { return m_visualScroll; }
     [[nodiscard]] int slideOffsetY() const { return m_slideOffsetY; }
-    [[nodiscard]] wlr_scene_tree* tree() const { return m_tree; }
+    [[nodiscard]] wlr_scene_tree* viewLayer(bool tiled) const { return tiled ? m_tiledLayer : m_floatingLayer; }
     [[nodiscard]] wlr_scene_tree* shadowLayer() const { return m_shadowLayer; }
     [[nodiscard]] wlr_scene_tree* fullscreenTree() const { return m_fullscreenTree; }
     [[nodiscard]] bool switchTransitionActive() const { return m_inSwitchTransition; }
@@ -97,6 +97,8 @@ namespace umbriel {
     std::vector<View*> m_switchViews;
     wlr_scene_tree* m_tree = nullptr;
     wlr_scene_tree* m_shadowLayer = nullptr;
+    wlr_scene_tree* m_tiledLayer = nullptr;
+    wlr_scene_tree* m_floatingLayer = nullptr;
     wlr_scene_tree* m_fullscreenTree = nullptr;
   };
 

@@ -240,16 +240,6 @@ namespace umbriel {
     case KeybindAction::Spawn:
       spawn(bind.spawnCommand.c_str());
       return true;
-    case KeybindAction::TerminalSpawn: {
-      const std::string& configured = config().general.terminal;
-      const char* terminal = !configured.empty() ? configured.c_str() : std::getenv("TERMINAL");
-      if (terminal == nullptr || terminal[0] == '\0') {
-        wlr_log(WLR_ERROR, "mod+Return: set [general].terminal or $TERMINAL");
-        return true;
-      }
-      spawn(terminal);
-      return true;
-    }
     case KeybindAction::WindowClose:
       if (Workspace* workspace = activeWorkspace()) {
         if (View* view = workspace->focusedView()) {

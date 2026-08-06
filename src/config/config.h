@@ -23,7 +23,6 @@ namespace umbriel {
   enum class KeybindAction {
     None,
     Spawn,
-    TerminalSpawn,
     WindowClose,
     SessionQuit,
     WindowFocusLeft,
@@ -174,7 +173,6 @@ namespace umbriel {
     [[nodiscard]] int layoutEdgePad() const { return layout.gap + appearance.totalBorderWidth(); }
 
     struct General {
-      std::string terminal;
       std::vector<std::string> autostart;
       // Re-selecting the active workspace jumps back to the previous one.
       bool workspaceBackAndForth = false;

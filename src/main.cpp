@@ -78,7 +78,7 @@ namespace {
         "  -c <config>    use <config> instead of the default config path\n"
         "\n"
         "Actions for `msg` (same strings as keybind actions in the config):\n"
-        "  spawn:<cmd> (or: msg spawn <cmd...>), terminal-spawn, window-close,\n"
+        "  spawn:<cmd> (or: msg spawn <cmd...>), window-close,\n"
         "  session-quit, window-focus-left/right/up/down, window-focus-next,\n"
         "  window-move-up/down, window-consume-left, window-expel-right,\n"
         "  window-cycle-width, column-move-left/right, window-toggle-maximize,\n"

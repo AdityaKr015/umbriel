@@ -79,7 +79,6 @@ namespace umbriel {
         });
       };
 
-      add(KeybindAction::TerminalSpawn, XKB_KEY_Return);
       add(KeybindAction::SessionQuit, XKB_KEY_Escape);
       add(KeybindAction::WindowFocusNext, XKB_KEY_F1);
 
@@ -251,7 +250,6 @@ namespace umbriel {
   bool parseKeybindAction(std::string_view value, Keybind& output) {
     static constexpr std::pair<std::string_view, KeybindAction> actions[] = {
         {"none", KeybindAction::None},
-        {"terminal-spawn", KeybindAction::TerminalSpawn},
         {"session-quit", KeybindAction::SessionQuit},
         {"window-close", KeybindAction::WindowClose},
         {"window-focus-left", KeybindAction::WindowFocusLeft},
@@ -984,17 +982,7 @@ namespace umbriel {
         warnAt(node->source(), "ignoring general (expected table)");
         return;
       }
-      warnUnknownKeys(
-          *section, "general", {"terminal", "autostart", "prefer_no_csd", "workspace_back_and_forth", "xwayland"}
-      );
-      if (const toml::node* terminal = section->get("terminal")) {
-        const auto value = terminal->value<std::string>();
-        if (!value) {
-          warnAt(terminal->source(), "ignoring general.terminal (expected string)");
-        } else {
-          loaded.general.terminal = *value;
-        }
-      }
+      warnUnknownKeys(*section, "general", {"autostart", "prefer_no_csd", "workspace_back_and_forth", "xwayland"});
       if (const toml::node* preferNoCsd = section->get("prefer_no_csd")) {
         if (const auto value = preferNoCsd->value<bool>()) {
           loaded.appearance.preferNoCsd = *value;

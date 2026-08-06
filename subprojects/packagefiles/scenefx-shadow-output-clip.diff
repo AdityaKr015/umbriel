@@ -1,0 +1,95 @@
+diff --git a/include/scenefx/types/wlr_scene.h b/include/scenefx/types/wlr_scene.h
+index 3a901a2..6f89ac6 100644
+--- a/include/scenefx/types/wlr_scene.h
++++ b/include/scenefx/types/wlr_scene.h
+@@ -167,6 +167,9 @@ struct wlr_scene_shadow {
+ 	float blur_sigma;
+ 
+ 	struct clipped_region clipped_region;
++
++	bool has_output_clip;
++	struct wlr_box output_clip;
+ };
+ 
+ struct wlr_scene_blur {
+@@ -611,6 +614,13 @@ void wlr_scene_shadow_set_color(struct wlr_scene_shadow *shadow, const float col
+ void wlr_scene_shadow_set_clipped_region(struct wlr_scene_shadow *shadow,
+ 		struct clipped_region clipped_region);
+ 
++/**
++ * Sets an output clip for the shadow. When set, the shadow is only rendered
++ * within this box (scene-root coordinates). Pass NULL to disable.
++ */
++void wlr_scene_shadow_set_output_clip(struct wlr_scene_shadow *shadow,
++		const struct wlr_box *output_clip);
++
+ /**
+  * Add a node displaying a blur to the scene-graph.
+  */
+diff --git a/types/scene/wlr_scene.c b/types/scene/wlr_scene.c
+index fc81437..8e94f37 100644
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -1069,6 +1069,24 @@ void wlr_scene_shadow_set_clipped_region(struct wlr_scene_shadow *shadow,
+ 	scene_node_update(&shadow->node, NULL);
+ }
+ 
++void wlr_scene_shadow_set_output_clip(struct wlr_scene_shadow *shadow,
++		const struct wlr_box *output_clip) {
++	if (output_clip == NULL) {
++		if (!shadow->has_output_clip) {
++			return;
++		}
++		shadow->has_output_clip = false;
++	} else {
++		if (shadow->has_output_clip &&
++				wlr_box_equal(&shadow->output_clip, output_clip)) {
++			return;
++		}
++		shadow->has_output_clip = true;
++		shadow->output_clip = *output_clip;
++	}
++	scene_node_update(&shadow->node, NULL);
++}
++
+ static void mark_all_optimized_blur_nodes_dirty(struct wlr_scene_node *node) {
+ 	if (node->type == WLR_SCENE_NODE_OPTIMIZED_BLUR) {
+ 		struct wlr_scene_optimized_blur *scene_blur = wlr_scene_optimized_blur_from_node(node);
+@@ -2198,6 +2216,23 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		transform_output_box(&shadow_clipped_region_box, data);
+ 		fx_corner_radii_transform(node_transform, &shadow_clipped_corners);
+ 
++		// Apply output clip: restrict the shadow to a caller-supplied box so it
++		// does not bleed onto adjacent outputs. The clip is in scene-root
++		// coordinates, independent of node position.
++		pixman_region32_t shadow_clip;
++		pixman_region32_t *clip = &render_region;
++		if (scene_shadow->has_output_clip) {
++			struct wlr_box oclip = scene_shadow->output_clip;
++			// Root relative -> output relative
++			oclip.x -= data->logical.x;
++			oclip.y -= data->logical.y;
++			transform_output_box(&oclip, data);
++			pixman_region32_init(&shadow_clip);
++			pixman_region32_intersect_rect(&shadow_clip, &render_region,
++				oclip.x, oclip.y, oclip.width, oclip.height);
++			clip = &shadow_clip;
++		}
++
+ 		struct fx_render_box_shadow_options shadow_options = {
+ 			.box = dst_box,
+ 			.clipped_region = {
+@@ -2212,9 +2247,12 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 				.b = scene_shadow->color[2],
+ 				.a = scene_shadow->color[3],
+ 			},
+-			.clip = &render_region,
++			.clip = clip,
+ 		};
+ 		fx_render_pass_add_box_shadow(fx_pass, &shadow_options);
++		if (scene_shadow->has_output_clip) {
++			pixman_region32_fini(&shadow_clip);
++		}
+ 		break;
+ 	case WLR_SCENE_NODE_OPTIMIZED_BLUR:;
+ 		struct wlr_scene_optimized_blur *scene_blur = wlr_scene_optimized_blur_from_node(node);

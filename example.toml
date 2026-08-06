@@ -9,9 +9,6 @@
 files = []
 
 [general]
-# Command used by the `terminal-spawn` action. An empty value falls back to
-# $TERMINAL.
-terminal = ""
 # Shell commands run once after startup; they are never re-run on config reload.
 autostart = []
 # Re-selecting the active workspace (e.g. Mod+2 while already on 2) jumps back
@@ -163,21 +160,13 @@ follows_mouse = false
 # Scroll-wheel chords: WheelUp, WheelDown, WheelLeft, WheelRight (need >=1 modifier).
 #
 # A configured chord replaces its compiled default. `none` removes a binding.
-# Values may be any of:
-#   none, terminal-spawn, window-close, session-quit,
-#   window-focus-left, window-focus-right, window-focus-up, window-focus-down,
-#   column-move-left, column-move-right, window-move-up, window-move-down,
-#   window-consume-left, window-expel-right, window-cycle-width,
-#   window-toggle-maximize, window-toggle-fullscreen, window-toggle-floating,
-#   window-focus-next, config-reload,
-#   layout-scroll-left, layout-scroll-right,
-#   workspace-switch:N, window-move-to-workspace:N (N is 1-9),
-#   spawn:<shell command>
+# Run `umbriel actions` for the full list. Parameterized actions:
+#   spawn:<shell command>, workspace-switch:<1-9>, window-move-to-workspace:<1-9>
 # Defaults: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
 # Binds repeat while held (using input.keyboard repeat_rate/repeat_delay).
 # Opt out per bind with the table form:
-#   "Mod+Return" = { action = "terminal-spawn", repeat = false }
-"Mod+Return" = "terminal-spawn"
+#   "Mod+Return" = { action = "spawn:kitty", repeat = false }
+"Mod+Return" = "spawn:kitty"
 "Mod+T" = "window-toggle-floating"
 "Mod+Shift+Q" = "window-close"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"
@@ -243,3 +232,13 @@ follows_mouse = false
 # [[rule]]
 # match.app_id = "org\\.gnome\\."
 # opacity = 0.95
+
+[[rule]]
+match.app_id = "^dev.noctalia.Noctalia$"
+default_floating = true
+default_size = [1000, 900]
+
+[[rule]]
+match.app_id = "^dev.noctalia.UmbrielSharePicker$"
+default_floating = true
+default_size = [800, 600]

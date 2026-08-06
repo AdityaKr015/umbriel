@@ -165,7 +165,7 @@ programs.umbriel = {
     layout.gap = 5;
     input.keyboard.layout = "de";
     keybinds = {
-      "Mod+Return" = "terminal-spawn";
+      "Mod+Return" = "spawn:kitty";
       "Mod+Q" = "window-close";
       "Mod+R" = "spawn:noctalia msg panel-toggle launcher";
     };

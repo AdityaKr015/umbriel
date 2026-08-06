@@ -924,6 +924,10 @@ namespace umbriel {
     if (view != nullptr && view->mapped() && target != nullptr) {
       if (view->workspace() != target) {
         view->setWorkspace(target);
+        // setWorkspace → addView → layoutAttach auto-inserts at the focused
+        // column.  Remove that entry so the explicit insertion below places
+        // the view at the requested drop position.
+        target->layout().removeView(view);
       }
       if (m_dropRow >= 0) {
         target->layout().insertViewIntoColumn(view, column, m_dropRow);

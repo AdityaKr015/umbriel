@@ -7,7 +7,9 @@
 #include <array>
 #include <wayland-server-core.h>
 
-struct wlr_box;
+extern "C" {
+#include <wlr/util/box.h>
+}
 struct wlr_ext_foreign_toplevel_handle_v1;
 struct wlr_foreign_toplevel_handle_v1;
 struct wlr_output;
@@ -143,6 +145,8 @@ namespace umbriel {
     SurfaceBlur m_blur;
     SurfaceShadow m_shadow;
     wlr_scene_tree* m_shadowContainer = nullptr; // child of workspace shadow layer
+    bool m_hasShadowOutputClip = false;
+    wlr_box m_shadowOutputClip{}; // global (scene-root), valid when m_hasShadowOutputClip
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_ext_foreign_toplevel_handle_v1* m_extForeign = nullptr;
     wlr_output* m_foreignOutput = nullptr;

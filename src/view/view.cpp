@@ -781,6 +781,8 @@ namespace umbriel {
     const int total = decorated ? config().appearance.totalBorderWidth() : 0;
     const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
     m_shadow.update(m_shadowContainer, w, h, total, radius);
+    // Reapply the persisted output clip so size-animation frames stay clipped.
+    m_shadow.setOutputClip(m_hasShadowOutputClip ? &m_shadowOutputClip : nullptr);
   }
 
   void View::beginCloseAnimation() {
@@ -947,6 +949,7 @@ namespace umbriel {
     if (m_borderTree != nullptr) {
       updateBorderGeometry();
     }
+    m_hasShadowOutputClip = false;
     updateBlur();
     updateShadow();
   }
@@ -972,6 +975,7 @@ namespace umbriel {
     } else {
       setSurfaceTreeClip(nullptr);
     }
+    m_hasShadowOutputClip = false;
     updateBlur();
     updateShadow();
   }
@@ -1075,6 +1079,10 @@ namespace umbriel {
           }
         }
       }
+    }
+    if (m_shadowContainer != nullptr) {
+      m_shadowOutputClip = outputBox;
+      m_hasShadowOutputClip = true;
     }
     updateShadow();
 

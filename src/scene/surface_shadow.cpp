@@ -89,5 +89,13 @@ namespace umbriel {
     }
   }
 
+  void SurfaceShadow::setOutputClip(const wlr_box* clip) {
+    if (m_node == nullptr) {
+      return;
+    }
+    // Clip is in scene-root (global) coordinates; pass through directly.
+    wlr_scene_shadow_set_output_clip(m_node, clip);
+  }
+
   void SurfaceShadow::reset() { m_node = nullptr; }
 } // namespace umbriel

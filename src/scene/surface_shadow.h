@@ -2,6 +2,7 @@
 
 struct wlr_scene_shadow;
 struct wlr_scene_tree;
+struct wlr_box;
 
 namespace umbriel {
 
@@ -19,6 +20,9 @@ namespace umbriel {
     void reset();
     // Set an opacity multiplier applied to the shadow color (for fade animations).
     void setAlpha(float alpha);
+    // Restrict shadow rendering to this box (scene-root / global coordinates).
+    // Pass nullptr to remove the clip.
+    void setOutputClip(const wlr_box* clip);
 
   private:
     wlr_scene_shadow* m_node = nullptr;

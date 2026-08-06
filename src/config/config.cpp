@@ -615,10 +615,10 @@ namespace umbriel {
           } else if (sv == "scrolling") {
             loaded.layout.mode = LayoutMode::Scrolling;
           } else {
-            warnAt(modeNode->source(), "unknown layout.mode \"{}\" (expected \"scrolling\" or \"dwindle\")", sv);
+            warnAt(modeNode->source(), R"(unknown layout.mode "{}" (expected "scrolling" or "dwindle"))", sv);
           }
         } else {
-          warnAt(modeNode->source(), "layout.mode must be a string (\"scrolling\" or \"dwindle\")");
+          warnAt(modeNode->source(), R"(layout.mode must be a string ("scrolling" or "dwindle"))");
         }
       }
       readInteger(*section, "gap", "layout.gap", 0, 500, loaded.layout.gap);

@@ -713,7 +713,8 @@ namespace umbriel {
     // Skip during wl_data_device drags, the drag grab must receive enter/
     // motion for surfaces under the cursor (dwl: CurPressed && !seat->drag).
     wlr_seat* seat = m_server->seat()->wlr();
-    if (seat->drag == nullptr && seat->pointer_state.button_count > 0
+    if (seat->drag == nullptr
+        && seat->pointer_state.button_count > 0
         && surface != seat->pointer_state.focused_surface) {
       updateConstraintForSurface(seat->pointer_state.focused_surface);
       return;

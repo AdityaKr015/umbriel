@@ -24,10 +24,11 @@ let
   inherit (builtins) head match readFile;
   version = head (match ".*\n  version: '([0-9][^']+)'.*" (readFile ../meson.build));
 
-  # Umbriel needs ignore_alpha on scene blur (not upstream in scenefx 0.5 yet).
   scenefxPatched = scenefx.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [
       ../subprojects/packagefiles/scenefx-blur-ignore-alpha.diff
+      ../subprojects/packagefiles/scenefx-fractional-scale-snap.diff
+      ../subprojects/packagefiles/scenefx-shadow-output-clip.diff
     ];
   });
 in

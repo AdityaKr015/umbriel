@@ -24,10 +24,10 @@ wayland_server_dep = dependency('wayland-server')
 wayland_client_dep = dependency('wayland-client')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')
-# Umbriel needs ignore_alpha (not in upstream SceneFX 0.5). Prefer a system
-# scenefx-0.5 that already has the symbol (Nix applies
-# subprojects/packagefiles/scenefx-blur-ignore-alpha.diff in package.nix).
-# Otherwise build the wrap subproject so the same diff applies via diff_files.
+# Umbriel needs SceneFX APIs not in upstream 0.5 (ignore_alpha, shadow
+# output clip). Prefer a system scenefx-0.5 that already has both (Nix
+# applies the same diffs as scenefx.wrap in package.nix). Otherwise build
+# the wrap subproject so diff_files apply.
 # Probe the header text instead of compiling: SceneFX headers use C99
 # `static` array sizes that break raw C++ compile checks.
 fs = import('fs')
@@ -40,14 +40,19 @@ if pkgconfig.found()
     foreach flag : scenefx_cflags
       if flag.startswith('-I')
         header = flag.substring(2) / 'scenefx' / 'types' / 'wlr_scene.h'
-        if fs.exists(header) and fs.read(header).contains('wlr_scene_blur_set_ignore_alpha')
-          use_system_scenefx = true
-          break
+        if fs.exists(header)
+          header_text = fs.read(header)
+          if header_text.contains('wlr_scene_blur_set_ignore_alpha') and header_text.contains(
+            'wlr_scene_shadow_set_output_clip'
+          )
+            use_system_scenefx = true
+            break
+          endif
         endif
       endif
     endforeach
     if not use_system_scenefx
-      message('system scenefx-0.5 lacks ignore_alpha; using patched wrap subproject')
+      message('system scenefx-0.5 lacks Umbriel patches; using patched wrap subproject')
     endif
   endif
 endif

@@ -159,7 +159,11 @@ namespace umbriel {
   }
 
   void Workspace::arrange(bool animate) {
-    if ((!m_active && !m_inSwitchTransition) || m_group == nullptr || m_group->output() == nullptr) {
+    // Layout math and client configures must run even for hidden workspaces:
+    // clients (games especially) change fullscreen state while another
+    // workspace is active, and skipping the configure here leaves them with a
+    // stale size (fullscreen at tile size, windowed at output size, ...).
+    if (m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
     Output* output = m_group->output();
@@ -198,6 +202,11 @@ namespace umbriel {
       if (geometry.width != width || geometry.height != height) {
         wlr_xdg_toplevel_set_size(view->toplevel(), width, height);
       }
+    }
+
+    // Visual state below (scroll, positions) only applies while visible.
+    if (!m_active && !m_inSwitchTransition) {
+      return;
     }
 
     if (m_layoutMode == LayoutMode::Scrolling) {
@@ -352,7 +361,6 @@ namespace umbriel {
           } else {
             view->setPosition(target.x, target.y);
           }
-          wlr_scene_subsurface_tree_set_clip(&view->sceneTree()->node, nullptr);
           wlr_box clipTarget = target;
           clipTarget.y += m_slideOffsetY;
           wlr_box decorated = clipTarget;
@@ -367,7 +375,6 @@ namespace umbriel {
           } else {
             view->setPosition(target.x, target.y);
           }
-          wlr_scene_subsurface_tree_set_clip(&view->sceneTree()->node, nullptr);
           wlr_box clipTarget = target;
           clipTarget.y += m_slideOffsetY;
           wlr_box intersection{};
@@ -571,6 +578,12 @@ namespace umbriel {
       }
     }
     m_switchViews.clear();
+    // setSlideOffset() refreshes visibility and clips, but it does not move tiled
+    // scene nodes to their authoritative horizontal strip positions. Reconcile
+    // after an interrupted switch so a fullscreen column cannot remain off-screen.
+    if (m_active) {
+      arrange(false);
+    }
   }
 
   void Workspace::applyConfig(std::string name, size_t index, ResolvedLayoutConfig layoutConfig) {

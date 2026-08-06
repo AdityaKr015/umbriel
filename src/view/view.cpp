@@ -1,6 +1,7 @@
 #include "view/view.h"
 
 #include "config/config.h"
+#include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layout/scrolling.h"
@@ -25,6 +26,10 @@ namespace umbriel {
   };
 
   namespace {
+    constexpr Logger kLog("view");
+
+    constexpr std::array<float, 4> kFullscreenBackdropColor{0.0F, 0.0F, 0.0F, 1.0F};
+
     bool looksTiled(const wlr_xdg_toplevel* toplevel) {
       const auto& state = toplevel->current;
       const bool fixedWidth = state.max_width > 0 && state.min_width == state.max_width;
@@ -119,6 +124,9 @@ namespace umbriel {
     m_sceneTree->node.data = this;
     m_toplevel->base->data = m_sceneTree;
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
+    m_fullscreenBackdrop = wlr_scene_rect_create(m_sceneTree, 0, 0, kFullscreenBackdropColor.data());
+    wlr_scene_node_lower_to_bottom(&m_fullscreenBackdrop->node);
+    wlr_scene_node_set_enabled(&m_fullscreenBackdrop->node, false);
     if (wlr_output* output = m_server->preferredOutput()) {
       wlr_surface* surface = m_toplevel->base->surface;
       wlr_fractional_scale_v1_notify_scale(surface, output->scale);
@@ -345,6 +353,9 @@ namespace umbriel {
   }
 
   int View::presentedWidth(const wlr_box& target) const {
+    if (m_toplevel->current.fullscreen) {
+      return target.width;
+    }
     if (m_sizeAnim != 0) {
       return m_presentedW;
     }
@@ -352,10 +363,48 @@ namespace umbriel {
   }
 
   int View::presentedHeight(const wlr_box& target) const {
+    if (m_toplevel->current.fullscreen) {
+      return target.height;
+    }
     if (m_sizeAnim != 0) {
       return m_presentedH;
     }
     return std::min(m_toplevel->base->geometry.height, target.height);
+  }
+
+  // Fullscreen PRESENTATION follows the client's COMMITTED state, not the
+  // scheduled intent (niri's sizing_mode rule): the backdrop and centering
+  // only appear once the client actually committed fullscreen, so a client
+  // mid-transition (wine flipping modes) never renders as a mismatched pair
+  // of stale buffer + fullscreen chrome. Never scale buffers (wrong aspect).
+  void View::updateFullscreenPresentation(int width, int height) {
+    const bool fullscreen = m_toplevel->current.fullscreen;
+    const bool validSize = width > 0 && height > 0;
+    wlr_scene_node_set_enabled(&m_fullscreenBackdrop->node, fullscreen && validSize);
+    wlr_scene_node* surfaceNode = toplevelSurfaceTreeNode(m_sceneTree, m_toplevel->base->surface);
+    const wlr_box& geo = m_toplevel->base->geometry;
+    if (fullscreen && validSize) {
+      wlr_scene_rect_set_size(m_fullscreenBackdrop, width, height);
+      wlr_scene_node_set_position(&m_fullscreenBackdrop->node, 0, 0);
+      // Centering may go negative for oversized buffers (crop equally, like niri).
+      m_fullscreenOffsetX = geo.width > 0 ? (width - geo.width) / 2 : 0;
+      m_fullscreenOffsetY = geo.height > 0 ? (height - geo.height) / 2 : 0;
+      if (surfaceNode != nullptr) {
+        // The wlroots xdg scene helper resets this to (-geo.x, -geo.y) on every
+        // commit; our commit handler re-applies the centering offset afterwards.
+        wlr_scene_node_set_position(surfaceNode, m_fullscreenOffsetX - geo.x, m_fullscreenOffsetY - geo.y);
+      }
+      m_fullscreenContentCentered = m_fullscreenOffsetX != 0 || m_fullscreenOffsetY != 0;
+      return;
+    }
+    m_fullscreenOffsetX = 0;
+    m_fullscreenOffsetY = 0;
+    if (!fullscreen && m_fullscreenContentCentered) {
+      if (surfaceNode != nullptr) {
+        wlr_scene_node_set_position(surfaceNode, -geo.x, -geo.y);
+      }
+      m_fullscreenContentCentered = false;
+    }
   }
 
   void View::applyPresentedSize() {
@@ -1013,12 +1062,32 @@ namespace umbriel {
     if (m_shadowContainer != nullptr) {
       wlr_scene_node_set_position(&m_shadowContainer->node, fullArea.x, fullArea.y);
     }
-    setSurfaceTreeClip(nullptr);
+    updateFullscreenPresentation(fullArea.width, fullArea.height);
+    // Oversized buffers (client mid mode-change) get cropped to the output.
+    const wlr_box& geo = m_toplevel->base->geometry;
+    if (geo.width > fullArea.width || geo.height > fullArea.height) {
+      const wlr_box clip{
+          geo.x - std::min(0, m_fullscreenOffsetX),
+          geo.y - std::min(0, m_fullscreenOffsetY),
+          std::min(geo.width, fullArea.width),
+          std::min(geo.height, fullArea.height),
+      };
+      setSurfaceTreeClip(&clip);
+    } else {
+      setSurfaceTreeClip(nullptr);
+    }
     updateBlur();
     updateShadow();
   }
 
   void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
+    updateFullscreenPresentation(target.width, target.height);
+    if (m_toplevel->current.fullscreen && screenIntersection != nullptr) {
+      wlr_scene_node_set_position(
+          &m_fullscreenBackdrop->node, screenIntersection->x - target.x, screenIntersection->y - target.y
+      );
+      wlr_scene_rect_set_size(m_fullscreenBackdrop, screenIntersection->width, screenIntersection->height);
+    }
     const wlr_box& geometry = m_toplevel->base->geometry;
     // Stay inside the tile while geometry lags configure (Electron often stays wide).
     const wlr_box content{
@@ -1050,8 +1119,8 @@ namespace umbriel {
 
     if (contentOnOutput) {
       wlr_box surfaceClip{
-          .x = geometry.x + contentVisible.x - content.x,
-          .y = geometry.y + contentVisible.y - content.y,
+          .x = geometry.x + contentVisible.x - content.x - m_fullscreenOffsetX,
+          .y = geometry.y + contentVisible.y - content.y - m_fullscreenOffsetY,
           .width = contentVisible.width,
           .height = contentVisible.height,
       };
@@ -1256,6 +1325,7 @@ namespace umbriel {
     }
     m_blur.hide();
     m_shadow.hide();
+    wlr_scene_node_set_enabled(&m_fullscreenBackdrop->node, false);
     if (m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
       // Move out of the fullscreen layer back to the normal workspace/xdg tree.
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
@@ -1409,7 +1479,13 @@ namespace umbriel {
     if (m_mapped && m_tiled && m_workspace != nullptr && m_workspace->active()) {
       m_workspace->syncViewPresentation(this);
     } else if (m_mapped && !m_tiled) {
-      syncFloatingSurfaceClip();
+      if (m_toplevel->scheduled.fullscreen && m_onActiveWorkspace) {
+        // Keep fullscreen placement authoritative; the xdg scene helper just
+        // reset the surface offset for this commit.
+        applyFullscreenLayout();
+      } else {
+        syncFloatingSurfaceClip();
+      }
     } else {
       updateBlur();
       updateShadow();
@@ -1507,9 +1583,35 @@ namespace umbriel {
     if (!m_toplevel->base->initialized) {
       return;
     }
+    kLog.debug(
+        "request_fullscreen '{}': {}", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?",
+        m_toplevel->requested.fullscreen
+    );
+
+    const bool requested = m_toplevel->requested.fullscreen;
+
+    // Redundant request (wine spams set_fullscreen while already fullscreen):
+    // ack with a configure, but skip the reparent/scroll-snap/arrange churn
+    // that a full setFullscreen() would run — that churn is visible flicker.
+    if (requested == m_toplevel->scheduled.fullscreen) {
+      wlr_xdg_surface_schedule_configure(m_toplevel->base);
+      return;
+    }
+
+    // Wine unfullscreens games when they lose focus (minimize-on-focus-loss).
+    // Honoring that rips the game out of the fullscreen strip the moment the
+    // user scrolls away. Deny unfullscreen from deactivated windows; the
+    // scheduled configure re-asserts the fullscreen state (spec-compliant).
+    if (!requested && !m_toplevel->scheduled.activated) {
+      kLog.debug(
+          "request_fullscreen denied for deactivated '{}'", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?"
+      );
+      wlr_xdg_surface_schedule_configure(m_toplevel->base);
+      return;
+    }
 
     // Honor the client's requested state (not a blind toggle).
-    setFullscreen(m_toplevel->requested.fullscreen);
+    setFullscreen(requested);
   }
 
   void View::toggleFullscreen() {
@@ -1633,6 +1735,10 @@ namespace umbriel {
   }
 
   void View::setFullscreen(bool fullscreen) {
+    kLog.debug(
+        "set_fullscreen '{}' -> {} (tiled={}, ws_active={})", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?",
+        fullscreen, m_tiled, m_workspace != nullptr && m_workspace->active()
+    );
     // Leaving column maximize when entering real fullscreen avoids a stale
     // widthFrac=1.0 column after the client leaves fullscreen.
     if (fullscreen && m_tiled && m_workspace != nullptr) {
@@ -1643,6 +1749,7 @@ namespace umbriel {
       }
     }
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
+    updateFullscreenPresentation(0, 0);
     cancelSizeAnimation();
     if (fullscreen) {
       // scheduled.fullscreen is set; reparent to fullscreen layer.
@@ -1651,8 +1758,11 @@ namespace umbriel {
       // Snap scroll to the now viewport-wide column and reflow neighbors.
       if (m_workspace != nullptr) {
         m_workspace->ensureFocusedVisible();
+        // arrange() sends the full-output size even when this workspace is hidden.
         m_workspace->arrange(false);
-      } else {
+      }
+      if (!m_tiled || m_workspace == nullptr) {
+        // Floating fullscreen is not part of the layout; size it directly.
         applyFullscreenLayout();
       }
     } else {

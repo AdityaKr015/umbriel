@@ -124,6 +124,7 @@ namespace umbriel {
     void beginCloseAnimation();
     void applyPresentedSize();
     void cancelSizeAnimation();
+    void updateFullscreenPresentation(int width, int height);
     void clearOutputClip();
     // Apply subsurface clip to the toplevel surface only, not xdg popup children.
     void setSurfaceTreeClip(const wlr_box* clip);
@@ -145,6 +146,7 @@ namespace umbriel {
     wlr_scene_tree* m_borderTree = nullptr;
     wlr_scene_rect* m_borderRects[4] = {};       // top, bottom, left, right (inner)
     wlr_scene_rect* m_outerBorderRect = nullptr; // single rounded ring outside the inner border
+    wlr_scene_rect* m_fullscreenBackdrop = nullptr;
     SurfaceBlur m_blur;
     SurfaceShadow m_shadow;
     wlr_scene_tree* m_shadowContainer = nullptr; // child of workspace shadow layer
@@ -167,6 +169,10 @@ namespace umbriel {
     int m_presentedH = 0;
     int m_sizeTargetW = 0;
     int m_sizeTargetH = 0;
+    // Fullscreen: content offset centering a stale (smaller) buffer in the tile.
+    int m_fullscreenOffsetX = 0;
+    int m_fullscreenOffsetY = 0;
+    bool m_fullscreenContentCentered = false;
     // Window rules: unsettled means title was empty at map, so a later
     // handleSetTitle re-applies all rule effects one more time.
     bool m_initialRulesSettled = false;

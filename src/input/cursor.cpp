@@ -428,7 +428,16 @@ namespace umbriel {
       return;
     }
 
-    wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
+    // Pointer focus must match the surface under the cursor before the button
+    // event so wl_data_device drag serial validation succeeds.
+    wlr_seat* seat = m_server->seat()->wlr();
+    if (surface != nullptr) {
+      wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+    } else {
+      wlr_seat_pointer_clear_focus(seat);
+    }
+
+    wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
     if (layer != nullptr) {
       layer->focus();
     } else if (m_server->exclusiveKeyboardLayer() == nullptr) {
@@ -638,13 +647,6 @@ namespace umbriel {
   void Cursor::handleTouchFrame() { wlr_seat_touch_notify_frame(m_server->seat()->wlr()); }
 
   void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY) {
-    // DnD icons are parented under dragIconTree; keep that tree on the cursor (dwl-style).
-    if (wlr_seat* seat = m_server->seat()->wlr(); seat->drag != nullptr && seat->drag->icon != nullptr) {
-      wlr_scene_node_set_position(
-          &m_server->dragIconTree()->node, static_cast<int>(m_cursor->x), static_cast<int>(m_cursor->y)
-      );
-    }
-
     if (m_mode == CursorMode::Move || m_mode == CursorMode::MoveTile) {
       if (m_server->sessionLocked()) {
         resetMode();
@@ -708,16 +710,17 @@ namespace umbriel {
 
     // Implicit pointer grab: while any button is held, keep focus on the
     // surface that received the press so it receives the matching release.
-    // Without this, crossing a border/gap/other surface clears or retargets
-    // focus and the release is lost — the client never sees button-up.
-    // The next motion after all buttons are up refreshes focus naturally.
+    // Skip during wl_data_device drags, the drag grab must receive enter/
+    // motion for surfaces under the cursor (dwl: CurPressed && !seat->drag).
     wlr_seat* seat = m_server->seat()->wlr();
-    if (seat->pointer_state.button_count > 0 && surface != seat->pointer_state.focused_surface) {
+    if (seat->drag == nullptr && seat->pointer_state.button_count > 0
+        && surface != seat->pointer_state.focused_surface) {
       updateConstraintForSurface(seat->pointer_state.focused_surface);
       return;
     }
 
     if (config().input.focus.followsMouse
+        && seat->drag == nullptr
         && !m_server->sessionLocked()
         && layer == nullptr
         && view != nullptr
@@ -748,6 +751,14 @@ namespace umbriel {
     } else {
       wlr_seat_pointer_clear_focus(seat);
     }
+
+    // Update the drag icon after seat motion so drop targets are recognized.
+    if (seat->drag != nullptr && seat->drag->icon != nullptr) {
+      wlr_scene_node_set_position(
+          &m_server->dragIconTree()->node, static_cast<int>(m_cursor->x), static_cast<int>(m_cursor->y)
+      );
+    }
+
     updateConstraintForSurface(surface);
     updateInteractiveCursor(view);
   }

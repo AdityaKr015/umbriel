@@ -96,10 +96,11 @@ just debug
 ```
 
 Umbriel needs SceneFX patches not upstream in 0.5 yet (`ignore_alpha`, shadow
-output clip, fractional-scale snap). They live under `subprojects/packagefiles/`.
-Meson uses system `scenefx-0.5` only when the required APIs are in the headers;
-otherwise it builds the wrap from `subprojects/scenefx.wrap`. Nix packaging
-applies the same diffs in `nix/package.nix`.
+output clip, fractional-scale snap). They live under
+`subprojects/packagefiles/`. Meson uses system `scenefx-0.5` only when the
+required APIs are in the headers; otherwise it builds the wrap from
+`subprojects/scenefx.wrap`. Nix packaging applies the same diffs in
+`nix/package.nix`.
 ## Running
 
 From an existing Wayland or X11 session, Umbriel opens a nested window (mod = Alt).

@@ -29,6 +29,8 @@ let
       ../subprojects/packagefiles/scenefx-blur-ignore-alpha.diff
       ../subprojects/packagefiles/scenefx-fractional-scale-snap.diff
       ../subprojects/packagefiles/scenefx-shadow-output-clip.diff
+      ../subprojects/packagefiles/scenefx-blur-offscreen-sync.diff
+      ../subprojects/packagefiles/scenefx-blur-edge-damage.diff
     ];
   });
 in
@@ -71,7 +73,8 @@ stdenv.mkDerivation {
       substituteInPlace "$out/share/wayland-sessions/umbriel.desktop" \
         --replace-fail 'Exec=umbriel' "Exec=$out/bin/umbriel"
     fi
-    wrapProgram $out/bin/umbriel --prefix PATH : ${lib.makeBinPath [ xwayland-satellite ]}
+    wrapProgram $out/bin/umbriel \
+      --prefix PATH : ${lib.makeBinPath [ xwayland-satellite ]} \
   '';
 
   passthru.providedSessions = [ "umbriel" ];

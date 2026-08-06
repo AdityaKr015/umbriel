@@ -1,0 +1,40 @@
+diff --git a/types/scene/wlr_scene.c b/types/scene/wlr_scene.c
+index 9a9fcc0..20e1837 100644
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -3385,6 +3385,35 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
+ 	wlr_damage_ring_rotate_buffer(&scene_output->damage_ring, buffer,
+ 		&render_data.damage);
+ 
++	// Match blur_data_calc_size() used by apply_blur_region() and get_main_buffer_blur().
++	// Partial client damage (common when surfaces open) can leave an undamaged halo
++	// outside the clip that flashes as a brief edge artifact.
++	struct blur_data *blur_data = &scene_output->scene->blur_data;
++	if (is_scene_blur_enabled(blur_data)) {
++		const int pad = blur_data_calc_size(blur_data);
++		for (int i = list_len - 1; i >= 0; i--) {
++			struct wlr_scene_node *node = list_data[i].node;
++			if (node->type != WLR_SCENE_NODE_BLUR) {
++				continue;
++			}
++
++			pixman_region32_t region;
++			pixman_region32_init(&region);
++			pixman_region32_copy(&region, &node->visible);
++			pixman_region32_translate(&region, -scene_output->x, -scene_output->y);
++			logical_to_buffer_coords(&region, &render_data, false);
++			wlr_region_expand(&region, &region, pad);
++			pixman_region32_intersect_rect(&region, &region,
++					0, 0, output->width, output->height);
++			pixman_region32_union(&render_data.damage,
++					&render_data.damage, &region);
++			state->committed |= WLR_OUTPUT_STATE_DAMAGE;
++			pixman_region32_union(&state->damage, &state->damage, &region);
++			pixman_region32_fini(&region);
++		}
++	}
++
++
+ 	struct fx_gles_render_pass *fx_pass = fx_get_render_pass(render_pass);
+ 	bool should_compensate_blur = false;
+ 	if (fx_render_pass_init_offscreen_buffers(render_pass, output)

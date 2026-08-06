@@ -2,7 +2,7 @@
 url = https://github.com/wlrfx/scenefx.git
 revision = 37ccd723bef49e6891156ffafce8f549f01446cc
 depth = 1
-diff_files = scenefx-blur-ignore-alpha.diff, scenefx-fractional-scale-snap.diff, scenefx-shadow-output-clip.diff
+diff_files = scenefx-blur-ignore-alpha.diff, scenefx-fractional-scale-snap.diff, scenefx-shadow-output-clip.diff, scenefx-blur-offscreen-sync.diff, scenefx-blur-edge-damage.diff
 
 [provide]
 scenefx-0.5 = scenefx

@@ -17,6 +17,7 @@ struct wlr_box;
 struct wlr_compositor;
 struct wlr_ext_foreign_toplevel_handle_v1;
 struct wlr_ext_foreign_toplevel_list_v1;
+struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1;
 struct wlr_foreign_toplevel_manager_v1;
 struct wlr_idle_inhibit_manager_v1;
 struct wlr_idle_notifier_v1;
@@ -186,6 +187,7 @@ namespace umbriel {
     static void onOutputManagerApply(wl_listener* listener, void* data);
     static void onOutputManagerTest(wl_listener* listener, void* data);
     static void onOutputLayoutChange(wl_listener* listener, void* data);
+    static void onToplevelCaptureRequest(wl_listener* listener, void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -245,6 +247,7 @@ namespace umbriel {
     wlr_layer_shell_v1* m_layerShell = nullptr;
     wlr_foreign_toplevel_manager_v1* m_foreignToplevelManager = nullptr;
     wlr_ext_foreign_toplevel_list_v1* m_extForeignToplevelList = nullptr;
+    wlr_ext_foreign_toplevel_image_capture_source_manager_v1* m_toplevelCaptureSourceManager = nullptr;
     wlr_ext_workspace_manager_v1* m_workspaceManager = nullptr;
     wlr_session_lock_manager_v1* m_sessionLockManager = nullptr;
     wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;
@@ -308,6 +311,7 @@ namespace umbriel {
     wl_listener m_outputManagerApply{};
     wl_listener m_outputManagerTest{};
     wl_listener m_outputLayoutChange{};
+    wl_listener m_toplevelCaptureRequest{};
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;

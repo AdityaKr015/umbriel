@@ -158,6 +158,9 @@ namespace umbriel {
 
     m_foreignToplevelManager = wlr_foreign_toplevel_manager_v1_create(m_display);
     m_extForeignToplevelList = wlr_ext_foreign_toplevel_list_v1_create(m_display, 1);
+    m_toplevelCaptureSourceManager = wlr_ext_foreign_toplevel_image_capture_source_manager_v1_create(m_display, 1);
+    m_toplevelCaptureRequest.notify = onToplevelCaptureRequest;
+    wl_signal_add(&m_toplevelCaptureSourceManager->events.new_request, &m_toplevelCaptureRequest);
 
     m_workspaceManager = wlr_ext_workspace_manager_v1_create(m_display, 1);
     m_workspaceCommit.notify = onWorkspaceCommit;
@@ -180,6 +183,8 @@ namespace umbriel {
 
     wlr_screencopy_manager_v1_create(m_display);
     wlr_export_dmabuf_manager_v1_create(m_display);
+    wlr_ext_output_image_capture_source_manager_v1_create(m_display, 1);
+    wlr_ext_image_copy_capture_manager_v1_create(m_display, 1);
 
     // Create the manager so apply/test listeners stay wired, but leave heads empty
     // (see updateOutputManagerConfig). Advertising a full configuration on bind
@@ -283,6 +288,7 @@ namespace umbriel {
     unsetenv("WAYLAND_SOCKET");
     kLog.info("running on WAYLAND_DISPLAY={}", m_socketName);
     wlr_log(WLR_INFO, "running on WAYLAND_DISPLAY=%s", m_socketName.c_str());
+    setenv("XDG_CURRENT_DESKTOP", "umbriel", 1);
 
     // Export cursor settings so X11 clients (via xwayland-satellite) and
     // toolkit clients pick up the compositor's configured cursor.
@@ -299,6 +305,17 @@ namespace umbriel {
       startXwayland();
     }
 
+    // Propagate session variables so D-Bus-activated services (portal backends,
+    // etc.) see the Wayland/X11 displays and cursor settings.
+    if (!m_nested) {
+      spawn(
+          "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY"
+          " XDG_CURRENT_DESKTOP XCURSOR_SIZE XCURSOR_THEME"
+      );
+      // Notify systemd that the graphical session is ready so user services
+      // gated on graphical-session.target (xdg-desktop-portal, etc.) can start.
+      spawn("systemctl --user start --no-block umbriel-session.target");
+    }
     if (startupCmd != nullptr) {
       spawn(startupCmd);
     }

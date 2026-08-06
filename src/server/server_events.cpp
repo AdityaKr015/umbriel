@@ -706,4 +706,28 @@ namespace umbriel {
     }
   }
 
+  void Server::onToplevelCaptureRequest(wl_listener* listener, void* data) {
+    Server* self;
+    self = wl_container_of(listener, self, m_toplevelCaptureRequest);
+    auto* request = static_cast<wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request*>(data);
+
+    if (request->toplevel_handle == nullptr || request->toplevel_handle->data == nullptr) {
+      return;
+    }
+    auto* view = static_cast<View*>(request->toplevel_handle->data);
+
+    // Reuse a cached capture source when one already exists for this view.
+    if (view->m_captureSource == nullptr) {
+      view->m_captureSource = wlr_ext_image_capture_source_v1_create_with_scene_node(
+          &view->sceneTree()->node, wl_display_get_event_loop(self->m_display), self->m_allocator, self->m_renderer
+      );
+      if (view->m_captureSource == nullptr) {
+        return;
+      }
+      view->m_captureSourceDestroy.notify = View::onCaptureSourceDestroy;
+      wl_signal_add(&view->m_captureSource->events.destroy, &view->m_captureSourceDestroy);
+    }
+
+    wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request_accept(request, view->m_captureSource);
+  }
 } // namespace umbriel

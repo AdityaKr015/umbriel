@@ -11,6 +11,7 @@ extern "C" {
 #include <wlr/util/box.h>
 }
 struct wlr_ext_foreign_toplevel_handle_v1;
+struct wlr_ext_image_capture_source_v1;
 struct wlr_foreign_toplevel_handle_v1;
 struct wlr_output;
 struct wlr_scene_tree;
@@ -88,6 +89,7 @@ namespace umbriel {
     static void onForeignDestroy(wl_listener* listener, void* data);
     static void onExtForeignDestroy(wl_listener* listener, void* data);
 
+    static void onCaptureSourceDestroy(wl_listener* listener, void* data);
     void handleMap();
     void handleUnmap();
     void handleCommit();
@@ -104,6 +106,7 @@ namespace umbriel {
     void handleForeignDestroy();
     void handleExtForeignDestroy();
     struct BorderEdge;
+    void handleCaptureSourceDestroy();
     static std::array<BorderEdge, 4> makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness);
     [[nodiscard]] std::array<BorderEdge, 4> borderEdges() const;
     [[nodiscard]] std::array<BorderEdge, 4> borderEdges(int contentWidth, int contentHeight) const;
@@ -150,6 +153,7 @@ namespace umbriel {
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_ext_foreign_toplevel_handle_v1* m_extForeign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
+    wlr_ext_image_capture_source_v1* m_captureSource = nullptr;
     Workspace* m_workspace = nullptr;
     bool m_mapped = false;
     bool m_tiled = false;
@@ -182,6 +186,7 @@ namespace umbriel {
     wl_listener m_foreignClose{};
     wl_listener m_foreignDestroy{};
     wl_listener m_extForeignDestroy{};
+    wl_listener m_captureSourceDestroy{};
   };
 
 } // namespace umbriel

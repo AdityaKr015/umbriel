@@ -157,3 +157,8 @@ install_data(
   install_dir: get_option('datadir') / 'wayland-sessions',
 )
 
+install_data(
+  'data/umbriel-session.target',
+  install_dir: get_option('prefix') / 'lib' / 'systemd' / 'user',
+)
+

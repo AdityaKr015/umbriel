@@ -147,4 +147,14 @@ namespace umbriel {
     m_extForeign = nullptr;
   }
 
+  void View::onCaptureSourceDestroy(wl_listener* listener, void* /*data*/) {
+    View* self = wl_container_of(listener, self, m_captureSourceDestroy);
+    self->handleCaptureSourceDestroy();
+  }
+
+  void View::handleCaptureSourceDestroy() {
+    wl_list_remove(&m_captureSourceDestroy.link);
+    m_captureSourceDestroy.link.next = nullptr;
+    m_captureSource = nullptr;
+  }
 } // namespace umbriel

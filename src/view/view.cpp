@@ -205,6 +205,10 @@ namespace umbriel {
       wlr_ext_foreign_toplevel_handle_v1_destroy(m_extForeign);
       m_extForeign = nullptr;
     }
+    if (m_captureSource != nullptr) {
+      wl_list_remove(&m_captureSourceDestroy.link);
+      m_captureSource = nullptr;
+    }
   }
 
   void View::setWorkspace(Workspace* workspace) {
@@ -1413,6 +1417,11 @@ namespace umbriel {
       wl_list_remove(&m_extForeignDestroy.link);
       wlr_ext_foreign_toplevel_handle_v1_destroy(m_extForeign);
       m_extForeign = nullptr;
+    }
+    if (m_captureSource != nullptr) {
+      wl_list_remove(&m_captureSourceDestroy.link);
+      m_captureSourceDestroy.link.next = nullptr;
+      m_captureSource = nullptr;
     }
 
     wl_list_remove(&m_map.link);

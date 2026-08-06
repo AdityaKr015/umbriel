@@ -46,6 +46,9 @@ asan: (build "asan")
 
 release: (build "release")
 
+install: (build "release")
+    meson install -C build-release
+
 run m=mode: (build m)
     #!/usr/bin/env bash
     set -euo pipefail

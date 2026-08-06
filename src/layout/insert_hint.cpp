@@ -76,8 +76,8 @@ namespace umbriel {
     if (usable.width <= 0 || usable.height <= 0) {
       return;
     }
-    const int edgePad = config().layoutEdgePad();
-    const int gap = config().layoutGap();
+    const int edgePad = workspace->layoutConfig().edgePad;
+    const int gap = workspace->layoutConfig().totalGap;
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
     const int clampedGap = std::clamp(gapIndex, 0, columnCount);
@@ -119,7 +119,7 @@ namespace umbriel {
     }
     Output* output = workspace->group()->output();
     const wlr_box usable = output->usableArea();
-    const int edgePad = config().layoutEdgePad();
+    const int edgePad = workspace->layoutConfig().edgePad;
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const Column& column = workspace->layout().columns()[static_cast<size_t>(columnIndex)];
     const int rowCount = static_cast<int>(column.views.size());
@@ -138,8 +138,8 @@ namespace umbriel {
       hintHeight = kRowHintEdgeHeight;
     } else {
       // Between two rows: centered on the boundary.
-      const int boundary =
-          workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layoutGap() / 2;
+      const int boundary = workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y
+          - workspace->layoutConfig().totalGap / 2;
       hintY = boundary - kRowHintMidHeight / 2;
       hintHeight = kRowHintMidHeight;
     }

@@ -1285,9 +1285,27 @@ namespace umbriel {
       if (wantTiled) {
         wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
         const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-        const int viewportWidth = std::max(1, usable.width - 2 * config().layoutEdgePad());
-        const int height = std::max(1, usable.height - 2 * config().layoutEdgePad());
-        const double widthFrac = rule.defaultWidth ? *rule.defaultWidth : config().layout.defaultWidthFraction;
+        struct InitialLayoutSizing {
+          int edgePad;
+          double defaultWidthFraction;
+        };
+        const InitialLayoutSizing layoutSizing = [&] {
+          if (m_workspace != nullptr) {
+            const ResolvedLayoutConfig& layoutConfig = m_workspace->layoutConfig();
+            return InitialLayoutSizing{
+                .edgePad = layoutConfig.edgePad,
+                .defaultWidthFraction = layoutConfig.defaultWidthFraction,
+            };
+          }
+          const ResolvedLayoutConfig layoutConfig = resolveGlobalLayout();
+          return InitialLayoutSizing{
+              .edgePad = layoutConfig.edgePad,
+              .defaultWidthFraction = layoutConfig.defaultWidthFraction,
+          };
+        }();
+        const int viewportWidth = std::max(1, usable.width - 2 * layoutSizing.edgePad);
+        const int height = std::max(1, usable.height - 2 * layoutSizing.edgePad);
+        const double widthFrac = rule.defaultWidth ? *rule.defaultWidth : layoutSizing.defaultWidthFraction;
         int width = std::max(1, static_cast<int>(std::lround(widthFrac * viewportWidth)));
         if (rule.defaultSize) {
           width = (*rule.defaultSize)[0];
@@ -1573,7 +1591,8 @@ namespace umbriel {
       } else {
         usable = m_server->usableAreaAt(keepX, keepY);
       }
-      const int nudge = std::max(32, config().layout.gap * 2);
+      const int gap = m_workspace != nullptr ? m_workspace->layoutConfig().gap : resolveGlobalLayout().gap;
+      const int nudge = std::max(32, gap * 2);
       int floatX = keepX + nudge;
       int floatY = keepY + nudge;
       if (usable.width > 0 && usable.height > 0 && keepWidth > 0 && keepHeight > 0) {

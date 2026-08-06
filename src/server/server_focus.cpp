@@ -383,7 +383,7 @@ namespace umbriel {
     case KeybindAction::LayoutScrollRight:
       if (Workspace* workspace = activeWorkspace()) {
         if (workspace->layoutMode() == LayoutMode::Scrolling) {
-          const auto step = static_cast<double>(config().layout.scrollWheelStep);
+          const auto step = static_cast<double>(config().input.mouse.scrollWheelStep);
           const double delta = bind.action == KeybindAction::LayoutScrollLeft ? -step : step;
           workspace->layout().setScroll(workspace->layout().scroll() + delta);
           workspace->arrange();

@@ -146,8 +146,9 @@ namespace umbriel {
         m_resizeStartBottom = box.y + box.height;
         m_resizeStartWidthPx = box.width;
 
-        const int viewportWidth =
-            std::max(1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * config().layoutEdgePad());
+        const int viewportWidth = std::max(
+            1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * m_resizeWorkspace->layoutConfig().edgePad
+        );
         if (m_resizeStartWidthPx >= viewportWidth) {
           m_resizeSoloHorizontal = true;
         }
@@ -873,7 +874,7 @@ namespace umbriel {
       workspace->layout().clearInsertGap();
       workspace->arrange(false);
     }
-    const int edgePad = config().layoutEdgePad();
+    const int edgePad = workspace->layoutConfig().edgePad;
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const int columnCount = static_cast<int>(workspace->layout().columns().size());
     const double layoutX = m_cursor->x - usable.x - edgePad + workspace->visualScroll();
@@ -890,7 +891,8 @@ namespace umbriel {
       for (int row = 1; row <= static_cast<int>(column.views.size()); ++row) {
         const int boundary = row == static_cast<int>(column.views.size())
             ? usable.y + usable.height - edgePad
-            : workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y - config().layoutGap() / 2;
+            : workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y
+                - workspace->layoutConfig().totalGap / 2;
         const double distance = std::abs(m_cursor->y - boundary);
         if (distance < rowDistance) {
           nearestRow = row;
@@ -909,8 +911,8 @@ namespace umbriel {
     double nearestDistance = std::abs(layoutX);
     for (int gap = 1; gap <= columnCount; ++gap) {
       const int boundary = gap == columnCount
-          ? workspace->layout().columnX(gap, viewportWidth) - config().layoutGap()
-          : workspace->layout().columnX(gap, viewportWidth) - config().layoutGap() / 2;
+          ? workspace->layout().columnX(gap, viewportWidth) - workspace->layoutConfig().totalGap
+          : workspace->layout().columnX(gap, viewportWidth) - workspace->layoutConfig().totalGap / 2;
       const double distance = std::abs(layoutX - boundary);
       if (distance < nearestDistance) {
         nearestGap = gap;
@@ -1230,10 +1232,12 @@ namespace umbriel {
     }
 
     Layout& layout = m_resizeWorkspace->layout();
-    const int viewportWidth =
-        std::max(1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * config().layoutEdgePad());
-    const int availableHeight =
-        std::max(1, m_resizeWorkspace->group()->output()->usableArea().height - 2 * config().layoutEdgePad());
+    const int viewportWidth = std::max(
+        1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * m_resizeWorkspace->layoutConfig().edgePad
+    );
+    const int availableHeight = std::max(
+        1, m_resizeWorkspace->group()->output()->usableArea().height - 2 * m_resizeWorkspace->layoutConfig().edgePad
+    );
     const double dx = m_cursor->x - m_resizeStartX;
     const double dy = m_cursor->y - m_resizeStartY;
 
@@ -1286,7 +1290,7 @@ namespace umbriel {
     } else if ((m_resizeEdges & WLR_EDGE_LEFT) != 0) {
       if (m_resizeColumn > 0 && !m_resizeSoloHorizontal) {
         // Shared boundary with previous column: move both widths, keep pair span fixed.
-        const int gap = config().layoutGap();
+        const int gap = m_resizeWorkspace->layoutConfig().totalGap;
         const int pair = m_resizeStartPrevWidthPx + gap + m_resizeStartWidthPx;
         const int minPrev = columnMinWidth(m_resizeColumn - 1);
         const int minCur = columnMinWidth(m_resizeColumn);
@@ -1315,7 +1319,7 @@ namespace umbriel {
       const int rowCount = static_cast<int>(column.views.size());
       // Vertical resize only with 2+ stacked windows (solo + gap weights get stuck later).
       if (rowCount >= 2) {
-        const int gap = config().layoutGap();
+        const int gap = m_resizeWorkspace->layoutConfig().totalGap;
         const int gapsTotal = std::max(0, rowCount - 1) * gap;
         const int stackHeight = std::max(rowCount, availableHeight - gapsTotal);
         if (stackHeight > 0) {

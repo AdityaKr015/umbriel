@@ -1,4 +1,5 @@
 #pragma once
+#include "config/config.h"
 #include "core/animation.h"
 #include "layout/layout.h"
 
@@ -21,7 +22,10 @@ namespace umbriel {
 
   class Workspace {
   public:
-    Workspace(WorkspaceGroup& group, wlr_ext_workspace_handle_v1* handle, std::string name, size_t index);
+    Workspace(
+        WorkspaceGroup& group, wlr_ext_workspace_handle_v1* handle, std::string name, size_t index,
+        ResolvedLayoutConfig layoutConfig
+    );
     ~Workspace();
 
     Workspace(const Workspace&) = delete;
@@ -34,6 +38,7 @@ namespace umbriel {
     [[nodiscard]] bool active() const { return m_active; }
     [[nodiscard]] Layout& layout() { return *m_layout; }
     [[nodiscard]] const Layout& layout() const { return *m_layout; }
+    [[nodiscard]] const ResolvedLayoutConfig& layoutConfig() const { return m_layoutConfig; }
     [[nodiscard]] LayoutMode layoutMode() const { return m_layoutMode; }
     [[nodiscard]] View* focusedView() const { return m_focusedView; }
     [[nodiscard]] double visualScroll() const { return m_visualScroll; }
@@ -82,6 +87,7 @@ namespace umbriel {
     bool m_active = false;
     std::vector<View*> m_views;
     std::unique_ptr<Layout> m_layout;
+    ResolvedLayoutConfig m_layoutConfig;
     LayoutMode m_layoutMode = LayoutMode::Scrolling;
     View* m_focusedView = nullptr;
     double m_visualScroll = 0;

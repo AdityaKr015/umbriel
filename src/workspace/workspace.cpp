@@ -26,9 +26,14 @@ namespace umbriel {
     constexpr uint32_t kGroupCaps = EXT_WORKSPACE_GROUP_HANDLE_V1_GROUP_CAPABILITIES_CREATE_WORKSPACE;
   } // namespace
 
-  Workspace::Workspace(WorkspaceGroup& group, wlr_ext_workspace_handle_v1* handle, std::string name, size_t index)
+  Workspace::Workspace(
+      WorkspaceGroup& group, wlr_ext_workspace_handle_v1* handle, std::string name, size_t index,
+      ResolvedLayoutConfig layoutConfig
+  )
       : m_group(&group), m_handle(handle), m_name(std::move(name)), m_index(index),
-        m_layout(createLayout(config().layout.mode)), m_layoutMode(config().layout.mode) {
+        m_layout(createLayout(layoutConfig.mode)), m_layoutConfig(std::move(layoutConfig)),
+        m_layoutMode(m_layoutConfig.mode) {
+    m_layout->setConfig(&m_layoutConfig);
     m_handle->data = this;
     wlr_ext_workspace_handle_v1_set_group(m_handle, m_group->handle());
     wlr_ext_workspace_handle_v1_set_name(m_handle, m_name.c_str());
@@ -258,7 +263,7 @@ namespace umbriel {
         return;
       }
       if (m_layoutMode == LayoutMode::Scrolling) {
-        const int viewportWidth = std::max(1, output->usableArea().width - 2 * config().layoutEdgePad());
+        const int viewportWidth = std::max(1, output->usableArea().width - 2 * m_layoutConfig.edgePad);
         wlr_box target = outputBox;
         target.x = outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
         wlr_box clipTarget = target;
@@ -323,7 +328,7 @@ namespace umbriel {
         ? static_cast<int>(std::lround(m_layout->scroll() - m_visualScroll))
         : 0;
     const int border = config().appearance.totalBorderWidth();
-    const int viewportWidth = std::max(1, output->usableArea().width - 2 * config().layoutEdgePad());
+    const int viewportWidth = std::max(1, output->usableArea().width - 2 * m_layoutConfig.edgePad);
 
     for (View* view : m_views) {
       if (view == nullptr || !view->mapped()) {
@@ -500,7 +505,7 @@ namespace umbriel {
       return;
     }
     const int column = m_layout->columnOf(m_focusedView);
-    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * config().layoutEdgePad());
+    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
     m_layout->ensureVisible(column, viewportWidth);
   }
 
@@ -509,7 +514,7 @@ namespace umbriel {
       return 0.0;
     }
     const int column = m_layout->columnOf(view);
-    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * config().layoutEdgePad());
+    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
     return m_layout->scrollAmountToEnsureVisible(column, viewportWidth);
   }
 
@@ -569,7 +574,18 @@ namespace umbriel {
   }
 
   void Workspace::recreateLayout() {
-    if (m_layout != nullptr && m_layout->mode() == config().layout.mode) {
+    // Re-resolve config from the current global config for this workspace's output and index.
+    const char* outputName = m_group->output()->wlr()->name;
+    auto resolved = resolveWorkspacesForOutput(outputName);
+    if (m_index < resolved.size()) {
+      m_layoutConfig = std::move(resolved[m_index].layout);
+    } else {
+      m_layoutConfig = resolveGlobalLayout();
+    }
+    if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
+      // Mode unchanged — just re-arrange with potentially new gaps/widths.
+      m_layout->setConfig(&m_layoutConfig);
+      arrange();
       return;
     }
     std::vector<View*> tiledViews;
@@ -579,8 +595,9 @@ namespace umbriel {
         tiledViews.push_back(view);
       }
     }
-    m_layoutMode = config().layout.mode;
+    m_layoutMode = m_layoutConfig.mode;
     m_layout = createLayout(m_layoutMode);
+    m_layout->setConfig(&m_layoutConfig);
     m_visualScroll = 0;
     for (View* view : tiledViews) {
       m_layout->insertView(view, static_cast<int>(m_layout->columns().size()));
@@ -595,17 +612,19 @@ namespace umbriel {
     wlr_ext_workspace_group_handle_v1_output_enter(m_handle, m_output->wlr());
 
     const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
-    for (size_t i = 0; i < kDefaultCount; ++i) {
+    auto resolved = resolveWorkspacesForOutput(outputName);
+    const size_t count = resolved.empty() ? kDefaultCount : resolved.size();
+    for (size_t i = 0; i < count; ++i) {
       char id[64];
-      char name[16];
       std::snprintf(id, sizeof(id), "%s:%zu", outputName, i + 1);
-      std::snprintf(name, sizeof(name), "%zu", i + 1);
+      const std::string wsName = i < resolved.size() ? std::move(resolved[i].name) : std::to_string(i + 1);
+      ResolvedLayoutConfig wsLayout = i < resolved.size() ? std::move(resolved[i].layout) : resolveGlobalLayout();
       wlr_ext_workspace_handle_v1* handle = wlr_ext_workspace_handle_v1_create(manager, id, kWorkspaceCaps);
-      m_workspaces.push_back(std::make_unique<Workspace>(*this, handle, name, i));
+      m_workspaces.push_back(std::make_unique<Workspace>(*this, handle, wsName, i, std::move(wsLayout)));
     }
 
     activate(m_workspaces.front().get());
-    kLog.info("workspace group for {} with {} workspaces", outputName, kDefaultCount);
+    kLog.info("workspace group for {} with {} workspaces", outputName, count);
   }
 
   WorkspaceGroup::~WorkspaceGroup() {
@@ -828,7 +847,7 @@ namespace umbriel {
     std::snprintf(id, sizeof(id), "%s:%zu", outputName, index + 1);
     std::string wsName = (name != nullptr && name[0] != '\0') ? name : std::to_string(index + 1);
     wlr_ext_workspace_handle_v1* handle = wlr_ext_workspace_handle_v1_create(manager, id, kWorkspaceCaps);
-    m_workspaces.push_back(std::make_unique<Workspace>(*this, handle, std::move(wsName), index));
+    m_workspaces.push_back(std::make_unique<Workspace>(*this, handle, std::move(wsName), index, resolveGlobalLayout()));
     return m_workspaces.back().get();
   }
 

@@ -58,6 +58,40 @@ namespace umbriel {
     int workspace = 0;
     bool repeat = true;
   };
+
+  // Per-workspace layout overrides (all optional → inherit Config::Layout).
+  struct WorkspaceLayoutOverrides {
+    std::optional<LayoutMode> mode;
+    std::optional<int> gap;
+    std::optional<double> defaultWidthFraction;
+    std::optional<std::vector<double>> widthPresets;
+  };
+
+  // Parsed from a [[workspace]] entry.
+  struct WorkspaceConfig {
+    std::string name;         // display name (optional in TOML; empty = use index)
+    std::string output;       // output selector (empty = base entry)
+    std::optional<int> index; // base slot selector (1-based; output entries only)
+    bool append = false;      // output entries only: explicit append
+    WorkspaceLayoutOverrides layout;
+  };
+
+  // Fully resolved layout config — no optionals. Owned by each Workspace.
+  struct ResolvedLayoutConfig {
+    LayoutMode mode = LayoutMode::Scrolling;
+    int gap = 8;
+    double defaultWidthFraction = 0.5;
+    std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
+    // Derived from gap + appearance border widths; set by resolve function.
+    int totalGap = 0; // gap + 2 * totalBorderWidth
+    int edgePad = 0;  // gap + totalBorderWidth
+  };
+
+  // Resolved workspace entry for a specific output (name + layout config).
+  struct ResolvedWorkspace {
+    std::string name;
+    ResolvedLayoutConfig layout;
+  };
   struct OutputMode {
     int width = 0;
     int height = 0;
@@ -132,7 +166,6 @@ namespace umbriel {
       int gap = 8;
       double defaultWidthFraction = 0.5;
       std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
-      int scrollWheelStep = 60;
     } layout;
 
     // Clear `layout.gap` outside decoration edges: borders are drawn outside the
@@ -164,6 +197,7 @@ namespace umbriel {
 
       struct Mouse {
         std::optional<bool> naturalScroll;
+        int scrollWheelStep = 60;
       } mouse;
 
       struct Cursor {
@@ -180,6 +214,7 @@ namespace umbriel {
     std::vector<Keybind> keybinds;
     std::vector<OutputRule> outputs;
     std::vector<WindowRule> windowRules;
+    std::vector<WorkspaceConfig> workspaces; // global [[workspace]] base set
   };
 
   [[nodiscard]] const Config& config();
@@ -190,5 +225,7 @@ namespace umbriel {
   [[nodiscard]] const std::filesystem::path& configRootPath();
   [[nodiscard]] ResolvedWindowRule resolveWindowRules(const char* appId, const char* title);
   [[nodiscard]] bool anyWindowRuleHasTitlePattern();
+  [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();
+  [[nodiscard]] std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName);
 
 } // namespace umbriel

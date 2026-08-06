@@ -67,8 +67,55 @@ gap = 8                         # 0-500
 default_width_fraction = 0.5    # 0.1-1.0
 # Widths visited by `window-cycle-width`.
 width_presets = [0.333, 0.5, 0.667]
-# Pixel step used by the `layout-scroll-left` and `layout-scroll-right` actions.
-scroll_wheel_step = 60           # 1-1000
+
+# ── Workspaces ────────────────────────────────────────────────────────────────
+# Base set applied to every output. Position in the array is the 1-based index.
+# Names are optional; unnamed workspaces display their index. Each workspace's
+# layout.* fields are optional and inherit from [layout] above.
+#
+# Per-output entries carry `output = "DP-1"` and either override a base workspace
+# (by name or index) or append new ones (append = true).
+#
+# Selector rules for output entries:
+#   index (1-based)  Targets a base slot. name (if set) renames for this output.
+#   name (no index)  Must match a named base entry (config error otherwise).
+#   append = true    Creates an output-exclusive workspace. name is display-only.
+#
+# Layout field resolution (per field, last writer wins):
+#   [layout] -> base [[workspace]] -> output-qualified [[workspace]]
+#
+# If no [[workspace]] entries exist, the compositor uses 9 numeric workspaces.
+
+# [[workspace]]
+# name = "main"
+
+# [[workspace]]
+# name = "chat"
+# layout.mode = "dwindle"
+# layout.gap = 4
+
+# [[workspace]]
+# name = "media"
+
+# Override "chat" on DP-1: keep dwindle (from base), widen gap.
+# [[workspace]]
+# name = "chat"
+# output = "DP-1"
+# layout.gap = 8
+
+# Override unnamed slot 4 on DP-1, rename it to "logs".
+# [[workspace]]
+# index = 4
+# name = "logs"
+# output = "DP-1"
+# layout.gap = 0
+
+# Append output-exclusive workspace to DP-1.
+# [[workspace]]
+# name = "monitor"
+# output = "DP-1"
+# append = true
+# layout.default_width_fraction = 0.667
 
 # ── Outputs ──────────────────────────────────────────────────────────────────
 # Output names must exactly match connector names such as DP-1 or HDMI-A-1.
@@ -103,6 +150,8 @@ repeat_delay = 600        # 0-10000 ms
 [input.mouse]
 # Leave commented to preserve each device's default.
 # natural_scroll = false
+# Pixel step used by the `layout-scroll-left` and `layout-scroll-right` actions.
+scroll_wheel_step = 60           # 1-1000
 
 [input.cursor]
 # An empty theme uses the environment/default Xcursor theme.

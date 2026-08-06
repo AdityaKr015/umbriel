@@ -113,7 +113,7 @@ namespace umbriel {
 
   int ScrollingLayout::columnX(int columnIndex, int viewportWidth) const {
     const int end = std::clamp(columnIndex, 0, static_cast<int>(m_columns.size()));
-    const int gap = config().layoutGap();
+    const int gap = m_config->totalGap;
     int x = 0;
     for (int i = 0; i < end; ++i) {
       x += columnWidth(i, viewportWidth) + gap;
@@ -128,7 +128,7 @@ namespace umbriel {
     if (m_columns.empty()) {
       return 0;
     }
-    return columnX(static_cast<int>(m_columns.size()), viewportWidth) - config().layoutGap();
+    return columnX(static_cast<int>(m_columns.size()), viewportWidth) - m_config->totalGap;
   }
 
   bool ScrollingLayout::isFullWidth(int columnIndex) const {
@@ -145,7 +145,7 @@ namespace umbriel {
     }
     const int index = std::clamp(columnIndex, 0, static_cast<int>(m_columns.size()));
     Column column;
-    column.widthFrac = config().layout.defaultWidthFraction;
+    column.widthFrac = m_config->defaultWidthFraction;
     column.views.push_back(view);
     column.heightWeights.push_back(1.0);
     m_columns.insert(m_columns.begin() + index, std::move(column));
@@ -205,7 +205,7 @@ namespace umbriel {
       source.heightWeights.erase(source.heightWeights.begin() + row);
     }
     Column column;
-    column.widthFrac = config().layout.defaultWidthFraction;
+    column.widthFrac = m_config->defaultWidthFraction;
     column.views.push_back(view);
     column.heightWeights.push_back(weight);
     m_columns.insert(m_columns.begin() + sourceColumn + 1, std::move(column));
@@ -283,7 +283,7 @@ namespace umbriel {
     }
 
     // Leave a strip of each neighbor on-screen so the pointer can reach it.
-    const int peek = std::max(config().layout.gap * 2, 32);
+    const int peek = std::max(m_config->gap * 2, 32);
     const bool hasPrev = columnIndex > 0;
     const bool hasNext = columnIndex + 1 < static_cast<int>(m_columns.size());
 
@@ -330,7 +330,7 @@ namespace umbriel {
     m_targets.clear();
     // Include outer border in the usable-area inset so decorations stay clear of
     // layer-shell exclusive zones (panels).
-    const int edgePad = config().layoutEdgePad();
+    const int edgePad = m_config->edgePad;
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const int availableHeight = std::max(1, usable.height - 2 * edgePad);
     const double maxScroll = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
@@ -351,7 +351,7 @@ namespace umbriel {
           + columnX(static_cast<int>(columnIndex), viewportWidth)
           - static_cast<int>(std::lround(m_scroll));
       const int rowCount = static_cast<int>(column.views.size());
-      const int gap = config().layoutGap();
+      const int gap = m_config->totalGap;
       const int gapsTotal = std::max(0, rowCount - 1) * gap;
       const int stackHeight = std::max(rowCount, availableHeight - gapsTotal);
       const double totalWeight = columnTotalWeight(column);
@@ -396,7 +396,7 @@ namespace umbriel {
       return false;
     }
     Column& column = m_columns[static_cast<size_t>(columnIndex)];
-    const auto& presets = config().layout.widthPresets;
+    const auto& presets = m_config->widthPresets;
     const auto it = std::ranges::find_if(presets, [current = column.widthFrac](double preset) {
       return preset > current + 0.0001;
     });
@@ -439,7 +439,7 @@ namespace umbriel {
 
   double ScrollingLayout::widthFraction(int columnIndex) const {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {
-      return config().layout.defaultWidthFraction;
+      return m_config->defaultWidthFraction;
     }
     return m_columns[static_cast<size_t>(columnIndex)].widthFrac;
   }

@@ -216,7 +216,7 @@ namespace umbriel {
           return;
         }
         m_scrollWorkspace = ws;
-        m_viewportWidth = std::max(1, out->usableArea().width - 2 * config().layoutEdgePad());
+        m_viewportWidth = std::max(1, out->usableArea().width - 2 * ws->layoutConfig().edgePad);
         m_scrollStart = ws->visualScroll();
         ws->layout().setScroll(m_scrollStart);
         ws->arrange(false);

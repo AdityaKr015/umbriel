@@ -9,6 +9,7 @@ struct wlr_box;
 namespace umbriel {
 
   class View;
+  struct ResolvedLayoutConfig;
 
   enum class LayoutMode {
     Scrolling,
@@ -27,6 +28,8 @@ namespace umbriel {
   class Layout {
   public:
     virtual ~Layout() = default;
+    void setConfig(const ResolvedLayoutConfig* config) { m_config = config; }
+    [[nodiscard]] const ResolvedLayoutConfig* layoutConfig() const { return m_config; }
 
     [[nodiscard]] virtual LayoutMode mode() const = 0;
 
@@ -79,6 +82,9 @@ namespace umbriel {
     [[nodiscard]] virtual double heightWeight(int, int) const { return 1.0; }
     [[nodiscard]] virtual double topGapWeight(int) const { return 0.0; }
     [[nodiscard]] virtual double bottomGapWeight(int) const { return 0.0; }
+
+  protected:
+    const ResolvedLayoutConfig* m_config = nullptr;
   };
 
   [[nodiscard]] std::unique_ptr<Layout> createLayout(LayoutMode mode);

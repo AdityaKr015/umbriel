@@ -165,7 +165,7 @@ namespace umbriel {
       return;
     }
 
-    const int gap = config().layoutGap();
+    const int gap = m_config->totalGap;
     const double ratio = std::clamp(node->ratio, 0.1, 0.9);
 
     if (isHorizontal(node)) {
@@ -354,7 +354,7 @@ namespace umbriel {
 
   void DwindleLayout::arrange(const wlr_box& usable) {
     m_targets.clear();
-    const int edgePad = config().layoutEdgePad();
+    const int edgePad = m_config->edgePad;
     wlr_box area{
         .x = usable.x + edgePad,
         .y = usable.y + edgePad,
@@ -422,7 +422,7 @@ namespace umbriel {
     if (node == nullptr || node->parent == nullptr) {
       return false;
     }
-    const auto& presets = config().layout.widthPresets;
+    const auto& presets = m_config->widthPresets;
     const auto it = std::ranges::find_if(presets, [current = node->parent->ratio](double preset) {
       return preset > current + 0.0001;
     });
@@ -460,7 +460,7 @@ namespace umbriel {
     if (node != nullptr && node->parent != nullptr) {
       return node->parent->ratio;
     }
-    return config().layout.defaultWidthFraction;
+    return m_config->defaultWidthFraction;
   }
 
 } // namespace umbriel

@@ -693,7 +693,9 @@ namespace umbriel {
     wlr_output* pointerOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
     if (pointerOutput != m_pointerOutput) {
       m_pointerOutput = pointerOutput;
-      if (!m_server->sessionLocked() && m_server->exclusiveKeyboardLayer() == nullptr) {
+      if (config().input.focus.followsMouse
+          && !m_server->sessionLocked()
+          && m_server->exclusiveKeyboardLayer() == nullptr) {
         m_server->refocus(m_server->outputFromWlr(pointerOutput));
       }
     }

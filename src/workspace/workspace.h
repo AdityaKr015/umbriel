@@ -74,7 +74,7 @@ namespace umbriel {
     void showSwitchViews();
     void endSwitchTransition();
     void setSlideOffset(double y);
-    void recreateLayout();
+    void applyConfig(std::string name, size_t index, ResolvedLayoutConfig layoutConfig);
 
     [[nodiscard]] std::vector<View*> allViews() const { return m_views; }
 
@@ -102,8 +102,6 @@ namespace umbriel {
 
   class WorkspaceGroup {
   public:
-    static constexpr size_t kDefaultCount = 9;
-
     WorkspaceGroup(Server& server, Output& output);
     ~WorkspaceGroup();
 
@@ -123,6 +121,7 @@ namespace umbriel {
     void activateIndex(size_t index);
     void deactivate(Workspace* workspace);
     Workspace* createWorkspace(const char* name);
+    void reconcileConfig();
 
     [[nodiscard]] bool slideActive() const { return m_slide.base != nullptr; }
     bool slideBegin(bool includePrev, bool includeNext);
@@ -131,6 +130,8 @@ namespace umbriel {
     void slideFinish();
 
   private:
+    std::unique_ptr<Workspace> createConfiguredWorkspace(ResolvedWorkspace workspace, size_t index);
+
     struct Slide {
       Workspace* base = nullptr;
       Workspace* up = nullptr;

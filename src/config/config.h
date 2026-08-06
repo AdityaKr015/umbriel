@@ -67,12 +67,11 @@ namespace umbriel {
     std::optional<std::vector<double>> widthPresets;
   };
 
-  // Parsed from a [[workspace]] entry.
+  // Layout rule parsed from a [[workspace]] entry. Exactly one selector is set.
   struct WorkspaceConfig {
-    std::string name;         // display name (optional in TOML; empty = use index)
-    std::string output;       // output selector (empty = base entry)
-    std::optional<int> index; // base slot selector (1-based; output entries only)
-    bool append = false;      // output entries only: explicit append
+    std::string name;
+    std::string output;       // optional output selector
+    std::optional<int> index; // optional 1-based position selector
     WorkspaceLayoutOverrides layout;
   };
 
@@ -104,6 +103,8 @@ namespace umbriel {
     std::optional<std::array<int, 2>> position;
     std::optional<double> scale;
     std::optional<int> transform;
+    // Explicit workspace inventory. Omitted means nine numeric workspaces.
+    std::optional<std::vector<std::string>> workspaces;
   };
 
   struct WindowRule {
@@ -213,7 +214,7 @@ namespace umbriel {
     std::vector<Keybind> keybinds;
     std::vector<OutputRule> outputs;
     std::vector<WindowRule> windowRules;
-    std::vector<WorkspaceConfig> workspaces; // global [[workspace]] base set
+    std::vector<WorkspaceConfig> workspaces; // [[workspace]] layout rules
   };
 
   [[nodiscard]] const Config& config();

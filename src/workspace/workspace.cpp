@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <ranges>
 #include "wlr.h"
 // clang-format on
 
@@ -573,17 +572,19 @@ namespace umbriel {
     m_switchViews.clear();
   }
 
-  void Workspace::recreateLayout() {
-    // Re-resolve config from the current global config for this workspace's output and index.
-    const char* outputName = m_group->output()->wlr()->name;
-    auto resolved = resolveWorkspacesForOutput(outputName);
-    if (m_index < resolved.size()) {
-      m_layoutConfig = std::move(resolved[m_index].layout);
-    } else {
-      m_layoutConfig = resolveGlobalLayout();
+  void Workspace::applyConfig(std::string name, size_t index, ResolvedLayoutConfig layoutConfig) {
+    if (m_name != name) {
+      m_name = std::move(name);
+      wlr_ext_workspace_handle_v1_set_name(m_handle, m_name.c_str());
     }
+    if (m_index != index) {
+      m_index = index;
+      const uint32_t coords[1] = {static_cast<uint32_t>(m_index)};
+      wlr_ext_workspace_handle_v1_set_coordinates(m_handle, coords, 1);
+    }
+
+    m_layoutConfig = std::move(layoutConfig);
     if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
-      // Mode unchanged — just re-arrange with potentially new gaps/widths.
       m_layout->setConfig(&m_layoutConfig);
       arrange();
       return;
@@ -613,14 +614,10 @@ namespace umbriel {
 
     const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
     auto resolved = resolveWorkspacesForOutput(outputName);
-    const size_t count = resolved.empty() ? kDefaultCount : resolved.size();
+    const size_t count = resolved.size();
+    m_workspaces.reserve(count);
     for (size_t i = 0; i < count; ++i) {
-      char id[64];
-      std::snprintf(id, sizeof(id), "%s:%zu", outputName, i + 1);
-      const std::string wsName = i < resolved.size() ? std::move(resolved[i].name) : std::to_string(i + 1);
-      ResolvedLayoutConfig wsLayout = i < resolved.size() ? std::move(resolved[i].layout) : resolveGlobalLayout();
-      wlr_ext_workspace_handle_v1* handle = wlr_ext_workspace_handle_v1_create(manager, id, kWorkspaceCaps);
-      m_workspaces.push_back(std::make_unique<Workspace>(*this, handle, wsName, i, std::move(wsLayout)));
+      m_workspaces.push_back(createConfiguredWorkspace(std::move(resolved[i]), i));
     }
 
     activate(m_workspaces.front().get());
@@ -642,6 +639,86 @@ namespace umbriel {
       wlr_ext_workspace_group_handle_v1_destroy(m_handle);
       m_handle = nullptr;
     }
+  }
+  std::unique_ptr<Workspace> WorkspaceGroup::createConfiguredWorkspace(ResolvedWorkspace workspace, size_t index) {
+    wlr_ext_workspace_manager_v1* manager = m_server->workspaceManager();
+    const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
+    char id[64];
+    std::snprintf(id, sizeof(id), "%s:%zu", outputName, index + 1);
+    wlr_ext_workspace_handle_v1* handle = wlr_ext_workspace_handle_v1_create(manager, id, kWorkspaceCaps);
+    return std::make_unique<Workspace>(*this, handle, std::move(workspace.name), index, std::move(workspace.layout));
+  }
+
+  void WorkspaceGroup::reconcileConfig() {
+    slideFinish();
+    const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
+    auto resolved = resolveWorkspacesForOutput(outputName);
+
+    auto old = std::move(m_workspaces);
+    std::vector<std::unique_ptr<Workspace>> next(resolved.size());
+
+    // Preserve workspace identity by name before using position as a fallback.
+    for (size_t i = 0; i < resolved.size(); ++i) {
+      const auto match = std::ranges::find_if(old, [&](const auto& workspace) {
+        return workspace != nullptr && workspace->name() == resolved[i].name;
+      });
+      if (match != old.end()) {
+        next[i] = std::move(*match);
+      }
+    }
+    for (size_t i = 0; i < resolved.size(); ++i) {
+      if (next[i] == nullptr && i < old.size() && old[i] != nullptr) {
+        next[i] = std::move(old[i]);
+      }
+      if (next[i] != nullptr) {
+        next[i]->applyConfig(std::move(resolved[i].name), i, std::move(resolved[i].layout));
+      } else {
+        next[i] = createConfiguredWorkspace(std::move(resolved[i]), i);
+      }
+    }
+
+    const auto survives = [&](const Workspace* workspace) {
+      return workspace != nullptr
+          && std::ranges::any_of(next, [&](const auto& candidate) { return candidate.get() == workspace; });
+    };
+    const bool activeSurvives = survives(m_active);
+    const bool previousSurvives = survives(m_previous);
+    Workspace* replacementActive = activeSurvives ? m_active : nullptr;
+    size_t relocatedViews = 0;
+
+    m_workspaces = std::move(next);
+    for (const auto& removed : old) {
+      if (removed == nullptr) {
+        continue;
+      }
+      Workspace* fallback = m_workspaces[std::min(removed->index(), m_workspaces.size() - 1)].get();
+      if (removed.get() == m_active) {
+        removed->setActive(false);
+        replacementActive = fallback;
+      }
+      for (View* view : removed->allViews()) {
+        view->setWorkspace(fallback);
+        ++relocatedViews;
+      }
+    }
+
+    if (!previousSurvives) {
+      m_previous = nullptr;
+    }
+    if (!activeSurvives) {
+      m_active = replacementActive;
+      m_active->setActive(true);
+    }
+    if (m_previous == m_active) {
+      m_previous = nullptr;
+    }
+    old.clear();
+
+    if (relocatedViews > 0 || !activeSurvives) {
+      m_server->cursor()->clearConstraint();
+      m_server->refocus(m_output);
+    }
+    kLog.info("reconciled {} to {} workspaces ({} windows relocated)", outputName, m_workspaces.size(), relocatedViews);
   }
 
   Workspace* WorkspaceGroup::workspaceAt(size_t index) const {

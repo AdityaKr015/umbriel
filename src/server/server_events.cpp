@@ -1,5 +1,4 @@
 #include "config/config.h"
-#include "config/config_diag.h"
 #include "config/config_watcher.h"
 #include "core/log.h"
 #include "input/cursor.h"
@@ -169,11 +168,7 @@ namespace umbriel {
     for (const auto& output : m_outputs) {
       output->applyConfig();
       if (WorkspaceGroup* group = output->workspaceGroup()) {
-        for (size_t i = 0; i < group->workspaceCount(); ++i) {
-          if (Workspace* workspace = group->workspaceAt(i)) {
-            workspace->recreateLayout();
-          }
-        }
+        group->reconcileConfig();
       }
     }
     for (const auto& view : m_views) {

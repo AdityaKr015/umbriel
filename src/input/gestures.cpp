@@ -226,7 +226,7 @@ namespace umbriel {
         WorkspaceGroup* group = out->workspaceGroup();
         const size_t idx = group->active()->index();
         m_hasPrev = idx > 0;
-        m_hasNext = idx + 1 < WorkspaceGroup::kDefaultCount;
+        m_hasNext = idx + 1 < group->workspaceCount();
         if (!group->slideBegin(m_hasPrev, m_hasNext)) {
           m_state = State::Idle;
           return;

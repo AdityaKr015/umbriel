@@ -68,53 +68,34 @@ default_width_fraction = 0.5    # 0.1-1.0
 # Widths visited by `window-cycle-width`.
 width_presets = [0.333, 0.5, 0.667]
 
-# ── Workspaces ────────────────────────────────────────────────────────────────
-# Base set applied to every output. Position in the array is the 1-based index.
-# Names are optional; unnamed workspaces display their index. Each workspace's
-# layout.* fields are optional and inherit from [layout] above.
+# ── Workspace layout rules ───────────────────────────────────────────────────
+# Workspace inventories are declared by each output's `workspaces` setting
+# below. [[workspace]] entries only customize an existing workspace and must
+# select it by exactly one of `name` or 1-based `index`.
 #
-# Per-output entries carry `output = "DP-1"` and either override a base workspace
-# (by name or index) or append new ones (append = true).
+# Rules without `output` apply wherever the selector exists. Output-specific
+# rules apply afterward and therefore take precedence. Layout fields inherit:
+#   [layout] -> matching global [[workspace]] -> matching output [[workspace]]
 #
-# Selector rules for output entries:
-#   index (1-based)  Targets a base slot. name (if set) renames for this output.
-#   name (no index)  Must match a named base entry (config error otherwise).
-#   append = true    Creates an output-exclusive workspace. name is display-only.
-#
-# Layout field resolution (per field, last writer wins):
-#   [layout] -> base [[workspace]] -> output-qualified [[workspace]]
-#
-# If no [[workspace]] entries exist, the compositor uses 9 numeric workspaces.
+# A rule never creates, removes, appends, or renames a workspace.
 
-# [[workspace]]
-# name = "main"
-
+# Use dwindle with a narrow gap for every workspace named "chat".
 # [[workspace]]
 # name = "chat"
 # layout.mode = "dwindle"
 # layout.gap = 4
 
-# [[workspace]]
-# name = "media"
-
-# Override "chat" on DP-1: keep dwindle (from base), widen gap.
+# Keep dwindle from the global rule, but widen the gap on DP-1.
 # [[workspace]]
 # name = "chat"
 # output = "DP-1"
 # layout.gap = 8
 
-# Override unnamed slot 4 on DP-1, rename it to "logs".
+# Customize workspace position 4 only on DP-1.
 # [[workspace]]
 # index = 4
-# name = "logs"
 # output = "DP-1"
 # layout.gap = 0
-
-# Append output-exclusive workspace to DP-1.
-# [[workspace]]
-# name = "monitor"
-# output = "DP-1"
-# append = true
 # layout.default_width_fraction = 0.667
 
 # ── Outputs ──────────────────────────────────────────────────────────────────
@@ -122,17 +103,26 @@ width_presets = [0.333, 0.5, 0.667]
 # Nested outputs use WL-1; headless outputs use HEADLESS-1. Mode is ignored in
 # nested sessions because the parent compositor controls the output size.
 # Run `umbriel outputs` inside the session to list connector names and modes.
+# Each output may declare either a numeric count or an exact ordered list of
+# names. Omitting `workspaces` creates the default 9 numeric workspaces.
+# Reloading reconciles inventories live. Existing workspaces survive by name,
+# then by position; windows from removed workspaces move to the nearest survivor.
+#
+# workspaces = 5                         # creates "1" through "5"
+# workspaces = ["main", "code", "chat"] # exact names and order
 
 # [output."DP-1"]
 # mode = "2560x1440@144"   # WIDTHxHEIGHT or WIDTHxHEIGHT@HZ; fractional HZ allowed
 # position = [0, 0]        # Layout coordinates [x, y]
 # scale = 1.25             # 0.25-4.0
+# workspaces = 5
 # transform = "normal"     # normal|90|180|270|flipped|flipped-90|flipped-180|flipped-270
 
 # [output."HDMI-A-1"]
 # mode = "1920x1080@60"
 # position = [2048, 0]     # right of DP-1 (2560 / 1.25 = 2048 logical pixels)
 # scale = 1.0
+# workspaces = ["TV"]
 
 [input.keyboard]
 # Empty layout/variant use the system XKB defaults.

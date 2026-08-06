@@ -12,7 +12,7 @@ What works today:
 - Nestable / DRM backend startup via wlroots + SceneFX renderer
 - Output hotplug, modeset, and SceneFX-backed scene commits
 - Seat, keyboard, pointer/cursor, xdg-shell toplevels and popups
-- Per-monitor workspaces via `ext_workspace_manager_v1` (9 workspaces each, isolated per output)
+- Per-monitor workspace inventories via `ext_workspace_manager_v1`, isolated and configurable per output
 - Scrolling column layout with keyboard/mouse focus, movement, width presets, and animated transitions
 - Floating windows with mouse move/resize, mod+drag tile reorder with drop-target preview
 - Window rules: per-app float, size, column width, workspace, fullscreen, and opacity via `[[rule]]` with regex matching on app_id and title

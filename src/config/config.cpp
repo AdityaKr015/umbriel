@@ -644,15 +644,46 @@ namespace umbriel {
       readWidthPresetsInto(*layout, ctx + ".layout", overrides.widthPresets);
     }
 
+    constexpr size_t kDefaultWorkspaceCount = 9;
+
+    std::vector<std::string> numericWorkspaceNames(size_t count) {
+      std::vector<std::string> names;
+      names.reserve(count);
+      for (size_t i = 0; i < count; ++i) {
+        names.push_back(std::to_string(i + 1));
+      }
+      return names;
+    }
+
+    std::vector<std::string> workspaceNamesForOutput(const Config& cfg, std::string_view outputName) {
+      const auto rule =
+          std::ranges::find_if(cfg.outputs, [&](const OutputRule& candidate) { return candidate.name == outputName; });
+      if (rule != cfg.outputs.end() && rule->workspaces) {
+        return *rule->workspaces;
+      }
+      return numericWorkspaceNames(kDefaultWorkspaceCount);
+    }
+
+    bool workspaceRuleMatches(const WorkspaceConfig& rule, const std::vector<std::string>& names) {
+      if (rule.index) {
+        return static_cast<size_t>(*rule.index) <= names.size();
+      }
+      return std::ranges::find(names, rule.name) != names.end();
+    }
+
     WorkspaceConfig parseWorkspaceEntry(const toml::table& section, std::string_view context) {
       WorkspaceConfig ws;
-      warnUnknownKeys(section, context, {"name", "output", "index", "append", "layout"});
+      warnUnknownKeys(section, context, {"name", "output", "index", "layout"});
 
       if (const toml::node* nameNode = section.get("name")) {
         if (const auto value = nameNode->value<std::string>()) {
-          ws.name = *value;
+          if (value->empty()) {
+            errorAt(nameNode->source(), "{}.name must not be empty", context);
+          } else {
+            ws.name = *value;
+          }
         } else {
-          warnAt(nameNode->source(), "ignoring {}.name (expected string)", context);
+          errorAt(nameNode->source(), "{}.name must be a string", context);
         }
       }
       if (const toml::node* outputNode = section.get("output")) {
@@ -663,22 +694,15 @@ namespace umbriel {
             ws.output = *value;
           }
         } else {
-          warnAt(outputNode->source(), "ignoring {}.output (expected string)", context);
+          errorAt(outputNode->source(), "{}.output must be a string", context);
         }
       }
       if (const toml::node* indexNode = section.get("index")) {
         const auto value = indexNode->value<std::int64_t>();
-        if (!value || *value < 1) {
-          warnAt(indexNode->source(), "ignoring {}.index (expected positive integer)", context);
+        if (!value || *value < 1 || *value > static_cast<std::int64_t>(kDefaultWorkspaceCount)) {
+          errorAt(indexNode->source(), "{}.index must be an integer from 1 to {}", context, kDefaultWorkspaceCount);
         } else {
           ws.index = static_cast<int>(*value);
-        }
-      }
-      if (const toml::node* appendNode = section.get("append")) {
-        if (const auto value = appendNode->value<bool>()) {
-          ws.append = *value;
-        } else {
-          warnAt(appendNode->source(), "ignoring {}.append (expected boolean)", context);
         }
       }
 
@@ -693,183 +717,86 @@ namespace umbriel {
       }
       const auto* workspaces = node->as_array();
       if (workspaces == nullptr) {
-        warnAt(node->source(), "ignoring workspace (expected [[workspace]] array of tables)");
+        errorAt(node->source(), "workspace must be a [[workspace]] array of tables");
         return;
       }
 
-      // Pass 1: parse all entries and partition into base / output-qualified.
       struct ParsedEntry {
         WorkspaceConfig ws;
         toml::source_region source;
         int arrayIndex;
       };
-      std::vector<ParsedEntry> baseEntries;
-      std::vector<ParsedEntry> outputEntries;
+      std::vector<ParsedEntry> entries;
+      entries.reserve(workspaces->size());
 
       int entryIndex = 0;
       for (const auto& entry : *workspaces) {
         const auto* section = entry.as_table();
         if (section == nullptr) {
-          warnAt(entry.source(), "ignoring workspace entry (expected table)");
+          errorAt(entry.source(), "workspace[{}] must be a table", entryIndex);
           ++entryIndex;
           continue;
         }
+
         const std::string context = std::format("workspace[{}]", entryIndex);
         WorkspaceConfig ws = parseWorkspaceEntry(*section, context);
-
-        if (ws.output.empty()) {
-          // Base entry: reject base-invalid fields.
-          if (ws.index.has_value()) {
-            errorAt(entry.source(), "{}: index is only valid on output-qualified entries", context);
-            ++entryIndex;
-            continue;
-          }
-          if (ws.append) {
-            errorAt(entry.source(), "{}: append is only valid on output-qualified entries", context);
-            ++entryIndex;
-            continue;
-          }
-          baseEntries.push_back({std::move(ws), entry.source(), entryIndex});
-        } else {
-          // Output-qualified: reject append+index combo early.
-          if (ws.append && ws.index.has_value()) {
-            errorAt(entry.source(), "{}: append and index are mutually exclusive", context);
-            ++entryIndex;
-            continue;
-          }
-          if (!ws.append && !ws.index.has_value() && ws.name.empty()) {
-            errorAt(entry.source(), "{}: output entry needs name, index, or append = true", context);
-            ++entryIndex;
-            continue;
-          }
-          outputEntries.push_back({std::move(ws), entry.source(), entryIndex});
+        const bool hasName = !ws.name.empty();
+        const bool hasIndex = ws.index.has_value();
+        if (hasName == hasIndex) {
+          errorAt(entry.source(), "{} must set exactly one of name or index", context);
         }
+
+        entries.push_back({std::move(ws), entry.source(), entryIndex});
         ++entryIndex;
       }
 
-      // Pass 2: validate base entries (duplicate names).
-      for (size_t i = 0; i < baseEntries.size(); ++i) {
-        if (baseEntries[i].ws.name.empty()) {
+      const auto sameSelector = [](const WorkspaceConfig& left, const WorkspaceConfig& right) {
+        if (left.output != right.output || left.index.has_value() != right.index.has_value()) {
+          return false;
+        }
+        return left.index ? left.index == right.index : left.name == right.name;
+      };
+
+      for (size_t i = 0; i < entries.size(); ++i) {
+        const auto& current = entries[i];
+        const auto& ws = current.ws;
+        const std::string context = std::format("workspace[{}]", current.arrayIndex);
+        if (ws.name.empty() != ws.index.has_value()) {
           continue;
         }
+
         for (size_t j = 0; j < i; ++j) {
-          if (baseEntries[j].ws.name == baseEntries[i].ws.name) {
-            errorAt(baseEntries[i].source, "duplicate base workspace name '{}'", baseEntries[i].ws.name);
+          if (sameSelector(entries[j].ws, ws)) {
+            errorAt(current.source, "{} duplicates workspace rule {}", context, entries[j].arrayIndex);
             break;
           }
         }
-      }
 
-      // Pass 3: validate output-qualified entries against the complete base set.
-      const int baseCount = static_cast<int>(baseEntries.size());
-      for (size_t i = 0; i < outputEntries.size(); ++i) {
-        auto& oe = outputEntries[i];
-        const std::string context = std::format("workspace[{}]", oe.arrayIndex);
-
-        if (!oe.ws.append && oe.ws.index.has_value()) {
-          if (*oe.ws.index < 1 || *oe.ws.index > baseCount) {
-            errorAt(
-                oe.source, "{}: index {} does not reference a base workspace (have {})", context, *oe.ws.index,
-                baseCount
-            );
-            continue;
-          }
-          // Check duplicate (output, index).
-          for (size_t j = 0; j < i; ++j) {
-            if (outputEntries[j].ws.output == oe.ws.output && outputEntries[j].ws.index == oe.ws.index) {
-              errorAt(oe.source, "duplicate override for output '{}' index {}", oe.ws.output, *oe.ws.index);
+        bool targetExists = false;
+        if (!ws.output.empty()) {
+          targetExists = workspaceRuleMatches(ws, workspaceNamesForOutput(loaded, ws.output));
+        } else {
+          targetExists = workspaceRuleMatches(ws, numericWorkspaceNames(kDefaultWorkspaceCount));
+          for (const auto& output : loaded.outputs) {
+            if (targetExists) {
               break;
             }
-          }
-        } else if (!oe.ws.append && !oe.ws.name.empty()) {
-          // Name selector: must match a base entry name.
-          bool found = false;
-          for (const auto& base : baseEntries) {
-            if (base.ws.name == oe.ws.name) {
-              found = true;
-              break;
-            }
-          }
-          if (!found) {
-            errorAt(
-                oe.source, "{}: no base workspace named '{}' (use append = true to add a new workspace)", context,
-                oe.ws.name
-            );
-            continue;
-          }
-          // Check duplicate (output, name) overlay.
-          for (size_t j = 0; j < i; ++j) {
-            if (outputEntries[j].ws.output == oe.ws.output
-                && !outputEntries[j].ws.append
-                && outputEntries[j].ws.name == oe.ws.name
-                && !outputEntries[j].ws.index.has_value()) {
-              errorAt(oe.source, "duplicate override for output '{}' workspace '{}'", oe.ws.output, oe.ws.name);
-              break;
-            }
+            targetExists = workspaceRuleMatches(ws, workspaceNamesForOutput(loaded, output.name));
           }
         }
-        // append entries need no selector validation
+        if (!targetExists) {
+          const std::string selector =
+              ws.index ? std::format("index {}", *ws.index) : std::format("name '{}'", ws.name);
+          if (ws.output.empty()) {
+            errorAt(current.source, "{}: {} does not match any workspace inventory", context, selector);
+          } else {
+            errorAt(current.source, "{}: {} does not exist on output '{}'", context, selector, ws.output);
+          }
+        }
       }
 
-      // Pass 4: simulate final workspace names per output, check uniqueness.
-      // Collect distinct output names from output-qualified entries.
-      std::vector<std::string> outputNames;
-      for (const auto& oe : outputEntries) {
-        if (std::ranges::find(outputNames, oe.ws.output) == outputNames.end()) {
-          outputNames.push_back(oe.ws.output);
-        }
-      }
-      // Also check base-only (outputs with no overrides).
-      outputNames.push_back(std::string{}); // sentinel for "any unqualified output"
-
-      for (const auto& outName : outputNames) {
-        // Build final name list: start with base names.
-        std::vector<std::string> finalNames;
-        finalNames.reserve(baseEntries.size());
-        for (size_t i = 0; i < baseEntries.size(); ++i) {
-          finalNames.push_back(baseEntries[i].ws.name.empty() ? std::to_string(i + 1) : baseEntries[i].ws.name);
-        }
-        // Apply output-qualified entries for this output.
-        if (!outName.empty()) {
-          for (const auto& oe : outputEntries) {
-            if (oe.ws.output != outName) {
-              continue;
-            }
-            if (!oe.ws.append && oe.ws.index.has_value()) {
-              const int idx = *oe.ws.index - 1;
-              if (idx >= 0 && idx < static_cast<int>(finalNames.size()) && !oe.ws.name.empty()) {
-                finalNames[static_cast<size_t>(idx)] = oe.ws.name;
-              }
-            } else if (oe.ws.append) {
-              finalNames.push_back(oe.ws.name.empty() ? std::to_string(finalNames.size() + 1) : oe.ws.name);
-            }
-            // name overlays don't change the display name
-          }
-        }
-        // Check for duplicates.
-        for (size_t i = 0; i < finalNames.size(); ++i) {
-          for (size_t j = i + 1; j < finalNames.size(); ++j) {
-            if (finalNames[i] == finalNames[j]) {
-              const std::string target =
-                  outName.empty() ? "base workspace set" : std::string("output '") + outName + "'";
-              errorAt(
-                  node->source(), "{}: duplicate resolved workspace name '{}' at positions {} and {}", target,
-                  finalNames[i], i + 1, j + 1
-              );
-              // Only report each name once per output.
-              goto nextOutput;
-            }
-          }
-        }
-      nextOutput:;
-      }
-
-      // Commit all parsed entries (errors prevent config installation via parseInto).
-      for (auto& e : baseEntries) {
-        loaded.workspaces.push_back(std::move(e.ws));
-      }
-      for (auto& e : outputEntries) {
-        loaded.workspaces.push_back(std::move(e.ws));
+      for (auto& entry : entries) {
+        loaded.workspaces.push_back(std::move(entry.ws));
       }
     }
 
@@ -1182,7 +1109,9 @@ namespace umbriel {
           warnAt(entry.source(), "ignoring output.{} (expected table)", name);
           continue;
         }
-        warnUnknownKeys(*section, std::string("output.") + name, {"mode", "position", "scale", "transform"});
+        warnUnknownKeys(
+            *section, std::string("output.") + name, {"mode", "position", "scale", "transform", "workspaces"}
+        );
 
         if (std::ranges::any_of(loaded.outputs, [&](const OutputRule& rule) { return rule.name == name; })) {
           warnAt(key.source(), "duplicate output section '{}'", name);
@@ -1190,6 +1119,49 @@ namespace umbriel {
         }
         OutputRule rule;
         rule.name = name;
+        if (const toml::node* workspacesNode = section->get("workspaces")) {
+          if (const auto count = workspacesNode->value<std::int64_t>()) {
+            if (*count < 1 || *count > static_cast<std::int64_t>(kDefaultWorkspaceCount)) {
+              errorAt(
+                  workspacesNode->source(), "output.{}.workspaces must be an integer from 1 to {}", name,
+                  kDefaultWorkspaceCount
+              );
+            } else {
+              rule.workspaces = numericWorkspaceNames(static_cast<size_t>(*count));
+            }
+          } else if (const auto* names = workspacesNode->as_array()) {
+            bool valid = true;
+            if (names->empty() || names->size() > kDefaultWorkspaceCount) {
+              errorAt(
+                  workspacesNode->source(), "output.{}.workspaces must contain 1 to {} names", name,
+                  kDefaultWorkspaceCount
+              );
+              valid = false;
+            }
+
+            std::vector<std::string> parsed;
+            parsed.reserve(names->size());
+            for (const auto& item : *names) {
+              const auto value = item.value<std::string>();
+              if (!value || value->empty()) {
+                errorAt(item.source(), "output.{}.workspaces entries must be non-empty strings", name);
+                valid = false;
+                continue;
+              }
+              if (std::ranges::find(parsed, *value) != parsed.end()) {
+                errorAt(item.source(), "output.{}.workspaces contains duplicate name '{}'", name, *value);
+                valid = false;
+                continue;
+              }
+              parsed.push_back(*value);
+            }
+            if (valid) {
+              rule.workspaces = std::move(parsed);
+            }
+          } else {
+            errorAt(workspacesNode->source(), "output.{}.workspaces must be an integer or an array of names", name);
+          }
+        }
 
         if (const toml::node* modeNode = section->get("mode")) {
           const auto value = modeNode->value<std::string>();
@@ -1645,20 +1617,15 @@ namespace umbriel {
   std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName) {
     const auto& cfg = g_config;
     const std::string_view outName = outputName != nullptr ? outputName : "";
+    std::vector<std::string> names = workspaceNamesForOutput(cfg, outName);
 
-    // Partition workspace entries into base and output-qualified for this output.
-    std::vector<const WorkspaceConfig*> baseEntries;
-    std::vector<const WorkspaceConfig*> outputEntries;
-    for (const auto& ws : cfg.workspaces) {
-      if (ws.output.empty()) {
-        baseEntries.push_back(&ws);
-      } else if (ws.output == outName) {
-        outputEntries.push_back(&ws);
-      }
+    std::vector<ResolvedWorkspace> result;
+    result.reserve(names.size());
+    for (auto& name : names) {
+      result.push_back({std::move(name), resolveGlobalLayout()});
     }
 
-    // Helper: resolve a WorkspaceLayoutOverrides on top of an existing ResolvedLayoutConfig.
-    auto applyOverrides = [&](ResolvedLayoutConfig& resolved, const WorkspaceLayoutOverrides& overrides) {
+    const auto applyOverrides = [&](ResolvedLayoutConfig& resolved, const WorkspaceLayoutOverrides& overrides) {
       if (overrides.mode) {
         resolved.mode = *overrides.mode;
       }
@@ -1676,68 +1643,33 @@ namespace umbriel {
       resolved.edgePad = resolved.gap + borderWidth;
     };
 
-    // Start with base entries.
-    struct Slot {
-      std::string name;
-      ResolvedLayoutConfig layout;
+    const auto applyRule = [&](const WorkspaceConfig& rule) {
+      size_t target = result.size();
+      if (rule.index) {
+        target = static_cast<size_t>(*rule.index - 1);
+      } else {
+        const auto match = std::ranges::find_if(result, [&](const ResolvedWorkspace& workspace) {
+          return workspace.name == rule.name;
+        });
+        if (match != result.end()) {
+          target = static_cast<size_t>(std::distance(result.begin(), match));
+        }
+      }
+      if (target < result.size()) {
+        applyOverrides(result[target].layout, rule.layout);
+      }
     };
-    std::vector<Slot> slots;
-    slots.reserve(baseEntries.size());
-    for (size_t i = 0; i < baseEntries.size(); ++i) {
-      const auto& base = *baseEntries[i];
-      Slot slot;
-      slot.name = base.name.empty() ? std::to_string(i + 1) : base.name;
-      slot.layout = resolveGlobalLayout();
-      applyOverrides(slot.layout, base.layout);
-      slots.push_back(std::move(slot));
-    }
 
-    // Apply output-qualified entries.
-    for (const auto* entry : outputEntries) {
-      // Find target slot.
-      int targetIdx = -1;
-      if (entry->index.has_value()) {
-        // index selector (1-based).
-        const int idx = *entry->index - 1;
-        if (idx >= 0 && idx < static_cast<int>(slots.size())) {
-          targetIdx = idx;
-        }
-        // Invalid index was already warned at parse time; skip.
-      } else if (!entry->append && !entry->name.empty()) {
-        // name selector: find matching base slot.
-        for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
-          // Match against the original base entry name, not the display name.
-          if (i < static_cast<int>(baseEntries.size()) && baseEntries[static_cast<size_t>(i)]->name == entry->name) {
-            targetIdx = i;
-            break;
-          }
-        }
-        // Unmatched name was already warned at parse time; skip.
-      }
-
-      if (targetIdx >= 0) {
-        // Overlay: apply per-field on top of the base slot.
-        Slot& slot = slots[static_cast<size_t>(targetIdx)];
-        applyOverrides(slot.layout, entry->layout);
-        // Name override (rename) when index is the selector.
-        if (entry->index.has_value() && !entry->name.empty()) {
-          slot.name = entry->name;
-        }
-      } else if (entry->append) {
-        // Append new workspace.
-        Slot slot;
-        slot.name = entry->name.empty() ? std::to_string(slots.size() + 1) : entry->name;
-        slot.layout = resolveGlobalLayout();
-        applyOverrides(slot.layout, entry->layout);
-        slots.push_back(std::move(slot));
+    // Global rules apply first; output-specific rules always take precedence.
+    for (const auto& rule : cfg.workspaces) {
+      if (rule.output.empty()) {
+        applyRule(rule);
       }
     }
-
-    // Convert to result.
-    std::vector<ResolvedWorkspace> result;
-    result.reserve(slots.size());
-    for (auto& slot : slots) {
-      result.push_back({std::move(slot.name), std::move(slot.layout)});
+    for (const auto& rule : cfg.workspaces) {
+      if (rule.output == outName) {
+        applyRule(rule);
+      }
     }
     return result;
   }

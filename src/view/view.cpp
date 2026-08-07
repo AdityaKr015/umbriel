@@ -1377,6 +1377,31 @@ namespace umbriel {
         if (rule.defaultSize) {
           width = (*rule.defaultSize)[0];
         }
+        // Dwindle: a window opening into an EMPTY dwindle workspace becomes the
+        // sole root leaf and must be full width. Sizing it to the split fraction
+        // here makes its first buffer commit at half; the later full-width
+        // arrange configure then races (Electron & co. keep the half-size buffer
+        // until a redraw). Size it correctly up front so the first configure is
+        // the final one. Non-empty dwindle keeps the fraction: it will split a
+        // leaf and arrange lands on ~that size, so no upward correction races.
+        if (!rule.defaultSize && !rule.defaultWidth) {
+          Workspace* target = m_workspace;
+          if (target == nullptr) {
+            if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
+              if (WorkspaceGroup* group = out->workspaceGroup()) {
+                target = group->active();
+                if (rule.defaultWorkspace) {
+                  if (Workspace* ruleTarget = group->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1))) {
+                    target = ruleTarget;
+                  }
+                }
+              }
+            }
+          }
+          if (target != nullptr && target->layoutMode() == LayoutMode::Dwindle && target->layout().columns().empty()) {
+            width = viewportWidth;
+          }
+        }
         wlr_xdg_toplevel_set_size(m_toplevel, width, height);
       } else {
         wlr_xdg_toplevel_set_tiled(m_toplevel, 0);

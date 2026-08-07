@@ -371,6 +371,7 @@ namespace umbriel {
           return reject("unknown workspace on output " + bind.workspaceOutput + ": " + bind.workspaceName);
         }
       } else {
+        bool ambiguous = false;
         for (const auto& output : m_outputs) {
           WorkspaceGroup* group = output->workspaceGroup();
           Workspace* match = group != nullptr ? group->workspaceNamed(bind.workspaceName) : nullptr;
@@ -378,14 +379,25 @@ namespace umbriel {
             continue;
           }
           if (target != nullptr) {
+            ambiguous = true;
+          } else {
+            target = match;
+          }
+        }
+        if (target == nullptr) {
+          return reject("unknown workspace: " + bind.workspaceName);
+        }
+        if (ambiguous) {
+          Output* preferred = outputFromWlr(preferredOutput());
+          WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
+          Workspace* preferredMatch =
+              preferredGroup != nullptr ? preferredGroup->workspaceNamed(bind.workspaceName) : nullptr;
+          if (preferredMatch == nullptr) {
             return reject(
                 "ambiguous workspace: " + bind.workspaceName + " (qualify it as " + bind.workspaceName + "/<output>)"
             );
           }
-          target = match;
-        }
-        if (target == nullptr) {
-          return reject("unknown workspace: " + bind.workspaceName);
+          target = preferredMatch;
         }
       }
 

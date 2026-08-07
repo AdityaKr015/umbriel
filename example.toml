@@ -165,7 +165,8 @@ follows_mouse = false
 #   spawn:<shell command>, workspace-switch:<workspace>[/<output>],
 #   window-move-to-workspace:<workspace>[/<output>]
 # Workspace selectors are exact names, including numeric names such as `1`.
-# Unqualified names resolve globally; add `/output` to disambiguate duplicates.
+# Unique names resolve globally. Duplicates resolve on the preferred output;
+# add `/output` to target a different output explicitly.
 # Defaults: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
 # Binds repeat while held (using input.keyboard repeat_rate/repeat_delay).
 # Opt out per bind with the table form:

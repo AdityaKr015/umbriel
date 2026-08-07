@@ -915,10 +915,10 @@ namespace umbriel {
           const bool crossWs = view->workspace() != target;
           const bool splitDrop = dropTarget != nullptr && dropTarget != view && m_dropEdge != 0;
           if (crossWs) {
-            view->setWorkspace(target);
-            // setWorkspace → addView auto-inserts; drop that entry so the
-            // explicit placement below decides the position.
-            dwindle->removeView(view);
+            // Move without the layout auto-attach: attaching would split the
+            // focused leaf and arrange(), sending a stale half-size configure to
+            // that window before the real placement below.
+            view->setWorkspace(target, /*attachToLayout=*/false);
             if (splitDrop) {
               dwindle->insertViewSplitOnView(view, dropTarget, m_dropEdge);
             } else {
@@ -938,11 +938,9 @@ namespace umbriel {
         return;
       }
       if (view->workspace() != target) {
-        view->setWorkspace(target);
-        // setWorkspace → addView → layoutAttach auto-inserts at the focused
-        // column.  Remove that entry so the explicit insertion below places
-        // the view at the requested drop position.
-        target->layout().removeView(view);
+        // Skip the layout auto-attach; the explicit insertion below places the
+        // view at the requested drop position with a single arrange.
+        view->setWorkspace(target, /*attachToLayout=*/false);
       }
       if (m_dropRow >= 0) {
         target->layout().insertViewIntoColumn(view, column, m_dropRow);

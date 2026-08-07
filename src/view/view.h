@@ -48,7 +48,7 @@ namespace umbriel {
     // Policy lives in Server::focusView; do not call from input/event code.
     void applySeatFocus();
     void setForeignActivated(bool activated);
-    void setWorkspace(Workspace* workspace);
+    void setWorkspace(Workspace* workspace, bool attachToLayout = true);
     void detachWorkspace();
     void setOnActiveWorkspace(bool active);
     void animateTo(int x, int y);

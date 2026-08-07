@@ -101,7 +101,7 @@ namespace umbriel {
     }
   }
 
-  void Workspace::addView(View* view) {
+  void Workspace::addView(View* view, bool attachToLayout) {
     if (view == nullptr || std::ranges::find(m_views, view) != m_views.end()) {
       return;
     }
@@ -110,7 +110,9 @@ namespace umbriel {
     wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : viewLayer(view->tiled()));
     view->reparentShadow(m_shadowLayer);
     applyVisibility();
-    layoutAttach(view);
+    if (attachToLayout) {
+      layoutAttach(view);
+    }
   }
 
   View* Workspace::removeView(View* view) {

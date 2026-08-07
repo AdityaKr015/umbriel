@@ -51,7 +51,7 @@ namespace umbriel {
 
     void setActive(bool active);
     void setFocusedView(View* view);
-    void addView(View* view);
+    void addView(View* view, bool attachToLayout = true);
     View* removeView(View* view);
     void layoutAttach(View* view);
     void layoutDetach(View* view);

@@ -219,7 +219,7 @@ namespace umbriel {
     }
   }
 
-  void View::setWorkspace(Workspace* workspace) {
+  void View::setWorkspace(Workspace* workspace, bool attachToLayout) {
     if (m_workspace == workspace) {
       return;
     }
@@ -228,7 +228,7 @@ namespace umbriel {
     }
     m_workspace = workspace;
     if (m_workspace != nullptr) {
-      m_workspace->addView(this);
+      m_workspace->addView(this, attachToLayout);
     } else {
       setOnActiveWorkspace(true);
     }

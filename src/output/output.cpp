@@ -344,23 +344,6 @@ namespace umbriel {
       wlr_output_schedule_frame(m_output);
       return;
     }
-    if (state.buffer != nullptr) {
-      wlr_dmabuf_attributes attributes{};
-      if (wlr_buffer_get_dmabuf(state.buffer, &attributes)
-          && (!m_renderBufferLogged
-              || attributes.format != m_renderBufferFormat
-              || attributes.modifier != m_renderBufferModifier)) {
-        kLog.info(
-            "output '{}': render buffer format=0x{:08x} modifier=0x{:016x} planes={} stride={} render_format=0x{:08x}",
-            m_output->name, attributes.format, attributes.modifier, attributes.n_planes, attributes.stride[0],
-            m_output->render_format
-        );
-        m_renderBufferLogged = true;
-        m_renderBufferFormat = attributes.format;
-        m_renderBufferModifier = attributes.modifier;
-      }
-    }
-
     // Hardware gamma only (DRM). Nested Wayland has no gamma LUT; leave that alone.
     // Apply only when dirty: uploading the LUT every frame stalls the compositor.
     bool gammaPending = false;

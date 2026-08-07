@@ -69,9 +69,6 @@ namespace umbriel {
     bool m_inFrame = false;
     bool m_hasDeferredMode = false;
     bool m_gammaDirty = false;
-    bool m_renderBufferLogged = false;
-    uint32_t m_renderBufferFormat = 0;
-    uint64_t m_renderBufferModifier = 0;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;
 

@@ -79,16 +79,18 @@ namespace umbriel {
       m_masked = cfg.ignoreAlpha > 0.0;
     }
 
-    if (m_masked && wlr_scene_blur_get_transparency_mask_source(m_node) == nullptr) {
+    if (wlr_scene_blur_get_transparency_mask_source(m_node) == nullptr) {
       if (wlr_scene_buffer* mask = findSurfaceBuffer(parent->node, surface)) {
         wlr_scene_blur_set_transparency_mask_source(m_node, mask);
       }
     }
 
+#ifdef HAVE_PATCHED_SCENEFX
     const auto ignoreAlpha = static_cast<float>(cfg.ignoreAlpha);
     if (m_node->ignore_alpha != ignoreAlpha) {
       wlr_scene_blur_set_ignore_alpha(m_node, ignoreAlpha);
     }
+#endif
 
     wlr_scene_node_set_enabled(&m_node->node, true);
     wlr_scene_node_set_position(&m_node->node, drawBox.x, drawBox.y);

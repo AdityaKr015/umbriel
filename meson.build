@@ -28,33 +28,30 @@ wayland_server_dep = dependency('wayland-server')
 wayland_client_dep = dependency('wayland-client')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')
-# Umbriel needs patched SceneFX APIs (ignore_alpha, shadow output clip).
-# Prefer a compatible system scenefx-0.5 (e.g. the Nix flake installs the
-# fork). Otherwise build from the git submodule in subprojects/scenefx.
+# SceneFX: prefer a system installation, fall back to the git submodule.
+# Detect if the patched APIs (ignore_alpha) are available and define
+# HAVE_PATCHED_SCENEFX so the code can conditionally use them.
 fs = import('fs')
 pkgconfig = find_program('pkg-config', required: false)
 use_system_scenefx = false
+has_patched_scenefx = false
 if pkgconfig.found()
   scenefx_exists = run_command(pkgconfig, '--exists', 'scenefx-0.5', check: false)
   if scenefx_exists.returncode() == 0
+    use_system_scenefx = true
     scenefx_cflags = run_command(pkgconfig, '--cflags-only-I', 'scenefx-0.5', check: true).stdout().split()
     foreach flag : scenefx_cflags
       if flag.startswith('-I')
         header = flag.substring(2) / 'scenefx' / 'types' / 'wlr_scene.h'
         if fs.exists(header)
           header_text = fs.read(header)
-          if header_text.contains('wlr_scene_blur_set_ignore_alpha') and header_text.contains(
-            'wlr_scene_shadow_set_clipped_region'
-          )
-            use_system_scenefx = true
-            break
+          if header_text.contains('wlr_scene_blur_set_ignore_alpha')
+            has_patched_scenefx = true
           endif
+          break
         endif
       endif
     endforeach
-    if not use_system_scenefx
-      message('system scenefx-0.5 lacks Umbriel patches; building from submodule')
-    endif
   endif
 endif
 if use_system_scenefx
@@ -65,6 +62,19 @@ else
     default_options: ['examples=false', 'tracy_enable=false', 'werror=false', 'default_library=static'],
   )
   scenefx_dep = scenefx_proj.get_variable('scenefx')
+  # Check if the submodule has patched APIs
+  scenefx_subproject_dir = meson.current_source_dir() / 'subprojects' / 'scenefx'
+  scenefx_subproject_header = scenefx_subproject_dir / 'include' / 'scenefx' / 'types' / 'wlr_scene.h'
+  if fs.exists(scenefx_subproject_header)
+    header_text = fs.read(scenefx_subproject_header)
+    if header_text.contains('wlr_scene_blur_set_ignore_alpha')
+      has_patched_scenefx = true
+    endif
+  endif
+endif
+if has_patched_scenefx
+  add_project_arguments('-DHAVE_PATCHED_SCENEFX', language: 'cpp')
+  add_project_arguments('-DHAVE_PATCHED_SCENEFX', language: 'c')
 endif
 xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput')

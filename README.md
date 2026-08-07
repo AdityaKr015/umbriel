@@ -236,3 +236,8 @@ Target support:
 - `zwlr_output_management_v1` (done)
 - `ext_foreign_toplevel_list_v1` (done)
 - `zwp_text_input_v3`
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, naming conventions, the dependency stack, and debugging
+helpers. Umbriel shares its conventions with [noctalia-shell](https://github.com/noctalia-dev/noctalia).

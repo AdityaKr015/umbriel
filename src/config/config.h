@@ -148,6 +148,7 @@ namespace umbriel {
       int animationMs = 250;
       struct Blur {
         bool enabled = true;
+        bool optimized = true;
         int passes = 3;
         int radius = 5;
         double noise = 0.02;

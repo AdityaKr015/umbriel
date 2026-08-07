@@ -8,6 +8,7 @@ struct wlr_gamma_control_v1;
 struct wlr_output;
 struct wlr_output_layout_output;
 struct wlr_scene_output;
+struct wlr_scene_optimized_blur;
 struct wlr_scene_tree;
 
 extern "C" {
@@ -39,6 +40,7 @@ namespace umbriel {
     void arrangeLayers();
     void onGammaChanged(wlr_gamma_control_v1* control);
     void applyConfig();
+    void markBlurBackgroundDirty();
     void handleExternalConfigChange();
 
   private:
@@ -53,18 +55,23 @@ namespace umbriel {
     void applyConfiguredState();
     wlr_output_layout_output* addToLayout();
     void arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive);
+    void updateOptimizedBlur(const wlr_box& fullArea);
 
     Server* m_server = nullptr;
     wlr_output* m_output = nullptr;
     wlr_scene_output* m_sceneOutput = nullptr;
     wlr_scene_tree* m_layerTrees[kLayerCount]{};
     wlr_scene_tree* m_popupTree = nullptr;
+    wlr_scene_optimized_blur* m_optimizedBlur = nullptr;
     std::unique_ptr<WorkspaceGroup> m_workspaceGroup;
     wlr_box m_usableArea{};
 
     bool m_inFrame = false;
     bool m_hasDeferredMode = false;
     bool m_gammaDirty = false;
+    bool m_renderBufferLogged = false;
+    uint32_t m_renderBufferFormat = 0;
+    uint64_t m_renderBufferModifier = 0;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;
 

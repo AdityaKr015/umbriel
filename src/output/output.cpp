@@ -7,9 +7,6 @@
 #include "server/server.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
-extern "C" {
-#include <wlr/backend/drm.h>
-}
 
 #include <cstdlib>
 #include <ctime>
@@ -102,9 +99,6 @@ namespace umbriel {
     }
     if (rule != nullptr && rule->transform) {
       wlr_output_state_set_transform(&state, static_cast<wl_output_transform>(*rule->transform));
-    }
-    if (wlr_output_is_drm(m_output)) {
-      wlr_output_state_set_adaptive_sync_enabled(&state, false);
     }
 
     const bool committed = wlr_output_commit_state(m_output, &state);
@@ -211,6 +205,7 @@ namespace umbriel {
     for (uint32_t layer : kExclusiveOrder) {
       arrangeLayer(m_layerTrees[layer], &fullArea, &usableArea, false);
     }
+    updateOptimizedBlur(fullArea);
 
     // Layer trees are output-local; pin them to the scene-output origin.
     for (auto& m_layerTree : m_layerTrees) {
@@ -231,6 +226,43 @@ namespace umbriel {
     );
     if (m_workspaceGroup != nullptr && m_workspaceGroup->active() != nullptr) {
       m_workspaceGroup->active()->arrange(false);
+    }
+  }
+
+  void Output::updateOptimizedBlur(const wlr_box& fullArea) {
+    const auto& blur = config().appearance.blur;
+    if (!blur.enabled || !blur.optimized) {
+      if (m_optimizedBlur != nullptr) {
+        wlr_scene_node_destroy(&m_optimizedBlur->node);
+        m_optimizedBlur = nullptr;
+      }
+      return;
+    }
+
+    if (m_optimizedBlur == nullptr) {
+      m_optimizedBlur = wlr_scene_optimized_blur_create(
+          m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND), fullArea.width, fullArea.height
+      );
+      if (m_optimizedBlur == nullptr) {
+        return;
+      }
+    }
+
+    const bool changed = m_optimizedBlur->node.x != m_sceneOutput->x
+        || m_optimizedBlur->node.y != m_sceneOutput->y
+        || m_optimizedBlur->width != fullArea.width
+        || m_optimizedBlur->height != fullArea.height;
+    wlr_scene_node_set_enabled(&m_optimizedBlur->node, true);
+    wlr_scene_node_set_position(&m_optimizedBlur->node, m_sceneOutput->x, m_sceneOutput->y);
+    wlr_scene_optimized_blur_set_size(m_optimizedBlur, fullArea.width, fullArea.height);
+    if (changed) {
+      wlr_scene_optimized_blur_mark_dirty(m_optimizedBlur);
+    }
+  }
+
+  void Output::markBlurBackgroundDirty() {
+    if (m_optimizedBlur != nullptr) {
+      wlr_scene_optimized_blur_mark_dirty(m_optimizedBlur);
     }
   }
 
@@ -311,6 +343,22 @@ namespace umbriel {
       m_inFrame = false;
       wlr_output_schedule_frame(m_output);
       return;
+    }
+    if (state.buffer != nullptr) {
+      wlr_dmabuf_attributes attributes{};
+      if (wlr_buffer_get_dmabuf(state.buffer, &attributes)
+          && (!m_renderBufferLogged
+              || attributes.format != m_renderBufferFormat
+              || attributes.modifier != m_renderBufferModifier)) {
+        kLog.info(
+            "output '{}': render buffer format=0x{:08x} modifier=0x{:016x} planes={} stride={} render_format=0x{:08x}",
+            m_output->name, attributes.format, attributes.modifier, attributes.n_planes, attributes.stride[0],
+            m_output->render_format
+        );
+        m_renderBufferLogged = true;
+        m_renderBufferFormat = attributes.format;
+        m_renderBufferModifier = attributes.modifier;
+      }
     }
 
     // Hardware gamma only (DRM). Nested Wayland has no gamma LUT; leave that alone.
@@ -393,6 +441,10 @@ namespace umbriel {
     m_frame.link.next = nullptr;
     m_requestState.link.next = nullptr;
     m_destroy.link.next = nullptr;
+    if (m_optimizedBlur != nullptr && m_server->scene() != nullptr) {
+      wlr_scene_node_destroy(&m_optimizedBlur->node);
+    }
+    m_optimizedBlur = nullptr;
     m_server->removeOutput(this);
   }
 

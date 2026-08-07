@@ -40,6 +40,7 @@ animation_ms = 250        # 1-10000
 # Blur only renders where a surface is actually transparent.
 [appearance.blur]
 enabled = true
+optimized = true          # cache one background blur per output instead of recomputing per surface
 passes = 3               # 0-8; 0 disables
 radius = 5               # 0-100; 0 disables
 noise = 0.02             # 0.0-1.0

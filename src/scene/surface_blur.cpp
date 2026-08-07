@@ -92,6 +92,8 @@ namespace umbriel {
     }
 #endif
 
+    wlr_scene_blur_set_should_only_blur_bottom_layer(m_node, cfg.optimized);
+
     wlr_scene_node_set_enabled(&m_node->node, true);
     wlr_scene_node_set_position(&m_node->node, drawBox.x, drawBox.y);
     if (m_node->width != drawBox.width || m_node->height != drawBox.height) {

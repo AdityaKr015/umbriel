@@ -493,6 +493,9 @@ namespace umbriel {
     wlr_scene_rect_set_color(m_backdrop, config().appearance.backdropColor.data());
     wlr_scene_rect_set_size(m_backdrop, layoutBox.width, layoutBox.height);
     wlr_scene_node_set_position(&m_backdrop->node, layoutBox.x, layoutBox.y);
+    for (const auto& output : m_outputs) {
+      output->markBlurBackgroundDirty();
+    }
   }
 
   void Server::raiseLockTree() { wlr_scene_node_raise_to_top(&m_lockTree->node); }

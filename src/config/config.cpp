@@ -851,13 +851,21 @@ namespace umbriel {
         if (const auto* blur = blurNode->as_table()) {
           warnUnknownKeys(
               *blur, "appearance.blur",
-              {"enabled", "passes", "radius", "noise", "brightness", "contrast", "saturation", "ignore_alpha"}
+              {"enabled", "optimized", "passes", "radius", "noise", "brightness", "contrast", "saturation",
+               "ignore_alpha"}
           );
           if (const toml::node* enabledNode = blur->get("enabled")) {
             if (enabledNode->is_boolean()) {
               loaded.appearance.blur.enabled = enabledNode->value<bool>().value();
             } else {
               warnAt(enabledNode->source(), "ignoring appearance.blur.enabled (expected boolean)");
+            }
+          }
+          if (const toml::node* optimizedNode = blur->get("optimized")) {
+            if (optimizedNode->is_boolean()) {
+              loaded.appearance.blur.optimized = optimizedNode->value<bool>().value();
+            } else {
+              warnAt(optimizedNode->source(), "ignoring appearance.blur.optimized (expected boolean)");
             }
           }
           readInteger(*blur, "passes", "appearance.blur.passes", 0, 8, loaded.appearance.blur.passes);

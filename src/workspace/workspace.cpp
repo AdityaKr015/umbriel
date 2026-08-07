@@ -263,6 +263,12 @@ namespace umbriel {
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
 
+    // Clip against the node's CURRENT position, not the layout target: during
+    // position animations (column swaps, drag drops) the node lags the target,
+    // and clips computed at the target land displaced on screen (cut-off
+    // borders that reappear as the window settles).
+    const wlr_scene_node& node = view->sceneTree()->node;
+
     if (view->toplevel()->scheduled.fullscreen) {
       const int col = m_layout->columnOf(view);
       if (col < 0) {
@@ -274,26 +280,11 @@ namespace umbriel {
         }
         return;
       }
-      if (m_layoutMode == LayoutMode::Scrolling) {
-        const int viewportWidth = std::max(1, output->usableArea().width - 2 * m_layoutConfig.edgePad);
-        wlr_box target = outputBox;
-        target.x = outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
-        wlr_box clipTarget = target;
-        clipTarget.y += m_slideOffsetY;
-        wlr_box decorated = clipTarget;
-        wlr_box intersection{};
-        const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
-        view->setNodeEnabled(visible);
-        view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
-      } else {
-        wlr_box target = outputBox; // fullscreen fills the whole output, not the dwindle tile box
-        wlr_box clipTarget = target;
-        clipTarget.y += m_slideOffsetY;
-        wlr_box intersection{};
-        const bool visible = wlr_box_intersection(&intersection, &clipTarget, &outputBox);
-        view->setNodeEnabled(visible);
-        view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
-      }
+      const wlr_box clipTarget{node.x, node.y + m_slideOffsetY, outputBox.width, outputBox.height};
+      wlr_box intersection{};
+      const bool visible = wlr_box_intersection(&intersection, &clipTarget, &outputBox);
+      view->setNodeEnabled(visible);
+      view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
       return;
     }
 
@@ -316,17 +307,12 @@ namespace umbriel {
       return;
     }
 
-    const int scrollOffset = (m_layoutMode == LayoutMode::Scrolling)
-        ? static_cast<int>(std::lround(m_layout->scroll() - m_visualScroll))
-        : 0;
-    wlr_box target = m_layout->targetBox(view);
-    target.x += scrollOffset;
+    const wlr_box target = m_layout->targetBox(view);
     const int border = config().appearance.totalBorderWidth();
-    const int presentW = view->presentedWidth(target);
-    const int presentH = view->presentedHeight(target);
-    wlr_box clipTarget = target;
-    clipTarget.y += m_slideOffsetY;
-    wlr_box decorated{clipTarget.x - border, clipTarget.y - border, presentW + 2 * border, presentH + 2 * border};
+    const wlr_box clipTarget{node.x, node.y + m_slideOffsetY, target.width, target.height};
+    const int presentW = view->presentedWidth(clipTarget);
+    const int presentH = view->presentedHeight(clipTarget);
+    const wlr_box decorated{clipTarget.x - border, clipTarget.y - border, presentW + 2 * border, presentH + 2 * border};
     wlr_box intersection{};
     const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
     view->setNodeEnabled(visible);
@@ -343,52 +329,29 @@ namespace umbriel {
     const int scrollOffset = (m_layoutMode == LayoutMode::Scrolling)
         ? static_cast<int>(std::lround(m_layout->scroll() - m_visualScroll))
         : 0;
-    const int border = config().appearance.totalBorderWidth();
     const int viewportWidth = std::max(1, output->usableArea().width - 2 * m_layoutConfig.edgePad);
 
+    // Position first, then let syncViewPresentation derive enable + clip from
+    // the node's current position so animated and resting views share one path.
     for (View* view : m_views) {
       if (view == nullptr || !view->mapped()) {
         continue;
       }
       if (view->toplevel()->scheduled.fullscreen) {
         const int col = m_layout->columnOf(view);
-        if (col < 0) {
-          if (m_active) {
-            view->setNodeEnabled(true);
-            view->applyFullscreenLayout();
-          }
-          continue;
-        }
-        if (m_layoutMode == LayoutMode::Scrolling) {
-          wlr_box target = outputBox;
-          target.x =
-              outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
-          if (animate) {
-            view->animateTo(target.x, target.y);
-          } else {
-            view->setPosition(target.x, target.y);
-          }
-          wlr_box clipTarget = target;
-          clipTarget.y += m_slideOffsetY;
-          wlr_box decorated = clipTarget;
-          wlr_box intersection{};
-          const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
-          view->setNodeEnabled(visible);
-          view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
-        } else {
+        if (col >= 0) {
           wlr_box target = outputBox; // fullscreen fills the whole output, not the dwindle tile box
+          if (m_layoutMode == LayoutMode::Scrolling) {
+            target.x =
+                outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
+          }
           if (animate) {
             view->animateTo(target.x, target.y);
           } else {
             view->setPosition(target.x, target.y);
           }
-          wlr_box clipTarget = target;
-          clipTarget.y += m_slideOffsetY;
-          wlr_box intersection{};
-          const bool visible = wlr_box_intersection(&intersection, &clipTarget, &outputBox);
-          view->setNodeEnabled(visible);
-          view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
         }
+        syncViewPresentation(view);
         continue;
       }
       if (m_layout->columnOf(view) < 0) {
@@ -403,15 +366,7 @@ namespace umbriel {
       } else {
         view->setPosition(target.x, target.y);
       }
-      const int presentW = view->presentedWidth(target);
-      const int presentH = view->presentedHeight(target);
-      wlr_box clipTarget = target;
-      clipTarget.y += m_slideOffsetY;
-      wlr_box decorated{clipTarget.x - border, clipTarget.y - border, presentW + 2 * border, presentH + 2 * border};
-      wlr_box intersection{};
-      const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
-      view->setNodeEnabled(visible);
-      view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
+      syncViewPresentation(view);
     }
   }
 

@@ -130,6 +130,11 @@ namespace umbriel {
     void applyEffectiveOpacity();
     void beginCloseAnimation();
     void applyPresentedSize();
+    // Scale-then-crop presentation of the primary buffer during a size
+    // animation; surfaceClip is the visible presented region in surface coords.
+    void applyPresentedCrop(const wlr_box& content, const wlr_box& surfaceClip);
+    // Undo applyPresentedCrop/size-anim buffer state when the animation ends.
+    void resetPresentedSurface();
     void cancelSizeAnimation();
     void updateFullscreenPresentation(int width, int height);
     // Apply subsurface clip to the toplevel surface only, not xdg popup children.

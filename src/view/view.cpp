@@ -424,37 +424,71 @@ namespace umbriel {
     }
   }
 
-  void View::applyPresentedSize() {
-    // Scale the toplevel's primary surface buffer to the animated size.
+  void View::applyPresentedCrop(const wlr_box& content, const wlr_box& surfaceClip) {
+    // The presented (animated) box scales the geometry; surfaceClip names the
+    // visible part of it in surface coordinates. Map that region back through
+    // the presented scale onto the committed buffer.
+    struct Ctx {
+      View* self;
+      const wlr_box* content;
+      const wlr_box* clip;
+    } ctx{this, &content, &surfaceClip};
     wlr_scene_node_for_each_buffer(
         &m_sceneTree->node,
         [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
-          auto* self = static_cast<View*>(data);
+          auto& ctx = *static_cast<Ctx*>(data);
           wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-          if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
+          if (sceneSurface == nullptr || sceneSurface->surface != ctx.self->m_toplevel->base->surface) {
             return;
           }
-          const wlr_box& geo = self->m_toplevel->base->geometry;
-          if (geo.width > 0 && geo.height > 0) {
-            wlr_scene_buffer_set_dest_size(
-                buffer,
-                std::max(
-                    1,
-                    static_cast<int>(std::lround(
-                        sceneSurface->surface->current.width * static_cast<double>(self->m_presentedW) / geo.width
-                    ))
-                ),
-                std::max(
-                    1,
-                    static_cast<int>(std::lround(
-                        sceneSurface->surface->current.height * static_cast<double>(self->m_presentedH) / geo.height
-                    ))
-                )
-            );
+          wlr_surface* surface = sceneSurface->surface;
+          const wlr_box& geo = ctx.self->m_toplevel->base->geometry;
+          if (ctx.content->width <= 0
+              || ctx.content->height <= 0
+              || geo.width <= 0
+              || geo.height <= 0
+              || surface->current.width <= 0
+              || surface->current.height <= 0) {
+            return;
           }
+          // Surface px per presented px.
+          const double fx = static_cast<double>(geo.width) / ctx.content->width;
+          const double fy = static_cast<double>(geo.height) / ctx.content->height;
+          // Surface-local region backing the visible presented box.
+          const double sx = geo.x + (ctx.clip->x - geo.x) * fx;
+          const double sy = geo.y + (ctx.clip->y - geo.y) * fy;
+          const double sw = ctx.clip->width * fx;
+          const double sh = ctx.clip->height * fy;
+          // Surface -> buffer coordinates (viewport/scale aware).
+          wlr_fbox base{};
+          wlr_surface_get_buffer_source_box(surface, &base);
+          const double bx = base.width / surface->current.width;
+          const double by = base.height / surface->current.height;
+          wlr_fbox src{base.x + sx * bx, base.y + sy * by, sw * bx, sh * by};
+          if (src.x < base.x) {
+            src.width -= base.x - src.x;
+            src.x = base.x;
+          }
+          if (src.y < base.y) {
+            src.height -= base.y - src.y;
+            src.y = base.y;
+          }
+          src.width = std::min(src.width, base.x + base.width - src.x);
+          src.height = std::min(src.height, base.y + base.height - src.y);
+          if (src.width <= 0 || src.height <= 0) {
+            return;
+          }
+          wlr_scene_buffer_set_source_box(buffer, &src);
+          wlr_scene_buffer_set_dest_size(buffer, ctx.clip->width, ctx.clip->height);
         },
-        this
+        &ctx
     );
+  }
+
+  void View::applyPresentedSize() {
+    // Buffer scale + crop is derived in setOutputClip (applyPresentedCrop) via
+    // syncViewPresentation below, so the animated size and the output clip are
+    // always applied together instead of fighting over dest_size.
     updateBorderGeometry(m_presentedW, m_presentedH);
     // Shadow with presented size.
     if (!m_toplevel->scheduled.fullscreen && m_shadowContainer != nullptr) {
@@ -478,6 +512,30 @@ namespace umbriel {
     }
   }
 
+  void View::resetPresentedSurface() {
+    // Restore the primary surface buffer to its real size and drop the animated
+    // source crop, then clear the subsurface clip so the next
+    // syncViewPresentation re-applies the resting clip through a real
+    // reconfigure (an unchanged clip box would early-out and leave the animated
+    // src/dst behind).
+    wlr_scene_node_for_each_buffer(
+        &m_sceneTree->node,
+        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+          auto* self = static_cast<View*>(data);
+          wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+          if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
+            return;
+          }
+          wlr_scene_buffer_set_source_box(buffer, nullptr);
+          wlr_scene_buffer_set_dest_size(
+              buffer, sceneSurface->surface->current.width, sceneSurface->surface->current.height
+          );
+        },
+        this
+    );
+    setSurfaceTreeClip(nullptr);
+  }
+
   void View::cancelSizeAnimation() {
     if (m_sizeAnim != 0) {
       m_server->animator().cancel(m_sizeAnim);
@@ -485,21 +543,7 @@ namespace umbriel {
       const wlr_box& geo = m_toplevel->base->geometry;
       m_presentedW = geo.width;
       m_presentedH = geo.height;
-      // Restore the primary surface buffer to its real size.
-      wlr_scene_node_for_each_buffer(
-          &m_sceneTree->node,
-          [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
-            auto* self = static_cast<View*>(data);
-            wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-            if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
-              return;
-            }
-            wlr_scene_buffer_set_dest_size(
-                buffer, sceneSurface->surface->current.width, sceneSurface->surface->current.height
-            );
-          },
-          this
-      );
+      resetPresentedSurface();
       updateBorderGeometry();
       updateBlur();
       updateShadow();
@@ -541,6 +585,11 @@ namespace umbriel {
           wlr_scene_node_set_position(&m_sceneTree->node, cx, cy);
           if (m_shadowContainer != nullptr) {
             wlr_scene_node_set_position(&m_shadowContainer->node, cx, cy);
+          }
+          // Clips are derived from the node's current position; refresh them as
+          // the node moves or partial-visibility trims land displaced.
+          if (m_workspace != nullptr) {
+            m_workspace->syncViewPresentation(this);
           }
         },
         [this] { m_posAnim = 0; }
@@ -1160,6 +1209,13 @@ namespace umbriel {
       // Crop the toplevel surface to the visible tile; popup children are unclipped in
       // setSurfaceTreeClip so context menus can extend past the window edge.
       setSurfaceTreeClip(&surfaceClip);
+      if (m_sizeAnim != 0) {
+        // The clip crops 1:1 in surface coordinates and caps the destination at
+        // the committed surface size, so it cannot express the size animation's
+        // "scale to presented, then crop". Program the buffer directly; the clip
+        // above keeps the buffer node positioned at the visible box origin.
+        applyPresentedCrop(content, surfaceClip);
+      }
     } else {
       // Only the border/decoration remains on this output. Hide the surface with a
       // non-empty clip placed outside the surface box: wlroots treats an empty clip
@@ -1506,21 +1562,7 @@ namespace umbriel {
               const wlr_box& geo = m_toplevel->base->geometry;
               m_presentedW = geo.width;
               m_presentedH = geo.height;
-              // Restore real surface size.
-              wlr_scene_node_for_each_buffer(
-                  &m_sceneTree->node,
-                  [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
-                    auto* self = static_cast<View*>(data);
-                    wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-                    if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
-                      return;
-                    }
-                    wlr_scene_buffer_set_dest_size(
-                        buffer, sceneSurface->surface->current.width, sceneSurface->surface->current.height
-                    );
-                  },
-                  this
-              );
+              resetPresentedSurface();
               updateBorderGeometry();
               updateBlur();
               updateShadow();

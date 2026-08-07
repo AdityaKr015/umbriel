@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <wayland-server-core.h>
 
@@ -16,6 +17,7 @@ namespace umbriel {
   class Server;
   class View;
   class Workspace;
+  struct ResizeGrab;
 
   enum class CursorMode {
     Passthrough,
@@ -81,8 +83,6 @@ namespace umbriel {
     void finishFloatMove();
     void processResize();
     void processResizeTile();
-    void beginDwindleResize(View* view);
-    [[nodiscard]] uint32_t tileResizeEdges(View* view) const;
     [[nodiscard]] uint32_t floatResizeEdges(View* view) const;
     [[nodiscard]] uint32_t hoverResizeEdges(View* view) const;
     void updateInteractiveCursor(View* under);
@@ -121,30 +121,10 @@ namespace umbriel {
     double m_tileDragStartX = 0;
     double m_tileDragStartY = 0;
     Workspace* m_resizeWorkspace = nullptr;
-    int m_resizeColumn = -1;
-    int m_resizeRow = -1;
     double m_resizeStartX = 0;
     double m_resizeStartY = 0;
-    double m_resizeStartScroll = 0;
-    int m_resizeStartLeft = 0;
-    int m_resizeStartRight = 0;
-    int m_resizeStartWidthPx = 0;
-    int m_resizeStartPrevWidthPx = 0;
-    int m_resizeStartTop = 0;
-    int m_resizeStartBottom = 0;
-    double m_resizeStartUpperWeight = 0;
-    double m_resizeStartLowerWeight = 0;
-    int m_resizeUpperRow = -1;
-    bool m_resizeSoloHorizontal = false;
-    // Dwindle interactive resize: per-axis split boundary captured at grab start.
-    bool m_resizeDwindleH = false;
-    bool m_resizeDwindleV = false;
-    uint32_t m_resizeDwindleHEdge = 0;
-    uint32_t m_resizeDwindleVEdge = 0;
-    double m_resizeDwindleHRatio = 0;
-    double m_resizeDwindleVRatio = 0;
-    double m_resizeDwindleHSpan = 0;
-    double m_resizeDwindleVSpan = 0;
+    // Layout-owned resize session for the active tiled resize (scrolling/dwindle).
+    std::unique_ptr<ResizeGrab> m_resizeGrab;
     // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
     wlr_output* m_pointerOutput = nullptr;
     double m_wheelAccum[2]{};

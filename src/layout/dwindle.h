@@ -61,6 +61,10 @@ namespace umbriel {
     [[nodiscard]] bool resizeBoundary(const View* view, uint32_t edge, double* outRatio, double* outSpan) const;
     bool setResizeBoundary(View* view, uint32_t edge, double ratio);
 
+    [[nodiscard]] uint32_t resizeEdgesAt(const View* view, double cx, double cy) const override;
+    [[nodiscard]] uint32_t sanitizeResizeEdges(const View* view, uint32_t edges) const override;
+    std::unique_ptr<ResizeGrab> beginResize(View* view, uint32_t edges, const wlr_box& usable) override;
+
     bool cycleWidth(int columnIndex) override;
     bool toggleFullWidth(int columnIndex) override;
     bool setWidthFraction(int columnIndex, double fraction) override;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -9,6 +10,7 @@ struct wlr_box;
 namespace umbriel {
 
   class View;
+  class Layout;
   struct ResolvedLayoutConfig;
 
   enum class LayoutMode {
@@ -23,6 +25,20 @@ namespace umbriel {
     double bottomGapWeight = 0.0;
     double widthFrac = 0.5;
     double savedWidthFrac = 0.0;
+  };
+
+  // Layout-owned interactive resize session. Cursor feeds a pointer delta; the
+  // session mutates only its layout's geometry state (split ratios, width
+  // fractions, row weights). Protocol calls and arrange() stay in Cursor.
+  struct ResizeGrab {
+    virtual ~ResizeGrab() = default;
+    virtual void applyDelta(double dx, double dy, const wlr_box& usable) = 0;
+    // Identity of the layout that created this session, for stale-pointer
+    // detection when a config reload swaps the workspace's layout mid-grab.
+    [[nodiscard]] virtual const Layout* ownerLayout() const = 0;
+    // True when the layout cleared a maximized/full-width state at grab start,
+    // so Cursor should un-maximize the toplevel immediately (matches legacy).
+    [[nodiscard]] virtual bool unmaximizeOnBegin() const { return false; }
   };
 
   class Layout {
@@ -54,6 +70,25 @@ namespace umbriel {
     virtual bool setWidthFraction(int columnIndex, double fraction) = 0;
     virtual void clearFullWidthState(int columnIndex) = 0;
     [[nodiscard]] virtual double widthFraction(int columnIndex) const = 0;
+
+    // ---- Interactive resize ----
+    // Edges grabbable at a pointer position (0 = none). Base = not resizable.
+    [[nodiscard]] virtual uint32_t resizeEdgesAt(const View* /*view*/, double /*cx*/, double /*cy*/) const { return 0; }
+    // Drop edges this layout can't resize (e.g. solo scrolling column vertical). Base = unchanged.
+    [[nodiscard]] virtual uint32_t sanitizeResizeEdges(const View* /*view*/, uint32_t edges) const { return edges; }
+    // Resolve the final resize edges: an explicit request is sanitized; an empty
+    // request (or one sanitized to nothing) falls back to the pointer proposal.
+    [[nodiscard]] uint32_t resolveResizeEdges(const View* view, uint32_t requested, double cx, double cy) const {
+      uint32_t edges = requested != 0 ? sanitizeResizeEdges(view, requested) : resizeEdgesAt(view, cx, cy);
+      if (edges == 0) {
+        edges = resizeEdgesAt(view, cx, cy);
+      }
+      return edges;
+    }
+    // Begin an interactive resize with already-resolved edges; null = not resizable.
+    virtual std::unique_ptr<ResizeGrab> beginResize(View* /*view*/, uint32_t /*edges*/, const wlr_box& /*usable*/) {
+      return nullptr;
+    }
 
     // ---- Scrolling-specific (default no-ops for non-scrolling layouts) ----
 

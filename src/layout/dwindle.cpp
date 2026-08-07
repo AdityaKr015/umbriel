@@ -7,6 +7,7 @@
 // clang-format off
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <ranges>
 #include "wlr.h"
 // clang-format on
@@ -555,6 +556,142 @@ namespace umbriel {
     }
     parent->ratio = std::clamp(ratio, 0.05, 0.95);
     return true;
+  }
+
+  namespace {
+
+    // Layout-owned resize session: nudges the split ratios behind the grabbed
+    // horizontal/vertical edges by (delta / boundary span).
+    class DwindleResizeGrab : public ResizeGrab {
+    public:
+      DwindleResizeGrab(
+          DwindleLayout* layout, View* view, bool hActive, uint32_t hEdge, double hRatio, double hSpan, bool vActive,
+          uint32_t vEdge, double vRatio, double vSpan
+      )
+          : m_layout(layout), m_view(view), m_hActive(hActive), m_hEdge(hEdge), m_hRatio(hRatio), m_hSpan(hSpan),
+            m_vActive(vActive), m_vEdge(vEdge), m_vRatio(vRatio), m_vSpan(vSpan) {}
+
+      void applyDelta(double dx, double dy, const wlr_box& /*usable*/) override {
+        if (m_hActive && m_hSpan > 0) {
+          m_layout->setResizeBoundary(m_view, m_hEdge, m_hRatio + dx / m_hSpan);
+        }
+        if (m_vActive && m_vSpan > 0) {
+          m_layout->setResizeBoundary(m_view, m_vEdge, m_vRatio + dy / m_vSpan);
+        }
+      }
+
+      [[nodiscard]] const Layout* ownerLayout() const override { return m_layout; }
+
+    private:
+      DwindleLayout* m_layout;
+      View* m_view;
+      bool m_hActive;
+      uint32_t m_hEdge;
+      double m_hRatio;
+      double m_hSpan;
+      bool m_vActive;
+      uint32_t m_vEdge;
+      double m_vRatio;
+      double m_vSpan;
+    };
+
+  } // namespace
+
+  uint32_t DwindleLayout::resizeEdgesAt(const View* view, double cx, double cy) const {
+    const wlr_box box = targetBox(view);
+    if (box.width <= 0 || box.height <= 0) {
+      return 0;
+    }
+    const double distLeft = std::abs(cx - box.x);
+    const double distRight = std::abs(cx - (box.x + box.width));
+    const double distTop = std::abs(cy - box.y);
+    const double distBottom = std::abs(cy - (box.y + box.height));
+    const double nearestH = std::min(distLeft, distRight);
+    const double nearestV = std::min(distTop, distBottom);
+
+    const uint32_t avail = resizableEdges(view);
+    if (avail == 0) {
+      return 0;
+    }
+    constexpr double kInfinity = std::numeric_limits<double>::max();
+    uint32_t hEdge = 0;
+    double hDist = kInfinity;
+    if ((avail & WLR_EDGE_LEFT) != 0 && (avail & WLR_EDGE_RIGHT) != 0) {
+      hEdge = distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
+      hDist = nearestH;
+    } else if ((avail & WLR_EDGE_LEFT) != 0) {
+      hEdge = WLR_EDGE_LEFT;
+      hDist = distLeft;
+    } else if ((avail & WLR_EDGE_RIGHT) != 0) {
+      hEdge = WLR_EDGE_RIGHT;
+      hDist = distRight;
+    }
+    uint32_t vEdge = 0;
+    double vDist = kInfinity;
+    if ((avail & WLR_EDGE_TOP) != 0 && (avail & WLR_EDGE_BOTTOM) != 0) {
+      vEdge = distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+      vDist = nearestV;
+    } else if ((avail & WLR_EDGE_TOP) != 0) {
+      vEdge = WLR_EDGE_TOP;
+      vDist = distTop;
+    } else if ((avail & WLR_EDGE_BOTTOM) != 0) {
+      vEdge = WLR_EDGE_BOTTOM;
+      vDist = distBottom;
+    }
+    // Resize both axes at once near a corner; otherwise the nearest boundary.
+    constexpr double kCornerSlop = 60.0;
+    if (hEdge != 0 && vEdge != 0 && hDist < kCornerSlop && vDist < kCornerSlop) {
+      return hEdge | vEdge;
+    }
+    if (hEdge != 0 && (vEdge == 0 || hDist <= vDist)) {
+      return hEdge;
+    }
+    return vEdge;
+  }
+
+  uint32_t DwindleLayout::sanitizeResizeEdges(const View* view, uint32_t edges) const {
+    return edges & resizableEdges(view);
+  }
+
+  std::unique_ptr<ResizeGrab> DwindleLayout::beginResize(View* view, uint32_t edges, const wlr_box& /*usable*/) {
+    bool hActive = false;
+    bool vActive = false;
+    uint32_t hEdge = 0;
+    uint32_t vEdge = 0;
+    double hRatio = 0;
+    double hSpan = 0;
+    double vRatio = 0;
+    double vSpan = 0;
+    double ratio = 0;
+    double span = 0;
+    if ((edges & WLR_EDGE_LEFT) != 0 && resizeBoundary(view, WLR_EDGE_LEFT, &ratio, &span)) {
+      hActive = true;
+      hEdge = WLR_EDGE_LEFT;
+      hRatio = ratio;
+      hSpan = span;
+    } else if ((edges & WLR_EDGE_RIGHT) != 0 && resizeBoundary(view, WLR_EDGE_RIGHT, &ratio, &span)) {
+      hActive = true;
+      hEdge = WLR_EDGE_RIGHT;
+      hRatio = ratio;
+      hSpan = span;
+    }
+    if ((edges & WLR_EDGE_TOP) != 0 && resizeBoundary(view, WLR_EDGE_TOP, &ratio, &span)) {
+      vActive = true;
+      vEdge = WLR_EDGE_TOP;
+      vRatio = ratio;
+      vSpan = span;
+    } else if ((edges & WLR_EDGE_BOTTOM) != 0 && resizeBoundary(view, WLR_EDGE_BOTTOM, &ratio, &span)) {
+      vActive = true;
+      vEdge = WLR_EDGE_BOTTOM;
+      vRatio = ratio;
+      vSpan = span;
+    }
+    if (!hActive && !vActive) {
+      return nullptr;
+    }
+    return std::make_unique<DwindleResizeGrab>(
+        this, view, hActive, hEdge, hRatio, hSpan, vActive, vEdge, vRatio, vSpan
+    );
   }
 
 } // namespace umbriel

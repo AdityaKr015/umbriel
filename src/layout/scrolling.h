@@ -49,6 +49,10 @@ namespace umbriel {
     void clearFullWidthState(int columnIndex) override;
     [[nodiscard]] double widthFraction(int columnIndex) const override;
 
+    [[nodiscard]] uint32_t resizeEdgesAt(const View* view, double cx, double cy) const override;
+    [[nodiscard]] uint32_t sanitizeResizeEdges(const View* view, uint32_t edges) const override;
+    std::unique_ptr<ResizeGrab> beginResize(View* view, uint32_t edges, const wlr_box& usable) override;
+
     bool setRowBoundary(int columnIndex, int upperRow, double upperWeight, double lowerWeight) override;
     bool setHeightWeight(int columnIndex, int row, double weight) override;
     bool setTopGapWeight(int columnIndex, double weight) override;

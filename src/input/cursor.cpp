@@ -98,99 +98,28 @@ namespace umbriel {
 
     if (mode == CursorMode::ResizeTile) {
       m_resizeWorkspace = view->workspace();
-      if (m_resizeWorkspace != nullptr && m_resizeWorkspace->layoutMode() == LayoutMode::Dwindle) {
-        beginDwindleResize(view);
-        return;
-      }
-      if (m_resizeWorkspace != nullptr && m_resizeWorkspace->layoutMode() != LayoutMode::Scrolling) {
+      if (m_resizeWorkspace == nullptr
+          || m_resizeWorkspace->group() == nullptr
+          || m_resizeWorkspace->group()->output() == nullptr) {
         resetMode();
         return;
       }
-      m_resizeColumn = m_resizeWorkspace != nullptr ? m_resizeWorkspace->layout().columnOf(view) : -1;
-      m_resizeRow = m_resizeWorkspace != nullptr ? m_resizeWorkspace->layout().rowOf(view) : -1;
+      Layout& layout = m_resizeWorkspace->layout();
+      m_resizeEdges = layout.resolveResizeEdges(view, m_resizeEdges, m_cursor->x, m_cursor->y);
       if (m_resizeEdges == 0) {
-        m_resizeEdges = tileResizeEdges(view);
+        resetMode();
+        return;
       }
-      // Solo column: no vertical resize (gap weights leave a weird state when another window joins).
-      if (m_resizeWorkspace != nullptr && m_resizeColumn >= 0) {
-        const auto& columns = m_resizeWorkspace->layout().columns();
-        if (m_resizeColumn < static_cast<int>(columns.size())
-            && columns[static_cast<size_t>(m_resizeColumn)].views.size() < 2) {
-          m_resizeEdges &= ~(WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
-          if (m_resizeEdges == 0) {
-            m_resizeEdges = tileResizeEdges(view);
-          }
-        }
+      const wlr_box usable = m_resizeWorkspace->group()->output()->usableArea();
+      m_resizeGrab = layout.beginResize(view, m_resizeEdges, usable);
+      if (m_resizeGrab == nullptr) {
+        resetMode();
+        return;
       }
-
-      m_resizeSoloHorizontal = false;
-      if (m_resizeWorkspace != nullptr
-          && m_resizeColumn >= 0
-          && m_resizeWorkspace->layout().isFullWidth(m_resizeColumn)) {
-        m_resizeWorkspace->layout().clearFullWidthState(m_resizeColumn);
-        wlr_xdg_toplevel_set_maximized(view->toplevel(), false);
-        m_resizeSoloHorizontal = true;
-      }
-
       m_resizeStartX = m_cursor->x;
       m_resizeStartY = m_cursor->y;
-      m_resizeStartScroll = m_resizeWorkspace != nullptr ? m_resizeWorkspace->layout().scroll() : 0;
-      m_resizeUpperRow = -1;
-      m_resizeStartPrevWidthPx = 0;
-      m_resizeStartUpperWeight = 0;
-      m_resizeStartLowerWeight = 0;
-
-      if (m_resizeWorkspace != nullptr
-          && m_resizeWorkspace->group() != nullptr
-          && m_resizeWorkspace->group()->output() != nullptr
-          && m_resizeColumn >= 0) {
-        const wlr_box box = m_resizeWorkspace->layout().targetBox(view);
-        m_resizeStartLeft = box.x;
-        m_resizeStartRight = box.x + box.width;
-        m_resizeStartTop = box.y;
-        m_resizeStartBottom = box.y + box.height;
-        m_resizeStartWidthPx = box.width;
-
-        const int viewportWidth = std::max(
-            1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * m_resizeWorkspace->layoutConfig().edgePad
-        );
-        if (m_resizeStartWidthPx >= viewportWidth) {
-          m_resizeSoloHorizontal = true;
-        }
-        if (m_resizeColumn > 0 && !m_resizeSoloHorizontal) {
-          m_resizeStartPrevWidthPx = m_resizeWorkspace->layout().columnWidth(m_resizeColumn - 1, viewportWidth);
-        }
-
-        if ((m_resizeEdges & (WLR_EDGE_TOP | WLR_EDGE_BOTTOM)) != 0 && m_resizeRow >= 0) {
-          const Column& column = m_resizeWorkspace->layout().columns()[static_cast<size_t>(m_resizeColumn)];
-          if ((m_resizeEdges & WLR_EDGE_TOP) != 0) {
-            if (m_resizeRow > 0) {
-              m_resizeUpperRow = m_resizeRow - 1;
-              m_resizeStartUpperWeight = m_resizeWorkspace->layout().heightWeight(m_resizeColumn, m_resizeUpperRow);
-              m_resizeStartLowerWeight = m_resizeWorkspace->layout().heightWeight(m_resizeColumn, m_resizeRow);
-            } else {
-              m_resizeUpperRow = -1;
-              m_resizeStartUpperWeight = m_resizeWorkspace->layout().topGapWeight(m_resizeColumn);
-              m_resizeStartLowerWeight = m_resizeWorkspace->layout().heightWeight(m_resizeColumn, 0);
-            }
-          } else if ((m_resizeEdges & WLR_EDGE_BOTTOM) != 0) {
-            if (m_resizeRow + 1 < static_cast<int>(column.views.size())) {
-              m_resizeUpperRow = m_resizeRow;
-              m_resizeStartUpperWeight = m_resizeWorkspace->layout().heightWeight(m_resizeColumn, m_resizeRow);
-              m_resizeStartLowerWeight = m_resizeWorkspace->layout().heightWeight(m_resizeColumn, m_resizeRow + 1);
-            } else {
-              m_resizeUpperRow = static_cast<int>(column.views.size()) - 1;
-              m_resizeStartUpperWeight = m_resizeWorkspace->layout().heightWeight(m_resizeColumn, m_resizeRow);
-              m_resizeStartLowerWeight = m_resizeWorkspace->layout().bottomGapWeight(m_resizeColumn);
-            }
-          }
-        }
-      } else {
-        m_resizeStartLeft = 0;
-        m_resizeStartRight = 0;
-        m_resizeStartTop = 0;
-        m_resizeStartBottom = 0;
-        m_resizeStartWidthPx = 0;
+      if (m_resizeGrab->unmaximizeOnBegin()) {
+        wlr_xdg_toplevel_set_maximized(view->toplevel(), false);
       }
       updateInteractiveCursor(view);
       return;
@@ -242,29 +171,10 @@ namespace umbriel {
     m_dropEdge = 0;
     m_tileDragPending = false;
     m_resizeWorkspace = nullptr;
-    m_resizeColumn = -1;
-    m_resizeRow = -1;
+    m_resizeEdges = 0;
     m_resizeStartX = 0;
     m_resizeStartY = 0;
-    m_resizeStartScroll = 0;
-    m_resizeStartLeft = 0;
-    m_resizeStartRight = 0;
-    m_resizeStartWidthPx = 0;
-    m_resizeStartPrevWidthPx = 0;
-    m_resizeStartTop = 0;
-    m_resizeStartBottom = 0;
-    m_resizeStartUpperWeight = 0;
-    m_resizeStartLowerWeight = 0;
-    m_resizeUpperRow = -1;
-    m_resizeSoloHorizontal = false;
-    m_resizeDwindleH = false;
-    m_resizeDwindleV = false;
-    m_resizeDwindleHEdge = 0;
-    m_resizeDwindleVEdge = 0;
-    m_resizeDwindleHRatio = 0;
-    m_resizeDwindleVRatio = 0;
-    m_resizeDwindleHSpan = 0;
-    m_resizeDwindleVSpan = 0;
+    m_resizeGrab.reset();
     refreshInteractiveCursor();
   }
 
@@ -1117,84 +1027,6 @@ namespace umbriel {
     wlr_xdg_toplevel_set_size(m_grabbedView->toplevel(), newRight - newLeft, newBottom - newTop);
   }
 
-  uint32_t Cursor::tileResizeEdges(View* view) const {
-    if (view == nullptr || view->workspace() == nullptr) {
-      return WLR_EDGE_RIGHT;
-    }
-    const wlr_box box = view->workspace()->layout().targetBox(view);
-    if (box.width <= 0 || box.height <= 0) {
-      return WLR_EDGE_RIGHT;
-    }
-    const double cx = m_cursor->x;
-    const double cy = m_cursor->y;
-    const double distLeft = std::abs(cx - box.x);
-    const double distRight = std::abs(cx - (box.x + box.width));
-    const double distTop = std::abs(cy - box.y);
-    const double distBottom = std::abs(cy - (box.y + box.height));
-    const double nearestH = std::min(distLeft, distRight);
-    const double nearestV = std::min(distTop, distBottom);
-
-    if (view->workspace()->layoutMode() == LayoutMode::Dwindle) {
-      auto* dwindle = dynamic_cast<DwindleLayout*>(&view->workspace()->layout());
-      if (dwindle == nullptr) {
-        return 0;
-      }
-      const uint32_t avail = dwindle->resizableEdges(view);
-      if (avail == 0) {
-        return 0;
-      }
-      constexpr double kInfinity = std::numeric_limits<double>::max();
-      uint32_t hEdge = 0;
-      double hDist = kInfinity;
-      if ((avail & WLR_EDGE_LEFT) != 0 && (avail & WLR_EDGE_RIGHT) != 0) {
-        hEdge = distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
-        hDist = nearestH;
-      } else if ((avail & WLR_EDGE_LEFT) != 0) {
-        hEdge = WLR_EDGE_LEFT;
-        hDist = distLeft;
-      } else if ((avail & WLR_EDGE_RIGHT) != 0) {
-        hEdge = WLR_EDGE_RIGHT;
-        hDist = distRight;
-      }
-      uint32_t vEdge = 0;
-      double vDist = kInfinity;
-      if ((avail & WLR_EDGE_TOP) != 0 && (avail & WLR_EDGE_BOTTOM) != 0) {
-        vEdge = distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
-        vDist = nearestV;
-      } else if ((avail & WLR_EDGE_TOP) != 0) {
-        vEdge = WLR_EDGE_TOP;
-        vDist = distTop;
-      } else if ((avail & WLR_EDGE_BOTTOM) != 0) {
-        vEdge = WLR_EDGE_BOTTOM;
-        vDist = distBottom;
-      }
-      // Resize both axes at once near a corner; otherwise the nearest boundary.
-      constexpr double kCornerSlop = 60.0;
-      if (hEdge != 0 && vEdge != 0 && hDist < kCornerSlop && vDist < kCornerSlop) {
-        return hEdge | vEdge;
-      }
-      if (hEdge != 0 && (vEdge == 0 || hDist <= vDist)) {
-        return hEdge;
-      }
-      return vEdge;
-    }
-
-    bool allowVertical = false;
-    if (view->workspace()->layoutMode() == LayoutMode::Scrolling) {
-      const int columnIndex = view->workspace()->layout().columnOf(view);
-      if (columnIndex >= 0) {
-        const auto& columns = view->workspace()->layout().columns();
-        allowVertical = columnIndex < static_cast<int>(columns.size())
-            && columns[static_cast<size_t>(columnIndex)].views.size() >= 2;
-      }
-    }
-
-    if (!allowVertical || nearestH <= nearestV) {
-      return distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
-    }
-    return distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
-  }
-
   uint32_t Cursor::floatResizeEdges(View* view) const {
     if (view == nullptr || view->sceneTree() == nullptr) {
       return WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM;
@@ -1261,7 +1093,7 @@ namespace umbriel {
     if (box.width <= 0 || box.height <= 0) {
       return 0;
     }
-    const uint32_t edges = tileResizeEdges(view);
+    const uint32_t edges = view->workspace()->layout().resizeEdgesAt(view, m_cursor->x, m_cursor->y);
     double dist = kHoverSlop + 1.0;
     if ((edges & WLR_EDGE_LEFT) != 0) {
       dist = std::abs(m_cursor->x - box.x);
@@ -1353,272 +1185,24 @@ namespace umbriel {
     updateInteractiveCursor(view);
   }
 
-  void Cursor::beginDwindleResize(View* view) {
-    auto* dwindle = m_resizeWorkspace != nullptr ? dynamic_cast<DwindleLayout*>(&m_resizeWorkspace->layout()) : nullptr;
-    if (dwindle == nullptr) {
-      resetMode();
-      return;
-    }
-    if (m_resizeEdges == 0) {
-      m_resizeEdges = tileResizeEdges(view);
-    }
-    if (m_resizeEdges == 0) {
-      resetMode();
-      return;
-    }
-    m_resizeColumn = m_resizeWorkspace->layout().columnOf(view);
-    m_resizeStartX = m_cursor->x;
-    m_resizeStartY = m_cursor->y;
-    m_resizeDwindleH = false;
-    m_resizeDwindleV = false;
-    double ratio = 0;
-    double span = 0;
-    if ((m_resizeEdges & WLR_EDGE_LEFT) != 0 && dwindle->resizeBoundary(view, WLR_EDGE_LEFT, &ratio, &span)) {
-      m_resizeDwindleH = true;
-      m_resizeDwindleHEdge = WLR_EDGE_LEFT;
-      m_resizeDwindleHRatio = ratio;
-      m_resizeDwindleHSpan = span;
-    } else if ((m_resizeEdges & WLR_EDGE_RIGHT) != 0 && dwindle->resizeBoundary(view, WLR_EDGE_RIGHT, &ratio, &span)) {
-      m_resizeDwindleH = true;
-      m_resizeDwindleHEdge = WLR_EDGE_RIGHT;
-      m_resizeDwindleHRatio = ratio;
-      m_resizeDwindleHSpan = span;
-    }
-    if ((m_resizeEdges & WLR_EDGE_TOP) != 0 && dwindle->resizeBoundary(view, WLR_EDGE_TOP, &ratio, &span)) {
-      m_resizeDwindleV = true;
-      m_resizeDwindleVEdge = WLR_EDGE_TOP;
-      m_resizeDwindleVRatio = ratio;
-      m_resizeDwindleVSpan = span;
-    } else if (
-        (m_resizeEdges & WLR_EDGE_BOTTOM) != 0 && dwindle->resizeBoundary(view, WLR_EDGE_BOTTOM, &ratio, &span)
-    ) {
-      m_resizeDwindleV = true;
-      m_resizeDwindleVEdge = WLR_EDGE_BOTTOM;
-      m_resizeDwindleVRatio = ratio;
-      m_resizeDwindleVSpan = span;
-    }
-    if (!m_resizeDwindleH && !m_resizeDwindleV) {
-      resetMode();
-      return;
-    }
-    updateInteractiveCursor(view);
-  }
-
   void Cursor::processResizeTile() {
     if (m_resizeWorkspace == nullptr
         || m_resizeWorkspace->group() == nullptr
         || m_resizeWorkspace->group()->output() == nullptr
-        || m_resizeColumn < 0
-        || m_grabbedView == nullptr) {
+        || m_grabbedView == nullptr
+        || m_resizeGrab == nullptr) {
       resetMode();
       return;
     }
-    if (m_resizeWorkspace->layoutMode() == LayoutMode::Dwindle) {
-      auto* dwindle = dynamic_cast<DwindleLayout*>(&m_resizeWorkspace->layout());
-      if (dwindle == nullptr) {
-        resetMode();
-        return;
-      }
-      const double dx = m_cursor->x - m_resizeStartX;
-      const double dy = m_cursor->y - m_resizeStartY;
-      if (m_resizeDwindleH && m_resizeDwindleHSpan > 0) {
-        dwindle->setResizeBoundary(
-            m_grabbedView, m_resizeDwindleHEdge, m_resizeDwindleHRatio + dx / m_resizeDwindleHSpan
-        );
-      }
-      if (m_resizeDwindleV && m_resizeDwindleVSpan > 0) {
-        dwindle->setResizeBoundary(
-            m_grabbedView, m_resizeDwindleVEdge, m_resizeDwindleVRatio + dy / m_resizeDwindleVSpan
-        );
-      }
-      wlr_xdg_toplevel_set_maximized(m_grabbedView->toplevel(), false);
-      m_resizeWorkspace->arrange(false);
-      return;
-    }
-    if (m_resizeWorkspace->layoutMode() != LayoutMode::Scrolling) {
+    // A config reload can swap the workspace's layout mid-grab, dangling the
+    // session's cached layout pointer. Bail if the layout is no longer the one
+    // the session was created against.
+    if (m_resizeGrab->ownerLayout() != &m_resizeWorkspace->layout()) {
       resetMode();
       return;
     }
-
-    Layout& layout = m_resizeWorkspace->layout();
-    const int viewportWidth = std::max(
-        1, m_resizeWorkspace->group()->output()->usableArea().width - 2 * m_resizeWorkspace->layoutConfig().edgePad
-    );
-    const int availableHeight = std::max(
-        1, m_resizeWorkspace->group()->output()->usableArea().height - 2 * m_resizeWorkspace->layoutConfig().edgePad
-    );
-    const double dx = m_cursor->x - m_resizeStartX;
-    const double dy = m_cursor->y - m_resizeStartY;
-
-    auto columnMinWidth = [&](int columnIndex) {
-      int minWidth = static_cast<int>(std::lround(0.15 * viewportWidth));
-      if (columnIndex < 0 || columnIndex >= static_cast<int>(layout.columns().size())) {
-        return minWidth;
-      }
-      for (View* view : layout.columns()[static_cast<size_t>(columnIndex)].views) {
-        if (view != nullptr) {
-          minWidth = std::max(minWidth, xdgSizeHints(view->toplevel()).minWidth);
-        }
-      }
-      return std::min(minWidth, viewportWidth);
-    };
-    auto columnMaxWidth = [&](int columnIndex) {
-      int maxWidth = viewportWidth;
-      if (columnIndex < 0 || columnIndex >= static_cast<int>(layout.columns().size())) {
-        return maxWidth;
-      }
-      bool any = false;
-      int clientMax = 0;
-      for (View* view : layout.columns()[static_cast<size_t>(columnIndex)].views) {
-        if (view == nullptr) {
-          continue;
-        }
-        const int hintMax = xdgSizeHints(view->toplevel()).maxWidth;
-        if (hintMax > 0) {
-          clientMax = any ? std::min(clientMax, hintMax) : hintMax;
-          any = true;
-        }
-      }
-      if (any) {
-        maxWidth = std::min(maxWidth, clientMax);
-      }
-      return std::max(maxWidth, columnMinWidth(columnIndex));
-    };
-
-    if ((m_resizeEdges & WLR_EDGE_RIGHT) != 0) {
-      // Pin left edge; only this column's width changes (neighbors untouched).
-      const int newWidth = std::clamp(
-          m_resizeStartWidthPx + static_cast<int>(std::lround(dx)), columnMinWidth(m_resizeColumn),
-          columnMaxWidth(m_resizeColumn)
-      );
-      layout.setWidthFraction(m_resizeColumn, static_cast<double>(newWidth) / viewportWidth);
-      if (m_resizeSoloHorizontal) {
-        // Keep the left edge where the full-width column was aligned.
-        layout.setScroll(m_resizeStartScroll);
-      }
-    } else if ((m_resizeEdges & WLR_EDGE_LEFT) != 0) {
-      if (m_resizeColumn > 0 && !m_resizeSoloHorizontal) {
-        // Shared boundary with previous column: move both widths, keep pair span fixed.
-        const int gap = m_resizeWorkspace->layoutConfig().totalGap;
-        const int pair = m_resizeStartPrevWidthPx + gap + m_resizeStartWidthPx;
-        const int minPrev = columnMinWidth(m_resizeColumn - 1);
-        const int minCur = columnMinWidth(m_resizeColumn);
-        const int maxPrev = columnMaxWidth(m_resizeColumn - 1);
-        const int maxCur = columnMaxWidth(m_resizeColumn);
-        const int newPrev = std::clamp(
-            m_resizeStartPrevWidthPx + static_cast<int>(std::lround(dx)), std::max(minPrev, pair - gap - maxCur),
-            std::min(maxPrev, pair - gap - minCur)
-        );
-        const int newCur = pair - gap - newPrev;
-        layout.setWidthFraction(m_resizeColumn - 1, static_cast<double>(newPrev) / viewportWidth);
-        layout.setWidthFraction(m_resizeColumn, static_cast<double>(newCur) / viewportWidth);
-      } else {
-        // Column 0 or full-width: pin the right edge, move only this column via width + scroll.
-        const int newWidth = std::clamp(
-            m_resizeStartWidthPx - static_cast<int>(std::lround(dx)), columnMinWidth(m_resizeColumn),
-            columnMaxWidth(m_resizeColumn)
-        );
-        layout.setWidthFraction(m_resizeColumn, static_cast<double>(newWidth) / viewportWidth);
-        layout.setScroll(m_resizeStartScroll + static_cast<double>(newWidth - m_resizeStartWidthPx));
-      }
-    }
-
-    if ((m_resizeEdges & (WLR_EDGE_TOP | WLR_EDGE_BOTTOM)) != 0 && m_resizeRow >= 0) {
-      const Column& column = layout.columns()[static_cast<size_t>(m_resizeColumn)];
-      const int rowCount = static_cast<int>(column.views.size());
-      // Vertical resize only with 2+ stacked windows (solo + gap weights get stuck later).
-      if (rowCount >= 2) {
-        const int gap = m_resizeWorkspace->layoutConfig().totalGap;
-        const int gapsTotal = std::max(0, rowCount - 1) * gap;
-        const int stackHeight = std::max(rowCount, availableHeight - gapsTotal);
-        if (stackHeight > 0) {
-          constexpr double kMinWindow = 0.05;
-          double totalWeight = std::max(0.0, column.topGapWeight) + std::max(0.0, column.bottomGapWeight);
-          for (double weight : column.heightWeights) {
-            totalWeight += std::max(kMinWindow, weight);
-          }
-          totalWeight = std::max(kMinWindow, totalWeight);
-
-          auto minWindowWeight = [&](View* view) {
-            if (view == nullptr) {
-              return kMinWindow;
-            }
-            const double fromHints =
-                static_cast<double>(xdgSizeHints(view->toplevel()).minHeight) / stackHeight * totalWeight;
-            return std::max(kMinWindow, fromHints);
-          };
-
-          const double pair = std::max(kMinWindow, m_resizeStartUpperWeight + m_resizeStartLowerWeight);
-          const double deltaWeight = dy / static_cast<double>(stackHeight) * pair;
-
-          auto splitWindows = [&](double startUpper, double /*startLower*/, double delta, double minUpper,
-                                  double minLower) {
-            double upper = startUpper + delta;
-            double lower = pair - upper;
-            if (upper < minUpper) {
-              upper = minUpper;
-              lower = pair - upper;
-            }
-            if (lower < minLower) {
-              lower = minLower;
-              upper = pair - lower;
-            }
-            return std::pair{upper, lower};
-          };
-          auto splitGapAndWindow = [&](double startGap, double /*startWindow*/, double deltaGap, double minWindow) {
-            double gapWeight = startGap + deltaGap;
-            double windowWeight = pair - gapWeight;
-            if (gapWeight < 0.0) {
-              gapWeight = 0.0;
-              windowWeight = pair;
-            }
-            if (windowWeight < minWindow) {
-              windowWeight = minWindow;
-              gapWeight = pair - windowWeight;
-              if (gapWeight < 0.0) {
-                gapWeight = 0.0;
-                windowWeight = pair;
-              }
-            }
-            return std::pair{gapWeight, windowWeight};
-          };
-
-          if ((m_resizeEdges & WLR_EDGE_TOP) != 0) {
-            if (m_resizeRow == 0) {
-              // Top edge of first window: trade with top gap only.
-              const double minWindow = minWindowWeight(column.views[0]);
-              const auto [gapWeight, windowWeight] =
-                  splitGapAndWindow(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight, minWindow);
-              layout.setTopGapWeight(m_resizeColumn, gapWeight);
-              layout.setHeightWeight(m_resizeColumn, 0, windowWeight);
-            } else if (m_resizeUpperRow >= 0) {
-              const double minUpper = minWindowWeight(column.views[static_cast<size_t>(m_resizeUpperRow)]);
-              const double minLower = minWindowWeight(column.views[static_cast<size_t>(m_resizeRow)]);
-              const auto [upper, lower] =
-                  splitWindows(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight, minUpper, minLower);
-              layout.setRowBoundary(m_resizeColumn, m_resizeUpperRow, upper, lower);
-            }
-          } else if ((m_resizeEdges & WLR_EDGE_BOTTOM) != 0) {
-            if (m_resizeRow + 1 >= rowCount) {
-              // Bottom edge of last window: trade with bottom gap only.
-              // Dragging down with no gap must not steal height from the window above.
-              const double minWindow = minWindowWeight(column.views[static_cast<size_t>(m_resizeRow)]);
-              const auto [gapWeight, windowWeight] =
-                  splitGapAndWindow(m_resizeStartLowerWeight, m_resizeStartUpperWeight, -deltaWeight, minWindow);
-              layout.setHeightWeight(m_resizeColumn, m_resizeRow, windowWeight);
-              layout.setBottomGapWeight(m_resizeColumn, gapWeight);
-            } else if (m_resizeUpperRow >= 0) {
-              const double minUpper = minWindowWeight(column.views[static_cast<size_t>(m_resizeUpperRow)]);
-              const double minLower = minWindowWeight(column.views[static_cast<size_t>(m_resizeRow + 1)]);
-              const auto [upper, lower] =
-                  splitWindows(m_resizeStartUpperWeight, m_resizeStartLowerWeight, deltaWeight, minUpper, minLower);
-              layout.setRowBoundary(m_resizeColumn, m_resizeUpperRow, upper, lower);
-            }
-          }
-        }
-      }
-    }
-
+    const wlr_box usable = m_resizeWorkspace->group()->output()->usableArea();
+    m_resizeGrab->applyDelta(m_cursor->x - m_resizeStartX, m_cursor->y - m_resizeStartY, usable);
     wlr_xdg_toplevel_set_maximized(m_grabbedView->toplevel(), false);
     m_resizeWorkspace->arrange(false);
   }

@@ -121,6 +121,10 @@ namespace umbriel {
     void applyCornerRadius();
     void updateBlur();
     void updateShadow();
+    // Re-apply m_fadeAlpha*m_ruleOpacity to surface buffers. wlroots' scene
+    // surface reconfigure (on commit or clip change) resets buffer opacity, so
+    // this must run after any such operation while effective opacity is < 1.
+    void applyEffectiveOpacity();
     void beginCloseAnimation();
     void applyPresentedSize();
     void cancelSizeAnimation();

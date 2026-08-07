@@ -344,6 +344,23 @@ namespace umbriel {
     }
   }
 
+  void View::applyEffectiveOpacity() {
+    if (m_sceneTree == nullptr) {
+      return;
+    }
+    float effective = m_fadeAlpha * m_ruleOpacity;
+    if (effective >= 1.0F) {
+      return;
+    }
+    wlr_scene_node_for_each_buffer(
+        &m_sceneTree->node,
+        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+          wlr_scene_buffer_set_opacity(buffer, *static_cast<float*>(data));
+        },
+        &effective
+    );
+  }
+
   void View::cancelFadeAnimation() {
     if (m_fadeAnim != 0) {
       m_server->animator().cancel(m_fadeAnim);
@@ -941,11 +958,15 @@ namespace umbriel {
     // clip on border/popup trees asserts when they have no subsurface tree.
     if (wlr_scene_node* surfaceNode = toplevelSurfaceTreeNode(m_sceneTree, m_toplevel->base->surface)) {
       wlr_scene_subsurface_tree_set_clip(surfaceNode, clip);
-      return;
-    }
-    if (clip == nullptr) {
+    } else if (clip == nullptr) {
       wlr_scene_subsurface_tree_set_clip(&m_sceneTree->node, nullptr);
     }
+    // A clip change runs wlroots' scene surface reconfigure, which resets the
+    // scene-buffer opacity (to the client alpha, 1.0 without wp_alpha_modifier).
+    // This runs in the render path after the animator tick, so re-apply our
+    // fade/rule opacity or the frame renders fully opaque (the fade then only
+    // survives on frames whose clip is unchanged, seen as transparent flashes).
+    applyEffectiveOpacity();
   }
 
   void View::unconstrainPopup(wlr_xdg_popup* popup) {
@@ -1108,7 +1129,6 @@ namespace umbriel {
     decorated.y -= border;
     decorated.width += 2 * border;
     decorated.height += 2 * border;
-
     wlr_box decoratedVisible{};
     if (screenIntersection == nullptr
         || !wlr_box_intersection(&decoratedVisible, &decorated, &outputBox)
@@ -1145,7 +1165,6 @@ namespace umbriel {
       const wlr_box empty{geometry.x, geometry.y, 0, 0};
       setSurfaceTreeClip(&empty);
     }
-
     if (m_borderTree != nullptr) {
       if (decoratedFullyVisible) {
         updateBorderGeometry(content.width, content.height);

@@ -39,9 +39,14 @@ namespace umbriel {
     m_destroy.notify = onDestroy;
     wl_signal_add(&m_output->events.destroy, &m_destroy);
 
+    if (wlr_output_is_drm(m_output)) {
+      m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
+    }
     applyConfiguredState();
     wlr_output_layout_output* layoutOutput = addToLayout();
-    m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
+    if (m_sceneOutput == nullptr) {
+      m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
+    }
     wlr_scene_output_layout_add_output(m_server->sceneLayout(), layoutOutput, m_sceneOutput);
 
     for (uint32_t layer = 0; layer < kLayerCount; ++layer) {
@@ -100,6 +105,13 @@ namespace umbriel {
     }
     if (rule != nullptr && rule->transform) {
       wlr_output_state_set_transform(&state, static_cast<wl_output_transform>(*rule->transform));
+    }
+    if (m_sceneOutput != nullptr
+        && (state.committed & WLR_OUTPUT_STATE_MODE) != 0
+        && !wlr_scene_output_build_state(m_sceneOutput, &state, nullptr)) {
+      wlr_output_state_finish(&state);
+      kLog.error("output '{}': failed to build configured scene state", m_output->name);
+      return;
     }
 
     const bool committed = wlr_output_commit_state(m_output, &state);

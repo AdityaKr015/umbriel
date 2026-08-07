@@ -11,13 +11,15 @@ files = []
 [general]
 # Shell commands run once after startup; they are never re-run on config reload.
 autostart = []
-# Re-selecting the active workspace (e.g. Mod+2 while already on 2) jumps back
-# to the previously active workspace on that output.
-workspace_back_and_forth = false
 # Spawn and manage xwayland-satellite for X11 app support (the binary must be
 # installed). X11 clients see it as a regular X server on a private DISPLAY.
 # Changing this requires a restart.
 xwayland = true
+
+[workspaces]
+# Re-selecting the active workspace (e.g. Mod+2 while already on 2) jumps back
+# to the previously active workspace on that output.
+back_and_forth = false
 
 [appearance]
 # Ask clients to omit client-side decorations (xdg-decoration server-side).

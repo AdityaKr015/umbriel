@@ -874,19 +874,15 @@ namespace umbriel {
     slideSettle(sign);
   }
 
-  void WorkspaceGroup::activateIndex(size_t index) {
-    Workspace* workspace = workspaceAt(index);
-    if (workspace == nullptr) {
+  void WorkspaceGroup::select(Workspace* workspace) {
+    if (workspace == nullptr || workspace->group() != this) {
       return;
     }
-    if (m_active == workspace) {
-      if (!config().general.workspaceBackAndForth || m_previous == nullptr || m_previous == m_active) {
-        return;
-      }
-      activate(m_previous);
-    } else {
-      activate(workspace);
+    Workspace* selected = workspace;
+    if (m_active == workspace && config().workspaces.backAndForth && m_previous != nullptr && m_previous != m_active) {
+      selected = m_previous;
     }
+    activate(selected);
     m_server->cursor()->clearConstraint();
     m_server->refocus(m_output);
   }

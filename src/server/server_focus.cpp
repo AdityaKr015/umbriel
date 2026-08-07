@@ -412,9 +412,7 @@ namespace umbriel {
           }
         }
       }
-      group->activate(target);
-      m_cursor->clearConstraint();
-      refocus(group->output());
+      group->select(target);
       return true;
     }
     case KeybindAction::LayoutScrollLeft:

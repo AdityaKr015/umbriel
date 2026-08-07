@@ -808,7 +808,7 @@ namespace umbriel {
       }
 
       for (auto& entry : entries) {
-        loaded.workspaces.push_back(std::move(entry.ws));
+        loaded.workspaceRules.push_back(std::move(entry.ws));
       }
     }
 
@@ -927,6 +927,26 @@ namespace umbriel {
       readWidthPresets(*section, loaded.layout.widthPresets);
     }
 
+    void readWorkspaceSettings(const toml::table& table, Config& loaded) {
+      const toml::node* node = table.get("workspaces");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* section = node->as_table();
+      if (section == nullptr) {
+        warnAt(node->source(), "ignoring workspaces (expected table)");
+        return;
+      }
+      warnUnknownKeys(*section, "workspaces", {"back_and_forth"});
+      if (const toml::node* backAndForth = section->get("back_and_forth")) {
+        if (const auto value = backAndForth->value<bool>()) {
+          loaded.workspaces.backAndForth = *value;
+        } else {
+          warnAt(backAndForth->source(), "ignoring workspaces.back_and_forth (expected boolean)");
+        }
+      }
+    }
+
     void readGeneral(const toml::table& table, Config& loaded) {
       const toml::node* node = table.get("general");
       if (node == nullptr) {
@@ -937,20 +957,13 @@ namespace umbriel {
         warnAt(node->source(), "ignoring general (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "general", {"autostart", "prefer_no_csd", "workspace_back_and_forth", "xwayland"});
+      warnUnknownKeys(*section, "general", {"autostart", "prefer_no_csd", "xwayland"});
       if (const toml::node* preferNoCsd = section->get("prefer_no_csd")) {
         if (const auto value = preferNoCsd->value<bool>()) {
           loaded.appearance.preferNoCsd = *value;
           warnAt(preferNoCsd->source(), "general.prefer_no_csd is deprecated; use appearance.prefer_no_csd");
         } else {
           warnAt(preferNoCsd->source(), "ignoring general.prefer_no_csd (expected boolean)");
-        }
-      }
-      if (const toml::node* backAndForth = section->get("workspace_back_and_forth")) {
-        if (const auto value = backAndForth->value<bool>()) {
-          loaded.general.workspaceBackAndForth = *value;
-        } else {
-          warnAt(backAndForth->source(), "ignoring general.workspace_back_and_forth (expected boolean)");
         }
       }
       if (const toml::node* xwayland = section->get("xwayland")) {
@@ -1485,7 +1498,8 @@ namespace umbriel {
         (void)value;
         if (!knownKey(
                 key.str(),
-                {"appearance", "layout", "general", "input", "keybinds", "output", "rule", "workspace", "include"}
+                {"appearance", "layout", "general", "input", "keybinds", "output", "rule", "workspace", "workspaces",
+                 "include"}
             )) {
           warnAt(key.source(), "unknown key {}", key.str());
         }
@@ -1522,6 +1536,7 @@ namespace umbriel {
         readAppearance(result.merged, loaded);
         readLayout(result.merged, loaded);
         readGeneral(result.merged, loaded);
+        readWorkspaceSettings(result.merged, loaded);
         readInput(result.merged, loaded);
         readOutputs(result.merged, loaded);
         readKeybinds(result.merged, loaded);
@@ -1697,12 +1712,12 @@ namespace umbriel {
     };
 
     // Global rules apply first; output-specific rules always take precedence.
-    for (const auto& rule : cfg.workspaces) {
+    for (const auto& rule : cfg.workspaceRules) {
       if (rule.output.empty()) {
         applyRule(rule);
       }
     }
-    for (const auto& rule : cfg.workspaces) {
+    for (const auto& rule : cfg.workspaceRules) {
       if (rule.output == outName) {
         applyRule(rule);
       }

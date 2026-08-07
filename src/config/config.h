@@ -180,10 +180,13 @@ namespace umbriel {
     [[nodiscard]] int layoutGap() const { return layout.gap + 2 * appearance.totalBorderWidth(); }
     [[nodiscard]] int layoutEdgePad() const { return layout.gap + appearance.totalBorderWidth(); }
 
+    struct Workspaces {
+      // Re-selecting the active workspace jumps back to the previous one.
+      bool backAndForth = false;
+    } workspaces;
+
     struct General {
       std::vector<std::string> autostart;
-      // Re-selecting the active workspace jumps back to the previous one.
-      bool workspaceBackAndForth = false;
       // Spawn and manage xwayland-satellite for X11 app support. Requires restart.
       bool xwayland = true;
     } general;
@@ -220,7 +223,7 @@ namespace umbriel {
     std::vector<Keybind> keybinds;
     std::vector<OutputRule> outputs;
     std::vector<WindowRule> windowRules;
-    std::vector<WorkspaceConfig> workspaces; // [[workspace]] layout rules
+    std::vector<WorkspaceConfig> workspaceRules; // [[workspace]] layout rules
   };
 
   [[nodiscard]] const Config& config();

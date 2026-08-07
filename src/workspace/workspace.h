@@ -122,7 +122,7 @@ namespace umbriel {
     [[nodiscard]] size_t workspaceCount() const { return m_workspaces.size(); }
 
     void activate(Workspace* workspace, bool animate = true);
-    void activateIndex(size_t index);
+    void select(Workspace* workspace);
     void deactivate(Workspace* workspace);
     Workspace* createWorkspace(const char* name);
     void reconcileConfig();

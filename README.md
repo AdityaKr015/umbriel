@@ -176,8 +176,8 @@ programs.umbriel = {
 `settings` also accepts a raw TOML string or a path to a `.toml` file. A hjem module is exported as
 `inputs.umbriel.hjemModules.default`.
 
-The `appearance`, `layout`, `general`, `input`, `keybinds`, and `[[rule]]` sections overlay compiled defaults, so a
-config file is optional. Window rules match on `app_id` and `title` (regex) and can set floating, size, column width,
+The `appearance`, `layout`, `general`, `workspaces`, `input`, `keybinds`, and `[[rule]]` sections overlay compiled
+defaults, so a config file is optional. Window rules match on `app_id` and `title` (regex) and can set floating, size,
 workspace, fullscreen, and opacity. Keyboard input supports XKB layout/variant and repeat settings; touchpads support
 tap-to-click and natural scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput
 options are applied only when supported by the device.

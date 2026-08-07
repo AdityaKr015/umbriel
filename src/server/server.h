@@ -198,7 +198,7 @@ namespace umbriel {
     void beginSessionLock(wlr_session_lock_v1* lock);
     void applyConfig();
     void handleConfigReload();
-    bool executeKeybindAction(const Keybind& bind);
+    bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);
     void showConfigDiagnostics();
     void relayoutBanner();
     void clearNormalFocus();

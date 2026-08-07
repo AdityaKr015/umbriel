@@ -75,7 +75,8 @@ namespace umbriel {
             .keysym = xkb_keysym_to_lower(keysym),
             .action = action,
             .spawnCommand = {},
-            .workspace = 0,
+            .workspaceName = {},
+            .workspaceOutput = {},
         });
       };
 
@@ -117,7 +118,8 @@ namespace umbriel {
               .keysym = keysym,
               .action = action,
               .spawnCommand = {},
-              .workspace = index,
+              .workspaceName = std::to_string(index + 1),
+              .workspaceOutput = {},
           });
         };
         addWorkspace(KeybindAction::WorkspaceSwitch, digit, 0);
@@ -134,7 +136,8 @@ namespace umbriel {
            .wheel = WheelDirection::Up,
            .action = KeybindAction::WindowFocusLeft,
            .spawnCommand = {},
-           .workspace = 0}
+           .workspaceName = {},
+           .workspaceOutput = {}}
       );
       keybinds.push_back(
           {.modifiers = 0,
@@ -143,7 +146,8 @@ namespace umbriel {
            .wheel = WheelDirection::Down,
            .action = KeybindAction::WindowFocusRight,
            .spawnCommand = {},
-           .workspace = 0}
+           .workspaceName = {},
+           .workspaceOutput = {}}
       );
 
       return keybinds;
@@ -266,12 +270,13 @@ namespace umbriel {
       {"window-focus-right", "", KeybindAction::WindowFocusRight},
       {"window-focus-up", "", KeybindAction::WindowFocusUp},
       {"window-move-down", "", KeybindAction::WindowMoveDown},
-      {"window-move-to-workspace", "<1-9>", KeybindAction::WindowMoveToWorkspace, ActionArgKind::Workspace},
+      {"window-move-to-workspace", "<workspace>[/<output>]", KeybindAction::WindowMoveToWorkspace,
+       ActionArgKind::Workspace},
       {"window-move-up", "", KeybindAction::WindowMoveUp},
       {"window-toggle-floating", "", KeybindAction::ToggleFloating},
       {"window-toggle-fullscreen", "", KeybindAction::ToggleFullscreen},
       {"window-toggle-maximize", "", KeybindAction::ToggleMaximize},
-      {"workspace-switch", "<1-9>", KeybindAction::WorkspaceSwitch, ActionArgKind::Workspace},
+      {"workspace-switch", "<workspace>[/<output>]", KeybindAction::WorkspaceSwitch, ActionArgKind::Workspace},
   };
 
   std::span<const ActionSpec> actionSpecs() { return kActionSpecs; }
@@ -297,18 +302,29 @@ namespace umbriel {
         break;
       }
       case ActionArgKind::Workspace: {
-        // Match "name:N" where N is 1-9
-        if (value.size() == spec.name.size() + 2
-            && value[spec.name.size()] == ':'
-            && value.substr(0, spec.name.size()) == spec.name) {
-          char ch = value.back();
-          if (ch >= '1' && ch <= '9') {
-            output.action = spec.action;
-            output.workspace = ch - '1';
-            return true;
-          }
+        if (value.size() <= spec.name.size() + 1
+            || value[spec.name.size()] != ':'
+            || value.substr(0, spec.name.size()) != spec.name) {
+          break;
         }
-        break;
+
+        output.workspaceName.clear();
+        output.workspaceOutput.clear();
+        std::string_view selector = value.substr(spec.name.size() + 1);
+        const size_t separator = selector.find('/');
+        if (separator != std::string_view::npos) {
+          if (separator == 0
+              || separator + 1 == selector.size()
+              || selector.find('/', separator + 1) != std::string_view::npos) {
+            break;
+          }
+          output.workspaceOutput = selector.substr(separator + 1);
+          selector = selector.substr(0, separator);
+        }
+
+        output.action = spec.action;
+        output.workspaceName = selector;
+        return true;
       }
       }
     }

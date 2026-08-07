@@ -55,7 +55,8 @@ namespace umbriel {
     WheelDirection wheel = WheelDirection::None;
     KeybindAction action = KeybindAction::None;
     std::string spawnCommand;
-    int workspace = 0;
+    std::string workspaceName;
+    std::string workspaceOutput;
     bool repeat = true;
   };
 
@@ -237,7 +238,7 @@ namespace umbriel {
 
   struct ActionSpec {
     std::string_view name;  // e.g. "spawn", "workspace-switch", "window-close"
-    std::string_view param; // "" for simple, "<cmd>" / "<1-9>" for parameterized
+    std::string_view param; // "" for simple, "<cmd>" / "<workspace>[/<output>]" for parameterized
     KeybindAction action;
     ActionArgKind argKind = ActionArgKind::None;
   };

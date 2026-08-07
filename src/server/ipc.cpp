@@ -207,7 +207,11 @@ namespace umbriel {
       if (!parseAction(actionStr, bind)) {
         return nlohmann::json{{"err", "unknown action: " + actionStr}}.dump();
       }
-      m_server->executeKeybindAction(bind);
+      std::string error;
+      m_server->executeKeybindAction(bind, &error);
+      if (!error.empty()) {
+        return nlohmann::json{{"err", error}}.dump();
+      }
       return R"({"ok":null})";
     }
 

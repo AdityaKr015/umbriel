@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct wlr_ext_workspace_group_handle_v1;
@@ -116,6 +117,7 @@ namespace umbriel {
     [[nodiscard]] Workspace* active() const { return m_active; }
     [[nodiscard]] Workspace* previous() const { return m_previous; }
     [[nodiscard]] Workspace* workspaceAt(size_t index) const;
+    [[nodiscard]] Workspace* workspaceNamed(std::string_view name) const;
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     [[nodiscard]] size_t workspaceCount() const { return m_workspaces.size(); }
 

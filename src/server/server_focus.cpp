@@ -225,7 +225,10 @@ namespace umbriel {
     return true;
   }
 
-  bool Server::executeKeybindAction(const Keybind& bind) {
+  bool Server::executeKeybindAction(const Keybind& bind, std::string* error) {
+    if (error != nullptr) {
+      error->clear();
+    }
     auto activeWorkspace = [this]() -> Workspace* {
       Output* output = outputFromWlr(preferredOutput());
       if (output == nullptr || output->workspaceGroup() == nullptr) {
@@ -346,16 +349,47 @@ namespace umbriel {
       return true;
     case KeybindAction::WorkspaceSwitch:
     case KeybindAction::WindowMoveToWorkspace: {
-      Output* output = outputFromWlr(preferredOutput());
-      if (output == nullptr || output->workspaceGroup() == nullptr) {
+      const auto reject = [error](std::string message) {
+        if (error != nullptr) {
+          *error = std::move(message);
+        }
         return true;
+      };
+
+      Workspace* target = nullptr;
+      if (!bind.workspaceOutput.empty()) {
+        Output* output = outputFromName(bind.workspaceOutput);
+        if (output == nullptr) {
+          return reject("unknown output: " + bind.workspaceOutput);
+        }
+        WorkspaceGroup* group = output->workspaceGroup();
+        if (group == nullptr) {
+          return reject("output has no workspace group: " + bind.workspaceOutput);
+        }
+        target = group->workspaceNamed(bind.workspaceName);
+        if (target == nullptr) {
+          return reject("unknown workspace on output " + bind.workspaceOutput + ": " + bind.workspaceName);
+        }
+      } else {
+        for (const auto& output : m_outputs) {
+          WorkspaceGroup* group = output->workspaceGroup();
+          Workspace* match = group != nullptr ? group->workspaceNamed(bind.workspaceName) : nullptr;
+          if (match == nullptr) {
+            continue;
+          }
+          if (target != nullptr) {
+            return reject(
+                "ambiguous workspace: " + bind.workspaceName + " (qualify it as " + bind.workspaceName + "/<output>)"
+            );
+          }
+          target = match;
+        }
+        if (target == nullptr) {
+          return reject("unknown workspace: " + bind.workspaceName);
+        }
       }
-      WorkspaceGroup* group = output->workspaceGroup();
-      const auto index = static_cast<size_t>(bind.workspace);
-      Workspace* target = group->workspaceAt(index);
-      if (target == nullptr) {
-        return true;
-      }
+
+      WorkspaceGroup* group = target->group();
       if (bind.action == KeybindAction::WindowMoveToWorkspace) {
         for (const auto& entry : m_views) {
           if (entry->mapped() && entry->onActiveWorkspace()) {
@@ -366,7 +400,9 @@ namespace umbriel {
           }
         }
       }
-      group->activateIndex(index);
+      group->activate(target);
+      m_cursor->clearConstraint();
+      refocus(group->output());
       return true;
     }
     case KeybindAction::LayoutScrollLeft:

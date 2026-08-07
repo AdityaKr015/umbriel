@@ -714,6 +714,15 @@ namespace umbriel {
     return m_workspaces[index].get();
   }
 
+  Workspace* WorkspaceGroup::workspaceNamed(std::string_view name) const {
+    for (const auto& entry : m_workspaces) {
+      if (entry->name() == name) {
+        return entry.get();
+      }
+    }
+    return nullptr;
+  }
+
   Workspace* WorkspaceGroup::workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const {
     for (const auto& entry : m_workspaces) {
       if (entry->handle() == handle) {

@@ -162,7 +162,10 @@ follows_mouse = false
 #
 # A configured chord replaces its compiled default. `none` removes a binding.
 # Run `umbriel actions` for the full list. Parameterized actions:
-#   spawn:<shell command>, workspace-switch:<1-9>, window-move-to-workspace:<1-9>
+#   spawn:<shell command>, workspace-switch:<workspace>[/<output>],
+#   window-move-to-workspace:<workspace>[/<output>]
+# Workspace selectors are exact names, including numeric names such as `1`.
+# Unqualified names resolve globally; add `/output` to disambiguate duplicates.
 # Defaults: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
 # Binds repeat while held (using input.keyboard repeat_rate/repeat_delay).
 # Opt out per bind with the table form:

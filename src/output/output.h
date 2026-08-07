@@ -7,7 +7,6 @@
 struct wlr_gamma_control_v1;
 struct wlr_output;
 struct wlr_output_layout_output;
-struct wlr_scene_optimized_blur;
 struct wlr_scene_output;
 struct wlr_scene_tree;
 
@@ -38,7 +37,6 @@ namespace umbriel {
     [[nodiscard]] WorkspaceGroup* workspaceGroup() const { return m_workspaceGroup.get(); }
 
     void arrangeLayers();
-    void markBlurBackgroundDirty();
     void onGammaChanged(wlr_gamma_control_v1* control);
     void applyConfig();
     void handleExternalConfigChange();
@@ -59,7 +57,6 @@ namespace umbriel {
     Server* m_server = nullptr;
     wlr_output* m_output = nullptr;
     wlr_scene_output* m_sceneOutput = nullptr;
-    wlr_scene_optimized_blur* m_optimizedBlur = nullptr;
     wlr_scene_tree* m_layerTrees[kLayerCount]{};
     wlr_scene_tree* m_popupTree = nullptr;
     std::unique_ptr<WorkspaceGroup> m_workspaceGroup;

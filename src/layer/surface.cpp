@@ -213,11 +213,6 @@ namespace umbriel {
 
   void LayerSurface::handleCommit() {
     updateBlur();
-    if (m_layerSurface->current.layer == ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
-      if (Output* out = output()) {
-        out->markBlurBackgroundDirty();
-      }
-    }
     if (m_layerSurface->initial_commit) {
       if (Output* out = output()) {
         out->arrangeLayers();

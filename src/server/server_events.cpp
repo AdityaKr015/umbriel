@@ -180,6 +180,7 @@ namespace umbriel {
       view->applyCornerRadius();
       view->updateBlur();
       view->updateShadow();
+      wlr_scene_rect_set_color(view->m_fullscreenBackdrop, config().appearance.backdropColor.data());
     }
     for (const auto& layer : m_layerSurfaces) {
       if (layer->mapped()) {
@@ -196,6 +197,7 @@ namespace umbriel {
       }
     }
     refocus();
+    updateBackdrop();
     if (m_sessionLocked) {
       updateLockBlank();
     }
@@ -477,14 +479,25 @@ namespace umbriel {
     if (layoutBox.width <= 0 || layoutBox.height <= 0) {
       return;
     }
+    wlr_scene_rect_set_color(m_lockBlank, config().appearance.backdropColor.data());
     wlr_scene_rect_set_size(m_lockBlank, layoutBox.width, layoutBox.height);
     wlr_scene_node_set_position(&m_lockBlank->node, layoutBox.x, layoutBox.y);
+  }
+
+  void Server::updateBackdrop() {
+    wlr_box layoutBox{};
+    wlr_output_layout_get_box(m_outputLayout, nullptr, &layoutBox);
+    if (layoutBox.width <= 0 || layoutBox.height <= 0) { return; }
+    wlr_scene_rect_set_color(m_backdrop, config().appearance.backdropColor.data());
+    wlr_scene_rect_set_size(m_backdrop, layoutBox.width, layoutBox.height);
+    wlr_scene_node_set_position(&m_backdrop->node, layoutBox.x, layoutBox.y);
   }
 
   void Server::raiseLockTree() { wlr_scene_node_raise_to_top(&m_lockTree->node); }
 
   void Server::addOutput(wlr_output* output) {
     m_outputs.push_back(std::make_unique<Output>(*this, output));
+    updateBackdrop();
     relayoutBanner();
     if (m_sessionLocked) {
       updateLockBlank();
@@ -631,6 +644,7 @@ namespace umbriel {
   void Server::onOutputLayoutChange(wl_listener* listener, void* /*data*/) {
     Server* self;
     self = wl_container_of(listener, self, m_outputLayoutChange);
+    self->updateBackdrop();
     self->updateOutputManagerConfig();
   }
 

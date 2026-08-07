@@ -147,6 +147,7 @@ namespace umbriel {
     void unlockSession();
     void raiseLockTree();
     void updateLockBlank();
+    void updateBackdrop();
     void notifyIdleActivity();
     // Prefer focusing a view on `preferred` when set (workspace switch on one output).
     void refocus(Output* preferred = nullptr);
@@ -264,6 +265,7 @@ namespace umbriel {
     wlr_scene_tree* m_fullscreenTree = nullptr;
     wlr_scene_tree* m_lockTree = nullptr;
     wlr_scene_rect* m_lockBlank = nullptr;
+    wlr_scene_rect* m_backdrop = nullptr;
     bool m_sessionLocked = false;
     Animator m_animator;
 

@@ -114,9 +114,11 @@ namespace umbriel {
     );
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
 
-    // Fixed global stacking: background < bottom < xdg < drag < top < fullscreen < overlay < lock.
+    // Fixed global stacking: backdrop < background < bottom < xdg < drag < top < fullscreen < overlay < lock.
     // Per-output layer trees are children of these roots so normal windows cannot raise above panels.
     // Fullscreen views are reparented into m_fullscreenTree so they cover top panels; overlay stays above.
+    m_backdrop = wlr_scene_rect_create(&m_scene->tree, 0, 0, config().appearance.backdropColor.data());
+    wlr_scene_rect_set_corner_radius(m_backdrop, 0);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&m_scene->tree);
     m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
@@ -127,10 +129,11 @@ namespace umbriel {
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
     m_bannerTree = wlr_scene_tree_create(&m_scene->tree);
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
-    const float blankColor[4] = {0.F, 0.F, 0.F, 1.F};
-    m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, blankColor);
+    m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, config().appearance.backdropColor.data());
+    wlr_scene_rect_set_corner_radius(m_lockBlank, 0);
     wlr_scene_node_set_enabled(&m_lockBlank->node, false);
     wlr_scene_node_set_enabled(&m_lockTree->node, false);
+    wlr_scene_node_lower_to_bottom(&m_backdrop->node);
 
     m_gammaManager = wlr_gamma_control_manager_v1_create(m_display);
     m_setGamma.notify = onSetGamma;

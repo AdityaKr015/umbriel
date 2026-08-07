@@ -28,8 +28,6 @@ namespace umbriel {
   namespace {
     constexpr Logger kLog("view");
 
-    constexpr std::array<float, 4> kFullscreenBackdropColor{0.0F, 0.0F, 0.0F, 1.0F};
-
     bool looksTiled(const wlr_xdg_toplevel* toplevel) {
       const auto& state = toplevel->current;
       const bool fixedWidth = state.max_width > 0 && state.min_width == state.max_width;
@@ -124,7 +122,8 @@ namespace umbriel {
     m_sceneTree->node.data = this;
     m_toplevel->base->data = m_sceneTree;
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
-    m_fullscreenBackdrop = wlr_scene_rect_create(m_sceneTree, 0, 0, kFullscreenBackdropColor.data());
+    m_fullscreenBackdrop = wlr_scene_rect_create(m_sceneTree, 0, 0, config().appearance.backdropColor.data());
+    wlr_scene_rect_set_corner_radius(m_fullscreenBackdrop, 0);
     wlr_scene_node_lower_to_bottom(&m_fullscreenBackdrop->node);
     wlr_scene_node_set_enabled(&m_fullscreenBackdrop->node, false);
     if (wlr_output* output = m_server->preferredOutput()) {

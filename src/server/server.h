@@ -136,6 +136,7 @@ namespace umbriel {
     void arrangeLayers(wlr_output* output);
     [[nodiscard]] wlr_output* preferredOutput() const;
     [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
+    [[nodiscard]] Output* outputFromName(const std::string& name) const;
     [[nodiscard]] wlr_box usableAreaAt(double lx, double ly) const;
 
     void removeOutput(Output* output);

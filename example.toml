@@ -194,6 +194,8 @@ follows_mouse = false
 # Use ^ and $ to anchor patterns. Matching uses regex search (partial match).
 #
 # Available effects:
+#   default_output      = "DP-1"        Open the window on a specific output
+#                                        (monitor name, e.g. DP-1, HDMI-A-1)
 #   default_floating    = true/false    Force floating / force tiling
 #   default_size        = [w, h]        Initial size (pixels); floats use both,
 #                                       tiled windows ignore height
@@ -201,6 +203,8 @@ follows_mouse = false
 #                                       overrides layout.default_width_fraction
 #   default_workspace   = 3             Place on workspace N (1-9)
 #   default_fullscreen  = true          Map fullscreen
+#   default_maximize    = true/false    Map maximized (tiled: column full-width;
+#                                       floating: fill usable area)
 #   opacity             = 0.95          Surface opacity (0.0-1.0)
 #
 # One-shot effects (floating, workspace, fullscreen, size, width) are applied
@@ -232,6 +236,11 @@ follows_mouse = false
 # [[rule]]
 # match.app_id = "org\\.gnome\\."
 # opacity = 0.95
+
+# [[rule]]
+# match.app_id = "firefox"
+# default_output = "DP-1"
+# default_workspace = 3
 
 [[rule]]
 match.app_id = "^dev.noctalia.Noctalia$"

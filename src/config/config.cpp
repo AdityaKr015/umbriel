@@ -1334,8 +1334,8 @@ namespace umbriel {
         }
         warnUnknownKeys(
             *section, "rule",
-            {"match", "default_floating", "default_size", "default_width", "default_workspace", "default_fullscreen",
-             "opacity"}
+            {"match", "default_output", "default_floating", "default_size", "default_width", "default_workspace",
+             "default_fullscreen", "default_maximize", "opacity"}
         );
 
         WindowRule rule;
@@ -1371,6 +1371,14 @@ namespace umbriel {
             }
           } else {
             warnAt(matchNode->source(), "ignoring rule.match (expected table)");
+          }
+        }
+
+        if (const toml::node* n = section->get("default_output")) {
+          if (const auto value = n->value<std::string>()) {
+            rule.defaultOutput = *value;
+          } else {
+            warnAt(n->source(), "ignoring rule.default_output (expected string)");
           }
         }
 
@@ -1430,6 +1438,14 @@ namespace umbriel {
             rule.defaultFullscreen = n->value<bool>();
           } else {
             warnAt(n->source(), "ignoring rule.default_fullscreen (expected boolean)");
+          }
+        }
+
+        if (const toml::node* n = section->get("default_maximize")) {
+          if (n->is_boolean()) {
+            rule.defaultMaximize = n->value<bool>();
+          } else {
+            warnAt(n->source(), "ignoring rule.default_maximize (expected boolean)");
           }
         }
 
@@ -1575,6 +1591,9 @@ namespace umbriel {
         }
       }
       // Last writer wins: overwrite each field the rule sets.
+      if (rule.defaultOutput) {
+        resolved.defaultOutput = rule.defaultOutput;
+      }
       if (rule.defaultFloating) {
         resolved.defaultFloating = rule.defaultFloating;
       }
@@ -1589,6 +1608,9 @@ namespace umbriel {
       }
       if (rule.defaultFullscreen) {
         resolved.defaultFullscreen = rule.defaultFullscreen;
+      }
+      if (rule.defaultMaximize) {
+        resolved.defaultMaximize = rule.defaultMaximize;
       }
       if (rule.opacity) {
         resolved.opacity = rule.opacity;

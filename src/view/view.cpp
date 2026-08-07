@@ -1340,23 +1340,33 @@ namespace umbriel {
     updateShadow();
 
     // Workspace placement: rule.defaultWorkspace overrides the default "focused output, active workspace".
+    // rule.defaultOutput redirects the window to a named output (e.g. "DP-1").
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this);
-    } else if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
-      if (WorkspaceGroup* group = out->workspaceGroup()) {
-        Workspace* target = group->active();
-        if (rule.defaultWorkspace) {
-          Workspace* ruleTarget = group->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1));
-          if (ruleTarget != nullptr) {
-            target = ruleTarget;
+    } else {
+      Output* targetOutput = nullptr;
+      if (rule.defaultOutput) {
+        targetOutput = m_server->outputFromName(*rule.defaultOutput);
+      }
+      if (targetOutput == nullptr) {
+        targetOutput = m_server->outputFromWlr(m_server->preferredOutput());
+      }
+      if (targetOutput != nullptr) {
+        if (WorkspaceGroup* group = targetOutput->workspaceGroup()) {
+          Workspace* target = group->active();
+          if (rule.defaultWorkspace) {
+            Workspace* ruleTarget = group->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1));
+            if (ruleTarget != nullptr) {
+              target = ruleTarget;
+            }
           }
+          setWorkspace(target);
+        } else {
+          setOnActiveWorkspace(true);
         }
-        setWorkspace(target);
       } else {
         setOnActiveWorkspace(true);
       }
-    } else {
-      setOnActiveWorkspace(true);
     }
     if (!m_tiled) {
       if (rule.defaultSize) {
@@ -1402,6 +1412,27 @@ namespace umbriel {
     // Fullscreen after workspace + focus so the view lands in the right place.
     if (rule.defaultFullscreen && *rule.defaultFullscreen) {
       setFullscreen(true);
+    }
+
+    // Maximize.
+    if (rule.defaultMaximize && *rule.defaultMaximize) {
+      if (m_tiled && m_workspace != nullptr) {
+        const int column = m_workspace->layout().columnOf(this);
+        if (column >= 0 && !m_workspace->layout().isFullWidth(column)) {
+          m_workspace->layout().toggleFullWidth(column);
+        }
+        wlr_xdg_toplevel_set_maximized(m_toplevel, true);
+      } else {
+        wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+        if (usable.width > 0 && usable.height > 0) {
+          wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
+          wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
+          if (m_shadowContainer != nullptr) {
+            wlr_scene_node_set_position(&m_shadowContainer->node, usable.x, usable.y);
+          }
+        }
+        wlr_xdg_toplevel_set_maximized(m_toplevel, true);
+      }
     }
   }
 
@@ -1906,10 +1937,21 @@ namespace umbriel {
       }
 
       // Workspace redirect.
-      if (rule.defaultWorkspace && m_workspace != nullptr && m_workspace->group() != nullptr) {
-        Workspace* target = m_workspace->group()->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1));
-        if (target != nullptr && target != m_workspace) {
-          setWorkspace(target);
+      if (m_workspace != nullptr) {
+        WorkspaceGroup* targetGroup = m_workspace->group();
+        if (rule.defaultOutput && m_server != nullptr) {
+          Output* ruleOutput = m_server->outputFromName(*rule.defaultOutput);
+          if (ruleOutput != nullptr && ruleOutput->workspaceGroup() != nullptr) {
+            targetGroup = ruleOutput->workspaceGroup();
+          }
+        }
+        if (targetGroup != nullptr) {
+          Workspace* target = rule.defaultWorkspace
+                                  ? targetGroup->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1))
+                                  : targetGroup->active();
+          if (target != nullptr && target != m_workspace) {
+            setWorkspace(target);
+          }
         }
       }
 
@@ -1931,6 +1973,27 @@ namespace umbriel {
       // Fullscreen.
       if (rule.defaultFullscreen && *rule.defaultFullscreen && !m_toplevel->scheduled.fullscreen) {
         setFullscreen(true);
+      }
+
+      // Maximize.
+      if (rule.defaultMaximize && *rule.defaultMaximize && !m_toplevel->current.maximized) {
+        if (m_tiled && m_workspace != nullptr) {
+          const int column = m_workspace->layout().columnOf(this);
+          if (column >= 0 && !m_workspace->layout().isFullWidth(column)) {
+            m_workspace->layout().toggleFullWidth(column);
+          }
+          wlr_xdg_toplevel_set_maximized(m_toplevel, true);
+        } else {
+          wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+          if (usable.width > 0 && usable.height > 0) {
+            wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
+            wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
+            if (m_shadowContainer != nullptr) {
+              wlr_scene_node_set_position(&m_shadowContainer->node, usable.x, usable.y);
+            }
+          }
+          wlr_xdg_toplevel_set_maximized(m_toplevel, true);
+        }
       }
     }
 

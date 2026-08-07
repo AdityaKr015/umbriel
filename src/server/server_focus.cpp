@@ -459,6 +459,15 @@ namespace umbriel {
     return nullptr;
   }
 
+  Output* Server::outputFromName(const std::string& name) const {
+    for (const auto& entry : m_outputs) {
+      if (entry->wlr()->name != nullptr && name == entry->wlr()->name) {
+        return entry.get();
+      }
+    }
+    return nullptr;
+  }
+
   wlr_box Server::usableAreaAt(double lx, double ly) const {
     wlr_output* output = wlr_output_layout_output_at(m_outputLayout, lx, ly);
     if (output == nullptr) {

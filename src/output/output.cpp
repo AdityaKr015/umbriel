@@ -39,20 +39,17 @@ namespace umbriel {
     m_destroy.notify = onDestroy;
     wl_signal_add(&m_output->events.destroy, &m_destroy);
 
-    if (wlr_output_is_drm(m_output)) {
-      m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
-    }
     applyConfiguredState();
     wlr_output_layout_output* layoutOutput = addToLayout();
-    if (m_sceneOutput == nullptr) {
-      m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
-    }
+    m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
     wlr_scene_output_layout_add_output(m_server->sceneLayout(), layoutOutput, m_sceneOutput);
 
     for (uint32_t layer = 0; layer < kLayerCount; ++layer) {
       m_layerTrees[layer] = wlr_scene_tree_create(m_server->shellLayerTree(layer));
     }
     m_popupTree = wlr_scene_tree_create(m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY));
+    m_optimizedBlur =
+        wlr_scene_optimized_blur_create(m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND), 0, 0);
 
     arrangeLayers();
     m_workspaceGroup = std::make_unique<WorkspaceGroup>(*m_server, *this);
@@ -106,13 +103,6 @@ namespace umbriel {
     if (rule != nullptr && rule->transform) {
       wlr_output_state_set_transform(&state, static_cast<wl_output_transform>(*rule->transform));
     }
-    if (m_sceneOutput != nullptr
-        && (state.committed & WLR_OUTPUT_STATE_MODE) != 0
-        && !wlr_scene_output_build_state(m_sceneOutput, &state, nullptr)) {
-      wlr_output_state_finish(&state);
-      kLog.error("output '{}': failed to build configured scene state", m_output->name);
-      return;
-    }
 
     const bool committed = wlr_output_commit_state(m_output, &state);
     wlr_output_state_finish(&state);
@@ -145,6 +135,12 @@ namespace umbriel {
     wlr_output_schedule_frame(m_output);
   }
 
+  void Output::markBlurBackgroundDirty() {
+    if (m_optimizedBlur != nullptr && config().appearance.blur.enabled) {
+      wlr_scene_optimized_blur_mark_dirty(m_optimizedBlur);
+    }
+  }
+
   void Output::handleExternalConfigChange() {
     // Mode changes can drop the DRM gamma LUT; re-apply on the next frame.
     m_gammaDirty = true;
@@ -153,6 +149,10 @@ namespace umbriel {
   }
 
   Output::~Output() {
+    if (m_optimizedBlur != nullptr) {
+      wlr_scene_node_destroy(&m_optimizedBlur->node);
+      m_optimizedBlur = nullptr;
+    }
     if (m_output != nullptr && m_output->data == this) {
       m_output->data = nullptr;
     }
@@ -201,6 +201,17 @@ namespace umbriel {
     wlr_output_effective_resolution(m_output, &fullArea.width, &fullArea.height);
     if (fullArea.width <= 0 || fullArea.height <= 0) {
       return;
+    }
+
+    if (m_optimizedBlur != nullptr) {
+      const bool enabled = config().appearance.blur.enabled;
+      const bool changed = m_optimizedBlur->node.enabled != enabled;
+      wlr_scene_node_set_enabled(&m_optimizedBlur->node, enabled);
+      wlr_scene_node_set_position(&m_optimizedBlur->node, m_sceneOutput->x, m_sceneOutput->y);
+      wlr_scene_optimized_blur_set_size(m_optimizedBlur, fullArea.width, fullArea.height);
+      if (enabled && changed) {
+        wlr_scene_optimized_blur_mark_dirty(m_optimizedBlur);
+      }
     }
 
     wlr_box usableArea = fullArea;

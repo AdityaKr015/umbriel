@@ -1160,9 +1160,14 @@ namespace umbriel {
       // setSurfaceTreeClip so context menus can extend past the window edge.
       setSurfaceTreeClip(&surfaceClip);
     } else {
-      // Only the border/decoration remains on this output.
-      const wlr_box empty{geometry.x, geometry.y, 0, 0};
-      setSurfaceTreeClip(&empty);
+      // Only the border/decoration remains on this output. Hide the surface with a
+      // non-empty clip placed outside the surface box: wlroots treats an empty clip
+      // box as "remove the clip" and would re-enable the full-size buffer, flashing
+      // the surface onto the neighbor output for a frame (end of a workspace slide).
+      // A non-intersecting clip instead disables the buffer node.
+      constexpr int kFarAway = 1 << 20;
+      const wlr_box offSurface{-kFarAway, -kFarAway, 1, 1};
+      setSurfaceTreeClip(&offSurface);
     }
     if (m_borderTree != nullptr) {
       if (decoratedFullyVisible) {

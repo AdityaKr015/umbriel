@@ -89,7 +89,28 @@ namespace umbriel {
     if (m_renderer == nullptr) {
       throw std::runtime_error("failed to create fx_renderer");
     }
-    wlr_renderer_init_wl_display(m_renderer, m_display);
+    if (!wlr_renderer_init_wl_shm(m_renderer, m_display)) {
+      throw std::runtime_error("failed to initialize wl_shm");
+    }
+
+    const int drmFd = wlr_renderer_get_drm_fd(m_renderer);
+    wlr_linux_dmabuf_v1* linuxDmabuf = nullptr;
+    if (wlr_renderer_get_texture_formats(m_renderer, WLR_BUFFER_CAP_DMABUF) != nullptr && drmFd >= 0) {
+      if (wlr_drm_create(m_display, m_renderer) == nullptr) {
+        kLog.warn("failed to create legacy wl_drm global");
+      }
+      linuxDmabuf = wlr_linux_dmabuf_v1_create_with_renderer(m_display, 4, m_renderer);
+      if (linuxDmabuf == nullptr) {
+        throw std::runtime_error("failed to create linux-dmabuf global");
+      }
+    }
+
+    if (drmFd >= 0 && m_renderer->features.timeline && m_backend->features.timeline) {
+      if (wlr_linux_drm_syncobj_manager_v1_create(m_display, 1, drmFd) == nullptr) {
+        throw std::runtime_error("failed to create linux-drm-syncobj manager");
+      }
+      kLog.info("explicit synchronization enabled");
+    }
 
     m_allocator = wlr_allocator_autocreate(m_backend, m_renderer);
     if (m_allocator == nullptr) {
@@ -107,6 +128,9 @@ namespace umbriel {
     m_outputLayout = wlr_output_layout_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_outputLayout);
     m_scene = wlr_scene_create();
+    if (linuxDmabuf != nullptr) {
+      wlr_scene_set_linux_dmabuf_v1(m_scene, linuxDmabuf);
+    }
     const Config::Appearance::Blur& blur = config().appearance.blur;
     wlr_scene_set_blur_data(
         m_scene, blur.passes, blur.radius, static_cast<float>(blur.noise), static_cast<float>(blur.brightness),

@@ -7,6 +7,9 @@
 #include "server/server.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
+extern "C" {
+#include <wlr/backend/drm.h>
+}
 
 #include <cstdlib>
 #include <ctime>
@@ -99,6 +102,9 @@ namespace umbriel {
     }
     if (rule != nullptr && rule->transform) {
       wlr_output_state_set_transform(&state, static_cast<wl_output_transform>(*rule->transform));
+    }
+    if (wlr_output_is_drm(m_output)) {
+      wlr_output_state_set_adaptive_sync_enabled(&state, false);
     }
 
     const bool committed = wlr_output_commit_state(m_output, &state);

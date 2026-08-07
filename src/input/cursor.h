@@ -39,6 +39,11 @@ namespace umbriel {
     [[nodiscard]] wlr_xcursor_manager* xcursorManager() const { return m_xcursorManager; }
     [[nodiscard]] CursorMode mode() const { return m_mode; }
     [[nodiscard]] View* grabbedView() const { return m_grabbedView; }
+    // True while `view` is the window under an interactive move (spans outputs
+    // unclipped); layout code must not re-clip it during the drag.
+    [[nodiscard]] bool isDraggingView(const View* view) const {
+      return view != nullptr && view == m_grabbedView && (m_mode == CursorMode::Move || m_mode == CursorMode::MoveTile);
+    }
 
     void attachInputDevice(wlr_input_device* device);
     void applyConfig();
@@ -77,7 +82,7 @@ namespace umbriel {
 
     void processMotion(uint32_t timeMsec, double oldX, double oldY);
     void processMove();
-    void clipGrabbedViewToOutput();
+    void presentGrabbedViewSpanning();
     void updateDropTarget();
     void finishTileMove();
     void finishFloatMove();

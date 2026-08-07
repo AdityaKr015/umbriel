@@ -1141,7 +1141,6 @@ namespace umbriel {
     wlr_box contentVisible{};
     const bool contentOnOutput = wlr_box_intersection(&contentVisible, &content, &outputBox);
     const bool decoratedFullyVisible = wlr_box_equal(&decoratedVisible, &decorated);
-
     if (contentOnOutput) {
       wlr_box surfaceClip{
           .x = geometry.x + contentVisible.x - content.x - m_fullscreenOffsetX,
@@ -1302,6 +1301,11 @@ namespace umbriel {
         wlr_xdg_toplevel_set_size(m_toplevel, (*rule.defaultSize)[0], (*rule.defaultSize)[1]);
       }
       placeInUsableArea();
+      // Enable + clip the float against its home output now that per-output
+      // visibility is resolved data-side (no per-render-pass pass to do it).
+      if (m_workspace != nullptr) {
+        m_workspace->syncViewPresentation(this);
+      }
     } else if (rule.defaultWidth && m_workspace != nullptr) {
       const int column = m_workspace->layout().columnOf(this);
       if (column >= 0) {
@@ -1535,6 +1539,10 @@ namespace umbriel {
         applyFullscreenLayout();
       } else {
         syncFloatingSurfaceClip();
+        // Enable + clip to the home output (previously done per render pass).
+        if (m_workspace != nullptr) {
+          m_workspace->syncViewPresentation(this);
+        }
       }
     } else {
       updateBlur();

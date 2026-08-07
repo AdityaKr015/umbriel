@@ -54,6 +54,9 @@ namespace umbriel {
     void animateTo(int x, int y);
     void setPosition(int x, int y);
     void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
+    // Drop the per-output clip so the view renders unclipped (e.g. a window
+    // dragged across a monitor boundary spans both outputs, like mango).
+    void clearOutputClip();
     void setFadeAlpha(float alpha);
     void cancelFadeAnimation();
     void cancelPositionAnimation();
@@ -129,7 +132,6 @@ namespace umbriel {
     void applyPresentedSize();
     void cancelSizeAnimation();
     void updateFullscreenPresentation(int width, int height);
-    void clearOutputClip();
     // Apply subsurface clip to the toplevel surface only, not xdg popup children.
     void setSurfaceTreeClip(const wlr_box* clip);
     void unconstrainPopup(wlr_xdg_popup* popup);

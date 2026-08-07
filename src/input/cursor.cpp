@@ -590,7 +590,7 @@ namespace umbriel {
             m_dragSourceWorkspace->layoutDetach(m_grabbedView);
           }
           wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
-          clipGrabbedViewToOutput();
+          presentGrabbedViewSpanning();
         }
         processMove();
         if (m_mode == CursorMode::MoveTile) {
@@ -697,42 +697,21 @@ namespace umbriel {
     if (m_grabbedView->m_shadowContainer != nullptr) {
       wlr_scene_node_set_position(&m_grabbedView->m_shadowContainer->node, nx, ny);
     }
-    if (m_mode == CursorMode::MoveTile) {
-      clipGrabbedViewToOutput();
-    }
+    // Both floating (Move) and tiled (MoveTile) drags keep the view unclipped so
+    // it spans outputs as the pointer crosses monitors.
+    presentGrabbedViewSpanning();
   }
 
-  void Cursor::clipGrabbedViewToOutput() {
+  void Cursor::presentGrabbedViewSpanning() {
     if (m_grabbedView == nullptr) {
       return;
     }
-    const wlr_box& geometry = m_grabbedView->toplevel()->base->geometry;
-    const wlr_box target{
-        .x = m_grabbedView->sceneTree()->node.x,
-        .y = m_grabbedView->sceneTree()->node.y,
-        .width = geometry.width,
-        .height = geometry.height,
-    };
-    wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
-    Output* output = m_server->outputFromWlr(wlrOutput);
-    if (output == nullptr) {
-      return;
-    }
-    wlr_box outputBox{};
-    wlr_output_layout_get_box(m_server->outputLayout(), output->wlr(), &outputBox);
-    const int border = m_grabbedView->tiled() ? config().appearance.totalBorderWidth() : 0;
-    wlr_box decorated = target;
-    decorated.x -= border;
-    decorated.y -= border;
-    decorated.width += 2 * border;
-    decorated.height += 2 * border;
-    wlr_box intersection{};
-    if (!wlr_box_intersection(&intersection, &decorated, &outputBox)) {
-      m_grabbedView->setNodeEnabled(false);
-      return;
-    }
+    // A window dragged across a monitor boundary must span both outputs, not be
+    // clipped to one (which flickers A<->B as the pointer crosses). Leave it
+    // unclipped and enabled; native per-output rendering draws each half. This
+    // matches mango and is the accepted trade for dropping per-output clipping.
     m_grabbedView->setNodeEnabled(true);
-    m_grabbedView->setOutputClip(&intersection, target, outputBox);
+    m_grabbedView->clearOutputClip();
   }
 
   void Cursor::updateDropTarget() {

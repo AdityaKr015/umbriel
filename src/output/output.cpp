@@ -298,15 +298,11 @@ namespace umbriel {
 
     m_inFrame = true;
 
-    // Shared scene: only this output's windows may be enabled for the pass.
-    m_server->prepareSceneForOutput(this);
-
     wlr_output_state state{};
     wlr_output_state_init(&state);
     if (!wlr_scene_output_build_state(m_sceneOutput, &state, nullptr)) {
       wlr_output_state_finish(&state);
       m_inFrame = false;
-      m_server->restoreSceneVisibility();
       wlr_output_schedule_frame(m_output);
       return;
     }
@@ -333,8 +329,6 @@ namespace umbriel {
     const bool ok = wlr_output_commit_state(m_output, &state);
     wlr_output_state_finish(&state);
     m_inFrame = false;
-    // Restore enabled nodes so hit-testing is not stuck on the last rendered output.
-    m_server->restoreSceneVisibility();
     if (ok && gammaPending) {
       m_gammaDirty = false;
     }

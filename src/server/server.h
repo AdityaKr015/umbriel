@@ -153,10 +153,6 @@ namespace umbriel {
     // Drop xdg activated / focus border / foreign activated on mapped views (except `except`).
     void deactivateViews(View* except = nullptr);
     [[nodiscard]] LayerSurface* exclusiveKeyboardLayer() const;
-    // Hide foreign-output views for this pass so shared scene nodes cannot bleed.
-    void prepareSceneForOutput(Output* rendering);
-    // Re-enable home-output visibility after a render pass (for hit-testing).
-    void restoreSceneVisibility();
     void
     animateCloseSnapshot(wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects);
 

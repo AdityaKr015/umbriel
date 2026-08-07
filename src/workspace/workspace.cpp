@@ -254,6 +254,11 @@ namespace umbriel {
         || m_group->output() == nullptr) {
       return;
     }
+    // A window under an interactive move spans outputs unclipped; leave it as
+    // clipGrabbedViewToOutput set it (re-clipping mid-drag flickers A<->B).
+    if (Cursor* cursor = m_group->server()->cursor(); cursor != nullptr && cursor->isDraggingView(view)) {
+      return;
+    }
     Output* output = m_group->output();
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
@@ -281,7 +286,7 @@ namespace umbriel {
         view->setNodeEnabled(visible);
         view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
       } else {
-        wlr_box target = m_layout->targetBox(view);
+        wlr_box target = outputBox; // fullscreen fills the whole output, not the dwindle tile box
         wlr_box clipTarget = target;
         clipTarget.y += m_slideOffsetY;
         wlr_box intersection{};
@@ -371,7 +376,7 @@ namespace umbriel {
           view->setNodeEnabled(visible);
           view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
         } else {
-          wlr_box target = m_layout->targetBox(view);
+          wlr_box target = outputBox; // fullscreen fills the whole output, not the dwindle tile box
           if (animate) {
             view->animateTo(target.x, target.y);
           } else {
@@ -387,6 +392,8 @@ namespace umbriel {
         continue;
       }
       if (m_layout->columnOf(view) < 0) {
+        // Floating (non-fullscreen): clip + enable against the home output.
+        syncViewPresentation(view);
         continue;
       }
       wlr_box target = m_layout->targetBox(view);
@@ -530,6 +537,14 @@ namespace umbriel {
   void Workspace::applyVisibility() {
     for (View* view : m_views) {
       view->setOnActiveWorkspace(m_active);
+      // Persistent resting state: an inactive workspace keeps its nodes disabled
+      // so the shared scene never renders them on any output. Active (and
+      // in-transition) views are enabled + clipped to their home output by
+      // syncViewPresentation (arrange / slide), which replaces the old
+      // per-render-pass enable/disable.
+      if (!m_active && !m_inSwitchTransition) {
+        view->setNodeEnabled(false);
+      }
     }
   }
 

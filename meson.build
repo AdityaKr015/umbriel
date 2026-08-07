@@ -44,7 +44,7 @@ if pkgconfig.found()
         if fs.exists(header)
           header_text = fs.read(header)
           if header_text.contains('wlr_scene_blur_set_ignore_alpha') and header_text.contains(
-            'wlr_scene_shadow_set_output_clip'
+            'wlr_scene_shadow_set_clipped_region'
           )
             use_system_scenefx = true
             break

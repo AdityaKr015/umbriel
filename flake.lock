@@ -49,16 +49,16 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1782624992,
-        "narHash": "sha256-vUjLG6eubEhJJVa9LPygIcVmNoHwYbSUTJcWEcbxnU4=",
-        "owner": "wlrfx",
+        "lastModified": 1786076571,
+        "narHash": "sha256-8+Z/aVn+fkyhrFDESSpNalQfCTR3PPV3ATw/MKbEpx4=",
+        "owner": "noctalia-dev",
         "repo": "scenefx",
-        "rev": "37ccd723bef49e6891156ffafce8f549f01446cc",
+        "rev": "e702cbf0d9885746455089f7fdf4e6c31ad54eb4",
         "type": "github"
       },
       "original": {
-        "owner": "wlrfx",
-        "ref": "0.5",
+        "owner": "noctalia-dev",
+        "ref": "umbriel",
         "repo": "scenefx",
         "type": "github"
       }

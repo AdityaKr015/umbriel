@@ -491,6 +491,7 @@ namespace umbriel {
 
   void View::setPosition(int x, int y) {
     cancelPositionAnimation();
+    m_positioned = true;
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
     if (m_shadowContainer != nullptr) {
       wlr_scene_node_set_position(&m_shadowContainer->node, x, y);
@@ -498,7 +499,10 @@ namespace umbriel {
   }
 
   void View::animateTo(int x, int y) {
-    if (!m_mapped || !m_onActiveWorkspace) {
+    // First placement snaps: the node starts at the default (0,0) world origin,
+    // so animating would fly the window across the layout on open. The fade-in
+    // covers the appear instead.
+    if (!m_mapped || !m_onActiveWorkspace || !m_positioned) {
       setPosition(x, y);
       return;
     }
@@ -588,6 +592,7 @@ namespace umbriel {
     const int height = geo.height > 0 ? geo.height : usable.height;
     const int x = usable.x + (usable.width - width) / 2;
     const int y = usable.y + (usable.height - height) / 2;
+    m_positioned = true;
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
     if (m_shadowContainer != nullptr) {
       wlr_scene_node_set_position(&m_shadowContainer->node, x, y);
@@ -1331,6 +1336,7 @@ namespace umbriel {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
     }
     m_mapped = false;
+    m_positioned = false;
     if (m_workspace != nullptr) {
       m_workspace->layoutDetach(this);
     }

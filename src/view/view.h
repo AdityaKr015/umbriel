@@ -158,6 +158,9 @@ namespace umbriel {
     wlr_ext_image_capture_source_v1* m_captureSource = nullptr;
     Workspace* m_workspace = nullptr;
     bool m_mapped = false;
+    // False until the first setPosition/animateTo places the node; the initial
+    // placement snaps (avoids animating from the default (0,0) world origin).
+    bool m_positioned = false;
     bool m_tiled = false;
     bool m_onActiveWorkspace = false;
     AnimId m_posAnim = 0;

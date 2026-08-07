@@ -487,7 +487,9 @@ namespace umbriel {
   void Server::updateBackdrop() {
     wlr_box layoutBox{};
     wlr_output_layout_get_box(m_outputLayout, nullptr, &layoutBox);
-    if (layoutBox.width <= 0 || layoutBox.height <= 0) { return; }
+    if (layoutBox.width <= 0 || layoutBox.height <= 0) {
+      return;
+    }
     wlr_scene_rect_set_color(m_backdrop, config().appearance.backdropColor.data());
     wlr_scene_rect_set_size(m_backdrop, layoutBox.width, layoutBox.height);
     wlr_scene_node_set_position(&m_backdrop->node, layoutBox.x, layoutBox.y);

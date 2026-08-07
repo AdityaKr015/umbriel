@@ -139,7 +139,7 @@ namespace umbriel {
         close(clientFd);
         return;
       }
-      if (buf.find('\n') != std::string::npos) {
+      if (buf.contains('\n')) {
         break;
       }
     }

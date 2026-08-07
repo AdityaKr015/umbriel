@@ -292,9 +292,7 @@ namespace umbriel {
         break;
       case ActionArgKind::Command: {
         // Match "name:arg"
-        if (value.size() > spec.name.size() + 1
-            && value[spec.name.size()] == ':'
-            && value.substr(0, spec.name.size()) == spec.name) {
+        if (value.size() > spec.name.size() + 1 && value[spec.name.size()] == ':' && value.starts_with(spec.name)) {
           output.action = spec.action;
           output.spawnCommand = value.substr(spec.name.size() + 1);
           return true;
@@ -302,9 +300,7 @@ namespace umbriel {
         break;
       }
       case ActionArgKind::Workspace: {
-        if (value.size() <= spec.name.size() + 1
-            || value[spec.name.size()] != ':'
-            || value.substr(0, spec.name.size()) != spec.name) {
+        if (value.size() <= spec.name.size() + 1 || value[spec.name.size()] != ':' || !value.starts_with(spec.name)) {
           break;
         }
 

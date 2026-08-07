@@ -1946,8 +1946,8 @@ namespace umbriel {
         }
         if (targetGroup != nullptr) {
           Workspace* target = rule.defaultWorkspace
-                                  ? targetGroup->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1))
-                                  : targetGroup->active();
+              ? targetGroup->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1))
+              : targetGroup->active();
           if (target != nullptr && target != m_workspace) {
             setWorkspace(target);
           }

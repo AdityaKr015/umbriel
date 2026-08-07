@@ -709,7 +709,7 @@ namespace umbriel {
     // A window dragged across a monitor boundary must span both outputs, not be
     // clipped to one (which flickers A<->B as the pointer crosses). Leave it
     // unclipped and enabled; native per-output rendering draws each half. This
-    // matches mango and is the accepted trade for dropping per-output clipping.
+    // is the accepted trade for dropping per-output clipping.
     m_grabbedView->setNodeEnabled(true);
     m_grabbedView->clearOutputClip();
   }

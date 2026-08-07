@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 // clang-format off
+#include <algorithm>
 #include <cstring> // IWYU pragma: keep
 #include "wlr.h"
 // clang-format on
@@ -9,7 +10,8 @@
 namespace umbriel {
 
   void SurfaceShadow::update(
-      wlr_scene_tree* parent, int contentWidth, int contentHeight, int borderTotal, int cornerRadius
+      wlr_scene_tree* parent, int contentWidth, int contentHeight, int borderTotal, int cornerRadius,
+      const wlr_box* clampBox
   ) {
     const auto& cfg = config().appearance.shadow;
     const int sigma = cfg.softness;
@@ -38,10 +40,40 @@ namespace umbriel {
     }
 
     // Node geometry: shadow extends sigma px beyond the decorated box on each side.
-    const int nodeWidth = decWidth + 2 * sigma;
-    const int nodeHeight = decHeight + 2 * sigma;
-    const int nodeX = -borderTotal - sigma + cfg.offsetX;
-    const int nodeY = -borderTotal - sigma + cfg.offsetY;
+    int nodeWidth = decWidth + 2 * sigma;
+    int nodeHeight = decHeight + 2 * sigma;
+    int nodeX = -borderTotal - sigma + cfg.offsetX;
+    int nodeY = -borderTotal - sigma + cfg.offsetY;
+
+    // Hole punched over the window+borders so the shadow never shows through
+    // transparent surfaces. Node-local coordinates.
+    wlr_box hole{
+        .x = sigma - cfg.offsetX,
+        .y = sigma - cfg.offsetY,
+        .width = decWidth,
+        .height = decHeight,
+    };
+
+    // Data-side confinement: shrink the node so it never extends past the clamp
+    // box instead of clipping at draw time. The hole shifts by the same amount
+    // so it stays aligned with the window.
+    if (clampBox != nullptr) {
+      int parentX = 0;
+      int parentY = 0;
+      wlr_scene_node_coords(&parent->node, &parentX, &parentY);
+      const int absX = parentX + nodeX;
+      const int absY = parentY + nodeY;
+      const int left = std::clamp(clampBox->x - absX, 0, nodeWidth);
+      const int right = std::clamp(absX + nodeWidth - (clampBox->x + clampBox->width), 0, nodeWidth);
+      const int top = std::clamp(clampBox->y - absY, 0, nodeHeight);
+      const int bottom = std::clamp(absY + nodeHeight - (clampBox->y + clampBox->height), 0, nodeHeight);
+      nodeX += left;
+      nodeY += top;
+      nodeWidth = std::max(0, nodeWidth - left - right);
+      nodeHeight = std::max(0, nodeHeight - top - bottom);
+      hole.x -= left;
+      hole.y -= top;
+    }
 
     wlr_scene_node_set_position(&m_node->node, nodeX, nodeY);
     if (m_node->width != nodeWidth || m_node->height != nodeHeight) {
@@ -60,14 +92,6 @@ namespace umbriel {
       wlr_scene_shadow_set_corner_radius(m_node, cornerRadius);
     }
 
-    // Clip the shadow out from under the window+borders so it never shows through
-    // transparent surfaces. The hole is in node-local coordinates.
-    const wlr_box hole{
-        .x = sigma - cfg.offsetX,
-        .y = sigma - cfg.offsetY,
-        .width = decWidth,
-        .height = decHeight,
-    };
     const fx_corner_radii corners = corner_radii_new(cornerRadius, cornerRadius, cornerRadius, cornerRadius);
     wlr_scene_shadow_set_clipped_region(m_node, clipped_region{.area = hole, .corners = corners});
 
@@ -87,14 +111,6 @@ namespace umbriel {
       const float color[4] = {cfg.color[0], cfg.color[1], cfg.color[2], cfg.color[3] * m_alpha};
       wlr_scene_shadow_set_color(m_node, color);
     }
-  }
-
-  void SurfaceShadow::setOutputClip(const wlr_box* clip) {
-    if (m_node == nullptr) {
-      return;
-    }
-    // Clip is in scene-root (global) coordinates; pass through directly.
-    wlr_scene_shadow_set_output_clip(m_node, clip);
   }
 
   void SurfaceShadow::reset() { m_node = nullptr; }

@@ -1428,8 +1428,14 @@ namespace umbriel {
           m_workspace->layout().toggleFullWidth(column);
         }
         wlr_xdg_toplevel_set_maximized(m_toplevel, true);
+        m_workspace->arrange(false);
       } else {
-        wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+        wlr_box usable{};
+        if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+          usable = m_workspace->group()->output()->usableArea();
+        } else {
+          usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+        }
         if (usable.width > 0 && usable.height > 0) {
           wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
           wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
@@ -1705,19 +1711,35 @@ namespace umbriel {
       return;
     }
 
+    const bool maximized = m_toplevel->requested.maximized;
+
     if (m_tiled && m_workspace != nullptr) {
       const int column = m_workspace->layout().columnOf(this);
-      const bool maximized = m_workspace->layout().toggleFullWidth(column);
+      if (column >= 0) {
+        if (maximized) {
+          if (!m_workspace->layout().isFullWidth(column)) {
+            m_workspace->layout().toggleFullWidth(column);
+          }
+        } else if (m_workspace->layout().isFullWidth(column)) {
+          m_workspace->layout().clearFullWidthState(column);
+        }
+      }
       wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
-      m_workspace->ensureFocusedVisible();
+      if (maximized) {
+        m_workspace->ensureFocusedVisible();
+      }
       m_workspace->arrange(false);
       updateForeignState();
       return;
     }
 
-    const bool maximized = !m_toplevel->current.maximized;
     if (maximized) {
-      wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+      wlr_box usable{};
+      if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+        usable = m_workspace->group()->output()->usableArea();
+      } else {
+        usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+      }
       if (usable.width > 0 && usable.height > 0) {
         wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
         wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
@@ -1997,8 +2019,14 @@ namespace umbriel {
             m_workspace->layout().toggleFullWidth(column);
           }
           wlr_xdg_toplevel_set_maximized(m_toplevel, true);
+          m_workspace->arrange(false);
         } else {
-          wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+          wlr_box usable{};
+          if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+            usable = m_workspace->group()->output()->usableArea();
+          } else {
+            usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+          }
           if (usable.width > 0 && usable.height > 0) {
             wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
             wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);

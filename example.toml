@@ -16,6 +16,12 @@ autostart = []
 # Changing this requires a restart.
 xwayland = true
 
+[environment]
+# Extra environment variables exported to Umbriel and all spawned commands.
+# Values must be strings.
+# GTK_THEME = "Adwaita:dark"
+# QT_QPA_PLATFORMTHEME = "qt5ct"
+
 [workspaces]
 # Re-selecting the active workspace (e.g. Mod+2 while already on 2) jumps back
 # to the previously active workspace on that output.

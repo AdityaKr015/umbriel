@@ -1097,6 +1097,30 @@ namespace umbriel {
       loaded.general.autostart = std::move(parsed);
     }
 
+    void readEnvironment(const toml::table& table, Config& loaded) {
+      const toml::node* node = table.get("environment");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* section = node->as_table();
+      if (section == nullptr) {
+        warnAt(node->source(), "ignoring environment (expected table)");
+        return;
+      }
+
+      std::vector<std::pair<std::string, std::string>> parsed;
+      parsed.reserve(section->size());
+      for (const auto& [key, value] : *section) {
+        const auto entry = value.value<std::string>();
+        if (!entry) {
+          warnAt(value.source(), "ignoring environment.{} (expected string)", key.str());
+          continue;
+        }
+        parsed.emplace_back(std::string(key.str()), *entry);
+      }
+      loaded.environment.variables = std::move(parsed);
+    }
+
     void validateKeyboardInput(Config::Input::Keyboard& keyboard, const toml::source_region& source) {
       if (keyboard.layout.empty() && keyboard.variant.empty()) {
         return;
@@ -1673,7 +1697,7 @@ namespace umbriel {
         if (!knownKey(
                 key.str(),
                 {"appearance", "overview", "layout", "general", "input", "keybinds", "output", "window_rule",
-                 "layer_rule", "workspace", "workspaces", "include"}
+                 "layer_rule", "workspace", "workspaces", "include", "environment"}
             )) {
           warnAt(key.source(), "unknown key {}", key.str());
         }
@@ -1711,6 +1735,7 @@ namespace umbriel {
         readOverview(result.merged, loaded);
         readLayout(result.merged, loaded);
         readGeneral(result.merged, loaded);
+        readEnvironment(result.merged, loaded);
         readWorkspaceSettings(result.merged, loaded);
         readInput(result.merged, loaded);
         readOutputs(result.merged, loaded);

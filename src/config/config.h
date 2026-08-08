@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <utility>
 #include <regex>
 #include <span>
 #include <string>
@@ -223,6 +224,11 @@ namespace umbriel {
       // Spawn and manage xwayland-satellite for X11 app support. Requires restart.
       bool xwayland = true;
     } general;
+
+    struct Environment {
+      // Ordered list of NAME=value pairs exported to the compositor process.
+      std::vector<std::pair<std::string, std::string>> variables;
+    } environment;
 
     struct Input {
       struct Keyboard {

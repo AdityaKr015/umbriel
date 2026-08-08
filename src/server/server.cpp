@@ -69,6 +69,17 @@ namespace umbriel {
       return false;
     }
 
+    void applyConfiguredEnvironment() {
+      for (const auto& [name, value] : config().environment.variables) {
+        if (name.empty()) {
+          continue;
+        }
+        if (setenv(name.c_str(), value.c_str(), 1) != 0) {
+          kLog.warn("failed to export environment variable {}", name);
+        }
+      }
+    }
+
   } // namespace
 
   Server::Server() {
@@ -337,6 +348,9 @@ namespace umbriel {
     if (!cursorCfg.theme.empty()) {
       setenv("XCURSOR_THEME", cursorCfg.theme.c_str(), 1);
     }
+
+    // Export user-defined environment variables from config.
+    applyConfiguredEnvironment();
 
     // Start xwayland-satellite before autostart so X11 apps in autostart can
     // connect (there is still a small race against satellite's socket bind).

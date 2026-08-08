@@ -150,6 +150,7 @@ namespace umbriel {
 
     const int total = config().appearance.totalBorderWidth();
     const bool decorated = total > 0 && !view->toplevel()->scheduled.fullscreen;
+    const int radius = decorated ? static_cast<int>(std::lround(config().appearance.cornerRadius * z)) : 0;
     if (card.border != nullptr) {
       const int width = std::max(1, static_cast<int>(std::lround(total * z)));
       const wlr_box full{card.box.x - width, card.box.y - width, contentW + 2 * width, contentH + 2 * width};
@@ -162,16 +163,24 @@ namespace umbriel {
         wlr_scene_rect_set_corner_radius(
             card.border, static_cast<int>(std::lround(expandedRadius(config().appearance.cornerRadius, total) * z))
         );
+        // Punch the content out so this stays a ring. A filled rect would sit
+        // behind the window and tint every translucent client with the border
+        // colour, which then visibly changes with focus.
+        const wlr_box hole{card.box.x - border.x, card.box.y - border.y, contentW, contentH};
+        wlr_scene_rect_set_clipped_region(
+            card.border, clipped_region{.area = hole, .corners = corner_radii_new(radius, radius, radius, radius)}
+        );
+        // Every row advertises its own focused window, not just the active
+        // one: the filmstrip is a browsing aid, and the border is what tells
+        // you where each workspace will land you when you zoom into it.
         const Workspace* workspace = view->workspace();
-        const bool focused =
-            workspace != nullptr && workspace->active() && workspace->focusedView() == view && m_dragCard != &card;
+        const bool focused = workspace != nullptr && workspace->focusedView() == view && m_dragCard != &card;
         const std::array<float, 4> color =
             tint(focused ? config().appearance.borderFocused : config().appearance.borderUnfocused, 1.0);
         wlr_scene_rect_set_color(card.border, color.data());
       }
     }
 
-    const int radius = decorated ? static_cast<int>(std::lround(config().appearance.cornerRadius * z)) : 0;
     const double fx = static_cast<double>(contentW) / geometry.width;
     const double fy = static_cast<double>(contentH) / geometry.height;
     for (const auto& entry : card.surfaces) {

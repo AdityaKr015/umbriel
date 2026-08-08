@@ -449,6 +449,9 @@ namespace umbriel {
       return true;
     case KeybindAction::Submap:
       if (bind.spawnCommand == "reset" || bind.spawnCommand == "disable") {
+        if (m_activeSubmaps.empty()) {
+          return false;
+        }
         popSubmap();
       } else {
         pushSubmap(bind.spawnCommand);

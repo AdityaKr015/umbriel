@@ -21,6 +21,8 @@ xwayland = true
 # to the previously active workspace on that output.
 back_and_forth = false
 
+# Appearance -----------------------------------------------------------------
+
 [appearance]
 # Ask clients to omit client-side decorations (xdg-decoration server-side).
 # Clients that explicitly request CSD are still honored. Restart apps after
@@ -29,16 +31,16 @@ prefer_no_csd = true
 border_width = 2          # 0-100
 outer_border_width = 0    # 0-100; ring outside the inner border
 corner_radius = 10        # 0-500; 0 disables rounded corners
-border_focused = "#7AA3FFFF"   # #RRGGBB or #RRGGBBAA
+border_focused = "#7AA3FFFF"     # #RRGGBB or #RRGGBBAA
 border_unfocused = "#292933FF"
-outer_border_color = "#1A1A1FFF"  # single color; no focus variant
+outer_border_color = "#1A1A1FFF" # single color; no focus variant
 insert_hint_color = "#7FC8FF80"  # drop-target preview shown during drag
-backdrop_color = "#000000FF"   # background color for fullscreen gaps and lock screen
+backdrop_color = "#000000FF"     # background color for fullscreen gaps and lock screen
 animation_ms = 250        # 1-10000
 
+[appearance.blur]
 # Backdrop blur behind transparent surfaces (windows, panels, popups).
 # Blur only renders where a surface is actually transparent.
-[appearance.blur]
 enabled = true
 optimized = true          # cache one background blur per output instead of recomputing per surface
 passes = 3               # 0-8; 0 disables
@@ -48,23 +50,27 @@ brightness = 0.9         # 0.0-2.0
 contrast = 0.9           # 0.0-2.0
 saturation = 1.1         # 0.0-2.0
 
-# Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
 [appearance.shadow]
+# Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
 enabled = true
 softness = 10            # 0-200; gaussian blur sigma in px, 0 disables
 offset_x = 2             # -200-200
 offset_y = 2             # -200-200
 color = "#0000008C"      # #RRGGBB or #RRGGBBAA
 
+# Overview -------------------------------------------------------------------
+
+[overview]
 # Zoomed-out view of every workspace on every output (default Mod+O).
 # Windows stay live; click one to focus it, middle-click to close it, drag it
 # between workspaces, scroll to move the filmstrip, 4-finger swipe to toggle.
-[overview]
 zoom = 0.5                    # 0.1-0.75; workspace scale when fully zoomed out
 # Tint over the desktop background. The wallpaper stays visible behind the
 # filmstrip; alpha 00 leaves it untouched, higher values dim it, FF hides it.
 backdrop_color = "#10101400"
 workspace_color = "#1A1A1FFF" # workspace thumbnail background
+
+# Layout ---------------------------------------------------------------------
 
 [layout]
 # Layout algorithm: "scrolling" or "dwindle".
@@ -75,7 +81,7 @@ default_width_fraction = 0.5    # 0.1-1.0
 # Widths visited by `window-cycle-width`.
 width_presets = [0.333, 0.5, 0.667]
 
-# ── Workspace layout rules ───────────────────────────────────────────────────
+# Workspace layout rules -----------------------------------------------------
 # Workspace inventories are declared by each output's `workspaces` setting
 # below. [[workspace]] entries only customize an existing workspace and must
 # select it by exactly one of `name` or 1-based `index`.
@@ -105,7 +111,7 @@ width_presets = [0.333, 0.5, 0.667]
 # layout.gap = 0
 # layout.default_width_fraction = 0.667
 
-# ── Outputs ──────────────────────────────────────────────────────────────────
+# Outputs --------------------------------------------------------------------
 # Output names must exactly match connector names such as DP-1 or HDMI-A-1.
 # Nested outputs use WL-1; headless outputs use HEADLESS-1. Mode is ignored in
 # nested sessions because the parent compositor controls the output size.
@@ -130,6 +136,8 @@ width_presets = [0.333, 0.5, 0.667]
 # position = [2048, 0]     # right of DP-1 (2560 / 1.25 = 2048 logical pixels)
 # scale = 1.0
 # workspaces = ["TV"]
+
+# Input ----------------------------------------------------------------------
 
 [input.keyboard]
 # Empty layout/variant use the system XKB defaults.
@@ -163,6 +171,8 @@ follows_mouse = false
 # viewport (0.0 = never scroll). Omit for no limit.
 # follows_mouse_max_scroll = 0.0
 
+# Keybinds -------------------------------------------------------------------
+
 [keybinds]
 # Chords are case-insensitive. Supported modifiers: Mod, Shift, Ctrl/Control,
 # Alt, and Super/Logo/Win (`Mod` is Alt nested / Super on DRM). Bare keys are
@@ -174,7 +184,7 @@ follows_mouse = false
 # Run `umbriel actions` for the full list. Parameterized actions:
 #   spawn:<shell command>, workspace-switch:<workspace>[/<output>],
 #   window-move-to-workspace:<workspace>[/<output>]
-#   window-set-width:<fraction> (0.1-1.0),
+#   window-set-width:<fraction> (0.1-1.0)
 # Workspace selectors are exact names, including numeric names such as `1`.
 # Unique names resolve globally. Duplicates resolve on the preferred output;
 # add `/output` to target a different output explicitly.
@@ -187,6 +197,7 @@ follows_mouse = false
 "Mod+Shift+Q" = "window-close"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"
 "Mod+O" = "overview-toggle"    # also: overview-open, overview-close
+
 # Direct column width bindings:
 # "Mod+A" = "window-set-width:0.333"
 # "Mod+S" = "window-set-width:0.5"
@@ -195,27 +206,21 @@ follows_mouse = false
 # "Mod+MouseMiddle" = "overview-toggle"
 # "Mod+Escape" = "none"
 
-# Submaps
-# Submaps let you create temporary keybind layers. Use `submap:<name>` to enter
-# a submap, and `submap:reset` (or `submap:disable`) to exit it.
+# Submaps: temporary keybind layers that can be nested.
+# Use `submap:<name>` to enter, `submap:reset` to exit one level.
 # Binds inside a submap use the `submap[name]` prefix on the chord.
+# A `submap:reset` bind in the default context (no prefix) always matches,
+# even inside a submap, for a global emergency exit.
 #
-# Submaps can be nested: entering a submap while already in one pushes it onto
-# a stack. `submap:reset` pops one level.
-#
-# Example: a screencapture submap with a nested region selector.
 # "Mod+S" = "submap:screencapture"
 # "submap[screencapture],1" = "spawn:grim screenshot.png"
 # "submap[screencapture],2" = "submap:region"
 # "submap[screencapture],Escape" = "submap:reset"
 # "submap[region],R" = "spawn:grim -g 'slurp -p' screenshot.png"
 # "submap[region],Escape" = "submap:reset"
-#
-# You can also define a global emergency exit in the default context (no prefix).
-# It will always match even when inside a submap:
 # "Escape" = "submap:reset"
 
-# Media keys — bare XF86 key names work without a modifier.
+# Media keys: bare XF86 key names work without a modifier.
 # Volume (PipeWire/WirePlumber)
 # "XF86AudioRaiseVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
 # "XF86AudioLowerVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
@@ -228,7 +233,7 @@ follows_mouse = false
 # "XF86AudioNext" = "spawn:playerctl next"
 # "XF86AudioPrev" = "spawn:playerctl previous"
 
-# ── Window rules ─────────────────────────────────────────────────────────────
+# Window rules ---------------------------------------------------------------
 # Each [[window_rule]] matches windows by app_id and/or title (regex, ECMAScript).
 # All matching rules are merged top-to-bottom; later rules override earlier ones
 # for each field they set (last-writer-wins).
@@ -295,7 +300,7 @@ match.app_id = "^dev.noctalia.UmbrielSharePicker$"
 default_floating = true
 default_size = [800, 600]
 
-# ── Layer rules ──────────────────────────────────────────────────────────────
+# Layer rules ----------------------------------------------------------------
 # Each [[layer_rule]] matches layer-shell surfaces such as bars, launchers, and
 # notifications by match.namespace (regex, ECMAScript). Matching uses regex
 # search (partial match); use ^ and $ to anchor patterns.
@@ -312,6 +317,6 @@ default_size = [800, 600]
 #   optimized     = true/false    Override appearance.blur.optimized
 
 [[layer_rule]]
-match.namespace = "^noctalia"
+match.namespace="^noctalia-(bar-[^\"]+|notification|dock|panel|attached-panel|osd)$"
 blur = true
-ignore_alpha = 0.5
+ignore_alpha = 0.5   

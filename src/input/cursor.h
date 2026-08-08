@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 #include <wayland-server-core.h>
 
 struct wlr_cursor;
@@ -136,6 +137,8 @@ namespace umbriel {
     // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
     wlr_output* m_pointerOutput = nullptr;
     double m_wheelAccum[2]{};
+    // Presses consumed by config mouse binds; their release is swallowed too.
+    std::vector<uint32_t> m_swallowedButtons;
     bool m_compositorOwnsCursor = false;
     std::string m_compositorCursorName;
 

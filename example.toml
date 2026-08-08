@@ -168,6 +168,7 @@ follows_mouse = false
 # Alt, and Super/Logo/Win (`Mod` is Alt nested / Super on DRM). Bare keys are
 # allowed (e.g. XF86AudioMute).
 # Scroll-wheel chords: WheelUp, WheelDown, WheelLeft, WheelRight (need >=1 modifier).
+# Mouse-button chords: MouseLeft, MouseRight, MouseMiddle, MouseBack, MouseForward (need >=1 modifier).
 #
 # A configured chord replaces its compiled default. `none` removes a binding.
 # Run `umbriel actions` for the full list. Parameterized actions:
@@ -191,6 +192,7 @@ follows_mouse = false
 # "Mod+S" = "window-set-width:0.5"
 # "Mod+D" = "window-set-width:0.667"
 # "Mod+F" = "window-set-width:1.0"
+# "Mod+MouseMiddle" = "overview-toggle"
 # "Mod+Escape" = "none"
 
 # Media keys — bare XF86 key names work without a modifier.

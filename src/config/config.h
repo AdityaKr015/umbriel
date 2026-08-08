@@ -57,6 +57,7 @@ namespace umbriel {
     bool useMod = false;
     uint32_t keysym = 0;
     WheelDirection wheel = WheelDirection::None;
+    uint32_t mouseButton = 0; // evdev BTN_* code, 0 = not a mouse bind
     KeybindAction action = KeybindAction::None;
     std::string spawnCommand;
     std::string workspaceName;

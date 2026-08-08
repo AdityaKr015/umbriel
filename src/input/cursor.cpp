@@ -290,6 +290,23 @@ namespace umbriel {
     auto* event = static_cast<wlr_pointer_button_event*>(data);
     m_server->notifyIdleActivity();
 
+    // Config mouse binds win over the overview and the built-in Mod+drag /
+    // Mod+resize grabs. Presses consumed here swallow their paired release so
+    // clients never see an unmatched release.
+    if (event->state == WL_POINTER_BUTTON_STATE_PRESSED
+        && !m_server->sessionLocked()
+        && m_mode == CursorMode::Passthrough) {
+      wlr_keyboard* kb = wlr_seat_get_keyboard(m_server->seat()->wlr());
+      const uint32_t modifiers = kb != nullptr ? wlr_keyboard_get_modifiers(kb) : 0;
+      if (m_server->handleMouseBind(event->button, modifiers)) {
+        m_swallowedButtons.push_back(event->button);
+        return;
+      }
+    }
+    if (event->state == WL_POINTER_BUTTON_STATE_RELEASED && std::erase(m_swallowedButtons, event->button) > 0) {
+      return;
+    }
+
     // Overview owns the pointer while it is up: cards are its own hit-test
     // surface and the desktop underneath is inert. Top/overlay layer surfaces
     // (panels) stay fully interactive.

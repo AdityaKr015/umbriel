@@ -5,6 +5,7 @@
 #include "core/log.h"
 
 // clang-format off
+#include <linux/input-event-codes.h>
 #include <xkbcommon/xkbcommon.h>
 #include "wlr.h"
 // clang-format on
@@ -186,7 +187,7 @@ namespace umbriel {
         return false;
       }
 
-      // Check if the last token is a wheel direction.
+      // Check if the last token is a wheel direction or a mouse button.
       std::string lastLower(tokens.back());
       std::ranges::transform(lastLower, lastLower.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
@@ -201,9 +202,21 @@ namespace umbriel {
       } else if (lastLower == "wheelright") {
         wheelDir = WheelDirection::Right;
       }
+      uint32_t mouseButton = 0;
+      if (lastLower == "mouseleft") {
+        mouseButton = BTN_LEFT;
+      } else if (lastLower == "mouseright") {
+        mouseButton = BTN_RIGHT;
+      } else if (lastLower == "mousemiddle") {
+        mouseButton = BTN_MIDDLE;
+      } else if (lastLower == "mouseback") {
+        mouseButton = BTN_SIDE;
+      } else if (lastLower == "mouseforward") {
+        mouseButton = BTN_EXTRA;
+      }
 
-      if (wheelDir != WheelDirection::None) {
-        // A bare wheel bind (no modifier) would hijack all client scrolling.
+      if (wheelDir != WheelDirection::None || mouseButton != 0) {
+        // A bare wheel or mouse-button bind would hijack all client input.
         if (tokens.size() < 2) {
           return false;
         }
@@ -227,6 +240,7 @@ namespace umbriel {
           }
         }
         output.wheel = wheelDir;
+        output.mouseButton = mouseButton;
         return true;
       }
 
@@ -1334,7 +1348,8 @@ namespace umbriel {
         return left.modifiers == right.modifiers
             && left.useMod == right.useMod
             && left.keysym == right.keysym
-            && left.wheel == right.wheel;
+            && left.wheel == right.wheel
+            && left.mouseButton == right.mouseButton;
       };
       for (const auto& [key, entry] : *section) {
         const std::string chord(key.str());

@@ -137,6 +137,7 @@ namespace umbriel {
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
     const Keybind* handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
     bool handleWheelBind(WheelDirection direction, uint32_t modifiers);
+    bool handleMouseBind(uint32_t button, uint32_t modifiers);
     bool handleVtSwitch(uint32_t keysym, uint32_t modifiers);
     void arrangeLayers(wlr_output* output);
     [[nodiscard]] wlr_output* preferredOutput() const;

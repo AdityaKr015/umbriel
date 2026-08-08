@@ -460,7 +460,7 @@ namespace umbriel {
     const uint32_t lowered = xkb_keysym_to_lower(keysym);
 
     for (const Keybind& bind : config().keybinds) {
-      if (bind.wheel != WheelDirection::None) {
+      if (bind.wheel != WheelDirection::None || bind.mouseButton != 0) {
         continue;
       }
       const uint32_t expected = bind.modifiers | (bind.useMod ? modKey() : 0);
@@ -482,6 +482,28 @@ namespace umbriel {
 
     for (const Keybind& bind : config().keybinds) {
       if (bind.wheel != direction) {
+        continue;
+      }
+      const uint32_t expected = bind.modifiers | (bind.useMod ? modKey() : 0);
+      if (effective != expected) {
+        continue;
+      }
+      return executeKeybindAction(bind);
+    }
+
+    return false;
+  }
+
+  bool Server::handleMouseBind(uint32_t button, uint32_t modifiers) {
+    if (m_sessionLocked) {
+      return false;
+    }
+
+    const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
+
+    for (const Keybind& bind : config().keybinds) {
+      // Non-mouse binds carry 0 here, which never equals a BTN_* code.
+      if (bind.mouseButton != button) {
         continue;
       }
       const uint32_t expected = bind.modifiers | (bind.useMod ? modKey() : 0);

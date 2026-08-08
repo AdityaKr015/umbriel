@@ -1492,7 +1492,7 @@ namespace umbriel {
 
         if (const toml::node* matchNode = section->get("match")) {
           if (const auto* match = matchNode->as_table()) {
-            warnUnknownKeys(*match, "window_rule.match", {"app_id", "title"});
+            warnUnknownKeys(*match, "window_rule.match", {"app_id", "title", "is_focused"});
             if (const toml::node* appIdNode = match->get("app_id")) {
               if (const auto value = appIdNode->value<std::string>()) {
                 rule.appIdPattern = *value;
@@ -1517,6 +1517,13 @@ namespace umbriel {
                 }
               } else {
                 warnAt(titleNode->source(), "ignoring window_rule.match.title (expected string)");
+              }
+            }
+            if (const toml::node* focusedNode = match->get("is_focused")) {
+              if (focusedNode->is_boolean()) {
+                rule.matchFocused = focusedNode->value<bool>();
+              } else {
+                warnAt(focusedNode->source(), "ignoring window_rule.match.is_focused (expected boolean)");
               }
             }
           } else {
@@ -1804,7 +1811,7 @@ namespace umbriel {
 
   const std::vector<std::filesystem::path>& configWatchPaths() { return g_watchPaths; }
 
-  ResolvedWindowRule resolveWindowRules(const char* appId, const char* title) {
+  ResolvedWindowRule resolveWindowRules(const char* appId, const char* title, bool focused) {
     ResolvedWindowRule resolved;
     const std::string_view appIdView = appId != nullptr ? appId : "";
     const std::string_view titleView = title != nullptr ? title : "";
@@ -1819,6 +1826,9 @@ namespace umbriel {
         if (titleView.empty() || !std::regex_search(titleView.begin(), titleView.end(), rule.titleRegex)) {
           continue;
         }
+      }
+      if (rule.matchFocused && *rule.matchFocused != focused) {
+        continue;
       }
       // Last writer wins: overwrite each field the rule sets.
       if (rule.defaultOutput) {

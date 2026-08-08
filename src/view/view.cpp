@@ -735,8 +735,12 @@ namespace umbriel {
   }
 
   void View::setBorderFocused(bool focused) {
+    const bool focusChanged = m_borderFocusedState != focused;
     m_borderFocusedState = focused;
     if (m_borderTree == nullptr) {
+      if (focusChanged && m_mapped) {
+        applyRuleOpacity();
+      }
       return;
     }
     const auto& baseColor = focused ? config().appearance.borderFocused : config().appearance.borderUnfocused;
@@ -752,6 +756,10 @@ namespace umbriel {
       float outerColor[4];
       premultiplied(outerColor, config().appearance.outerBorderColor, m_fadeAlpha);
       wlr_scene_rect_set_color(m_outerBorderRect, outerColor);
+    }
+
+    if (focusChanged && m_mapped) {
+      applyRuleOpacity();
     }
   }
 
@@ -1321,7 +1329,7 @@ namespace umbriel {
     clearOutputClip();
 
     // Resolve window rules and apply one-shot effects.
-    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
+    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
     if (rule.defaultFloating) {
       m_tiled = !*rule.defaultFloating;
     }
@@ -1473,7 +1481,8 @@ namespace umbriel {
   void View::handleCommit() {
     if (m_toplevel->base->initial_commit) {
       // Resolve window rules early to influence initial tiled/float decision and size.
-      const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
+        const ResolvedWindowRule rule =
+          resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
       const bool wantTiled = rule.defaultFloating ? !*rule.defaultFloating : looksTiled(m_toplevel);
 
       if (wantTiled) {
@@ -1930,7 +1939,7 @@ namespace umbriel {
     if (!m_mapped) {
       return;
     }
-    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
+    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
 
     if (allowDisruptive) {
       // Float/tile override.
@@ -2007,7 +2016,7 @@ namespace umbriel {
   }
 
   void View::applyRuleOpacity() {
-    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title);
+    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
     const float newOpacity = rule.opacity ? static_cast<float>(*rule.opacity) : 1.0F;
     if (newOpacity != m_ruleOpacity) {
       m_ruleOpacity = newOpacity;

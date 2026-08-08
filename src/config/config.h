@@ -122,6 +122,7 @@ namespace umbriel {
     std::string titlePattern;
     std::regex appIdRegex;
     std::regex titleRegex;
+    std::optional<bool> matchFocused;
     std::optional<std::string> defaultOutput;
     std::optional<bool> defaultFloating;
     std::optional<std::array<int, 2>> defaultSize; // [width, height]
@@ -272,7 +273,7 @@ namespace umbriel {
   [[nodiscard]] const std::vector<std::filesystem::path>& configWatchPaths();
   [[nodiscard]] const std::vector<ConfigDiagnostic>& configDiagnostics();
   [[nodiscard]] const std::filesystem::path& configRootPath();
-  [[nodiscard]] ResolvedWindowRule resolveWindowRules(const char* appId, const char* title);
+  [[nodiscard]] ResolvedWindowRule resolveWindowRules(const char* appId, const char* title, bool focused);
   [[nodiscard]] ResolvedLayerRule resolveLayerRules(const char* layerNamespace);
   [[nodiscard]] bool anyWindowRuleHasTitlePattern();
   [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();

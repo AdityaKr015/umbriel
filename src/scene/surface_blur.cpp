@@ -45,7 +45,7 @@ namespace umbriel {
 
   void SurfaceBlur::update(
       wlr_scene_tree* parent, wlr_surface* surface, const wlr_box& nodeBox, const wlr_box& surfaceBox, int cornerRadius,
-      const wlr_box* clipBox
+      const wlr_box* clipBox, const SurfaceBlurOptions& options
   ) {
     const Config::Appearance::Blur& cfg = config().appearance.blur;
     wlr_box drawBox = nodeBox;
@@ -57,7 +57,10 @@ namespace umbriel {
         return;
       }
     }
-    const bool want = cfg.enabled && drawBox.width > 0 && drawBox.height > 0 && isTransparent(surface, surfaceBox);
+    const bool want = options.enabled.value_or(cfg.enabled)
+        && drawBox.width > 0
+        && drawBox.height > 0
+        && isTransparent(surface, surfaceBox);
     if (!want) {
       if (m_node != nullptr) {
         wlr_scene_node_set_enabled(&m_node->node, false);
@@ -65,7 +68,7 @@ namespace umbriel {
       return;
     }
 
-    if (m_node != nullptr && m_masked != (cfg.ignoreAlpha > 0.0)) {
+    if (m_node != nullptr && m_masked != (options.ignoreAlpha > 0.0F)) {
       wlr_scene_node_destroy(&m_node->node);
       m_node = nullptr;
     }
@@ -76,7 +79,7 @@ namespace umbriel {
         return;
       }
       wlr_scene_node_lower_to_bottom(&m_node->node);
-      m_masked = cfg.ignoreAlpha > 0.0;
+      m_masked = options.ignoreAlpha > 0.0F;
     }
 
     if (wlr_scene_blur_get_transparency_mask_source(m_node) == nullptr) {
@@ -85,12 +88,11 @@ namespace umbriel {
       }
     }
 
-    const auto ignoreAlpha = static_cast<float>(cfg.ignoreAlpha);
-    if (m_node->ignore_alpha != ignoreAlpha) {
-      wlr_scene_blur_set_ignore_alpha(m_node, ignoreAlpha);
+    if (m_node->ignore_alpha != options.ignoreAlpha) {
+      wlr_scene_blur_set_ignore_alpha(m_node, options.ignoreAlpha);
     }
 
-    wlr_scene_blur_set_should_only_blur_bottom_layer(m_node, cfg.optimized);
+    wlr_scene_blur_set_should_only_blur_bottom_layer(m_node, options.optimized.value_or(cfg.optimized));
 
     wlr_scene_node_set_enabled(&m_node->node, true);
     wlr_scene_node_set_position(&m_node->node, drawBox.x, drawBox.y);
@@ -99,6 +101,16 @@ namespace umbriel {
     }
     if (m_node->corners.top_left != cornerRadius) {
       wlr_scene_blur_set_corner_radius(m_node, cornerRadius);
+    }
+    if (m_node->alpha != m_alpha) {
+      wlr_scene_blur_set_alpha(m_node, m_alpha);
+    }
+  }
+
+  void SurfaceBlur::setAlpha(float alpha) {
+    m_alpha = alpha;
+    if (m_node != nullptr && m_node->alpha != alpha) {
+      wlr_scene_blur_set_alpha(m_node, alpha);
     }
   }
 

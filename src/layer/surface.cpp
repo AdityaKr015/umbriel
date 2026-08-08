@@ -35,8 +35,9 @@ namespace umbriel {
 
     const auto layer = m_layerSurface->pending.layer;
     kLog.debug(
-        "new layer surface layer={} output={} exclusive={}", static_cast<unsigned>(layer), m_layerSurface->output->name,
-        m_layerSurface->pending.exclusive_zone
+        "new layer surface ns={} layer={} output={} exclusive={}",
+        m_layerSurface->namespace_ != nullptr ? m_layerSurface->namespace_ : "", static_cast<unsigned>(layer),
+        m_layerSurface->output->name, m_layerSurface->pending.exclusive_zone
     );
 
     m_scene = wlr_scene_layer_surface_v1_create(out->layerTree(layer), m_layerSurface);
@@ -46,6 +47,7 @@ namespace umbriel {
       m_layerSurface = nullptr;
       return;
     }
+    m_rule = resolveLayerRules(m_layerSurface->namespace_);
     m_scene->tree->node.data = this;
     m_layerSurface->data = this;
 
@@ -129,6 +131,14 @@ namespace umbriel {
     }
   }
 
+  SurfaceBlurOptions LayerSurface::blurOptions() const {
+    return SurfaceBlurOptions{
+        .ignoreAlpha = static_cast<float>(m_rule.ignoreAlpha.value_or(0.0)),
+        .enabled = m_rule.blur.value_or(false),
+        .optimized = m_rule.optimized,
+    };
+  }
+
   void LayerSurface::unconstrainPopup(wlr_xdg_popup* popup) {
     Output* out = output();
     if (out == nullptr || m_scene == nullptr) {
@@ -151,7 +161,12 @@ namespace umbriel {
 
   void LayerSurface::updateBlur() {
     const wlr_box box{0, 0, m_layerSurface->surface->current.width, m_layerSurface->surface->current.height};
-    m_blur.update(m_scene->tree, m_layerSurface->surface, box, box, 0);
+    m_blur.update(m_scene->tree, m_layerSurface->surface, box, box, 0, nullptr, blurOptions());
+  }
+
+  void LayerSurface::applyConfig() {
+    m_rule = resolveLayerRules(m_layerSurface->namespace_);
+    updateBlur();
   }
 
   void LayerSurface::onMap(wl_listener* listener, void* /*data*/) {

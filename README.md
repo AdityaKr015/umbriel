@@ -15,7 +15,7 @@ What works today:
 - Per-monitor workspace inventories via `ext_workspace_manager_v1`, isolated and configurable per output
 - Scrolling column layout with keyboard/mouse focus, movement, width presets, and animated transitions
 - Floating windows with mouse move/resize, mod+drag tile reorder with drop-target preview
-- Window rules: per-app float, size, column width, workspace, fullscreen, and opacity via `[[rule]]` with regex matching on app_id and title
+- Window rules: per-app float, size, column width, workspace, fullscreen, and opacity via `[[window_rule]]` with regex matching on app_id and title
 - Blur, shadows, rounded corners, double borders (inner + outer ring), animated position/size/fade transitions, close animation snapshots
 - Touchpad/trackpad gestures: 3-finger horizontal swipe (scroll layout), 3-finger vertical swipe (workspace switch), pinch/hold forwarding
 - Touch input: tap-to-focus, touch forwarding to clients, hot-plug support
@@ -176,11 +176,13 @@ programs.umbriel = {
 `settings` also accepts a raw TOML string or a path to a `.toml` file. A hjem module is exported as
 `inputs.umbriel.hjemModules.default`.
 
-The `appearance`, `layout`, `general`, `workspaces`, `input`, `keybinds`, and `[[rule]]` sections overlay compiled
-defaults, so a config file is optional. Window rules match on `app_id` and `title` (regex) and can set floating, size,
-workspace, fullscreen, and opacity. Keyboard input supports XKB layout/variant and repeat settings; touchpads support
-tap-to-click and natural scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput
-options are applied only when supported by the device.
+The `appearance`, `layout`, `general`, `workspaces`, `input`, `keybinds`, `[[window_rule]]`, and `[[layer_rule]]`
+overlay compiled defaults, so a config file is optional. Window rules match on `app_id` and `title` (regex) and can
+set floating, size, workspace, fullscreen, and opacity. Layer rules match layer-shell namespaces (regex). Layer blur
+is disabled by default and requires an explicit `blur = true`; matching rules can also configure alpha masking and
+optimized blur. Keyboard input supports XKB layout/variant and repeat settings; touchpads support tap-to-click and
+natural scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput options are
+applied only when supported by the device.
 
 ## Project layout
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config/config.h"
 #include "scene/node.h"
 #include "scene/surface_blur.h"
 
@@ -30,6 +31,7 @@ namespace umbriel {
     [[nodiscard]] bool exclusiveKeyboard() const;
     [[nodiscard]] bool acceptsKeyboard() const;
     [[nodiscard]] bool hasKeyboardFocus() const;
+    [[nodiscard]] SurfaceBlurOptions blurOptions() const;
 
     void focus();
     void unconstrainPopup(wlr_xdg_popup* popup);
@@ -50,12 +52,14 @@ namespace umbriel {
     void handleNewPopup(void* data);
     void reparentToLayer(uint32_t layer);
     void updateBlur();
+    void applyConfig();
     Output* output() const;
 
     Server* m_server = nullptr;
     wlr_layer_surface_v1* m_layerSurface = nullptr;
     wlr_scene_layer_surface_v1* m_scene = nullptr;
     SurfaceBlur m_blur;
+    ResolvedLayerRule m_rule;
     bool m_mapped = false;
     bool m_arrangingOut = false;
 

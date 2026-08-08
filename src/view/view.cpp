@@ -336,11 +336,7 @@ namespace umbriel {
     );
     setBorderFocused(m_borderFocusedState);
     m_shadow.setAlpha(effective);
-    if (effective < 1.0F) {
-      m_blur.hide();
-    } else {
-      updateBlur();
-    }
+    m_blur.setAlpha(effective);
   }
 
   void View::applyEffectiveOpacity() {
@@ -506,6 +502,7 @@ namespace umbriel {
         m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry,
         rounded ? config().appearance.cornerRadius : 0
     );
+    m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
     if (m_workspace != nullptr) {
       m_workspace->syncViewPresentation(this);
     }
@@ -880,16 +877,13 @@ namespace umbriel {
   }
 
   void View::updateBlur() {
-    if (m_fadeAlpha < 1.0F) {
-      m_blur.hide();
-      return;
-    }
     const wlr_box& geometry = m_toplevel->base->geometry;
     const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
     const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
     m_blur.update(
         m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0
     );
+    m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
   }
 
   void View::updateShadow() {
@@ -1246,7 +1240,7 @@ namespace umbriel {
 
     const wlr_box nodeBox{0, 0, content.width, content.height};
     const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
-    if (!contentOnOutput || m_fadeAlpha < 1.0F) {
+    if (!contentOnOutput) {
       m_blur.hide();
       return;
     }
@@ -1296,6 +1290,7 @@ namespace umbriel {
         m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0,
         &blurClip
     );
+    m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
   }
 
   void View::ensureBorders() {

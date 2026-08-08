@@ -32,6 +32,21 @@ namespace umbriel {
       }
       return nullptr;
     }
+
+    LayerSurface* layerSurfaceFromSurface(wlr_surface* surface) {
+      wlr_surface* walk = surface;
+      while (walk != nullptr) {
+        if (wlr_layer_surface_v1* layer = wlr_layer_surface_v1_try_from_wlr_surface(walk)) {
+          return static_cast<LayerSurface*>(layer->data);
+        }
+        if (wlr_xdg_popup* popup = wlr_xdg_popup_try_from_wlr_surface(walk)) {
+          walk = popup->parent;
+          continue;
+        }
+        break;
+      }
+      return nullptr;
+    }
   } // namespace
 
   Popup::Popup(wlr_xdg_popup* popup, wlr_scene_tree* parentTree) : m_popup(popup) {
@@ -75,9 +90,11 @@ namespace umbriel {
 
   void Popup::handleCommit() {
     const wlr_box& geometry = m_popup->base->geometry;
+    LayerSurface* layer = layerSurfaceFromSurface(m_popup->parent);
     m_blur.update(
         static_cast<wlr_scene_tree*>(m_popup->base->data), m_popup->base->surface,
-        wlr_box{0, 0, geometry.width, geometry.height}, geometry, 0
+        wlr_box{0, 0, geometry.width, geometry.height}, geometry, 0, nullptr,
+        layer != nullptr ? layer->blurOptions() : SurfaceBlurOptions{}
     );
     if (!m_popup->base->initial_commit) {
       return;

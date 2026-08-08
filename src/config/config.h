@@ -137,6 +137,20 @@ namespace umbriel {
     std::optional<double> opacity;
   };
 
+  struct LayerRule {
+    std::string namespacePattern;
+    std::regex namespaceRegex;
+    std::optional<bool> blur;
+    std::optional<double> ignoreAlpha;
+    std::optional<bool> optimized;
+  };
+
+  struct ResolvedLayerRule {
+    std::optional<bool> blur;
+    std::optional<double> ignoreAlpha;
+    std::optional<bool> optimized;
+  };
+
   struct Config {
     struct Appearance {
       int borderWidth = 2;
@@ -157,7 +171,6 @@ namespace umbriel {
         double brightness = 0.9;
         double contrast = 0.9;
         double saturation = 1.1;
-        double ignoreAlpha = 0.5;
       } blur;
       struct Shadow {
         bool enabled = true;
@@ -226,6 +239,7 @@ namespace umbriel {
     std::vector<Keybind> keybinds;
     std::vector<OutputRule> outputs;
     std::vector<WindowRule> windowRules;
+    std::vector<LayerRule> layerRules;
     std::vector<WorkspaceConfig> workspaceRules; // [[workspace]] layout rules
   };
 
@@ -236,6 +250,7 @@ namespace umbriel {
   [[nodiscard]] const std::vector<ConfigDiagnostic>& configDiagnostics();
   [[nodiscard]] const std::filesystem::path& configRootPath();
   [[nodiscard]] ResolvedWindowRule resolveWindowRules(const char* appId, const char* title);
+  [[nodiscard]] ResolvedLayerRule resolveLayerRules(const char* layerNamespace);
   [[nodiscard]] bool anyWindowRuleHasTitlePattern();
   [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();
   [[nodiscard]] std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName);

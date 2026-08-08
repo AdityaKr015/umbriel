@@ -184,7 +184,7 @@ namespace umbriel {
     }
     for (const auto& layer : m_layerSurfaces) {
       if (layer->mapped()) {
-        layer->updateBlur();
+        layer->applyConfig();
       }
     }
     applyKdeDecorationDefault(m_serverDecorationManager);

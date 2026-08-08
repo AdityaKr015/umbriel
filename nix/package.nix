@@ -23,18 +23,11 @@
   nlohmann_json,
   xwayland-satellite,
   makeBinaryWrapper,
+  scenefx,
 }:
 let
   inherit (builtins) baseNameOf head match readFile;
-  source = lib.cleanSourceWith {
-    src = lib.cleanSource ./..;
-    filter =
-      path: type:
-      let
-        name = baseNameOf path;
-      in
-      type != "directory" || (name != "build" && !(lib.hasPrefix "build-" name));
-  };
+  source = ../.;
   version = head (match ".*\n  version: '([0-9][^']+)'.*" (readFile ../meson.build));
 in
 stdenv.mkDerivation {
@@ -42,6 +35,12 @@ stdenv.mkDerivation {
   inherit version;
 
   src = source;
+
+  preConfigure = ''
+    mkdir -p subprojects
+    rm -rf subprojects/scenefx
+    cp -r ${scenefx} subprojects/scenefx
+  '';
 
   nativeBuildInputs = [
     makeBinaryWrapper

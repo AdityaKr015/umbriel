@@ -447,6 +447,13 @@ namespace umbriel {
     case KeybindAction::OverviewClose:
       m_overview->close();
       return true;
+    case KeybindAction::Submap:
+      if (bind.spawnCommand == "reset" || bind.spawnCommand == "disable") {
+        popSubmap();
+      } else {
+        pushSubmap(bind.spawnCommand);
+      }
+      return true;
     }
     return false;
   }
@@ -458,8 +465,20 @@ namespace umbriel {
 
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
     const uint32_t lowered = xkb_keysym_to_lower(keysym);
+    const std::string& currentSubmap = m_activeSubmaps.empty() ? std::string{} : m_activeSubmaps.back();
 
     for (const Keybind& bind : config().keybinds) {
+      if (bind.submap != currentSubmap) {
+        // Allow submap:reset / submap:disable from the default context to
+        // always match, so users can define a global emergency exit.
+        if (!m_activeSubmaps.empty() && bind.submap.empty()
+            && bind.action == KeybindAction::Submap
+            && (bind.spawnCommand == "reset" || bind.spawnCommand == "disable")) {
+          // Fall through to match below.
+        } else {
+          continue;
+        }
+      }
       if (bind.wheel != WheelDirection::None || bind.mouseButton != 0) {
         continue;
       }
@@ -479,8 +498,12 @@ namespace umbriel {
     }
 
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
+    const std::string& currentSubmap = m_activeSubmaps.empty() ? std::string{} : m_activeSubmaps.back();
 
     for (const Keybind& bind : config().keybinds) {
+      if (bind.submap != currentSubmap) {
+        continue;
+      }
       if (bind.wheel != direction) {
         continue;
       }
@@ -500,8 +523,12 @@ namespace umbriel {
     }
 
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
+    const std::string& currentSubmap = m_activeSubmaps.empty() ? std::string{} : m_activeSubmaps.back();
 
     for (const Keybind& bind : config().keybinds) {
+      if (bind.submap != currentSubmap) {
+        continue;
+      }
       // Non-mouse binds carry 0 here, which never equals a BTN_* code.
       if (bind.mouseButton != button) {
         continue;
@@ -514,6 +541,16 @@ namespace umbriel {
     }
 
     return false;
+  }
+
+  void Server::pushSubmap(const std::string& name) {
+    m_activeSubmaps.push_back(name);
+  }
+
+  void Server::popSubmap() {
+    if (!m_activeSubmaps.empty()) {
+      m_activeSubmaps.pop_back();
+    }
   }
 
   void Server::arrangeLayers(wlr_output* output) {

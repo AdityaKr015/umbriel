@@ -122,6 +122,12 @@ namespace umbriel {
     void hideInsertHint();
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
     [[nodiscard]] bool sessionLocked() const { return m_sessionLocked; }
+    [[nodiscard]] const std::string& activeSubmap() const {
+      static const std::string empty;
+      return m_activeSubmaps.empty() ? empty : m_activeSubmaps.back();
+    }
+    void pushSubmap(const std::string& name);
+    void popSubmap();
     [[nodiscard]] wlr_foreign_toplevel_manager_v1* foreignToplevelManager() const { return m_foreignToplevelManager; }
     [[nodiscard]] wlr_ext_foreign_toplevel_list_v1* extForeignToplevelList() const { return m_extForeignToplevelList; }
     [[nodiscard]] wlr_ext_workspace_manager_v1* workspaceManager() const { return m_workspaceManager; }
@@ -275,6 +281,7 @@ namespace umbriel {
     wlr_scene_rect* m_lockBlank = nullptr;
     wlr_scene_rect* m_backdrop = nullptr;
     bool m_sessionLocked = false;
+    std::vector<std::string> m_activeSubmaps;
     Animator m_animator;
 
     struct CloseSnapshot {

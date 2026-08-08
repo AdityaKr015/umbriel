@@ -195,6 +195,26 @@ follows_mouse = false
 # "Mod+MouseMiddle" = "overview-toggle"
 # "Mod+Escape" = "none"
 
+# Submaps
+# Submaps let you create temporary keybind layers. Use `submap:<name>` to enter
+# a submap, and `submap:reset` (or `submap:disable`) to exit it.
+# Binds inside a submap use the `submap[name]` prefix on the chord.
+#
+# Submaps can be nested: entering a submap while already in one pushes it onto
+# a stack. `submap:reset` pops one level.
+#
+# Example: a screencapture submap with a nested region selector.
+# "Mod+S" = "submap:screencapture"
+# "submap[screencapture],1" = "spawn:grim screenshot.png"
+# "submap[screencapture],2" = "submap:region"
+# "submap[screencapture],Escape" = "submap:reset"
+# "submap[region],R" = "spawn:grim -g 'slurp -p' screenshot.png"
+# "submap[region],Escape" = "submap:reset"
+#
+# You can also define a global emergency exit in the default context (no prefix).
+# It will always match even when inside a submap:
+# "Escape" = "submap:reset"
+
 # Media keys — bare XF86 key names work without a modifier.
 # Volume (PipeWire/WirePlumber)
 # "XF86AudioRaiseVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"

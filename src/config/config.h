@@ -50,9 +50,11 @@ namespace umbriel {
     OverviewToggle,
     OverviewOpen,
     OverviewClose,
+    Submap,
   };
 
   struct Keybind {
+    std::string submap;
     uint32_t modifiers = 0;
     bool useMod = false;
     uint32_t keysym = 0;

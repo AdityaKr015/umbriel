@@ -71,6 +71,7 @@ namespace umbriel {
       keybinds.reserve(60);
       auto add = [&keybinds](KeybindAction action, uint32_t keysym, uint32_t modifiers = 0) {
         keybinds.push_back({
+            .submap = {},
             .modifiers = modifiers,
             .useMod = true,
             .keysym = xkb_keysym_to_lower(keysym),
@@ -110,6 +111,7 @@ namespace umbriel {
       add(KeybindAction::ToggleFloating, XKB_KEY_t);
       // Overview must not repeat: holding the key would thrash open/close.
       keybinds.push_back({
+          .submap = {},
           .modifiers = 0,
           .useMod = true,
           .keysym = XKB_KEY_o,
@@ -125,6 +127,7 @@ namespace umbriel {
         const uint32_t keypad = XKB_KEY_KP_1 + static_cast<uint32_t>(index);
         auto addWorkspace = [&](KeybindAction action, uint32_t keysym, uint32_t modifiers) {
           keybinds.push_back({
+              .submap = {},
               .modifiers = modifiers,
               .useMod = true,
               .keysym = keysym,
@@ -142,7 +145,8 @@ namespace umbriel {
 
       // Default wheel binds: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
       keybinds.push_back(
-          {.modifiers = 0,
+          {.submap = {},
+           .modifiers = 0,
            .useMod = true,
            .keysym = 0,
            .wheel = WheelDirection::Up,
@@ -152,7 +156,8 @@ namespace umbriel {
            .workspaceOutput = {}}
       );
       keybinds.push_back(
-          {.modifiers = 0,
+          {.submap = {},
+           .modifiers = 0,
            .useMod = true,
            .keysym = 0,
            .wheel = WheelDirection::Down,
@@ -167,6 +172,27 @@ namespace umbriel {
 
     bool parseChord(std::string_view chord, Keybind& output) {
       output = Keybind{};
+
+      // Check for submap[name] prefix.
+      if (chord.starts_with("submap[")) {
+        const size_t closeBracket = chord.find(']');
+        if (closeBracket == std::string_view::npos) {
+          return false;
+        }
+        output.submap = chord.substr(7, closeBracket - 7);
+        if (output.submap.empty()) {
+          return false;
+        }
+        // Skip past "submap[name]" and optional comma.
+        size_t restStart = closeBracket + 1;
+        if (restStart < chord.size() && chord[restStart] == ',') {
+          ++restStart;
+        }
+        if (restStart >= chord.size()) {
+          return false;
+        }
+        chord = chord.substr(restStart);
+      }
 
       std::vector<std::string_view> tokens;
       size_t start = 0;
@@ -306,6 +332,7 @@ namespace umbriel {
       {"window-toggle-fullscreen", "", KeybindAction::ToggleFullscreen},
       {"window-toggle-maximize", "", KeybindAction::ToggleMaximize},
       {"workspace-switch", "<workspace>[/<output>]", KeybindAction::WorkspaceSwitch, ActionArgKind::Workspace},
+      {"submap", "<name>", KeybindAction::Submap, ActionArgKind::Command},
   };
 
   std::span<const ActionSpec> actionSpecs() { return kActionSpecs; }
@@ -1345,7 +1372,8 @@ namespace umbriel {
 
       std::vector<Keybind> configured;
       auto sameChord = [](const Keybind& left, const Keybind& right) {
-        return left.modifiers == right.modifiers
+        return left.submap == right.submap
+            && left.modifiers == right.modifiers
             && left.useMod == right.useMod
             && left.keysym == right.keysym
             && left.wheel == right.wheel

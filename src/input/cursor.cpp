@@ -290,7 +290,6 @@ namespace umbriel {
       }
       if (m_mode == CursorMode::ResizeTile) {
         if (m_resizeWorkspace != nullptr) {
-          m_resizeWorkspace->ensureFocusedVisible();
           m_resizeWorkspace->arrange(false);
         }
         resetMode();

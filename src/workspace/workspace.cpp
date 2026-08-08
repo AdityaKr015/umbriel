@@ -155,9 +155,9 @@ namespace umbriel {
     arrange();
   }
 
-  void Workspace::layoutDetach(View* view) {
+  void Workspace::layoutDetach(View* view, bool animate) {
     m_layout->removeView(view);
-    arrange(false);
+    arrange(animate);
   }
 
   void Workspace::arrange(bool animate) {
@@ -435,6 +435,17 @@ namespace umbriel {
   bool Workspace::cycleFocusedWidth() {
     const int column = m_layout->columnOf(m_focusedView);
     if (!m_layout->cycleWidth(column)) {
+      return false;
+    }
+    wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), false);
+    ensureFocusedVisible();
+    arrange();
+    return true;
+  }
+
+  bool Workspace::setFocusedWidth(double fraction) {
+    const int column = m_layout->columnOf(m_focusedView);
+    if (!m_layout->setWidthFraction(column, fraction)) {
       return false;
     }
     wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), false);

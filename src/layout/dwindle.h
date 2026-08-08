@@ -80,8 +80,18 @@ namespace umbriel {
       int height = 0;
     };
 
+    struct WidthSplit {
+      Node* node = nullptr;
+      bool first = false;
+      double outerProduct = 1.0;
+    };
+
     [[nodiscard]] Node* findNode(const View* view) const;
     [[nodiscard]] Node* nodeAtFlatIndex(int index) const;
+    [[nodiscard]] std::vector<WidthSplit> widthSplits(Node* node) const;
+    [[nodiscard]] static double widthShare(const WidthSplit& split);
+    static void setWidthShare(const WidthSplit& split, double share);
+    bool applyWidthFraction(const std::vector<WidthSplit>& splits, double fraction);
     void splitNode(Node* node, View* newView);
     void splitNodeDirected(Node* node, View* newView, bool horizontal, bool newFirst);
     [[nodiscard]] bool isHorizontal(const Node* node) const;

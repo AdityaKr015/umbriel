@@ -55,7 +55,7 @@ namespace umbriel {
     void addView(View* view, bool attachToLayout = true);
     View* removeView(View* view);
     void layoutAttach(View* view);
-    void layoutDetach(View* view);
+    void layoutDetach(View* view, bool animate = false);
     void arrange(bool animate = true);
     void syncViewPresentation(View* view);
     [[nodiscard]] View* focusAdjacent(int direction) const;
@@ -65,6 +65,7 @@ namespace umbriel {
     bool expelFocusedRight();
     bool moveFocusedVertical(int direction);
     bool cycleFocusedWidth();
+    bool setFocusedWidth(double fraction);
     bool toggleFocusedFullWidth();
     bool toggleFocusedFullscreen();
     bool toggleFocusedFloating();

@@ -1453,7 +1453,7 @@ namespace umbriel {
     m_mapped = false;
     m_positioned = false;
     if (m_workspace != nullptr) {
-      m_workspace->layoutDetach(this);
+      m_workspace->layoutDetach(this, m_workspace->layoutMode() == LayoutMode::Scrolling);
     }
     leaveForeignOutput();
     setForeignActivated(false);

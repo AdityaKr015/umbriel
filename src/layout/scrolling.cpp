@@ -425,7 +425,7 @@ namespace umbriel {
       return false;
     }
     Column& column = m_columns[static_cast<size_t>(columnIndex)];
-    column.widthFrac = std::clamp(fraction, 0.15, 1.0);
+    column.widthFrac = std::clamp(fraction, 0.1, 1.0);
     column.savedWidthFrac = 0.0;
     return true;
   }

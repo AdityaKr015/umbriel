@@ -67,6 +67,53 @@ namespace umbriel {
     return nullptr;
   }
 
+  std::vector<DwindleLayout::WidthSplit> DwindleLayout::widthSplits(Node* node) const {
+    std::vector<WidthSplit> splits;
+    Node* child = node;
+    while (child != nullptr && child->parent != nullptr) {
+      Node* parent = child->parent;
+      if (parent->type == Node::HSplit) {
+        splits.push_back({.node = parent, .first = parent->left.get() == child});
+      }
+      child = parent;
+    }
+
+    double outerProduct = 1.0;
+    for (auto& split : std::views::reverse(splits)) {
+      split.outerProduct = outerProduct;
+      outerProduct *= widthShare(split);
+    }
+    return splits;
+  }
+
+  double DwindleLayout::widthShare(const WidthSplit& split) {
+    return split.first ? split.node->ratio : 1.0 - split.node->ratio;
+  }
+
+  void DwindleLayout::setWidthShare(const WidthSplit& split, double share) {
+    split.node->ratio = split.first ? share : 1.0 - share;
+  }
+
+  bool DwindleLayout::applyWidthFraction(const std::vector<WidthSplit>& splits, double fraction) {
+    if (splits.empty()) {
+      return false;
+    }
+
+    const double used = std::clamp(fraction, 0.1, 1.0);
+    double innerProduct = 1.0;
+    for (const WidthSplit& split : splits) {
+      const double denominator = innerProduct * split.outerProduct;
+      const double desired = denominator > 0.0 ? used / denominator : std::numeric_limits<double>::infinity();
+      const double applied = std::clamp(desired, 0.1, 0.9);
+      setWidthShare(split, applied);
+      innerProduct *= applied;
+      if (applied == desired) {
+        break;
+      }
+    }
+    return true;
+  }
+
   bool DwindleLayout::isHorizontal(const Node* node) const {
     if (node == nullptr) {
       return false;
@@ -431,48 +478,56 @@ namespace umbriel {
 
   bool DwindleLayout::cycleWidth(int columnIndex) {
     Node* node = nodeAtFlatIndex(columnIndex);
-    if (node == nullptr || node->parent == nullptr) {
+    const std::vector<WidthSplit> splits = widthSplits(node);
+    if (splits.empty()) {
       return false;
     }
+    double current = 1.0;
+    for (const WidthSplit& split : splits) {
+      current *= widthShare(split);
+    }
     const auto& presets = m_config->widthPresets;
-    const auto it = std::ranges::find_if(presets, [current = node->parent->ratio](double preset) {
-      return preset > current + 0.0001;
-    });
-    node->parent->ratio = (it == presets.end()) ? presets[0] : *it;
-    return true;
+    const auto it = std::ranges::find_if(presets, [current](double preset) { return preset > current + 0.0001; });
+    const double next = (it == presets.end()) ? presets[0] : *it;
+    return applyWidthFraction(splits, next);
   }
 
   bool DwindleLayout::toggleFullWidth(int columnIndex) {
     Node* node = nodeAtFlatIndex(columnIndex);
-    if (node == nullptr || node->parent == nullptr) {
+    const std::vector<WidthSplit> splits = widthSplits(node);
+    if (splits.empty()) {
       return false;
     }
-    Node* parent = node->parent;
-    if (parent->ratio >= 0.99) {
-      parent->ratio = 0.5;
+    double current = 1.0;
+    double maximum = 1.0;
+    for (const WidthSplit& split : splits) {
+      current *= widthShare(split);
+      maximum *= 0.9;
+    }
+    if (current >= maximum - 0.0001) {
+      applyWidthFraction(splits, 0.5);
       return false;
     }
-    parent->ratio = 1.0;
+    applyWidthFraction(splits, 1.0);
     return true;
   }
 
   bool DwindleLayout::setWidthFraction(int columnIndex, double fraction) {
-    Node* node = nodeAtFlatIndex(columnIndex);
-    if (node == nullptr || node->parent == nullptr) {
-      return false;
-    }
-    node->parent->ratio = std::clamp(fraction, 0.15, 1.0);
-    return true;
+    return applyWidthFraction(widthSplits(nodeAtFlatIndex(columnIndex)), fraction);
   }
 
   void DwindleLayout::clearFullWidthState(int /*columnIndex*/) {}
 
   double DwindleLayout::widthFraction(int columnIndex) const {
-    Node* node = nodeAtFlatIndex(columnIndex);
-    if (node != nullptr && node->parent != nullptr) {
-      return node->parent->ratio;
+    const std::vector<WidthSplit> splits = widthSplits(nodeAtFlatIndex(columnIndex));
+    if (splits.empty()) {
+      return m_config->defaultWidthFraction;
     }
-    return m_config->defaultWidthFraction;
+    double fraction = 1.0;
+    for (const WidthSplit& split : splits) {
+      fraction *= widthShare(split);
+    }
+    return fraction;
   }
 
   // ---- Drag-and-drop directional insertion ----

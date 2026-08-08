@@ -167,6 +167,7 @@ follows_mouse = false
 # Run `umbriel actions` for the full list. Parameterized actions:
 #   spawn:<shell command>, workspace-switch:<workspace>[/<output>],
 #   window-move-to-workspace:<workspace>[/<output>]
+#   window-set-width:<fraction> (0.1-1.0),
 # Workspace selectors are exact names, including numeric names such as `1`.
 # Unique names resolve globally. Duplicates resolve on the preferred output;
 # add `/output` to target a different output explicitly.
@@ -178,6 +179,11 @@ follows_mouse = false
 "Mod+T" = "window-toggle-floating"
 "Mod+Shift+Q" = "window-close"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"
+# Direct column width bindings:
+# "Mod+A" = "window-set-width:0.333"
+# "Mod+S" = "window-set-width:0.5"
+# "Mod+D" = "window-set-width:0.667"
+# "Mod+F" = "window-set-width:1.0"
 # "Mod+Escape" = "none"
 
 # Media keys — bare XF86 key names work without a modifier.

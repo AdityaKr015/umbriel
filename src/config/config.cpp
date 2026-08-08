@@ -263,6 +263,7 @@ namespace umbriel {
       {"window-close", "", KeybindAction::WindowClose},
       {"window-consume-left", "", KeybindAction::WindowConsumeLeft},
       {"window-cycle-width", "", KeybindAction::WindowCycleWidth},
+      {"window-set-width", "<fraction>", KeybindAction::WindowSetWidth, ActionArgKind::WidthFraction},
       {"window-expel-right", "", KeybindAction::WindowExpelRight},
       {"window-focus-down", "", KeybindAction::WindowFocusDown},
       {"window-focus-left", "", KeybindAction::WindowFocusLeft},
@@ -298,6 +299,27 @@ namespace umbriel {
           return true;
         }
         break;
+      }
+      case ActionArgKind::WidthFraction: {
+        if (value.size() <= spec.name.size() + 1 || value[spec.name.size()] != ':' || !value.starts_with(spec.name)) {
+          break;
+        }
+
+        const std::string_view fractionText = value.substr(spec.name.size() + 1);
+        double fraction = 0.0;
+        const auto [fractionPtr, fractionError] =
+            std::from_chars(fractionText.data(), fractionText.data() + fractionText.size(), fraction);
+        if (fractionError != std::errc{}
+            || fractionPtr != fractionText.data() + fractionText.size()
+            || !std::isfinite(fraction)
+            || fraction < 0.1
+            || fraction > 1.0) {
+          break;
+        }
+
+        output.action = spec.action;
+        output.widthFraction = fraction;
+        return true;
       }
       case ActionArgKind::Workspace: {
         if (value.size() <= spec.name.size() + 1 || value[spec.name.size()] != ':' || !value.starts_with(spec.name)) {

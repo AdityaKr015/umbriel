@@ -37,6 +37,7 @@ namespace umbriel {
     WindowConsumeLeft,
     WindowExpelRight,
     WindowCycleWidth,
+    WindowSetWidth,
     ToggleMaximize,
     ToggleFullscreen,
     ToggleFloating,
@@ -57,6 +58,7 @@ namespace umbriel {
     std::string spawnCommand;
     std::string workspaceName;
     std::string workspaceOutput;
+    double widthFraction = 0.0;
     bool repeat = true;
   };
 
@@ -238,7 +240,7 @@ namespace umbriel {
   [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();
   [[nodiscard]] std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName);
 
-  enum class ActionArgKind : uint8_t { None, Command, Workspace };
+  enum class ActionArgKind : uint8_t { None, Command, WidthFraction, Workspace };
 
   struct ActionSpec {
     std::string_view name;  // e.g. "spawn", "workspace-switch", "window-close"

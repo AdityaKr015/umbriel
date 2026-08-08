@@ -5,6 +5,7 @@
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "output/output.h"
+#include "overview/overview.h"
 #include "server/server.h"
 #include "view/view.h"
 // clang-format off
@@ -27,6 +28,8 @@ namespace umbriel {
     constexpr double kCommitVelocityPxMs = 0.9;
     constexpr double kOverscrollCompress = 0.15;
     constexpr double kOverscrollMaxWs = 0.08;
+    // niri's OVERVIEW_GESTURE_MOVEMENT: finger travel for a full open/close.
+    constexpr double kOverviewDistancePx = 300.0;
   } // namespace
 
   // ----- trampolines (same pattern as Cursor) -----
@@ -122,6 +125,9 @@ namespace umbriel {
     case State::Switch:
       finishSwitch(true);
       break;
+    case State::Overview:
+      finishOverview(true);
+      break;
     case State::Forward:
       // Forward a cancel end so clients see the end.
       wlr_pointer_gestures_v1_send_swipe_end(m_server->pointerGestures(), m_server->seat()->wlr(), 0, true);
@@ -144,6 +150,9 @@ namespace umbriel {
     case State::Switch:
       finishSwitch(true);
       break;
+    case State::Overview:
+      finishOverview(true);
+      break;
     case State::Forward:
     case State::Pending:
     case State::Idle:
@@ -164,17 +173,34 @@ namespace umbriel {
     if (m_state != State::Idle) {
       cancelActive();
     }
-    if (event->fingers == 3) {
+    Overview* overview = m_server->overview();
+    if (event->fingers == 4 && overview != nullptr) {
+      m_state = State::Overview;
+      m_accumX = 0;
+      m_accumY = 0;
+      m_overviewWasOpen = overview->active();
+      m_progress = m_overviewWasOpen ? 1.0 : 0.0;
+      m_velocity = 0;
+      m_lastTimeMsec = event->time_msec;
+      return;
+    }
+    // Three-finger workspace switching would fight the filmstrip; inside
+    // overview the wheel and arrow keys already cover navigation.
+    if (event->fingers == 3 && (overview == nullptr || !overview->active())) {
       m_state = State::Pending;
       m_accumX = 0;
       m_accumY = 0;
       m_output = nullptr;
-    } else {
-      m_state = State::Forward;
-      wlr_pointer_gestures_v1_send_swipe_begin(
-          m_server->pointerGestures(), m_server->seat()->wlr(), event->time_msec, event->fingers
-      );
+      return;
     }
+    if (event->fingers == 3) {
+      m_state = State::Idle;
+      return;
+    }
+    m_state = State::Forward;
+    wlr_pointer_gestures_v1_send_swipe_begin(
+        m_server->pointerGestures(), m_server->seat()->wlr(), event->time_msec, event->fingers
+    );
   }
 
   void Gestures::handleSwipeUpdate(void* data) {
@@ -291,6 +317,24 @@ namespace umbriel {
       return;
     }
 
+    case State::Overview: {
+      Overview* overview = m_server->overview();
+      if (overview == nullptr) {
+        m_state = State::Idle;
+        return;
+      }
+      m_accumY += event->dy;
+      // Swipe up opens, swipe down closes; base is where the gesture started.
+      const double base = m_overviewWasOpen ? 1.0 : 0.0;
+      const double p = std::clamp(base - m_accumY / kOverviewDistancePx, 0.0, 1.0);
+      const uint32_t dt = std::max(1U, event->time_msec - m_lastTimeMsec);
+      m_velocity = 0.75 * m_velocity + 0.25 * (-event->dy / static_cast<double>(dt));
+      m_lastTimeMsec = event->time_msec;
+      m_progress = p;
+      overview->gestureUpdate(p);
+      return;
+    }
+
     case State::Idle:
       return;
     }
@@ -325,9 +369,34 @@ namespace umbriel {
       finishSwitch(event->cancelled);
       return;
 
+    case State::Overview:
+      finishOverview(event->cancelled);
+      return;
+
     case State::Idle:
       return;
     }
+  }
+
+  // ===== Overview finish (4-finger) =====
+
+  void Gestures::finishOverview(bool cancelled) {
+    m_state = State::Idle;
+    Overview* overview = m_server->overview();
+    if (overview == nullptr) {
+      return;
+    }
+    bool commitOpen = m_overviewWasOpen;
+    if (!cancelled) {
+      const double base = m_overviewWasOpen ? 1.0 : 0.0;
+      const bool farEnough = std::abs(m_progress - base) > kCommitProgress;
+      // Positive velocity is a swipe up, which only commits an opening gesture.
+      const bool fastEnough = std::abs(m_velocity) > kCommitVelocityPxMs && (m_velocity > 0) == !m_overviewWasOpen;
+      if (farEnough || fastEnough) {
+        commitOpen = !m_overviewWasOpen;
+      }
+    }
+    overview->gestureEnd(commitOpen);
   }
 
   // ===== Scroll finish (Step 5) =====

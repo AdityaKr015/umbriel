@@ -21,7 +21,7 @@ namespace umbriel {
     void cancelForOutput(Output* output);
 
   private:
-    enum class State { Idle, Forward, Pending, Scroll, Switch };
+    enum class State { Idle, Forward, Pending, Scroll, Switch, Overview };
 
     static void onSwipeBegin(wl_listener* listener, void* data);
     static void onSwipeUpdate(wl_listener* listener, void* data);
@@ -44,6 +44,7 @@ namespace umbriel {
     void cancelActive();
     void finishScroll(bool cancelled);
     void finishSwitch(bool cancelled);
+    void finishOverview(bool cancelled);
     void silentCancel();
 
     Server* m_server = nullptr;
@@ -64,6 +65,9 @@ namespace umbriel {
     uint32_t m_lastTimeMsec = 0;
     bool m_hasPrev = false;
     bool m_hasNext = false;
+
+    // Overview state (vertical 4-finger): swipe up opens, swipe down closes.
+    bool m_overviewWasOpen = false;
 
     wl_listener m_swipeBegin{};
     wl_listener m_swipeUpdate{};

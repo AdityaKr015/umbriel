@@ -2,7 +2,9 @@
 
 #include "core/animation.h"
 
-struct wlr_box;
+extern "C" {
+#include <wlr/util/box.h>
+}
 struct wlr_scene_rect;
 struct wlr_scene_tree;
 
@@ -22,6 +24,13 @@ namespace umbriel {
     void show(Workspace* workspace, int gapIndex);
     void showRow(Workspace* workspace, int columnIndex, int rowIndex);
     void showBox(Workspace* workspace, const wlr_box& geometry);
+
+    // World-coordinate hint rectangles for a scrolling workspace rendered at
+    // horizontal offset `scroll`. Overview reuses these to draw the same hint
+    // scaled into a workspace thumbnail. Zero-sized when not applicable.
+    [[nodiscard]] static wlr_box gapHintBox(const Workspace& workspace, int gapIndex, double scroll);
+    [[nodiscard]] static wlr_box rowHintBox(const Workspace& workspace, int columnIndex, int rowIndex, double scroll);
+
     void hide();
     [[nodiscard]] bool visible() const { return m_visible; }
 

@@ -107,6 +107,17 @@ namespace umbriel {
       add(KeybindAction::ToggleFullscreen, XKB_KEY_f);
       add(KeybindAction::ToggleMaximize, XKB_KEY_f, WLR_MODIFIER_CTRL);
       add(KeybindAction::ToggleFloating, XKB_KEY_t);
+      // Overview must not repeat: holding the key would thrash open/close.
+      keybinds.push_back({
+          .modifiers = 0,
+          .useMod = true,
+          .keysym = XKB_KEY_o,
+          .action = KeybindAction::OverviewToggle,
+          .spawnCommand = {},
+          .workspaceName = {},
+          .workspaceOutput = {},
+          .repeat = false,
+      });
 
       for (int index = 0; index < 9; ++index) {
         const uint32_t digit = XKB_KEY_1 + static_cast<uint32_t>(index);
@@ -258,6 +269,9 @@ namespace umbriel {
       {"layout-scroll-left", "", KeybindAction::LayoutScrollLeft},
       {"layout-scroll-right", "", KeybindAction::LayoutScrollRight},
       {"none", "", KeybindAction::None},
+      {"overview-close", "", KeybindAction::OverviewClose},
+      {"overview-open", "", KeybindAction::OverviewOpen},
+      {"overview-toggle", "", KeybindAction::OverviewToggle},
       {"session-quit", "", KeybindAction::SessionQuit},
       {"spawn", "<cmd>", KeybindAction::Spawn, ActionArgKind::Command},
       {"window-close", "", KeybindAction::WindowClose},
@@ -918,6 +932,22 @@ namespace umbriel {
           warnAt(shadowNode->source(), "ignoring appearance.shadow (expected table)");
         }
       }
+    }
+
+    void readOverview(const toml::table& table, Config& loaded) {
+      const toml::node* node = table.get("overview");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* section = node->as_table();
+      if (section == nullptr) {
+        warnAt(node->source(), "ignoring overview (expected table)");
+        return;
+      }
+      warnUnknownKeys(*section, "overview", {"zoom", "backdrop_color", "workspace_color"});
+      readDouble(*section, "zoom", "overview.zoom", 0.1, 0.75, loaded.overview.zoom);
+      readColor(*section, "backdrop_color", "overview.backdrop_color", loaded.overview.backdropColor);
+      readColor(*section, "workspace_color", "overview.workspace_color", loaded.overview.workspaceColor);
     }
 
     void readLayout(const toml::table& table, Config& loaded) {
@@ -1599,8 +1629,8 @@ namespace umbriel {
         (void)value;
         if (!knownKey(
                 key.str(),
-                {"appearance", "layout", "general", "input", "keybinds", "output", "window_rule", "layer_rule",
-                 "workspace", "workspaces", "include"}
+                {"appearance", "overview", "layout", "general", "input", "keybinds", "output", "window_rule",
+                 "layer_rule", "workspace", "workspaces", "include"}
             )) {
           warnAt(key.source(), "unknown key {}", key.str());
         }
@@ -1635,6 +1665,7 @@ namespace umbriel {
         loaded.keybinds = defaultKeybinds();
         warnUnknownTopLevel(result.merged);
         readAppearance(result.merged, loaded);
+        readOverview(result.merged, loaded);
         readLayout(result.merged, loaded);
         readGeneral(result.merged, loaded);
         readWorkspaceSettings(result.merged, loaded);

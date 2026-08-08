@@ -3,11 +3,13 @@
 #include "config/config.h"
 #include "input/seat.h"
 #include "layer/surface.h"
+#include "layout/drop_target.h"
 #include "layout/dwindle.h"
 #include "layout/insert_hint.h"
 #include "layout/scrolling.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
+#include "overview/overview.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "view/xdg_size.h"
@@ -21,6 +23,19 @@
 #include "workspace/workspace.h"
 
 namespace umbriel {
+
+  namespace {
+    // Panels (top/overlay) keep working inside the overview. Wallpaper and
+    // bottom-layer widgets are part of the inert desktop behind the filmstrip,
+    // so their clicks belong to the overview instead.
+    bool overviewPassthroughLayer(const LayerSurface* layer) {
+      if (layer == nullptr) {
+        return false;
+      }
+      const uint32_t which = layer->layerSurface()->current.layer;
+      return which == ZWLR_LAYER_SHELL_V1_LAYER_TOP || which == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
+    }
+  } // namespace
 
   Cursor::Cursor(Server& server) : m_server(&server) {
     m_cursor = wlr_cursor_create();
@@ -275,6 +290,32 @@ namespace umbriel {
     auto* event = static_cast<wlr_pointer_button_event*>(data);
     m_server->notifyIdleActivity();
 
+    // Overview owns the pointer while it is up: cards are its own hit-test
+    // surface and the desktop underneath is inert. Top/overlay layer surfaces
+    // (panels) stay fully interactive.
+    if (Overview* overview = m_server->overview();
+        overview != nullptr && overview->active() && !m_server->sessionLocked()) {
+      const bool pressed = event->state == WL_POINTER_BUTTON_STATE_PRESSED;
+      double sx = 0;
+      double sy = 0;
+      wlr_surface* surface = nullptr;
+      LayerSurface* layer = nullptr;
+      m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+      wlr_seat* seat = m_server->seat()->wlr();
+      if (overviewPassthroughLayer(layer) && !overview->dragging()) {
+        if (surface != nullptr) {
+          wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+        }
+        wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+        if (pressed) {
+          layer->focus();
+        }
+        return;
+      }
+      overview->handleButton(event->button, pressed, m_cursor->x, m_cursor->y);
+      return;
+    }
+
     if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
       if (m_mode == CursorMode::MoveTile) {
         if (m_tileDragPending) {
@@ -393,6 +434,31 @@ namespace umbriel {
       eventDir = rawDelta < 0 ? WheelDirection::Left : WheelDirection::Right;
     }
 
+    // Unmodified scrolling drives the overview filmstrip instead of the inert
+    // desktop under the cursor. Panels (top/overlay) keep their own scrolling,
+    // and modifier chords still fall through to the wheel binds below.
+    if (Overview* overview = m_server->overview(); overview != nullptr && overview->active() && effective == 0) {
+      double sx = 0;
+      double sy = 0;
+      wlr_surface* surface = nullptr;
+      LayerSurface* layer = nullptr;
+      m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+      if (!overviewPassthroughLayer(layer)) {
+        if (!overview->interactive()) {
+          return;
+        }
+        const int axis = isVertical ? 0 : 1;
+        m_wheelAccum[axis] +=
+            event->delta_discrete != 0 ? static_cast<double>(event->delta_discrete) / 120.0 : event->delta / 15.0;
+        double& accumulated = m_wheelAccum[axis];
+        while (std::abs(accumulated) >= 1.0) {
+          overview->handleAxisNotch(isVertical, accumulated, m_cursor->x, m_cursor->y);
+          accumulated -= std::copysign(1.0, accumulated);
+        }
+        return;
+      }
+    }
+
     // Arm only when a bind matches this exact direction and modifier set.
     bool armed = false;
     for (const Keybind& bind : config().keybinds) {
@@ -479,6 +545,16 @@ namespace umbriel {
     wlr_surface* surface = nullptr;
     LayerSurface* layer = nullptr;
     View* view = m_server->viewAt(lx, ly, &surface, &sx, &sy, &layer);
+
+    // A tap in overview activates like a left click; panels keep their touch.
+    if (Overview* overview = m_server->overview();
+        overview != nullptr && overview->active() && !m_server->sessionLocked() && !overviewPassthroughLayer(layer)) {
+      if (overview->interactive()) {
+        overview->handleButton(BTN_LEFT, true, lx, ly);
+        overview->handleButton(BTN_LEFT, false, lx, ly);
+      }
+      return;
+    }
 
     if (surface != nullptr) {
       // Focus the touched view (click-to-focus equivalent).
@@ -572,6 +648,33 @@ namespace umbriel {
   void Cursor::handleTouchFrame() { wlr_seat_touch_notify_frame(m_server->seat()->wlr()); }
 
   void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY) {
+    // Overview owns motion: cards follow a drag, panels keep passthrough, and
+    // the inert desktop underneath never receives enter/motion or hover focus.
+    if (Overview* overview = m_server->overview();
+        overview != nullptr && overview->active() && !m_server->sessionLocked()) {
+      overview->handleMotion(m_cursor->x, m_cursor->y);
+      wlr_seat* seat = m_server->seat()->wlr();
+      if (overview->dragging()) {
+        wlr_seat_pointer_clear_focus(seat);
+        return;
+      }
+      double sx = 0;
+      double sy = 0;
+      wlr_surface* surface = nullptr;
+      LayerSurface* layer = nullptr;
+      m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+      if (overviewPassthroughLayer(layer) && surface != nullptr) {
+        wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+        wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);
+        return;
+      }
+      wlr_seat_pointer_clear_focus(seat);
+      if (!m_compositorOwnsCursor) {
+        wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+      }
+      return;
+    }
+
     if (m_mode == CursorMode::Move || m_mode == CursorMode::MoveTile) {
       if (m_server->sessionLocked()) {
         resetMode();
@@ -821,56 +924,16 @@ namespace umbriel {
       workspace->layout().clearInsertGap();
       workspace->arrange(false);
     }
-    const int edgePad = workspace->layoutConfig().edgePad;
-    const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
-    const int columnCount = static_cast<int>(workspace->layout().columns().size());
-    const double layoutX = m_cursor->x - usable.x - edgePad + workspace->visualScroll();
-
-    for (int columnIndex = 0; columnIndex < columnCount; ++columnIndex) {
-      const int columnX = workspace->layout().columnX(columnIndex, viewportWidth);
-      const int columnWidth = workspace->layout().columnWidth(columnIndex, viewportWidth);
-      if (layoutX < columnX + columnWidth * 0.2 || layoutX > columnX + columnWidth * 0.8) {
-        continue;
-      }
-      const Column& column = workspace->layout().columns()[static_cast<size_t>(columnIndex)];
-      int nearestRow = 0;
-      double rowDistance = std::abs(m_cursor->y - (usable.y + edgePad));
-      for (int row = 1; row <= static_cast<int>(column.views.size()); ++row) {
-        const int boundary = row == static_cast<int>(column.views.size())
-            ? usable.y + usable.height - edgePad
-            : workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y
-                - workspace->layoutConfig().totalGap / 2;
-        const double distance = std::abs(m_cursor->y - boundary);
-        if (distance < rowDistance) {
-          nearestRow = row;
-          rowDistance = distance;
-        }
-      }
-      m_dropWorkspace = workspace;
-      m_dropColumn = columnIndex;
-      m_dropRow = nearestRow;
-      m_server->insertHint().showRow(workspace, columnIndex, nearestRow);
-      wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
-      return;
-    }
-
-    int nearestGap = 0;
-    double nearestDistance = std::abs(layoutX);
-    for (int gap = 1; gap <= columnCount; ++gap) {
-      const int boundary = gap == columnCount
-          ? workspace->layout().columnX(gap, viewportWidth) - workspace->layoutConfig().totalGap
-          : workspace->layout().columnX(gap, viewportWidth) - workspace->layoutConfig().totalGap / 2;
-      const double distance = std::abs(layoutX - boundary);
-      if (distance < nearestDistance) {
-        nearestGap = gap;
-        nearestDistance = distance;
-      }
-    }
-
+    const ScrollingDropTarget target =
+        computeScrollingDropTarget(*workspace, usable, workspace->visualScroll(), m_cursor->x, m_cursor->y);
     m_dropWorkspace = workspace;
-    m_dropColumn = nearestGap;
-    m_dropRow = -1;
-    m_server->insertHint().show(workspace, nearestGap);
+    m_dropColumn = target.column;
+    m_dropRow = target.row;
+    if (target.row >= 0) {
+      m_server->insertHint().showRow(workspace, target.column, target.row);
+    } else {
+      m_server->insertHint().show(workspace, target.column);
+    }
     wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
   }
 

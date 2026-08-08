@@ -47,6 +47,9 @@ namespace umbriel {
     ConfigReload,
     LayoutScrollLeft,
     LayoutScrollRight,
+    OverviewToggle,
+    OverviewOpen,
+    OverviewClose,
   };
 
   struct Keybind {
@@ -183,6 +186,17 @@ namespace umbriel {
 
       [[nodiscard]] int totalBorderWidth() const { return borderWidth + outerBorderWidth; }
     } appearance;
+
+    struct Overview {
+      // Workspace scale when fully zoomed out (niri's compute_overview_zoom).
+      double zoom = 0.5;
+      // Tint laid over the desktop background while the overview is up. The
+      // wallpaper (background layer) is never hidden by anything else, so a
+      // transparent default leaves it untouched; raise the alpha to dim it,
+      // FF to replace it outright.
+      std::array<float, 4> backdropColor{0.0627451F, 0.0627451F, 0.0784314F, 0.0F};
+      std::array<float, 4> workspaceColor{0.1019608F, 0.1019608F, 0.1215686F, 1.0F};
+    } overview;
 
     struct Layout {
       LayoutMode mode = LayoutMode::Scrolling;

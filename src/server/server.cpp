@@ -12,6 +12,7 @@
 #include "layout/insert_hint.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
+#include "overview/overview.h"
 #include "scene/color.h"
 #include "scene/config_banner.h"
 #include "server/ipc.h"
@@ -146,6 +147,8 @@ namespace umbriel {
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&m_scene->tree);
     m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
+    m_overviewTree = wlr_scene_tree_create(&m_scene->tree);
+    wlr_scene_node_set_enabled(&m_overviewTree->node, false);
     m_dragTree = wlr_scene_tree_create(&m_scene->tree);
     m_dragIconTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);
@@ -232,6 +235,7 @@ namespace umbriel {
     m_cursor = std::make_unique<Cursor>(*this);
     m_seat = std::make_unique<Seat>(*this);
     m_gestures = std::make_unique<Gestures>(*this);
+    m_overview = std::make_unique<Overview>(*this);
     updateSeatCapabilities();
 
     m_newOutput.notify = onNewOutput;
@@ -269,6 +273,7 @@ namespace umbriel {
     }
     m_closeSnapshots.clear();
     m_configBanner.reset();
+    m_overview.reset();
     m_sessionLock.reset();
     m_layerSurfaces.clear();
     m_views.clear();

@@ -1,0 +1,193 @@
+#pragma once
+
+#include "core/animation.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <vector>
+#include <wayland-server-core.h>
+
+extern "C" {
+#include <wlr/util/box.h>
+}
+
+struct wlr_scene_buffer;
+struct wlr_scene_rect;
+struct wlr_scene_tree;
+struct wlr_surface;
+
+namespace umbriel {
+
+  class Output;
+  class Server;
+  class View;
+  class Workspace;
+  class WorkspaceGroup;
+
+  // Niri-style zoomed-out view of every workspace on every output, arranged as
+  // one vertical filmstrip per output. Clients are never reconfigured: the real
+  // window trees are hidden and re-rendered as "cards", per-surface scene
+  // buffers sharing the client textures and scaled by the scene graph. The
+  // overview is also an editor (click to focus, middle-click to close, drag to
+  // relocate), so it owns pointer and keyboard input while open.
+  class Overview {
+  public:
+    explicit Overview(Server& server);
+    ~Overview();
+
+    Overview(const Overview&) = delete;
+    Overview& operator=(const Overview&) = delete;
+
+    // Open, opening, or zooming back in.
+    [[nodiscard]] bool active() const { return m_active; }
+    // Open and not already zooming back in: pointer/keyboard edits still apply.
+    [[nodiscard]] bool interactive() const { return m_active && !m_closing; }
+
+    void toggle();
+    void open();
+    // Zoom back into each output's active workspace, restoring normal focus.
+    void close();
+    // Activate `workspace` (no slide, the real trees are hidden), zoom into it,
+    // and focus `focus` (null = whatever refocus picks) once the zoom lands.
+    void closeToWorkspace(Workspace* workspace, View* focus);
+    // Instant teardown with no animation (session lock, config reload, output loss).
+    void forceClose();
+
+    // 4-finger swipe. `progress` is pre-clamped by the caller.
+    void gestureUpdate(double progress);
+    void gestureEnd(bool commitOpen);
+
+    void onViewMapped(View* view);
+    void onViewUnmapped(View* view);
+    void onWorkspaceActivated(WorkspaceGroup* group);
+    void onWorkspaceArranged(Workspace* workspace);
+    void onFocusChanged();
+    void onOutputRemoved(Output* output);
+
+    // Input entry points; called from Cursor/Keyboard while active.
+    bool handleButton(uint32_t button, bool pressed, double lx, double ly);
+    void handleMotion(double lx, double ly);
+    bool handleAxisNotch(bool vertical, double direction, double lx, double ly);
+    bool handleFallbackKey(uint32_t keysym);
+    [[nodiscard]] bool dragging() const { return m_dragCard != nullptr; }
+
+  private:
+    struct Card;
+    struct OutputState;
+
+    struct CardSurface {
+      Card* card = nullptr;
+      wlr_surface* surface = nullptr;
+      wlr_scene_buffer* buffer = nullptr;
+      int sx = 0;
+      int sy = 0;
+      bool isRoot = false;
+      wl_listener commit{};
+      wl_listener destroy{};
+    };
+
+    struct Card {
+      Overview* overview = nullptr;
+      OutputState* owner = nullptr;
+      View* view = nullptr;
+      size_t row = 0; // workspace index inside the output's group
+      wlr_scene_tree* tree = nullptr;
+      wlr_scene_rect* border = nullptr;
+      std::vector<std::unique_ptr<CardSurface>> surfaces;
+      wlr_box box{}; // content box in layout coordinates
+    };
+
+    struct OutputState {
+      Output* output = nullptr;
+      wlr_scene_tree* tree = nullptr;
+      wlr_scene_rect* backdrop = nullptr;
+      std::vector<wlr_scene_rect*> rowRects;
+      std::vector<std::unique_ptr<Card>> cards;
+      double rowScroll = 0;
+      double rowFrom = 0;
+      double rowTo = 0;
+    };
+
+    // Row placement for one output at the current progress.
+    struct RowMetrics {
+      wlr_box outputBox{};
+      double zoom = 1.0;
+      int rowX = 0;
+      int rowW = 0;
+      int rowH = 0;
+      double baseY = 0;
+      double gap = 0;
+    };
+
+    static void onCardSurfaceCommit(wl_listener* listener, void* data);
+    static void onCardSurfaceDestroy(wl_listener* listener, void* data);
+    static void addCardSurface(wlr_surface* surface, int sx, int sy, void* data);
+    static void syncCardSurface(wlr_surface* surface, int sx, int sy, void* data);
+
+    [[nodiscard]] double zoom() const;
+    [[nodiscard]] static bool rowMetrics(const OutputState& state, const Server& server, double zoom, RowMetrics& out);
+    [[nodiscard]] static int rowTop(const RowMetrics& metrics, double rowScroll, size_t row);
+
+    bool beginPresentation();
+    void buildState();
+    void populateCards(OutputState& state);
+    Card* createCard(OutputState& state, View* view, size_t row);
+    void destroyCard(Card* card);
+    void dropCard(View* view);
+    void rebuildCard(View* view);
+    [[nodiscard]] OutputState* stateFor(const Output* output);
+    [[nodiscard]] OutputState* stateForWorkspace(const Workspace* workspace);
+    [[nodiscard]] Card* findCard(const View* view);
+
+    void applyProgress();
+    void layoutOutput(OutputState& state);
+    void layoutCard(Card& card, const RowMetrics& metrics, double rowScroll);
+    [[nodiscard]] wlr_box worldBoxOf(const View* view, const wlr_box& outputBox) const;
+
+    void startAnimation(double target, bool closing);
+    void finishAnimation();
+    void beginClose(View* focus);
+    void teardown();
+    void scheduleFrames() const;
+
+    [[nodiscard]] Card* cardAt(double lx, double ly);
+    [[nodiscard]] Workspace* rowAt(double lx, double ly, OutputState** outState, size_t* outRow);
+    [[nodiscard]] Workspace* preferredWorkspace() const;
+
+    void beginDrag();
+    void updateDrag(double lx, double ly);
+    void endDrag(bool drop);
+    void showDropHint(const wlr_box& worldBox, const RowMetrics& metrics, double rowScroll, size_t row);
+    void hideDropHint();
+
+    Server* m_server = nullptr;
+    wlr_scene_tree* m_tree = nullptr;     // Server::overviewTree()
+    wlr_scene_rect* m_dropHint = nullptr; // child of m_tree, created on demand
+    std::vector<std::unique_ptr<OutputState>> m_outputs;
+
+    bool m_active = false;
+    bool m_closing = false;
+    double m_progress = 0;
+    double m_targetProgress = 0;
+    AnimId m_anim = 0;
+    View* m_pendingFocus = nullptr;
+    bool m_gestureOpenedHere = false;
+
+    Card* m_pressCard = nullptr;
+    Workspace* m_pressWorkspace = nullptr;
+    double m_pressX = 0;
+    double m_pressY = 0;
+
+    Card* m_dragCard = nullptr;
+    double m_dragOffsetX = 0;
+    double m_dragOffsetY = 0;
+    Workspace* m_dragSourceWorkspace = nullptr;
+    int m_dragSourceColumn = -1;
+    int m_dragSourceRow = -1;
+    Workspace* m_dropWorkspace = nullptr;
+    int m_dropColumn = -1;
+    int m_dropRow = -1;
+  };
+
+} // namespace umbriel

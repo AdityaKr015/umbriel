@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "overview/overview.h"
 #include "server/server.h"
 #include "wlr.h"
 
@@ -120,6 +121,18 @@ namespace umbriel {
       if (matched != nullptr) {
         armRepeat(*matched, event->keycode);
       }
+      // Unbound plain keys drive overview navigation instead of reaching
+      // clients, unless a layer surface (launcher, panel) holds the keyboard:
+      // its Escape/arrows belong to it, not to the filmstrip.
+      if (!handled && seat->keyboard_state.focused_surface == nullptr) {
+        Overview* overview = m_server->overview();
+        const uint32_t plain = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
+        if (overview != nullptr && overview->interactive() && plain == 0) {
+          for (int i = 0; i < nsyms && !handled; ++i) {
+            handled = overview->handleFallbackKey(syms[i]);
+          }
+        }
+      }
     } else if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
       if (m_repeatArmed && event->keycode == m_repeatKeycode) {
         cancelRepeat();
@@ -127,6 +140,14 @@ namespace umbriel {
     }
 
     if (!handled) {
+      // Overview holds the seat, so windows see no keys until it closes. It
+      // never hands keyboard focus to a view while open (focusView skips the
+      // seat enter), so a non-null focus here is a layer surface that took it
+      // deliberately, e.g. a launcher panel; those keep typing.
+      if (Overview* overview = m_server->overview();
+          overview != nullptr && overview->active() && seat->keyboard_state.focused_surface == nullptr) {
+        return;
+      }
       wlr_seat_set_keyboard(seat, m_keyboard);
       wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
     }

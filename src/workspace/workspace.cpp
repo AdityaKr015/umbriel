@@ -4,6 +4,7 @@
 #include "core/log.h"
 #include "input/cursor.h"
 #include "output/output.h"
+#include "overview/overview.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "view/xdg_size.h"
@@ -204,6 +205,12 @@ namespace umbriel {
       if (geometry.width != width || geometry.height != height) {
         wlr_xdg_toplevel_set_size(view->toplevel(), width, height);
       }
+    }
+
+    // Card geometry derives from the layout math above, so it stays correct for
+    // hidden workspaces too (resizes, drag gaps, config-driven relayout).
+    if (Overview* overview = m_group->server()->overview(); overview != nullptr && overview->active()) {
+      overview->onWorkspaceArranged(this);
     }
 
     // Visual state below (scroll, positions) only applies while visible.
@@ -850,7 +857,11 @@ namespace umbriel {
       return;
     }
     slideFinish();
-    const bool doAnimate = animate && m_active != nullptr && !m_server->sessionLocked();
+    Overview* overview = m_server->overview();
+    const bool overviewActive = overview != nullptr && overview->active();
+    // The real trees are hidden while overview runs: the filmstrip scroll is
+    // the transition, so never start a slide underneath it.
+    const bool doAnimate = animate && m_active != nullptr && !m_server->sessionLocked() && !overviewActive;
     if (!doAnimate) {
       if (m_active != nullptr) {
         m_previous = m_active;
@@ -859,6 +870,9 @@ namespace umbriel {
       m_active = workspace;
       m_active->setActive(true);
       kLog.debug("activate workspace {} on {}", m_active->name(), m_output->wlr()->name);
+      if (overviewActive) {
+        overview->onWorkspaceActivated(this);
+      }
       return;
     }
     wlr_box box{};

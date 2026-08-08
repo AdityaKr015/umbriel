@@ -64,22 +64,20 @@ namespace umbriel {
     }
   }
 
-  void InsertHint::show(Workspace* workspace, int gapIndex) {
-    if (workspace == nullptr
-        || workspace->group() == nullptr
-        || workspace->group()->output() == nullptr
-        || workspace->layoutMode() != LayoutMode::Scrolling) {
-      return;
+  wlr_box InsertHint::gapHintBox(const Workspace& workspace, int gapIndex, double scroll) {
+    if (workspace.group() == nullptr
+        || workspace.group()->output() == nullptr
+        || workspace.layoutMode() != LayoutMode::Scrolling) {
+      return {};
     }
-    Output* output = workspace->group()->output();
-    const wlr_box usable = output->usableArea();
+    const wlr_box usable = workspace.group()->output()->usableArea();
     if (usable.width <= 0 || usable.height <= 0) {
-      return;
+      return {};
     }
-    const int edgePad = workspace->layoutConfig().edgePad;
-    const int gap = workspace->layoutConfig().totalGap;
+    const int edgePad = workspace.layoutConfig().edgePad;
+    const int gap = workspace.layoutConfig().totalGap;
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
-    const int columnCount = static_cast<int>(workspace->layout().columns().size());
+    const int columnCount = static_cast<int>(workspace.layout().columns().size());
     const int clampedGap = std::clamp(gapIndex, 0, columnCount);
 
     // Position the preview rectangle at the would-be column location.
@@ -95,33 +93,34 @@ namespace umbriel {
       hintX = 0;
     } else if (clampedGap >= columnCount) {
       // After the last column.
-      hintX = workspace->layout().columnX(columnCount - 1, viewportWidth)
-          + workspace->layout().columnWidth(columnCount - 1, viewportWidth)
+      hintX = workspace.layout().columnX(columnCount - 1, viewportWidth)
+          + workspace.layout().columnWidth(columnCount - 1, viewportWidth)
           + gap;
     } else {
       // Between two columns: center on the gap boundary.
-      hintX = workspace->layout().columnX(clampedGap, viewportWidth) - gap / 2 - kColumnHintWidth / 2;
+      hintX = workspace.layout().columnX(clampedGap, viewportWidth) - gap / 2 - kColumnHintWidth / 2;
     }
 
-    const int hintHeight = std::max(1, usable.height - 2 * edgePad);
-    const int targetX = usable.x + edgePad + hintX - static_cast<int>(std::lround(workspace->visualScroll()));
-    showGeometry(workspace, targetX, usable.y + edgePad, kColumnHintWidth, hintHeight);
+    return {
+        .x = usable.x + edgePad + hintX - static_cast<int>(std::lround(scroll)),
+        .y = usable.y + edgePad,
+        .width = kColumnHintWidth,
+        .height = std::max(1, usable.height - 2 * edgePad),
+    };
   }
 
-  void InsertHint::showRow(Workspace* workspace, int columnIndex, int rowIndex) {
-    if (workspace == nullptr
-        || workspace->group() == nullptr
-        || workspace->group()->output() == nullptr
-        || workspace->layoutMode() != LayoutMode::Scrolling
+  wlr_box InsertHint::rowHintBox(const Workspace& workspace, int columnIndex, int rowIndex, double scroll) {
+    if (workspace.group() == nullptr
+        || workspace.group()->output() == nullptr
+        || workspace.layoutMode() != LayoutMode::Scrolling
         || columnIndex < 0
-        || columnIndex >= static_cast<int>(workspace->layout().columns().size())) {
-      return;
+        || columnIndex >= static_cast<int>(workspace.layout().columns().size())) {
+      return {};
     }
-    Output* output = workspace->group()->output();
-    const wlr_box usable = output->usableArea();
-    const int edgePad = workspace->layoutConfig().edgePad;
+    const wlr_box usable = workspace.group()->output()->usableArea();
+    const int edgePad = workspace.layoutConfig().edgePad;
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
-    const Column& column = workspace->layout().columns()[static_cast<size_t>(columnIndex)];
+    const Column& column = workspace.layout().columns()[static_cast<size_t>(columnIndex)];
     const int rowCount = static_cast<int>(column.views.size());
     const int row = std::clamp(rowIndex, 0, rowCount);
 
@@ -138,18 +137,43 @@ namespace umbriel {
       hintHeight = kRowHintEdgeHeight;
     } else {
       // Between two rows: centered on the boundary.
-      const int boundary = workspace->layout().targetBox(column.views[static_cast<size_t>(row)]).y
-          - workspace->layoutConfig().totalGap / 2;
+      const int boundary = workspace.layout().targetBox(column.views[static_cast<size_t>(row)]).y
+          - workspace.layoutConfig().totalGap / 2;
       hintY = boundary - kRowHintMidHeight / 2;
       hintHeight = kRowHintMidHeight;
     }
 
-    const int targetX = usable.x
-        + edgePad
-        + workspace->layout().columnX(columnIndex, viewportWidth)
-        - static_cast<int>(std::lround(workspace->visualScroll()));
-    const int width = workspace->layout().columnWidth(columnIndex, viewportWidth);
-    showGeometry(workspace, targetX, hintY, width, hintHeight);
+    return {
+        .x = usable.x
+            + edgePad
+            + workspace.layout().columnX(columnIndex, viewportWidth)
+            - static_cast<int>(std::lround(scroll)),
+        .y = hintY,
+        .width = workspace.layout().columnWidth(columnIndex, viewportWidth),
+        .height = hintHeight,
+    };
+  }
+
+  void InsertHint::show(Workspace* workspace, int gapIndex) {
+    if (workspace == nullptr) {
+      return;
+    }
+    const wlr_box box = gapHintBox(*workspace, gapIndex, workspace->visualScroll());
+    if (box.width <= 0 || box.height <= 0) {
+      return;
+    }
+    showGeometry(workspace, box.x, box.y, box.width, box.height);
+  }
+
+  void InsertHint::showRow(Workspace* workspace, int columnIndex, int rowIndex) {
+    if (workspace == nullptr) {
+      return;
+    }
+    const wlr_box box = rowHintBox(*workspace, columnIndex, rowIndex, workspace->visualScroll());
+    if (box.width <= 0 || box.height <= 0) {
+      return;
+    }
+    showGeometry(workspace, box.x, box.y, box.width, box.height);
   }
 
   void InsertHint::showBox(Workspace* workspace, const wlr_box& geometry) {

@@ -6,6 +6,7 @@
 #include "input/seat.h"
 #include "layout/scrolling.h"
 #include "output/output.h"
+#include "overview/overview.h"
 #include "scene/color.h"
 #include "server/server.h"
 #include "view/xdg_size.h"
@@ -291,7 +292,7 @@ namespace umbriel {
     updateShadow();
   }
 
-  void View::applySeatFocus() {
+  void View::applySeatFocus(bool withKeyboard) {
     // Mechanism only. Policy lives in Server::focusView — do not call directly
     // from input/event code.
     if (!m_onActiveWorkspace) {
@@ -309,7 +310,7 @@ namespace umbriel {
     setBorderFocused(true);
     setForeignActivated(true);
 
-    if (seat->keyboard_state.focused_surface == surface) {
+    if (!withKeyboard || seat->keyboard_state.focused_surface == surface) {
       return;
     }
     if (wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat)) {
@@ -904,7 +905,10 @@ namespace umbriel {
   }
 
   void View::beginCloseAnimation() {
-    if (!m_mapped || !m_onActiveWorkspace || m_server->sessionLocked()) {
+    if (!m_mapped
+        || !m_onActiveWorkspace
+        || m_server->sessionLocked()
+        || (m_server->overview() != nullptr && m_server->overview()->active())) {
       return;
     }
 
@@ -1428,9 +1432,16 @@ namespace umbriel {
         wlr_xdg_toplevel_set_maximized(m_toplevel, true);
       }
     }
+
+    if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+      overview->onViewMapped(this);
+    }
   }
 
   void View::handleUnmap() {
+    if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+      overview->onViewUnmapped(this);
+    }
     beginCloseAnimation();
     cancelFadeAnimation();
     cancelSizeAnimation();

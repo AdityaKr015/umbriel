@@ -70,6 +70,7 @@ namespace umbriel {
   class Keyboard;
   class LayerSurface;
   class Output;
+  class Overview;
   class Seat;
   class SessionLock;
   class View;
@@ -99,6 +100,10 @@ namespace umbriel {
     [[nodiscard]] wlr_allocator* allocator() const { return m_allocator; }
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
     [[nodiscard]] wlr_scene_tree* xdgTree() const { return m_xdgTree; }
+    // Between windows and the drag/insert-hint tree: overview cards render here
+    // while the real window trees are disabled.
+    [[nodiscard]] wlr_scene_tree* overviewTree() const { return m_overviewTree; }
+    [[nodiscard]] Overview* overview() const { return m_overview.get(); }
     // Above xdg windows, below layer-shell top/overlay (drag/drop insert hint).
     [[nodiscard]] wlr_scene_tree* dragTree() const { return m_dragTree; }
     // Parent for wl_data_device drag icons; moved to the cursor while a drag is active.
@@ -168,6 +173,7 @@ namespace umbriel {
     friend class SessionLock;
     friend class LockSurface;
     friend class Ipc;
+    friend class Overview;
 
     static void onNewOutput(wl_listener* listener, void* data);
     static void onNewInput(wl_listener* listener, void* data);
@@ -260,6 +266,7 @@ namespace umbriel {
     wlr_output_manager_v1* m_outputManager = nullptr;
     wlr_scene_tree* m_shellLayerTrees[kLayerCount]{};
     wlr_scene_tree* m_xdgTree = nullptr;
+    wlr_scene_tree* m_overviewTree = nullptr;
     wlr_scene_tree* m_dragTree = nullptr;
     wlr_scene_tree* m_dragIconTree = nullptr;
     wlr_scene_tree* m_fullscreenTree = nullptr;
@@ -280,6 +287,7 @@ namespace umbriel {
     std::unique_ptr<Cursor> m_cursor;
     std::unique_ptr<Gestures> m_gestures;
     std::unique_ptr<SessionLock> m_sessionLock;
+    std::unique_ptr<Overview> m_overview;
     std::unique_ptr<InsertHint> m_insertHint;
     std::unique_ptr<ConfigWatcher> m_configWatcher;
     std::unique_ptr<Ipc> m_ipc;

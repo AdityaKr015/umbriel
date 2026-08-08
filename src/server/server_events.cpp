@@ -8,6 +8,7 @@
 #include "layer/surface.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
+#include "overview/overview.h"
 #include "server/server.h"
 #include "view/popup.h"
 #include "view/view.h"
@@ -205,6 +206,8 @@ namespace umbriel {
   }
 
   void Server::handleConfigReload() {
+    // Workspace inventory is about to be reconciled; overview state indexes it.
+    m_overview->forceClose();
     if (reloadConfig()) {
       applyConfig();
       kLog.info("config reloaded");
@@ -425,6 +428,7 @@ namespace umbriel {
     }
 
     m_sessionLocked = true;
+    m_overview->forceClose();
     m_cursor->resetMode();
     m_cursor->clearConstraint();
     clearNormalFocus();
@@ -549,6 +553,7 @@ namespace umbriel {
   }
 
   void Server::removeOutput(Output* output) {
+    m_overview->onOutputRemoved(output);
     m_gestures->cancelForOutput(output);
     // wlroots 0.20 does not track output lifetime for layer surfaces, so
     // their wlr_output pointer would dangle once the output is freed.

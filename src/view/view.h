@@ -46,7 +46,9 @@ namespace umbriel {
 
     // Mechanism only — applies seat keyboard, activation chrome, and raise.
     // Policy lives in Server::focusView; do not call from input/event code.
-    void applySeatFocus();
+    // `withKeyboard` is false while overview owns the seat: chrome and
+    // activation still update, the keyboard enter is deferred to the close.
+    void applySeatFocus(bool withKeyboard = true);
     void setForeignActivated(bool activated);
     void setWorkspace(Workspace* workspace, bool attachToLayout = true);
     void detachWorkspace();

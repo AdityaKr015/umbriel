@@ -3,6 +3,7 @@
 #include "input/seat.h"
 #include "layer/surface.h"
 #include "output/output.h"
+#include "overview/overview.h"
 #include "scene/node.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -51,15 +52,21 @@ namespace umbriel {
 
     // Keep workspace focus while exclusive layer-shell holds the seat; refocus applies it later.
     // Still clear activation chrome so the previous window does not stay visually focused.
+    // Overview owns the seat the same way, but keeps the chrome so card borders
+    // track the focused window; the keyboard enter replays when it closes.
+    const bool overviewActive = m_overview != nullptr && m_overview->active();
     const bool seatAvailable = exclusiveKeyboardLayer() == nullptr;
     if (seatAvailable) {
-      view->applySeatFocus();
+      view->applySeatFocus(!overviewActive);
     } else {
       deactivateViews(nullptr);
     }
     Workspace* workspace = view->workspace();
     if (workspace != nullptr) {
       workspace->setFocusedView(view);
+    }
+    if (overviewActive) {
+      m_overview->onFocusChanged();
     }
 
     // Derive reveal policy from the focus reason.
@@ -430,6 +437,15 @@ namespace umbriel {
           workspace->arrange();
         }
       }
+      return true;
+    case KeybindAction::OverviewToggle:
+      m_overview->toggle();
+      return true;
+    case KeybindAction::OverviewOpen:
+      m_overview->open();
+      return true;
+    case KeybindAction::OverviewClose:
+      m_overview->close();
       return true;
     }
     return false;

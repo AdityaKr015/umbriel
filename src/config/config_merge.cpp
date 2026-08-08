@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <format>
+#include <fstream>
 #include <memory>
 #include <set>
 #include <string_view>
@@ -44,6 +45,74 @@ namespace umbriel::configmerge {
       std::error_code error;
       auto key = std::filesystem::weakly_canonical(path, error);
       return error ? path.lexically_normal() : key;
+    }
+
+    // toml++ 3.4 corrupts quoted duplicate keys in parse-error descriptions.
+    // Reconstruct the key from source until the minimum supported version fixes it.
+    std::string keyAtLine(const std::filesystem::path& path, toml::source_index lineNumber) {
+      if (lineNumber == 0) {
+        return {};
+      }
+
+      std::ifstream input(path);
+      std::string line;
+      for (toml::source_index current = 1; current <= lineNumber; ++current) {
+        if (!std::getline(input, line)) {
+          return {};
+        }
+      }
+
+      char quote = '\0';
+      bool escaped = false;
+      for (size_t i = 0; i < line.size(); ++i) {
+        const char character = line[i];
+        if (quote != '\0') {
+          if (quote == '"' && character == '\\' && !escaped) {
+            escaped = true;
+            continue;
+          }
+          if (character == quote && !escaped) {
+            quote = '\0';
+          }
+          escaped = false;
+          continue;
+        }
+        if (character == '"' || character == '\'') {
+          quote = character;
+          continue;
+        }
+        if (character != '=') {
+          continue;
+        }
+
+        size_t begin = 0;
+        while (begin < i && std::isspace(static_cast<unsigned char>(line[begin])) != 0) {
+          ++begin;
+        }
+        size_t end = i;
+        while (end > begin && std::isspace(static_cast<unsigned char>(line[end - 1])) != 0) {
+          --end;
+        }
+        return line.substr(begin, end - begin);
+      }
+      return {};
+    }
+
+    std::string parseErrorMessage(const toml::parse_error& error, const std::filesystem::path& path) {
+      std::string message(error.description());
+      constexpr std::string_view duplicatePrefix = "Error while parsing key-value pair: cannot redefine existing ";
+      if (!message.starts_with(duplicatePrefix)) {
+        return message;
+      }
+
+      const std::string key = keyAtLine(path, error.source().begin.line);
+      const size_t recordedKey = message.find(" '", duplicatePrefix.size());
+      if (key.empty() || recordedKey == std::string::npos) {
+        return message;
+      }
+
+      // Keep the parser's context and value type, but use the source spelling.
+      return message.substr(0, recordedKey + 1) + "'" + key + "'";
     }
 
     std::string expandEnvironment(std::string_view input) {
@@ -222,7 +291,7 @@ namespace umbriel::configmerge {
         if (source.path == nullptr) {
           source.path = std::make_shared<const std::string>(path.string());
         }
-        emit(result, ConfigDiagnostic::Severity::Error, &source, std::string(error.description()));
+        emit(result, ConfigDiagnostic::Severity::Error, &source, parseErrorMessage(error, path));
         return {};
       }
       return expandFile(path, std::move(parsed), visited, result);

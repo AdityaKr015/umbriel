@@ -15,21 +15,33 @@
   pango,
   libGL,
   libdrm,
-  scenefx,
+  libgbm,
+  libxcb,
+  libxcb-wm,
+  lcms2,
   tomlplusplus,
   nlohmann_json,
   xwayland-satellite,
   makeBinaryWrapper,
 }:
 let
-  inherit (builtins) head match readFile;
+  inherit (builtins) baseNameOf head match readFile;
+  source = lib.cleanSourceWith {
+    src = lib.cleanSource ./..;
+    filter =
+      path: type:
+      let
+        name = baseNameOf path;
+      in
+      type != "directory" || (name != "build" && !(lib.hasPrefix "build-" name));
+  };
   version = head (match ".*\n  version: '([0-9][^']+)'.*" (readFile ../meson.build));
 in
 stdenv.mkDerivation {
   pname = "umbriel";
   inherit version;
 
-  src = lib.cleanSource ./..;
+  src = source;
 
   nativeBuildInputs = [
     makeBinaryWrapper
@@ -42,8 +54,6 @@ stdenv.mkDerivation {
   buildInputs = [
     wayland
     wayland-protocols
-    # SceneFX before wlroots so its scene symbols win at link time.
-    scenefx
     wlroots_0_20
     libxkbcommon
     libinput
@@ -52,11 +62,16 @@ stdenv.mkDerivation {
     libGL
     nlohmann_json
     libdrm
+    libgbm
+    libxcb
+    libxcb-wm
+    lcms2
     cairo
     pango
   ];
 
   mesonBuildType = "release";
+  mesonInstallFlags = [ "--skip-subprojects" ];
 
   # Session desktop comes from meson (`data/umbriel.desktop`).
   # Rewrite Exec= so display managers invoke the wrapped binary in this store path.

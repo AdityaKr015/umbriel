@@ -83,8 +83,8 @@ nix build
 ./result/bin/umbriel
 ```
 
-SceneFX comes in as a flake input (`github:wlrfx/scenefx/0.5`). Prefer `nix develop` for local
-builds so wlroots, SceneFX, and tomlplusplus are on `PKG_CONFIG_PATH`.
+Nix builds use the patched SceneFX submodule in `subprojects/scenefx`, so the Nix package and local
+Meson builds consume the same source.
 
 ## Build (system packages)
 

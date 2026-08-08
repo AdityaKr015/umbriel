@@ -85,12 +85,10 @@ namespace umbriel {
       }
     }
 
-#ifdef HAVE_PATCHED_SCENEFX
     const auto ignoreAlpha = static_cast<float>(cfg.ignoreAlpha);
     if (m_node->ignore_alpha != ignoreAlpha) {
       wlr_scene_blur_set_ignore_alpha(m_node, ignoreAlpha);
     }
-#endif
 
     wlr_scene_blur_set_should_only_blur_bottom_layer(m_node, cfg.optimized);
 

@@ -4,6 +4,7 @@
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "overview/overview.h"
+#include "scene/cheatsheet.h"
 #include "server/server.h"
 #include "wlr.h"
 
@@ -131,6 +132,18 @@ namespace umbriel {
           for (int i = 0; i < nsyms && !handled; ++i) {
             handled = overview->handleFallbackKey(syms[i]);
           }
+        }
+      }
+      // Any non-modifier key press dismisses the cheatsheet, except the key
+      // that just toggled it.
+      if (Cheatsheet* sheet = m_server->cheatsheet(); sheet != nullptr && sheet->visible()) {
+        const bool cheatsheetBind = matched != nullptr
+            && (matched->action == KeybindAction::CheatsheetToggle
+                || matched->action == KeybindAction::CheatsheetOpen
+                || matched->action == KeybindAction::CheatsheetClose);
+        const bool modifierOnly = nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R;
+        if (!cheatsheetBind && !modifierOnly) {
+          sheet->hide();
         }
       }
     } else if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {

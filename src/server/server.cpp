@@ -13,6 +13,7 @@
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
+#include "scene/cheatsheet.h"
 #include "scene/color.h"
 #include "scene/config_banner.h"
 #include "server/ipc.h"
@@ -150,8 +151,8 @@ namespace umbriel {
     );
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
 
-    // Fixed global stacking: backdrop < background < bottom < xdg < drag < top < fullscreen < overlay < lock.
-    // Per-output layer trees are children of these roots so normal windows cannot raise above panels.
+    // Fixed global stacking: backdrop < background < bottom < xdg < drag < top < fullscreen < overlay < cheatsheet <
+    // banner < lock. Per-output layer trees are children of these roots so normal windows cannot raise above panels.
     // Fullscreen views are reparented into m_fullscreenTree so they cover top panels; overlay stays above.
     m_backdrop = wlr_scene_rect_create(&m_scene->tree, 0, 0, config().appearance.backdropColor.data());
     wlr_scene_rect_set_corner_radius(m_backdrop, 0);
@@ -165,6 +166,7 @@ namespace umbriel {
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);
     m_fullscreenTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
+    m_cheatsheetTree = wlr_scene_tree_create(&m_scene->tree);
     m_bannerTree = wlr_scene_tree_create(&m_scene->tree);
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
     m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, config().appearance.backdropColor.data());
@@ -380,6 +382,10 @@ namespace umbriel {
     m_configBanner = std::make_unique<ConfigBanner>(*this, m_bannerTree);
     m_configWatcher->watch(configWatchPaths());
     showConfigDiagnostics();
+    m_cheatsheet = std::make_unique<Cheatsheet>(*this, m_cheatsheetTree);
+    if (config().general.showCheatsheet) {
+      m_cheatsheet->show();
+    }
     return true;
   }
 
@@ -388,6 +394,12 @@ namespace umbriel {
   void Server::relayoutBanner() {
     if (m_configBanner != nullptr) {
       m_configBanner->relayout();
+    }
+  }
+
+  void Server::relayoutCheatsheet() {
+    if (m_cheatsheet != nullptr) {
+      m_cheatsheet->relayout();
     }
   }
 

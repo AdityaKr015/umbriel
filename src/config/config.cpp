@@ -33,6 +33,7 @@ namespace umbriel {
     bool g_explicitPath = false;
     std::vector<std::filesystem::path> g_watchPaths;
     std::vector<ConfigDiagnostic> g_diagnostics;
+    bool g_fileMissing = false;
 
     void emitDiag(ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
       ConfigDiagnostic diag;
@@ -303,6 +304,9 @@ namespace umbriel {
   } // namespace
 
   static constexpr ActionSpec kActionSpecs[] = {
+      {"cheatsheet-close", "", KeybindAction::CheatsheetClose},
+      {"cheatsheet-open", "", KeybindAction::CheatsheetOpen},
+      {"cheatsheet-toggle", "", KeybindAction::CheatsheetToggle},
       {"column-move-left", "", KeybindAction::ColumnMoveLeft},
       {"column-move-right", "", KeybindAction::ColumnMoveRight},
       {"config-reload", "", KeybindAction::ConfigReload},
@@ -1053,7 +1057,7 @@ namespace umbriel {
         warnAt(node->source(), "ignoring general (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "general", {"autostart", "prefer_no_csd", "xwayland"});
+      warnUnknownKeys(*section, "general", {"autostart", "prefer_no_csd", "show_cheatsheet", "xwayland"});
       if (const toml::node* preferNoCsd = section->get("prefer_no_csd")) {
         if (const auto value = preferNoCsd->value<bool>()) {
           loaded.appearance.preferNoCsd = *value;
@@ -1067,6 +1071,13 @@ namespace umbriel {
           loaded.general.xwayland = *value;
         } else {
           warnAt(xwayland->source(), "ignoring general.xwayland (expected boolean)");
+        }
+      }
+      if (const toml::node* showCheatsheet = section->get("show_cheatsheet")) {
+        if (const auto value = showCheatsheet->value<bool>()) {
+          loaded.general.showCheatsheet = *value;
+        } else {
+          warnAt(showCheatsheet->source(), "ignoring general.show_cheatsheet (expected boolean)");
         }
       }
 
@@ -1820,6 +1831,8 @@ namespace umbriel {
 
   const std::filesystem::path& configRootPath() { return g_rootPath; }
 
+  bool configFileMissing() { return g_fileMissing; }
+
   void loadConfig(const char* explicitPath) {
     g_rootPath = explicitPath == nullptr ? defaultConfigPath() : std::filesystem::path(explicitPath);
     g_explicitPath = explicitPath != nullptr;
@@ -1839,12 +1852,20 @@ namespace umbriel {
       }
     }
     g_config = std::move(loaded);
+    {
+      std::error_code ec;
+      g_fileMissing = !std::filesystem::is_regular_file(g_rootPath, ec) || ec;
+    }
   }
 
   bool reloadConfig() {
     Config loaded;
     if (parseInto(loaded)) {
       g_config = std::move(loaded);
+      {
+        std::error_code ec;
+        g_fileMissing = !std::filesystem::is_regular_file(g_rootPath, ec) || ec;
+      }
       return true;
     }
     kLog.warn("config reload failed; keeping previous configuration");

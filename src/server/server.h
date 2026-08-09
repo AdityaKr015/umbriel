@@ -77,6 +77,7 @@ namespace umbriel {
   class Workspace;
   class WorkspaceGroup;
   class ConfigBanner;
+  class Cheatsheet;
   class Ipc;
 
   class Server {
@@ -104,6 +105,7 @@ namespace umbriel {
     // while the real window trees are disabled.
     [[nodiscard]] wlr_scene_tree* overviewTree() const { return m_overviewTree; }
     [[nodiscard]] Overview* overview() const { return m_overview.get(); }
+    [[nodiscard]] Cheatsheet* cheatsheet() const { return m_cheatsheet.get(); }
     // Above xdg windows, below layer-shell top/overlay (drag/drop insert hint).
     [[nodiscard]] wlr_scene_tree* dragTree() const { return m_dragTree; }
     // Parent for wl_data_device drag icons; moved to the cursor while a drag is active.
@@ -214,6 +216,7 @@ namespace umbriel {
     bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);
     void showConfigDiagnostics();
     void relayoutBanner();
+    void relayoutCheatsheet();
     void clearNormalFocus();
     void setLockBlankEnabled(bool enabled);
     void updateIdleInhibit();
@@ -301,6 +304,8 @@ namespace umbriel {
     std::unique_ptr<Ipc> m_ipc;
     wlr_scene_tree* m_bannerTree = nullptr;
     std::unique_ptr<ConfigBanner> m_configBanner;
+    wlr_scene_tree* m_cheatsheetTree = nullptr;
+    std::unique_ptr<Cheatsheet> m_cheatsheet;
 
     bool m_nested = false;
     std::string m_socketName;

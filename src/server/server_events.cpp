@@ -9,6 +9,7 @@
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
+#include "scene/cheatsheet.h"
 #include "server/server.h"
 #include "view/popup.h"
 #include "view/view.h"
@@ -213,6 +214,7 @@ namespace umbriel {
       kLog.info("config reloaded");
     }
     showConfigDiagnostics();
+    relayoutCheatsheet();
     if (m_configWatcher != nullptr) {
       m_configWatcher->watch(configWatchPaths());
     }
@@ -429,6 +431,9 @@ namespace umbriel {
 
     m_sessionLocked = true;
     m_overview->forceClose();
+    if (m_cheatsheet != nullptr) {
+      m_cheatsheet->hide();
+    }
     m_cursor->resetMode();
     m_cursor->clearConstraint();
     clearNormalFocus();
@@ -508,6 +513,7 @@ namespace umbriel {
     m_outputs.push_back(std::make_unique<Output>(*this, output));
     updateBackdrop();
     relayoutBanner();
+    relayoutCheatsheet();
     if (m_sessionLocked) {
       updateLockBlank();
       raiseLockTree();
@@ -596,6 +602,7 @@ namespace umbriel {
 
     std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) { return entry.get() == output; });
     relayoutBanner();
+    relayoutCheatsheet();
     if (m_sessionLocked) {
       updateLockBlank();
     }
@@ -707,6 +714,7 @@ namespace umbriel {
         }
       }
       relayoutBanner();
+      relayoutCheatsheet();
       if (m_sessionLocked) {
         updateLockBlank();
       }

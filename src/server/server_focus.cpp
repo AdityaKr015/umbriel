@@ -4,6 +4,7 @@
 #include "layer/surface.h"
 #include "output/output.h"
 #include "overview/overview.h"
+#include "scene/cheatsheet.h"
 #include "scene/node.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -446,6 +447,21 @@ namespace umbriel {
       return true;
     case KeybindAction::OverviewClose:
       m_overview->close();
+      return true;
+    case KeybindAction::CheatsheetToggle:
+      if (m_cheatsheet != nullptr) {
+        m_cheatsheet->toggle();
+      }
+      return true;
+    case KeybindAction::CheatsheetOpen:
+      if (m_cheatsheet != nullptr) {
+        m_cheatsheet->show();
+      }
+      return true;
+    case KeybindAction::CheatsheetClose:
+      if (m_cheatsheet != nullptr) {
+        m_cheatsheet->hide();
+      }
       return true;
     case KeybindAction::Submap:
       if (bind.spawnCommand == "reset" || bind.spawnCommand == "disable") {

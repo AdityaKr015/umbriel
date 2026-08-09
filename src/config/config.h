@@ -51,6 +51,9 @@ namespace umbriel {
     OverviewToggle,
     OverviewOpen,
     OverviewClose,
+    CheatsheetToggle,
+    CheatsheetOpen,
+    CheatsheetClose,
     Submap,
   };
 
@@ -234,6 +237,8 @@ namespace umbriel {
       std::vector<std::string> autostart;
       // Spawn and manage xwayland-satellite for X11 app support. Requires restart.
       bool xwayland = true;
+      // Show the keybinds cheatsheet overlay on startup.
+      bool showCheatsheet = true;
     } general;
 
     struct Environment {
@@ -283,6 +288,7 @@ namespace umbriel {
   [[nodiscard]] const std::vector<std::filesystem::path>& configWatchPaths();
   [[nodiscard]] const std::vector<ConfigDiagnostic>& configDiagnostics();
   [[nodiscard]] const std::filesystem::path& configRootPath();
+  [[nodiscard]] bool configFileMissing();
   [[nodiscard]] ResolvedWindowRule resolveWindowRules(const char* appId, const char* title, bool focused);
   [[nodiscard]] ResolvedLayerRule resolveLayerRules(const char* layerNamespace);
   [[nodiscard]] bool anyWindowRuleHasTitlePattern();

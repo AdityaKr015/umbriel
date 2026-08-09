@@ -55,6 +55,16 @@ names resolve globally; duplicate names resolve on the preferred output. Append
 
 `overview-toggle`, `overview-open`, `overview-close`.
 
+### Cheatsheet actions
+
+`cheatsheet-toggle`, `cheatsheet-open`, `cheatsheet-close`.
+
+The keybinds cheatsheet overlay lists every active keybind in a styled panel.
+It appears automatically on startup when `general.show_cheatsheet` is `true`
+(the default). At runtime, toggle it via IPC (`umbriel msg cheatsheet-toggle`)
+or bind one of the actions above. Any non-modifier key press dismisses the
+overlay; bound chords still execute normally.
+
 ## Repeat
 
 Binds repeat while held, using `input.keyboard.repeat_rate` and

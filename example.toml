@@ -8,6 +8,7 @@ files = []
 [general]
 autostart = []
 xwayland = true                # requires restart to change
+show_cheatsheet = true         # show keybinds overlay on startup
 
 # [environment]
 # GTK_THEME = "Adwaita:dark"

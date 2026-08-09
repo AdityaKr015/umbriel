@@ -35,6 +35,43 @@ namespace umbriel {
       const uint32_t which = layer->layerSurface()->current.layer;
       return which == ZWLR_LAYER_SHELL_V1_LAYER_TOP || which == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
     }
+
+    bool surfaceLocalCoordinates(wlr_scene* scene, wlr_surface* target, double lx, double ly, double* sx, double* sy) {
+      if (target == nullptr) {
+        return false;
+      }
+
+      struct SurfacePosition {
+        wlr_surface* target;
+        int x = 0;
+        int y = 0;
+        bool found = false;
+      } position{target};
+
+      wlr_scene_node_for_each_buffer(
+          &scene->tree.node,
+          [](wlr_scene_buffer* buffer, int x, int y, void* data) {
+            auto* position = static_cast<SurfacePosition*>(data);
+            if (position->found) {
+              return;
+            }
+            wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+            if (sceneSurface != nullptr && sceneSurface->surface == position->target) {
+              position->x = x;
+              position->y = y;
+              position->found = true;
+            }
+          },
+          &position
+      );
+
+      if (!position.found) {
+        return false;
+      }
+      *sx = lx - position.x;
+      *sy = ly - position.y;
+      return true;
+    }
   } // namespace
 
   Cursor::Cursor(Server& server) : m_server(&server) {
@@ -376,6 +413,15 @@ namespace umbriel {
       return;
     }
 
+    // An implicit grab belongs to the surface that received the first press.
+    // Route additional presses there until every button has been released.
+    if (wlr_seat* seat = m_server->seat()->wlr(); seat->drag == nullptr
+        && seat->pointer_state.button_count > 0
+        && seat->pointer_state.focused_surface != nullptr) {
+      wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+      return;
+    }
+
     double sx = 0;
     double sy = 0;
     wlr_surface* surface = nullptr;
@@ -606,38 +652,11 @@ namespace umbriel {
     double ly = 0;
     wlr_cursor_absolute_to_layout_coords(m_cursor, &event->touch->base, event->x, event->y, &lx, &ly);
 
-    // Find the scene buffer node backing the focus surface. This works for any
-    // surface type (xdg toplevel, layer shell, session lock, popup).
-    struct FindCtx {
-      wlr_surface* target;
-      int nodeX;
-      int nodeY;
-      bool found;
-    } ctx{point->focus_surface, 0, 0, false};
-
-    wlr_scene_node_for_each_buffer(
-        &m_server->scene()->tree.node,
-        [](wlr_scene_buffer* buffer, int sx, int sy, void* data) {
-          auto* c = static_cast<FindCtx*>(data);
-          if (c->found) {
-            return;
-          }
-          wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-          if (sceneSurface != nullptr && sceneSurface->surface == c->target) {
-            c->nodeX = sx;
-            c->nodeY = sy;
-            c->found = true;
-          }
-        },
-        &ctx
-    );
-
-    if (!ctx.found) {
+    double sx = 0;
+    double sy = 0;
+    if (!surfaceLocalCoordinates(m_server->scene(), point->focus_surface, lx, ly, &sx, &sy)) {
       return;
     }
-
-    const double sx = lx - ctx.nodeX;
-    const double sy = ly - ctx.nodeY;
     wlr_seat_touch_notify_motion(seat, event->time_msec, event->touch_id, sx, sy);
   }
 
@@ -735,6 +754,22 @@ namespace umbriel {
       }
     }
 
+    wlr_seat* seat = m_server->seat()->wlr();
+    if (seat->drag == nullptr
+        && seat->pointer_state.button_count > 0
+        && seat->pointer_state.focused_surface != nullptr) {
+      double sx = 0;
+      double sy = 0;
+      if (!surfaceLocalCoordinates(
+              m_server->scene(), seat->pointer_state.focused_surface, m_cursor->x, m_cursor->y, &sx, &sy
+          )) {
+        sx = seat->pointer_state.sx + (m_cursor->x - oldX);
+        sy = seat->pointer_state.sy + (m_cursor->y - oldY);
+      }
+      wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);
+      updateConstraintForSurface(seat->pointer_state.focused_surface);
+      return;
+    }
     // Crossing outputs updates keyboard / foreign-toplevel focus so clients that follow the
     // focused screen match preferredOutput() / workspace-switch behavior.
     wlr_output* pointerOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
@@ -752,18 +787,6 @@ namespace umbriel {
     wlr_surface* surface = nullptr;
     LayerSurface* layer = nullptr;
     View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
-
-    // Implicit pointer grab: while any button is held, keep focus on the
-    // surface that received the press so it receives the matching release.
-    // Skip during wl_data_device drags, the drag grab must receive enter/
-    // motion for surfaces under the cursor (dwl: CurPressed && !seat->drag).
-    wlr_seat* seat = m_server->seat()->wlr();
-    if (seat->drag == nullptr
-        && seat->pointer_state.button_count > 0
-        && surface != seat->pointer_state.focused_surface) {
-      updateConstraintForSurface(seat->pointer_state.focused_surface);
-      return;
-    }
 
     if (config().input.focus.followsMouse
         && seat->drag == nullptr

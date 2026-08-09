@@ -57,11 +57,13 @@ namespace umbriel {
         return;
       }
     }
+    // A compositor opacity below 1 makes even a client-declared opaque surface
+    // reveal the backdrop, so it also requires a blur node.
     const bool want = cfg.enabled
         && options.enabled.value_or(false)
         && drawBox.width > 0
         && drawBox.height > 0
-        && isTransparent(surface, surfaceBox);
+        && (m_alpha < 1.0F || isTransparent(surface, surfaceBox));
     if (!want) {
       if (m_node != nullptr) {
         wlr_scene_node_set_enabled(&m_node->node, false);

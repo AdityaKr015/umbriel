@@ -113,8 +113,16 @@ namespace umbriel {
   }
 
   wlr_box Overview::worldBoxOf(const View* view, const wlr_box& outputBox) const {
-    if (view->toplevel()->scheduled.fullscreen) {
-      return outputBox;
+    const wlr_box& geometry = view->toplevel()->base->geometry;
+    if (view->toplevel()->current.fullscreen && geometry.width > 0 && geometry.height > 0) {
+      // Match View::updateFullscreenPresentation: committed fullscreen content
+      // is centered without scaling, and oversized buffers are cropped evenly.
+      return {
+          outputBox.x + (outputBox.width - geometry.width) / 2,
+          outputBox.y + (outputBox.height - geometry.height) / 2,
+          geometry.width,
+          geometry.height,
+      };
     }
     if (const Workspace* workspace = view->workspace()) {
       if (workspace->layout().columnOf(view) >= 0) {
@@ -124,7 +132,6 @@ namespace umbriel {
         }
       }
     }
-    const wlr_box& geometry = view->toplevel()->base->geometry;
     return {view->sceneTree()->node.x, view->sceneTree()->node.y, geometry.width, geometry.height};
   }
 
@@ -167,7 +174,7 @@ namespace umbriel {
     }
 
     const int total = config().appearance.totalBorderWidth();
-    const bool decorated = total > 0 && !view->toplevel()->scheduled.fullscreen;
+    const bool decorated = total > 0 && !view->toplevel()->current.fullscreen;
     const int radius = decorated ? static_cast<int>(std::lround(config().appearance.cornerRadius * z)) : 0;
     if (card.border != nullptr) {
       const int width = std::max(1, static_cast<int>(std::lround(total * z)));
@@ -307,9 +314,8 @@ namespace umbriel {
   // ------------------------------------------------------------------- cards
 
   void Overview::syncCardBuffer(CardSurface& entry) {
-    wlr_scene_buffer* source = entry.sourceBuffer;
     wlr_surface* surface = entry.surface;
-    if (source == nullptr || surface == nullptr || entry.buffer == nullptr) {
+    if (surface == nullptr || entry.buffer == nullptr) {
       return;
     }
 
@@ -322,17 +328,37 @@ namespace umbriel {
       options.wait_timeline = sync->acquire_timeline;
       options.wait_point = sync->acquire_point;
     }
-    wlr_scene_buffer_set_buffer_with_options(entry.buffer, source->buffer, &options);
-    wlr_scene_buffer_set_opaque_region(entry.buffer, &source->opaque_region);
-    const wlr_fbox* sourceBox = source->src_box.width > 0 && source->src_box.height > 0 ? &source->src_box : nullptr;
-    wlr_scene_buffer_set_source_box(entry.buffer, sourceBox);
-    wlr_scene_buffer_set_dest_size(entry.buffer, source->dst_width, source->dst_height);
-    wlr_scene_buffer_set_transform(entry.buffer, source->transform);
-    wlr_scene_buffer_set_opacity(entry.buffer, source->opacity);
-    wlr_scene_buffer_set_transfer_function(entry.buffer, source->transfer_function);
-    wlr_scene_buffer_set_primaries(entry.buffer, source->primaries);
-    wlr_scene_buffer_set_color_encoding(entry.buffer, source->color_encoding);
-    wlr_scene_buffer_set_color_range(entry.buffer, source->color_range);
+    // A scene buffer may clear its `buffer` pointer after importing a texture
+    // and releasing the client buffer. The surface retains the authoritative
+    // committed buffer, including for hidden workspaces.
+    wlr_buffer* committed = surface->buffer != nullptr ? &surface->buffer->base : nullptr;
+    if (committed == nullptr) {
+      options.damage = nullptr;
+    }
+    wlr_scene_buffer_set_buffer_with_options(entry.buffer, committed, &options);
+
+    // Presentation state comes from the surface's committed state, NEVER from
+    // the view's scene buffers: workspace slides clip those (setOutputClip →
+    // applyPresentedCrop), and a window parked on a hidden workspace keeps the
+    // final sliver crop. Copying it smears subsurface-presented content (games)
+    // into a single stretched line. layoutCard then re-crops the root surface
+    // and re-scales every entry for the thumbnail.
+    wlr_fbox src{};
+    wlr_surface_get_buffer_source_box(surface, &src);
+    wlr_scene_buffer_set_source_box(entry.buffer, &src);
+    wlr_scene_buffer_set_dest_size(entry.buffer, surface->current.width, surface->current.height);
+    wlr_scene_buffer_set_transform(entry.buffer, surface->current.transform);
+    wlr_scene_buffer_set_opaque_region(entry.buffer, &surface->opaque_region);
+
+    // Protocol-derived display properties (alpha-modifier, color management)
+    // are clip-independent, so the view's scene buffer is a safe source.
+    if (wlr_scene_buffer* source = entry.sourceBuffer) {
+      wlr_scene_buffer_set_opacity(entry.buffer, source->opacity);
+      wlr_scene_buffer_set_transfer_function(entry.buffer, source->transfer_function);
+      wlr_scene_buffer_set_primaries(entry.buffer, source->primaries);
+      wlr_scene_buffer_set_color_encoding(entry.buffer, source->color_encoding);
+      wlr_scene_buffer_set_color_range(entry.buffer, source->color_range);
+    }
   }
 
   void Overview::addCardSurface(wlr_surface* surface, int sx, int sy, void* data) {
@@ -551,7 +577,7 @@ namespace umbriel {
           if (view == nullptr || !view->mapped()) {
             continue;
           }
-          const bool fullscreen = view->toplevel()->scheduled.fullscreen;
+          const bool fullscreen = view->toplevel()->current.fullscreen;
           const int layer = fullscreen ? 2 : (view->tiled() ? 0 : 1);
           if (layer == pass) {
             createCard(state, view, row);

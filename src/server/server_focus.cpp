@@ -474,7 +474,8 @@ namespace umbriel {
       if (bind.submap != currentSubmap) {
         // Allow submap:reset / submap:disable from the default context to
         // always match, so users can define a global emergency exit.
-        if (!m_activeSubmaps.empty() && bind.submap.empty()
+        if (!m_activeSubmaps.empty()
+            && bind.submap.empty()
             && bind.action == KeybindAction::Submap
             && (bind.spawnCommand == "reset" || bind.spawnCommand == "disable")) {
           // Fall through to match below.
@@ -546,9 +547,7 @@ namespace umbriel {
     return false;
   }
 
-  void Server::pushSubmap(const std::string& name) {
-    m_activeSubmaps.push_back(name);
-  }
+  void Server::pushSubmap(const std::string& name) { m_activeSubmaps.push_back(name); }
 
   void Server::popSubmap() {
     if (!m_activeSubmaps.empty()) {

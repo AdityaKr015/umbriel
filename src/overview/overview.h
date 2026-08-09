@@ -79,12 +79,15 @@ namespace umbriel {
     struct CardSurface {
       Card* card = nullptr;
       wlr_surface* surface = nullptr;
+      wlr_scene_buffer* sourceBuffer = nullptr;
       wlr_scene_buffer* buffer = nullptr;
       int sx = 0;
       int sy = 0;
       bool isRoot = false;
       wl_listener commit{};
       wl_listener destroy{};
+      wl_listener outputSample{};
+      wl_listener frameDone{};
     };
 
     struct Card {
@@ -122,6 +125,8 @@ namespace umbriel {
 
     static void onCardSurfaceCommit(wl_listener* listener, void* data);
     static void onCardSurfaceDestroy(wl_listener* listener, void* data);
+    static void onCardBufferOutputSample(wl_listener* listener, void* data);
+    static void onCardBufferFrameDone(wl_listener* listener, void* data);
     static void addCardSurface(wlr_surface* surface, int sx, int sy, void* data);
     static void syncCardSurface(wlr_surface* surface, int sx, int sy, void* data);
 
@@ -134,6 +139,7 @@ namespace umbriel {
     void populateCards(OutputState& state);
     Card* createCard(OutputState& state, View* view, size_t row);
     void destroyCard(Card* card);
+    static void syncCardBuffer(CardSurface& entry);
     void dropCard(View* view);
     void rebuildCard(View* view);
     [[nodiscard]] OutputState* stateFor(const Output* output);

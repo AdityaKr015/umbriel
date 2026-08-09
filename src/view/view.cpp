@@ -1487,8 +1487,7 @@ namespace umbriel {
   void View::handleCommit() {
     if (m_toplevel->base->initial_commit) {
       // Resolve window rules early to influence initial tiled/float decision and size.
-        const ResolvedWindowRule rule =
-          resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
+      const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
       const bool wantTiled = rule.defaultFloating ? !*rule.defaultFloating : looksTiled(m_toplevel);
 
       if (wantTiled) {

@@ -14,7 +14,6 @@
 // clang-format off
 #include <algorithm>
 #include <cmath>
-#include <ctime>
 #include <linux/input-event-codes.h>
 #include <xkbcommon/xkbcommon.h>
 #include "wlr.h"
@@ -49,6 +48,25 @@ namespace umbriel {
     // Cards are pure output: hit testing runs off Overview's own boxes, so scene
     // input must never land on them (Server::viewAt then sees layer surfaces only).
     bool rejectInput(wlr_scene_buffer* /*buffer*/, double* /*sx*/, double* /*sy*/) { return false; }
+
+    wlr_scene_buffer* sourceBufferForSurface(wlr_scene_node* node, wlr_surface* surface) {
+      if (node->type == WLR_SCENE_NODE_BUFFER) {
+        wlr_scene_buffer* buffer = wlr_scene_buffer_from_node(node);
+        wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+        return sceneSurface != nullptr && sceneSurface->surface == surface ? buffer : nullptr;
+      }
+      if (node->type != WLR_SCENE_NODE_TREE) {
+        return nullptr;
+      }
+      wlr_scene_tree* tree = wlr_scene_tree_from_node(node);
+      wlr_scene_node* child = nullptr;
+      wl_list_for_each(child, &tree->children, link) {
+        if (wlr_scene_buffer* buffer = sourceBufferForSurface(child, surface)) {
+          return buffer;
+        }
+      }
+      return nullptr;
+    }
   } // namespace
 
   Overview::Overview(Server& server) : m_server(&server) {}
@@ -288,25 +306,64 @@ namespace umbriel {
 
   // ------------------------------------------------------------------- cards
 
+  void Overview::syncCardBuffer(CardSurface& entry) {
+    wlr_scene_buffer* source = entry.sourceBuffer;
+    wlr_surface* surface = entry.surface;
+    if (source == nullptr || surface == nullptr || entry.buffer == nullptr) {
+      return;
+    }
+
+    wlr_scene_buffer_set_buffer_options options{
+        .damage = &surface->buffer_damage,
+        .wait_timeline = nullptr,
+        .wait_point = 0,
+    };
+    if (wlr_linux_drm_syncobj_surface_v1_state* sync = wlr_linux_drm_syncobj_v1_get_surface_state(surface)) {
+      options.wait_timeline = sync->acquire_timeline;
+      options.wait_point = sync->acquire_point;
+    }
+    wlr_scene_buffer_set_buffer_with_options(entry.buffer, source->buffer, &options);
+    wlr_scene_buffer_set_opaque_region(entry.buffer, &source->opaque_region);
+    const wlr_fbox* sourceBox = source->src_box.width > 0 && source->src_box.height > 0 ? &source->src_box : nullptr;
+    wlr_scene_buffer_set_source_box(entry.buffer, sourceBox);
+    wlr_scene_buffer_set_dest_size(entry.buffer, source->dst_width, source->dst_height);
+    wlr_scene_buffer_set_transform(entry.buffer, source->transform);
+    wlr_scene_buffer_set_opacity(entry.buffer, source->opacity);
+    wlr_scene_buffer_set_transfer_function(entry.buffer, source->transfer_function);
+    wlr_scene_buffer_set_primaries(entry.buffer, source->primaries);
+    wlr_scene_buffer_set_color_encoding(entry.buffer, source->color_encoding);
+    wlr_scene_buffer_set_color_range(entry.buffer, source->color_range);
+  }
+
   void Overview::addCardSurface(wlr_surface* surface, int sx, int sy, void* data) {
     auto* card = static_cast<Card*>(data);
-    wlr_scene_surface* sceneSurface = wlr_scene_surface_create(card->tree, surface);
-    if (sceneSurface == nullptr) {
+    wlr_scene_buffer* source = sourceBufferForSurface(&card->view->sceneTree()->node, surface);
+    if (source == nullptr) {
+      return;
+    }
+    wlr_scene_buffer* buffer = wlr_scene_buffer_create(card->tree, nullptr);
+    if (buffer == nullptr) {
       return;
     }
     auto entry = std::make_unique<CardSurface>();
     entry->card = card;
     entry->surface = surface;
-    entry->buffer = sceneSurface->buffer;
+    entry->sourceBuffer = source;
+    entry->buffer = buffer;
     entry->sx = sx;
     entry->sy = sy;
     entry->isRoot = surface == card->view->toplevel()->base->surface;
-    wlr_scene_buffer_set_filter_mode(entry->buffer, WLR_SCALE_FILTER_BILINEAR);
-    entry->buffer->point_accepts_input = rejectInput;
+    wlr_scene_buffer_set_filter_mode(buffer, WLR_SCALE_FILTER_BILINEAR);
+    buffer->point_accepts_input = rejectInput;
     entry->commit.notify = onCardSurfaceCommit;
     wl_signal_add(&surface->events.commit, &entry->commit);
     entry->destroy.notify = onCardSurfaceDestroy;
     wl_signal_add(&surface->events.destroy, &entry->destroy);
+    entry->outputSample.notify = onCardBufferOutputSample;
+    wl_signal_add(&buffer->events.output_sample, &entry->outputSample);
+    entry->frameDone.notify = onCardBufferFrameDone;
+    wl_signal_add(&buffer->events.frame_done, &entry->frameDone);
+    syncCardBuffer(*entry);
     card->surfaces.push_back(std::move(entry));
   }
 
@@ -316,6 +373,7 @@ namespace umbriel {
       if (entry->surface == surface) {
         entry->sx = sx;
         entry->sy = sy;
+        syncCardBuffer(*entry);
         return;
       }
     }
@@ -330,8 +388,8 @@ namespace umbriel {
     if (!self->m_active || card->owner == nullptr) {
       return;
     }
-    // The scene surface reconfigures on every commit, resetting dest size and
-    // source box; re-derive both (and pick up new/moved subsurfaces).
+    // The source scene surface reconfigures on every commit. Refresh the
+    // passive buffer mirrors, then re-derive their overview crop and scale.
     wlr_surface_for_each_surface(card->view->toplevel()->base->surface, syncCardSurface, card);
     RowMetrics metrics{};
     if (rowMetrics(*card->owner, *self->m_server, self->zoom(), metrics)) {
@@ -346,9 +404,40 @@ namespace umbriel {
     Card* card = entry->card;
     wl_list_remove(&entry->commit.link);
     wl_list_remove(&entry->destroy.link);
+    wl_list_remove(&entry->outputSample.link);
+    wl_list_remove(&entry->frameDone.link);
+    if (entry->buffer != nullptr) {
+      wlr_scene_node_destroy(&entry->buffer->node);
+      entry->buffer = nullptr;
+    }
     std::erase_if(card->surfaces, [entry](const std::unique_ptr<CardSurface>& candidate) {
       return candidate.get() == entry;
     });
+  }
+
+  void Overview::onCardBufferOutputSample(wl_listener* listener, void* data) {
+    CardSurface* entry;
+    entry = wl_container_of(listener, entry, outputSample);
+    auto* event = static_cast<wlr_scene_output_sample_event*>(data);
+    wlr_output* output = event->output->output;
+    if (event->direct_scanout) {
+      wlr_presentation_surface_scanned_out_on_output(entry->surface, output);
+    } else {
+      wlr_presentation_surface_textured_on_output(entry->surface, output);
+    }
+    if (wlr_linux_drm_syncobj_surface_v1_state* sync = wlr_linux_drm_syncobj_v1_get_surface_state(entry->surface);
+        sync != nullptr && event->release_timeline != nullptr) {
+      wlr_linux_drm_syncobj_v1_state_add_release_point(
+          sync, event->release_timeline, event->release_point, output->event_loop
+      );
+    }
+  }
+
+  void Overview::onCardBufferFrameDone(wl_listener* listener, void* data) {
+    CardSurface* entry;
+    entry = wl_container_of(listener, entry, frameDone);
+    auto* event = static_cast<wlr_scene_frame_done_event*>(data);
+    wlr_surface_send_frame_done(entry->surface, &event->when);
   }
 
   Overview::Card* Overview::createCard(OutputState& state, View* view, size_t row) {
@@ -372,14 +461,8 @@ namespace umbriel {
 
     wlr_surface_for_each_surface(surface, addCardSurface, raw);
 
-    // Commit-throttled clients only render when a frame callback fires. The
-    // real tree just went invisible, so feed one frame to restart their loop;
-    // the card's own scene surfaces drive it from there.
-    timespec now{};
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    for (const auto& entry : raw->surfaces) {
-      wlr_surface_send_frame_done(entry->surface, &now);
-    }
+    // Animation schedules the first output frame. The passive card buffers then
+    // pace clients from frames where their content was actually sampled.
     return raw;
   }
 
@@ -387,6 +470,8 @@ namespace umbriel {
     for (const auto& entry : card->surfaces) {
       wl_list_remove(&entry->commit.link);
       wl_list_remove(&entry->destroy.link);
+      wl_list_remove(&entry->outputSample.link);
+      wl_list_remove(&entry->frameDone.link);
     }
     card->surfaces.clear();
     if (card->tree != nullptr) {

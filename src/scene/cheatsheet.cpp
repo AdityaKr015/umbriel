@@ -595,12 +595,14 @@ namespace umbriel {
     // A display line is either a group header or a bind row.
     struct DisplayLine {
       bool isHeader = false;
-      bool isDitto = false; // ditto row must not start a new column
-      std::string text;     // Pango markup for the full line (header or row)
+      bool isDitto = false;
+      int group = 0;    // group index: lines with the same value are never split across columns
+      std::string text; // Pango markup for the full line (header or row)
     };
 
     auto buildLines = [&]() -> std::vector<DisplayLine> {
       std::vector<DisplayLine> lines;
+      int groupId = 0;
 
       for (Group grp : kFixedGroups) {
         std::vector<const CheatsheetRow*> groupRows;
@@ -615,11 +617,14 @@ namespace umbriel {
           continue;
 
         const char* title = groupTitle(grp);
+        // Blank separator belongs to the upcoming group (break happens before it).
+        ++groupId;
         if (!lines.empty()) {
-          lines.push_back({.isHeader = false, .text = ""}); // blank separator
+          lines.push_back({.isHeader = false, .group = groupId, .text = ""});
         }
         lines.push_back({
             .isHeader = true,
+            .group = groupId,
             .text = std::format("<span foreground='#f5c96b' weight='bold'>{}</span>", title),
         });
 
@@ -629,7 +634,9 @@ namespace umbriel {
           maxChordLen = std::max(maxChordLen, row->chord.size());
         }
 
-        // Apps group: sub-group spawn rows by binary name and render subheadings.
+        // Apps group: single-usage binaries stay here as flat rows.
+        // Multi-usage binaries are deferred to their own top-level groups
+        // (rendered right after Apps with the same header style).
         if (grp == Group::Apps) {
           // Collect unique binaries in first-seen order.
           std::vector<std::string> binOrder;
@@ -640,6 +647,14 @@ namespace umbriel {
             }
           }
 
+          // Partition: single-usage binaries render flat under "Apps",
+          // multi-usage binaries are collected for their own groups.
+          struct DeferredGroup {
+            std::string title;
+            std::vector<const CheatsheetRow*> rows;
+          };
+          std::vector<DeferredGroup> deferred;
+
           for (const auto& bin : binOrder) {
             std::vector<const CheatsheetRow*> binRows;
             for (const auto* row : groupRows) {
@@ -648,46 +663,75 @@ namespace umbriel {
               }
             }
 
-            // Count non-ditto rows to decide if a subheading is warranted.
             const auto realCount =
                 std::ranges::count_if(binRows, [](const CheatsheetRow* r) { return r->action != "\xe2\x80\xb3"; });
-            const bool useSubheading = realCount >= 2
+            const bool promote = realCount >= 2
                 && std::ranges::any_of(binRows, [](const CheatsheetRow* r) { return !r->spawnArgs.empty(); });
 
-            if (useSubheading) {
-              lines.push_back({
-                  .isHeader = true,
-                  .text = std::format(" <span foreground='#8a8a92'>{}</span>", escape(bin)),
-              });
-            }
-            const char* indent = useSubheading ? "  " : "";
-            for (const auto* row : binRows) {
-              std::string escapedChord = escape(row->chord);
-              // Single-usage: show "binary args" or just "binary" as the label.
-              std::string label;
-              const bool isDitto = row->action == "\xe2\x80\xb3";
-              if (isDitto) {
-                label = row->action;
-              } else if (useSubheading) {
-                label = row->action; // args only, subheading provides context
-              } else {
-                // Flat: combine binary + args for a self-contained label.
-                label = row->spawnArgs.empty() ? row->spawnBinary : row->spawnBinary + " " + row->action;
-                if (label.size() > 32) {
-                  label = label.substr(0, 32) + "\xe2\x80\xa6";
-                }
+            if (promote) {
+              // Capitalize first letter for the group title.
+              std::string groupTitle = bin;
+              if (!groupTitle.empty()) {
+                groupTitle[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(groupTitle[0])));
               }
-              std::string escapedAction = escape(label);
+              deferred.push_back({.title = std::move(groupTitle), .rows = std::move(binRows)});
+            } else {
+              // Flat under "Apps": combine binary + args.
+              for (const auto* row : binRows) {
+                std::string escapedChord = escape(row->chord);
+                const bool isDitto = row->action == "\xe2\x80\xb3";
+                std::string label;
+                if (isDitto) {
+                  label = row->action;
+                } else {
+                  label = row->spawnArgs.empty() ? row->spawnBinary : row->spawnBinary + " " + row->action;
+                  if (label.size() > 32) {
+                    label = label.substr(0, 32) + "\xe2\x80\xa6";
+                  }
+                }
+                std::string escapedAction = escape(label);
+                size_t extraPad = maxChordLen > row->chord.size() ? maxChordLen - row->chord.size() : 0;
+                std::string padding(extraPad, ' ');
+                const char* actionColor = isDitto ? "#8a8a92" : "#e8e8ea";
+                lines.push_back({
+                    .isHeader = false,
+                    .isDitto = isDitto,
+                    .group = groupId,
+                    .text = std::format(
+                        "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span "
+                        "foreground='{}'>{}</span>",
+                        escapedChord, padding, actionColor, escapedAction
+                    ),
+                });
+              }
+            }
+          }
+
+          // Render deferred binary groups as top-level sections.
+          for (auto& dg : deferred) {
+            ++groupId;
+            if (!lines.empty()) {
+              lines.push_back({.isHeader = false, .group = groupId, .text = ""});
+            }
+            lines.push_back({
+                .isHeader = true,
+                .group = groupId,
+                .text = std::format("<span foreground='#f5c96b' weight='bold'>{}</span>", escape(dg.title)),
+            });
+            for (const auto* row : dg.rows) {
+              std::string escapedChord = escape(row->chord);
+              const bool isDitto = row->action == "\xe2\x80\xb3";
+              std::string escapedAction = escape(isDitto ? row->action : row->action);
               size_t extraPad = maxChordLen > row->chord.size() ? maxChordLen - row->chord.size() : 0;
               std::string padding(extraPad, ' ');
               const char* actionColor = isDitto ? "#8a8a92" : "#e8e8ea";
               lines.push_back({
                   .isHeader = false,
                   .isDitto = isDitto,
+                  .group = groupId,
                   .text = std::format(
-                      "{}<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span "
-                      "foreground='{}'>{}</span>",
-                      indent, escapedChord, padding, actionColor, escapedAction
+                      "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span foreground='{}'>{}</span>",
+                      escapedChord, padding, actionColor, escapedAction
                   ),
               });
             }
@@ -706,6 +750,7 @@ namespace umbriel {
           lines.push_back({
               .isHeader = false,
               .isDitto = isDitto,
+              .group = groupId,
               .text = std::format(
                   "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span foreground='{}'>{}</span>",
                   escapedChord, padding, actionColor, escapedAction
@@ -725,11 +770,13 @@ namespace umbriel {
         if (groupRows.empty())
           continue;
 
+        ++groupId;
         if (!lines.empty()) {
-          lines.push_back({.isHeader = false, .text = ""});
+          lines.push_back({.isHeader = false, .group = groupId, .text = ""});
         }
         lines.push_back({
             .isHeader = true,
+            .group = groupId,
             .text = std::format("<span foreground='#f5c96b' weight='bold'>Submap: {}</span>", escape(smName)),
         });
 
@@ -748,6 +795,7 @@ namespace umbriel {
           lines.push_back({
               .isHeader = false,
               .isDitto = isDitto,
+              .group = groupId,
               .text = std::format(
                   "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span foreground='{}'>{}</span>",
                   escapedChord, padding, actionColor, escapedAction
@@ -775,17 +823,33 @@ namespace umbriel {
       const int linesPerCol = (lineCount + numCols - 1) / numCols;
       std::vector<std::string> columns;
 
+      // Collect group boundary indices (first line of each group).
+      std::vector<int> groupStarts;
+      if (lineCount > 0) {
+        groupStarts.push_back(0);
+        for (int i = 1; i < lineCount; ++i) {
+          if (allLines[static_cast<size_t>(i)].group != allLines[static_cast<size_t>(i - 1)].group) {
+            groupStarts.push_back(i);
+          }
+        }
+      }
+
       int pos = 0;
       for (int col = 0; col < numCols && pos < lineCount; ++col) {
         std::string markup;
         int colEnd = std::min(pos + linesPerCol, lineCount);
 
-        // Never start a new column on a ditto row or a group header; pull the
-        // break back so the ditto/header stays with its predecessor.
-        while (colEnd < lineCount
-               && colEnd > pos
-               && (allLines[static_cast<size_t>(colEnd)].isDitto || allLines[static_cast<size_t>(colEnd)].isHeader)) {
-          --colEnd;
+        // Snap colEnd back to the nearest group boundary so no group is split.
+        if (colEnd < lineCount) {
+          // Find the largest group start <= colEnd.
+          auto it = std::ranges::upper_bound(groupStarts, colEnd);
+          if (it != groupStarts.begin()) {
+            --it;
+            // Only pull back if it doesn't collapse the column to nothing.
+            if (*it > pos) {
+              colEnd = *it;
+            }
+          }
         }
 
         for (int i = pos; i < colEnd; ++i) {

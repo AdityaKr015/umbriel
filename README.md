@@ -179,11 +179,12 @@ programs.umbriel = {
 The `appearance`, `layout`, `general`, `workspaces`, `input`, `environment`, `keybinds`, `[[window_rule]]`, and
 `[[layer_rule]]` overlay compiled defaults, so a config file is optional. The `environment` table exports arbitrary
 environment variables (string values) to Umbriel and its spawned children. Window rules match on `app_id` and
-`title` (regex) and optionally `is_focused` (boolean), and can set floating, size, workspace, fullscreen, and
-opacity. Layer rules match layer-shell namespaces (regex). Layer blur is disabled by default and requires an explicit
-`blur = true`; matching rules can also configure alpha masking and optimized blur. Keyboard input supports XKB
-layout/variant and repeat settings; touchpads support tap-to-click and natural scrolling, mice support natural
-scrolling, and cursor theme/size are configurable. Libinput options are applied only when supported by the device.
+`title` (regex) and optionally `is_focused` (boolean). Toplevel, layer, and XDG popup blur is opt-in through
+`blur = true` and `blur_popups = true`; `[appearance.blur].enabled` is the master switch. Rules can configure alpha
+masking with `blur_ignore_alpha` and optimized blur with `blur_optimized`. Window rules can also set floating, size,
+workspace, fullscreen, and opacity. Keyboard input supports XKB layout/variant and repeat settings; touchpads support
+tap-to-click and natural scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput
+options are applied only when supported by the device.
 
 ## Project layout
 

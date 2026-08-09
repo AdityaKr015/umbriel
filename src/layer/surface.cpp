@@ -139,6 +139,14 @@ namespace umbriel {
     };
   }
 
+  SurfaceBlurOptions LayerSurface::popupBlurOptions() const {
+    return SurfaceBlurOptions{
+        .ignoreAlpha = static_cast<float>(m_rule.ignoreAlpha.value_or(0.0)),
+        .enabled = m_rule.blurPopups.value_or(false),
+        .optimized = m_rule.optimized,
+    };
+  }
+
   void LayerSurface::unconstrainPopup(wlr_xdg_popup* popup) {
     Output* out = output();
     if (out == nullptr || m_scene == nullptr) {

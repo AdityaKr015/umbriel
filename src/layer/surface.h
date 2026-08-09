@@ -32,6 +32,7 @@ namespace umbriel {
     [[nodiscard]] bool acceptsKeyboard() const;
     [[nodiscard]] bool hasKeyboardFocus() const;
     [[nodiscard]] SurfaceBlurOptions blurOptions() const;
+    [[nodiscard]] SurfaceBlurOptions popupBlurOptions() const;
 
     void focus();
     void unconstrainPopup(wlr_xdg_popup* popup);

@@ -501,7 +501,7 @@ namespace umbriel {
     const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
     m_blur.update(
         m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry,
-        rounded ? config().appearance.cornerRadius : 0
+        rounded ? config().appearance.cornerRadius : 0, nullptr, blurOptions()
     );
     m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
     if (m_workspace != nullptr) {
@@ -739,7 +739,7 @@ namespace umbriel {
     m_borderFocusedState = focused;
     if (m_borderTree == nullptr) {
       if (focusChanged && m_mapped) {
-        applyRuleOpacity();
+        applyDynamicRules();
       }
       return;
     }
@@ -759,7 +759,7 @@ namespace umbriel {
     }
 
     if (focusChanged && m_mapped) {
-      applyRuleOpacity();
+      applyDynamicRules();
     }
   }
 
@@ -885,12 +885,17 @@ namespace umbriel {
     );
   }
 
+  SurfaceBlurOptions View::blurOptions() const { return m_blurOptions; }
+
+  SurfaceBlurOptions View::popupBlurOptions() const { return m_popupBlurOptions; }
+
   void View::updateBlur() {
     const wlr_box& geometry = m_toplevel->base->geometry;
     const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
     const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
     m_blur.update(
-        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0
+        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0,
+        nullptr, blurOptions()
     );
     m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
   }
@@ -1300,7 +1305,7 @@ namespace umbriel {
     }
     m_blur.update(
         m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0,
-        &blurClip
+        &blurClip, blurOptions()
     );
     m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
   }
@@ -2038,17 +2043,28 @@ namespace umbriel {
       }
     }
 
-    // Opacity is always safe to update.
-    applyRuleOpacity();
+    // Dynamic effects are always safe to update.
+    applyDynamicRules();
   }
 
-  void View::applyRuleOpacity() {
+  void View::applyDynamicRules() {
     const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
+    m_blurOptions = SurfaceBlurOptions{
+        .ignoreAlpha = static_cast<float>(rule.blurIgnoreAlpha.value_or(0.0)),
+        .enabled = rule.blur.value_or(false),
+        .optimized = rule.blurOptimized,
+    };
+    m_popupBlurOptions = SurfaceBlurOptions{
+        .ignoreAlpha = static_cast<float>(rule.blurIgnoreAlpha.value_or(0.0)),
+        .enabled = rule.blurPopups.value_or(false),
+        .optimized = rule.blurOptimized,
+    };
     const float newOpacity = rule.opacity ? static_cast<float>(*rule.opacity) : 1.0F;
     if (newOpacity != m_ruleOpacity) {
       m_ruleOpacity = newOpacity;
       setFadeAlpha(m_fadeAlpha); // refresh effective opacity
     }
+    updateBlur();
   }
 
 } // namespace umbriel

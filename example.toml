@@ -45,9 +45,10 @@ backdrop_color = "#000000FF"     # background color for fullscreen gaps and lock
 animation_ms = 250        # 1-10000
 
 [appearance.blur]
-# Backdrop blur behind transparent surfaces (windows, panels, popups).
-# Blur only renders where a surface is actually transparent.
-enabled = true
+# Backdrop blur rendering parameters. `enabled` is the master switch; individual
+# toplevels, layer surfaces, and their XDG popups must opt in through
+# [[window_rule]] or [[layer_rule]]. Blur only renders where a surface is transparent.
+enabled = true            # master switch; rules still opt individual surfaces in
 optimized = true          # cache one background blur per output instead of recomputing per surface
 passes = 3               # 0-8; 0 disables
 radius = 5               # 0-100; 0 disables
@@ -261,11 +262,21 @@ follows_mouse = false
 #   default_maximize    = true/false    Map maximized (tiled: column full-width;
 #                                       floating: fill usable area)
 #   opacity             = 0.95          Surface opacity (0.0-1.0)
+#   blur                = true/false    Enable or disable blur for the window
+#   blur_popups         = true/false    Enable or disable blur for its XDG popups
+#   blur_ignore_alpha   = 0.5           Skip blur where surface alpha is below
+#                                       this threshold (0.0-1.0); applies to the
+#                                       window and its popups
+#   blur_optimized      = true/false    Override appearance.blur.optimized
 #
 # One-shot effects (floating, workspace, fullscreen, size, width) are applied
 # at map time. If a window's title arrives after mapping, rules are re-evaluated
-# once. Opacity updates continuously on title/app_id changes.
+# once. Opacity and blur update continuously on title/app_id/focus changes.
 
+# Enable blur for every window, then use later rules to override specific apps:
+# [[window_rule]]
+# blur = true
+#
 # [[window_rule]]
 # match.app_id = "firefox"
 # match.title = "^Library$"
@@ -325,14 +336,15 @@ default_size = [800, 600]
 # (last writer wins). Run `umbriel layers` to discover surface namespaces.
 #
 # Available effects:
-#   blur          = true/false    Enable or disable blur for the matching layer
-#   ignore_alpha  = 0.5           Skip blurring pixels whose own alpha is below
-#                                 this threshold (0.0-1.0). 0.0 blurs the
-#                                 surface's whole rectangle; higher values leave
-#                                 more-transparent regions unblurred.
-#   optimized     = true/false    Override appearance.blur.optimized
+#   blur               = true/false    Enable or disable blur for the matching layer
+#   blur_popups        = true/false    Enable or disable blur for descendant XDG popups
+#   blur_ignore_alpha  = 0.5           Skip blurring pixels whose own alpha is below
+#                                      this threshold (0.0-1.0). 0.0 blurs the
+#                                      surface's whole rectangle; higher values leave
+#                                      more-transparent regions unblurred.
+#   blur_optimized     = true/false    Override appearance.blur.optimized
 
 [[layer_rule]]
 match.namespace="^noctalia-(bar-[^\"]+|notification|dock|panel|attached-panel|osd)$"
 blur = true
-ignore_alpha = 0.5   
+blur_ignore_alpha = 0.5

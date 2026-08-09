@@ -57,7 +57,8 @@ namespace umbriel {
         return;
       }
     }
-    const bool want = options.enabled.value_or(cfg.enabled)
+    const bool want = cfg.enabled
+        && options.enabled.value_or(false)
         && drawBox.width > 0
         && drawBox.height > 0
         && isTransparent(surface, surfaceBox);

@@ -131,6 +131,10 @@ namespace umbriel {
     std::optional<bool> defaultFullscreen;
     std::optional<bool> defaultMaximize;
     std::optional<double> opacity; // 0.0-1.0
+    std::optional<bool> blur;
+    std::optional<bool> blurPopups;
+    std::optional<double> blurIgnoreAlpha;
+    std::optional<bool> blurOptimized;
   };
 
   // Resolved result: merge of all matching rules (last writer wins per field).
@@ -143,18 +147,24 @@ namespace umbriel {
     std::optional<bool> defaultFullscreen;
     std::optional<bool> defaultMaximize;
     std::optional<double> opacity;
+    std::optional<bool> blur;
+    std::optional<bool> blurPopups;
+    std::optional<double> blurIgnoreAlpha;
+    std::optional<bool> blurOptimized;
   };
 
   struct LayerRule {
     std::string namespacePattern;
     std::regex namespaceRegex;
     std::optional<bool> blur;
+    std::optional<bool> blurPopups;
     std::optional<double> ignoreAlpha;
     std::optional<bool> optimized;
   };
 
   struct ResolvedLayerRule {
     std::optional<bool> blur;
+    std::optional<bool> blurPopups;
     std::optional<double> ignoreAlpha;
     std::optional<bool> optimized;
   };

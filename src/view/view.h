@@ -125,6 +125,8 @@ namespace umbriel {
     void applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight);
     void applyCornerRadius();
     void updateBlur();
+    [[nodiscard]] SurfaceBlurOptions blurOptions() const;
+    [[nodiscard]] SurfaceBlurOptions popupBlurOptions() const;
     void updateShadow();
     // Re-apply m_fadeAlpha*m_ruleOpacity to surface buffers. wlroots' scene
     // surface reconfigure (on commit or clip change) resets buffer opacity, so
@@ -151,7 +153,7 @@ namespace umbriel {
     void enterForeignOutput();
     void leaveForeignOutput();
     void applyWindowRules(bool allowDisruptive);
-    void applyRuleOpacity();
+    void applyDynamicRules();
 
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
@@ -161,6 +163,8 @@ namespace umbriel {
     wlr_scene_rect* m_outerBorderRect = nullptr; // single rounded ring outside the inner border
     wlr_scene_rect* m_fullscreenBackdrop = nullptr;
     SurfaceBlur m_blur;
+    SurfaceBlurOptions m_blurOptions;
+    SurfaceBlurOptions m_popupBlurOptions;
     SurfaceShadow m_shadow;
     wlr_scene_tree* m_shadowContainer = nullptr; // child of workspace shadow layer
     bool m_hasShadowOutputClip = false;

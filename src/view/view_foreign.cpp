@@ -91,11 +91,11 @@ namespace umbriel {
         m_initialRulesSettled = true;
         applyWindowRules(true);
       } else {
-        // Still empty title; just refresh opacity with whatever matches now.
-        applyRuleOpacity();
+        // Still empty title; refresh non-disruptive effects with whatever matches now.
+        applyDynamicRules();
       }
     } else {
-      applyRuleOpacity();
+      applyDynamicRules();
     }
   }
 
@@ -104,15 +104,15 @@ namespace umbriel {
     updateForeignIdentity();
     if (!m_initialRulesSettled) {
       // Title hasn't arrived yet. If no rule cares about title, we can settle now.
-      // Otherwise only update opacity — disruptive rules wait for the title.
+      // Otherwise only update non-disruptive effects; disruptive rules wait for the title.
       if (!anyWindowRuleHasTitlePattern()) {
         m_initialRulesSettled = true;
         applyWindowRules(true);
       } else {
-        applyRuleOpacity();
+        applyDynamicRules();
       }
     } else {
-      applyRuleOpacity();
+      applyDynamicRules();
     }
   }
 

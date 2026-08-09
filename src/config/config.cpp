@@ -1485,7 +1485,8 @@ namespace umbriel {
         warnUnknownKeys(
             *section, "window_rule",
             {"match", "default_output", "default_floating", "default_size", "default_width", "default_workspace",
-             "default_fullscreen", "default_maximize", "opacity"}
+             "default_fullscreen", "default_maximize", "opacity", "blur", "blur_popups", "blur_ignore_alpha",
+             "blur_optimized"}
         );
 
         WindowRule rule;
@@ -1619,6 +1620,43 @@ namespace umbriel {
           }
         }
 
+        if (const toml::node* n = section->get("blur")) {
+          if (n->is_boolean()) {
+            rule.blur = n->value<bool>();
+          } else {
+            warnAt(n->source(), "ignoring window_rule.blur (expected boolean)");
+          }
+        }
+
+        if (const toml::node* n = section->get("blur_popups")) {
+          if (n->is_boolean()) {
+            rule.blurPopups = n->value<bool>();
+          } else {
+            warnAt(n->source(), "ignoring window_rule.blur_popups (expected boolean)");
+          }
+        }
+
+        if (const toml::node* n = section->get("blur_ignore_alpha")) {
+          const auto value = n->value<double>();
+          if (!value || std::isnan(*value)) {
+            warnAt(n->source(), "ignoring window_rule.blur_ignore_alpha (expected number 0.0-1.0)");
+          } else {
+            const double used = std::clamp(*value, 0.0, 1.0);
+            if (used != *value) {
+              warnAt(n->source(), "window_rule.blur_ignore_alpha = {} out of range, clamped to {}", *value, used);
+            }
+            rule.blurIgnoreAlpha = used;
+          }
+        }
+
+        if (const toml::node* n = section->get("blur_optimized")) {
+          if (n->is_boolean()) {
+            rule.blurOptimized = n->value<bool>();
+          } else {
+            warnAt(n->source(), "ignoring window_rule.blur_optimized (expected boolean)");
+          }
+        }
+
         loaded.windowRules.push_back(std::move(rule));
       }
     }
@@ -1640,7 +1678,9 @@ namespace umbriel {
           warnAt(entry.source(), "ignoring layer_rule entry (expected table)");
           continue;
         }
-        warnUnknownKeys(*section, "layer_rule", {"match", "blur", "ignore_alpha", "optimized"});
+        warnUnknownKeys(
+            *section, "layer_rule", {"match", "blur", "blur_popups", "blur_ignore_alpha", "blur_optimized"}
+        );
 
         LayerRule rule;
 
@@ -1673,24 +1713,32 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* n = section->get("ignore_alpha")) {
+        if (const toml::node* n = section->get("blur_popups")) {
+          if (n->is_boolean()) {
+            rule.blurPopups = n->value<bool>();
+          } else {
+            warnAt(n->source(), "ignoring layer_rule.blur_popups (expected boolean)");
+          }
+        }
+
+        if (const toml::node* n = section->get("blur_ignore_alpha")) {
           const auto value = n->value<double>();
           if (!value || std::isnan(*value)) {
-            warnAt(n->source(), "ignoring layer_rule.ignore_alpha (expected number 0.0-1.0)");
+            warnAt(n->source(), "ignoring layer_rule.blur_ignore_alpha (expected number 0.0-1.0)");
           } else {
             const double used = std::clamp(*value, 0.0, 1.0);
             if (used != *value) {
-              warnAt(n->source(), "layer_rule.ignore_alpha = {} out of range, clamped to {}", *value, used);
+              warnAt(n->source(), "layer_rule.blur_ignore_alpha = {} out of range, clamped to {}", *value, used);
             }
             rule.ignoreAlpha = used;
           }
         }
 
-        if (const toml::node* n = section->get("optimized")) {
+        if (const toml::node* n = section->get("blur_optimized")) {
           if (n->is_boolean()) {
             rule.optimized = n->value<bool>();
           } else {
-            warnAt(n->source(), "ignoring layer_rule.optimized (expected boolean)");
+            warnAt(n->source(), "ignoring layer_rule.blur_optimized (expected boolean)");
           }
         }
 
@@ -1855,6 +1903,18 @@ namespace umbriel {
       if (rule.opacity) {
         resolved.opacity = rule.opacity;
       }
+      if (rule.blur) {
+        resolved.blur = rule.blur;
+      }
+      if (rule.blurPopups) {
+        resolved.blurPopups = rule.blurPopups;
+      }
+      if (rule.blurIgnoreAlpha) {
+        resolved.blurIgnoreAlpha = rule.blurIgnoreAlpha;
+      }
+      if (rule.blurOptimized) {
+        resolved.blurOptimized = rule.blurOptimized;
+      }
     }
     return resolved;
   }
@@ -1870,6 +1930,9 @@ namespace umbriel {
       }
       if (rule.blur) {
         resolved.blur = rule.blur;
+      }
+      if (rule.blurPopups) {
+        resolved.blurPopups = rule.blurPopups;
       }
       if (rule.ignoreAlpha) {
         resolved.ignoreAlpha = rule.ignoreAlpha;

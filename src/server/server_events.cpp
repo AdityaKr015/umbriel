@@ -179,7 +179,7 @@ namespace umbriel {
       view->setBorderFocused(false);
       view->updateBorderGeometry();
       view->applyCornerRadius();
-      view->updateBlur();
+      view->applyDynamicRules();
       view->updateShadow();
       wlr_scene_rect_set_color(view->m_fullscreenBackdrop, config().appearance.backdropColor.data());
     }

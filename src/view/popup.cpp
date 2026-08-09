@@ -90,11 +90,15 @@ namespace umbriel {
 
   void Popup::handleCommit() {
     const wlr_box& geometry = m_popup->base->geometry;
-    LayerSurface* layer = layerSurfaceFromSurface(m_popup->parent);
+    SurfaceBlurOptions blurOptions;
+    if (LayerSurface* layer = layerSurfaceFromSurface(m_popup->parent)) {
+      blurOptions = layer->popupBlurOptions();
+    } else if (View* view = toplevelViewFromSurface(m_popup->parent)) {
+      blurOptions = view->popupBlurOptions();
+    }
     m_blur.update(
         static_cast<wlr_scene_tree*>(m_popup->base->data), m_popup->base->surface,
-        wlr_box{0, 0, geometry.width, geometry.height}, geometry, 0, nullptr,
-        layer != nullptr ? layer->blurOptions() : SurfaceBlurOptions{}
+        wlr_box{0, 0, geometry.width, geometry.height}, geometry, 0, nullptr, blurOptions
     );
     if (!m_popup->base->initial_commit) {
       return;

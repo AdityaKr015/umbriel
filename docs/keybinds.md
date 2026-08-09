@@ -34,8 +34,9 @@ at least one modifier).
 
 ## Actions
 
-Run `umbriel actions` for the full list. A configured chord replaces its
-compiled default. Use `"none"` to remove a binding entirely.
+Run `umbriel actions` for the full list. Default keybinds are only loaded when
+no config file exists; once you provide a config, `[keybinds]` is the complete
+set.
 
 ### Parameterized actions
 

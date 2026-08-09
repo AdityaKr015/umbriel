@@ -85,9 +85,6 @@ namespace {
 
   int printActions() {
     for (const auto& spec : umbriel::actionSpecs()) {
-      if (spec.action == umbriel::KeybindAction::None) {
-        continue;
-      }
       if (spec.param.empty()) {
         std::println("{}", spec.name);
       } else {
@@ -149,9 +146,6 @@ int main(int argc, char** argv) {
         std::println("");
         std::println("Available actions:");
         for (const auto& spec : umbriel::actionSpecs()) {
-          if (spec.action == umbriel::KeybindAction::None) {
-            continue;
-          }
           if (spec.param.empty()) {
             std::println("  {}", spec.name);
           } else {

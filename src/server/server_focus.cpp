@@ -246,7 +246,7 @@ namespace umbriel {
 
     switch (bind.action) {
     case KeybindAction::None:
-      return true;
+      return false;
     case KeybindAction::Spawn:
       spawn(bind.spawnCommand.c_str());
       return true;

@@ -34,7 +34,7 @@ What works today:
 - `zwlr_gamma_control_v1` (color temperature / night light)
 - `zwlr_output_management_v1` (output configuration for shell clients)
 - `xdg_decoration` / `server_decoration` (CSD/SSD preference via `appearance.prefer_no_csd`, default true)
-- Configurable keybinds with compiled defaults for focus/move, layout actions, applications, and workspaces
+- Configurable keybinds for focus/move, layout actions, applications, and workspaces (defaults when no config file)
 - Scroll-wheel bindings (mod+WheelUp/Down for focus navigation)
 - Output configuration: mode, position, scale, and transform per connector
 - Sloppy focus (follows_mouse) with configurable scroll threshold
@@ -180,8 +180,8 @@ programs.umbriel = {
 `settings` also accepts a raw TOML string or a path to a `.toml` file. A hjem module is exported as
 `inputs.umbriel.hjemModules.default`.
 
-The `appearance`, `layout`, `general`, `workspaces`, `input`, `environment`, `keybinds`, `[[window_rule]]`, and
-`[[layer_rule]]` overlay compiled defaults, so a config file is optional. The `environment` table exports arbitrary
+Most settings overlay compiled defaults, so a config file is optional. Keybinds use compiled defaults only when no
+config file is present; once a config file exists, `[keybinds]` is the complete set. The `environment` table exports arbitrary
 environment variables (string values) to Umbriel and its spawned children. Window rules match on `app_id` and
 `title` (regex) and optionally `is_focused` (boolean). Toplevel, layer, and XDG popup blur is opt-in through
 `blur = true` and `blur_popups = true`; `[appearance.blur].enabled` is the master switch. Rules can configure alpha

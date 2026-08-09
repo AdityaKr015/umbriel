@@ -308,7 +308,6 @@ namespace umbriel {
       {"config-reload", "", KeybindAction::ConfigReload},
       {"layout-scroll-left", "", KeybindAction::LayoutScrollLeft},
       {"layout-scroll-right", "", KeybindAction::LayoutScrollRight},
-      {"none", "", KeybindAction::None},
       {"overview-close", "", KeybindAction::OverviewClose},
       {"overview-open", "", KeybindAction::OverviewOpen},
       {"overview-toggle", "", KeybindAction::OverviewToggle},
@@ -1383,7 +1382,6 @@ namespace umbriel {
     }
 
     void readKeybinds(const toml::table& table, Config& loaded) {
-      loaded.keybinds = defaultKeybinds();
       const toml::node* node = table.get("keybinds");
       if (node == nullptr) {
         return;
@@ -1459,9 +1457,7 @@ namespace umbriel {
         std::erase_if(configured, [&](const Keybind& existing) { return sameChord(existing, binding); });
         configured.push_back(binding);
         std::erase_if(loaded.keybinds, [&](const Keybind& existing) { return sameChord(existing, binding); });
-        if (binding.action != KeybindAction::None) {
-          loaded.keybinds.push_back(std::move(binding));
-        }
+        loaded.keybinds.push_back(std::move(binding));
       }
     }
 
@@ -1784,7 +1780,6 @@ namespace umbriel {
         }
 
         Config loaded;
-        loaded.keybinds = defaultKeybinds();
         warnUnknownTopLevel(result.merged);
         readAppearance(result.merged, loaded);
         readOverview(result.merged, loaded);
@@ -1848,7 +1843,6 @@ namespace umbriel {
 
   bool reloadConfig() {
     Config loaded;
-    loaded.keybinds = defaultKeybinds();
     if (parseInto(loaded)) {
       g_config = std::move(loaded);
       return true;

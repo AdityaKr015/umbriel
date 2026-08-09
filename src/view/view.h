@@ -128,6 +128,10 @@ namespace umbriel {
     [[nodiscard]] SurfaceBlurOptions blurOptions() const;
     [[nodiscard]] SurfaceBlurOptions popupBlurOptions() const;
     void updateShadow();
+    // Record the dimensions currently rendered by the scene. Client geometry
+    // can lag a layout configure, so presentation consumers must not infer
+    // their size independently from the committed geometry.
+    void trackPresentedSize(int width, int height);
     // Re-apply m_fadeAlpha*m_ruleOpacity to surface buffers. wlroots' scene
     // surface reconfigure (on commit or clip change) resets buffer opacity, so
     // this must run after any such operation while effective opacity is < 1.
@@ -185,6 +189,8 @@ namespace umbriel {
     float m_fadeAlpha = 1.0F;
     bool m_borderFocusedState = false;
     AnimId m_sizeAnim = 0;
+    // Dimensions currently rendered by the scene. These follow the layout clip
+    // while client geometry lags, and the interpolated size during animation.
     int m_presentedW = 0;
     int m_presentedH = 0;
     int m_sizeTargetW = 0;

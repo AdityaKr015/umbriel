@@ -384,6 +384,13 @@ namespace umbriel {
     }
     return std::min(m_toplevel->base->geometry.height, target.height);
   }
+  void View::trackPresentedSize(int width, int height) {
+    if (m_sizeAnim != 0 || width <= 0 || height <= 0) {
+      return;
+    }
+    m_presentedW = width;
+    m_presentedH = height;
+  }
 
   // Fullscreen PRESENTATION follows the client's COMMITTED state, not the
   // scheduled intent (niri's sizing_mode rule): the backdrop and centering
@@ -909,8 +916,8 @@ namespace umbriel {
       return;
     }
     const wlr_box& geometry = m_toplevel->base->geometry;
-    const int w = (m_sizeAnim != 0 && m_presentedW > 0) ? m_presentedW : geometry.width;
-    const int h = (m_sizeAnim != 0 && m_presentedH > 0) ? m_presentedH : geometry.height;
+    const int w = m_tiled && m_presentedW > 0 ? m_presentedW : geometry.width;
+    const int h = m_tiled && m_presentedH > 0 ? m_presentedH : geometry.height;
     const bool decorated = m_borderTree != nullptr && m_borderTree->node.enabled;
     const int total = decorated ? config().appearance.totalBorderWidth() : 0;
     const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
@@ -1076,6 +1083,8 @@ namespace umbriel {
     // leaves a bar-sized gap). Use scheduled (not current): on leave, scheduled clears
     // immediately while current lags until the client acks.
     const bool fullscreen = m_toplevel->scheduled.fullscreen;
+    const wlr_box& geometry = m_toplevel->base->geometry;
+    trackPresentedSize(geometry.width, geometry.height);
     if (!fullscreen && !m_tiled) {
       syncFloatingSurfaceClip();
       if (m_borderTree != nullptr) {
@@ -1182,6 +1191,7 @@ namespace umbriel {
         .width = presentedWidth(target),
         .height = presentedHeight(target),
     };
+    trackPresentedSize(content.width, content.height);
     const int border =
         m_borderTree != nullptr && m_borderTree->node.enabled ? config().appearance.totalBorderWidth() : 0;
     wlr_box decorated = content;
@@ -1350,10 +1360,8 @@ namespace umbriel {
     updateBlur();
     updateShadow();
 
-    // Workspace placement: rule.defaultWorkspace overrides the default "focused output, active workspace".
-    // rule.defaultOutput redirects the window to a named output (e.g. "DP-1").
     if (m_workspace != nullptr) {
-      m_workspace->layoutAttach(this);
+      m_workspace->layoutAttach(this, rule.defaultWidth);
     } else {
       Output* targetOutput = nullptr;
       if (rule.defaultOutput) {
@@ -1371,7 +1379,8 @@ namespace umbriel {
               target = ruleTarget;
             }
           }
-          setWorkspace(target);
+          setWorkspace(target, /*attachToLayout=*/false);
+          target->layoutAttach(this, rule.defaultWidth);
         } else {
           setOnActiveWorkspace(true);
         }
@@ -1388,12 +1397,6 @@ namespace umbriel {
       // visibility is resolved data-side (no per-render-pass pass to do it).
       if (m_workspace != nullptr) {
         m_workspace->syncViewPresentation(this);
-      }
-    } else if (rule.defaultWidth && m_workspace != nullptr) {
-      const int column = m_workspace->layout().columnOf(this);
-      if (column >= 0) {
-        m_workspace->layout().setWidthFraction(column, *rule.defaultWidth);
-        m_workspace->arrange();
       }
     }
 

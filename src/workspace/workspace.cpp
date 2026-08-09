@@ -146,13 +146,16 @@ namespace umbriel {
     return replacement;
   }
 
-  void Workspace::layoutAttach(View* view) {
+  void Workspace::layoutAttach(View* view, std::optional<double> initialWidth) {
     if (view == nullptr || !view->mapped() || !view->tiled() || m_layout->columnOf(view) >= 0) {
       return;
     }
     const int focusedColumn = m_layout->columnOf(m_focusedView);
     const int index = focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout->columns().size());
     m_layout->insertView(view, index);
+    if (initialWidth) {
+      m_layout->setWidthFraction(m_layout->columnOf(view), *initialWidth);
+    }
     arrange();
   }
 

@@ -54,7 +54,7 @@ namespace umbriel {
     void setFocusedView(View* view);
     void addView(View* view, bool attachToLayout = true);
     View* removeView(View* view);
-    void layoutAttach(View* view);
+    void layoutAttach(View* view, std::optional<double> initialWidth = std::nullopt);
     void layoutDetach(View* view, bool animate = false);
     void arrange(bool animate = true);
     void syncViewPresentation(View* view);

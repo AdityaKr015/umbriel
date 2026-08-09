@@ -67,6 +67,7 @@ namespace umbriel {
 
     bool cycleWidth(int columnIndex) override;
     bool toggleFullWidth(int columnIndex) override;
+    [[nodiscard]] bool isFullWidth(int columnIndex) const override;
     bool setWidthFraction(int columnIndex, double fraction) override;
     void clearFullWidthState(int columnIndex) override;
     [[nodiscard]] double widthFraction(int columnIndex) const override;

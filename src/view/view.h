@@ -102,6 +102,7 @@ namespace umbriel {
     void handleRequestMove();
     void handleRequestResize(void* data);
     void handleRequestMaximize();
+    void setMaximized(bool maximized);
     void handleRequestFullscreen();
     void setFullscreen(bool fullscreen);
     void handleSetTitle();
@@ -203,6 +204,8 @@ namespace umbriel {
     // handleSetTitle re-applies all rule effects one more time.
     bool m_initialRulesSettled = false;
     float m_ruleOpacity = 1.0F;
+    bool m_hasMaximizeRestoreBox = false;
+    wlr_box m_maximizeRestoreBox{};
 
     wl_listener m_map{};
     wl_listener m_unmap{};

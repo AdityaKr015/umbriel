@@ -512,6 +512,20 @@ namespace umbriel {
     return true;
   }
 
+  bool DwindleLayout::isFullWidth(int columnIndex) const {
+    const std::vector<WidthSplit> splits = widthSplits(nodeAtFlatIndex(columnIndex));
+    if (splits.empty()) {
+      return false;
+    }
+    double current = 1.0;
+    double maximum = 1.0;
+    for (const WidthSplit& split : splits) {
+      current *= widthShare(split);
+      maximum *= 0.9;
+    }
+    return current >= maximum - 0.0001;
+  }
+
   bool DwindleLayout::setWidthFraction(int columnIndex, double fraction) {
     return applyWidthFraction(widthSplits(nodeAtFlatIndex(columnIndex)), fraction);
   }

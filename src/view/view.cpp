@@ -1423,30 +1423,14 @@ namespace umbriel {
       }
     }
 
+    // Honor the client's pre-map request as well as the compositor default.
+    if (m_toplevel->requested.maximized || (rule.defaultMaximize && *rule.defaultMaximize)) {
+      setMaximized(true);
+    }
+
     // Fullscreen after workspace + focus so the view lands in the right place.
     if (rule.defaultFullscreen && *rule.defaultFullscreen) {
       setFullscreen(true);
-    }
-
-    // Maximize.
-    if (rule.defaultMaximize && *rule.defaultMaximize) {
-      if (m_tiled && m_workspace != nullptr) {
-        const int column = m_workspace->layout().columnOf(this);
-        if (column >= 0 && !m_workspace->layout().isFullWidth(column)) {
-          m_workspace->layout().toggleFullWidth(column);
-        }
-        wlr_xdg_toplevel_set_maximized(m_toplevel, true);
-      } else {
-        wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-        if (usable.width > 0 && usable.height > 0) {
-          wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
-          wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
-          if (m_shadowContainer != nullptr) {
-            wlr_scene_node_set_position(&m_shadowContainer->node, usable.x, usable.y);
-          }
-        }
-        wlr_xdg_toplevel_set_maximized(m_toplevel, true);
-      }
     }
 
     if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
@@ -1484,6 +1468,7 @@ namespace umbriel {
     }
     m_initialRulesSettled = false;
     m_ruleOpacity = 1.0F;
+    m_hasMaximizeRestoreBox = false;
   }
 
   void View::handleCommit() {
@@ -1707,24 +1692,38 @@ namespace umbriel {
     m_server->cursor()->beginInteractive(this, m_tiled ? CursorMode::ResizeTile : CursorMode::Resize, event->edges);
   }
 
-  void View::handleRequestMaximize() {
-    if (!m_toplevel->base->initialized) {
-      return;
-    }
-
+  void View::setMaximized(bool maximized) {
     if (m_tiled && m_workspace != nullptr) {
       const int column = m_workspace->layout().columnOf(this);
-      const bool maximized = m_workspace->layout().toggleFullWidth(column);
+      if (column >= 0 && m_workspace->layout().isFullWidth(column) != maximized) {
+        m_workspace->layout().toggleFullWidth(column);
+      }
       wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
-      m_workspace->ensureFocusedVisible();
+      if (maximized) {
+        m_workspace->ensureFocusedVisible();
+      }
       m_workspace->arrange(false);
       updateForeignState();
       return;
     }
 
-    const bool maximized = !m_toplevel->current.maximized;
-    if (maximized) {
-      wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+    const bool wasMaximized = m_toplevel->scheduled.maximized;
+    if (maximized && !wasMaximized) {
+      const wlr_box& geometry = m_toplevel->base->geometry;
+      m_maximizeRestoreBox = {
+          .x = m_sceneTree->node.x,
+          .y = m_sceneTree->node.y,
+          .width = geometry.width,
+          .height = geometry.height,
+      };
+      m_hasMaximizeRestoreBox = geometry.width > 0 && geometry.height > 0;
+
+      wlr_box usable{};
+      if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+        usable = m_workspace->group()->output()->usableArea();
+      } else {
+        usable = m_server->usableAreaAt(m_sceneTree->node.x, m_sceneTree->node.y);
+      }
       if (usable.width > 0 && usable.height > 0) {
         wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
         wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
@@ -1732,9 +1731,24 @@ namespace umbriel {
           wlr_scene_node_set_position(&m_shadowContainer->node, usable.x, usable.y);
         }
       }
+    } else if (!maximized && wasMaximized && m_hasMaximizeRestoreBox) {
+      wlr_xdg_toplevel_set_size(m_toplevel, m_maximizeRestoreBox.width, m_maximizeRestoreBox.height);
+      wlr_scene_node_set_position(&m_sceneTree->node, m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
+      if (m_shadowContainer != nullptr) {
+        wlr_scene_node_set_position(&m_shadowContainer->node, m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
+      }
+      m_hasMaximizeRestoreBox = false;
     }
     wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+    syncFloatingSurfaceClip();
     updateForeignState();
+  }
+
+  void View::handleRequestMaximize() {
+    if (!m_toplevel->base->initialized || !m_mapped) {
+      return;
+    }
+    setMaximized(m_toplevel->requested.maximized);
   }
 
   void View::handleRequestFullscreen() {
@@ -1997,24 +2011,8 @@ namespace umbriel {
       }
 
       // Maximize.
-      if (rule.defaultMaximize && *rule.defaultMaximize && !m_toplevel->current.maximized) {
-        if (m_tiled && m_workspace != nullptr) {
-          const int column = m_workspace->layout().columnOf(this);
-          if (column >= 0 && !m_workspace->layout().isFullWidth(column)) {
-            m_workspace->layout().toggleFullWidth(column);
-          }
-          wlr_xdg_toplevel_set_maximized(m_toplevel, true);
-        } else {
-          wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-          if (usable.width > 0 && usable.height > 0) {
-            wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
-            wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
-            if (m_shadowContainer != nullptr) {
-              wlr_scene_node_set_position(&m_shadowContainer->node, usable.x, usable.y);
-            }
-          }
-          wlr_xdg_toplevel_set_maximized(m_toplevel, true);
-        }
+      if (rule.defaultMaximize && *rule.defaultMaximize && !m_toplevel->scheduled.maximized) {
+        setMaximized(true);
       }
     }
 

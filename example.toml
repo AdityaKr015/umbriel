@@ -1,282 +1,116 @@
-# Umbriel configuration example
+# Umbriel example config
 # Copy to ~/.config/umbriel/config.toml or pass with `umbriel -c example.toml`.
-# Changes to this file and its includes apply immediately. Invalid configurations
-# keep the previous state. Use `config-reload` as a keybind action for manual reloads.
+# Changes apply on save. See docs/ for the full reference.
 
 [include]
-# Included files are resolved relative to this file. Later files override earlier
-# files, and values in this file override every include.
 files = []
 
 [general]
-# Shell commands run once after startup; they are never re-run on config reload.
 autostart = []
-# Spawn and manage xwayland-satellite for X11 app support (the binary must be
-# installed). X11 clients see it as a regular X server on a private DISPLAY.
-# Changing this requires a restart.
-xwayland = true
+xwayland = true                # requires restart to change
 
-[environment]
-# Extra environment variables exported to Umbriel and all spawned commands.
-# Values must be strings.
+# [environment]
 # GTK_THEME = "Adwaita:dark"
 # QT_QPA_PLATFORMTHEME = "qt5ct"
 
 [workspaces]
-# Re-selecting the active workspace (e.g. Mod+2 while already on 2) jumps back
-# to the previously active workspace on that output.
 back_and_forth = false
 
 # Appearance -----------------------------------------------------------------
 
 [appearance]
-# Ask clients to omit client-side decorations (xdg-decoration server-side).
-# Clients that explicitly request CSD are still honored. Restart apps after
-# changing this for full effect.
 prefer_no_csd = true
-border_width = 2          # 0-100
-outer_border_width = 0    # 0-100; ring outside the inner border
-corner_radius = 10        # 0-500; 0 disables rounded corners
-border_focused = "#7AA3FFFF"     # #RRGGBB or #RRGGBBAA
+border_width = 2               # 0-100
+outer_border_width = 0         # 0-100
+corner_radius = 10             # 0-500
+border_focused = "#7AA3FFFF"
 border_unfocused = "#292933FF"
-outer_border_color = "#1A1A1FFF" # single color; no focus variant
-insert_hint_color = "#7FC8FF80"  # drop-target preview shown during drag
-backdrop_color = "#000000FF"     # background color for fullscreen gaps and lock screen
-animation_ms = 250        # 1-10000
+outer_border_color = "#1A1A1FFF"
+insert_hint_color = "#7FC8FF80"
+backdrop_color = "#000000FF"
+animation_ms = 250             # 1-10000
 
 [appearance.blur]
-# Backdrop blur rendering parameters. `enabled` is the master switch; individual
-# toplevels, layer surfaces, and their XDG popups must opt in through
-# [[window_rule]] or [[layer_rule]]. Blur only renders where a surface is transparent.
-enabled = true            # master switch; rules still opt individual surfaces in
-optimized = true          # cache one background blur per output instead of recomputing per surface
-passes = 3               # 0-8; 0 disables
-radius = 5               # 0-100; 0 disables
-noise = 0.02             # 0.0-1.0
-brightness = 0.9         # 0.0-2.0
-contrast = 0.9           # 0.0-2.0
-saturation = 1.1         # 0.0-2.0
+enabled = true
+optimized = true
+passes = 3                     # 0-8
+radius = 5                     # 0-100
+noise = 0.02                   # 0.0-1.0
+brightness = 0.9               # 0.0-2.0
+contrast = 0.9                 # 0.0-2.0
+saturation = 1.1               # 0.0-2.0
 
 [appearance.shadow]
-# Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
 enabled = true
-softness = 10            # 0-200; gaussian blur sigma in px, 0 disables
-offset_x = 2             # -200-200
-offset_y = 2             # -200-200
-color = "#0000008C"      # #RRGGBB or #RRGGBBAA
+softness = 10                  # 0-200
+offset_x = 2                   # -200 to 200
+offset_y = 2
+color = "#0000008C"
 
 # Overview -------------------------------------------------------------------
 
 [overview]
-# Zoomed-out view of every workspace on every output (default Mod+O).
-# Windows stay live; click one to focus it, middle-click to close it, drag it
-# between workspaces, scroll to move the filmstrip, 4-finger swipe to toggle.
-zoom = 0.5                    # 0.1-0.75; workspace scale when fully zoomed out
-# Tint over the desktop background. The wallpaper stays visible behind the
-# filmstrip; alpha 00 leaves it untouched, higher values dim it, FF hides it.
+zoom = 0.5                     # 0.1-0.75
 backdrop_color = "#10101400"
-workspace_color = "#1A1A1FFF" # workspace thumbnail background
+workspace_color = "#1A1A1FFF"
 
 # Layout ---------------------------------------------------------------------
 
 [layout]
-# Layout algorithm: "scrolling" or "dwindle".
-mode = "scrolling"
-gap = 8                         # 0-500
-# Initial width assigned to new columns.
-default_width_fraction = 0.5    # 0.1-1.0
-# Widths visited by `window-cycle-width`.
+mode = "scrolling"             # "scrolling" or "dwindle"
+gap = 8                        # 0-500
+default_width_fraction = 0.5   # 0.1-1.0
 width_presets = [0.333, 0.5, 0.667]
 
-# Workspace layout rules -----------------------------------------------------
-# Workspace inventories are declared by each output's `workspaces` setting
-# below. [[workspace]] entries only customize an existing workspace and must
-# select it by exactly one of `name` or 1-based `index`.
-#
-# Rules without `output` apply wherever the selector exists. Output-specific
-# rules apply afterward and therefore take precedence. Layout fields inherit:
-#   [layout] -> matching global [[workspace]] -> matching output [[workspace]]
-#
-# A rule never creates, removes, appends, or renames a workspace.
-
-# Use dwindle with a narrow gap for every workspace named "chat".
+# Workspace layout overrides (see docs/outputs.md#workspace-rules)
 # [[workspace]]
 # name = "chat"
 # layout.mode = "dwindle"
 # layout.gap = 4
 
-# Keep dwindle from the global rule, but widen the gap on DP-1.
-# [[workspace]]
-# name = "chat"
-# output = "DP-1"
-# layout.gap = 8
-
-# Customize workspace position 4 only on DP-1.
-# [[workspace]]
-# index = 4
-# output = "DP-1"
-# layout.gap = 0
-# layout.default_width_fraction = 0.667
-
-# Outputs --------------------------------------------------------------------
-# Output names must exactly match connector names such as DP-1 or HDMI-A-1.
-# Nested outputs use WL-1; headless outputs use HEADLESS-1. Mode is ignored in
-# nested sessions because the parent compositor controls the output size.
-# Run `umbriel outputs` inside the session to list connector names and modes.
-# Each output may declare either a numeric count or an exact ordered list of
-# names. Omitting `workspaces` creates the default 9 numeric workspaces.
-# Reloading reconciles inventories live. Existing workspaces survive by name,
-# then by position; windows from removed workspaces move to the nearest survivor.
-#
-# workspaces = 5                         # creates "1" through "5"
-# workspaces = ["main", "code", "chat"] # exact names and order
+# Outputs (see docs/outputs.md) ---------------------------------------------
 
 # [output."DP-1"]
-# mode = "2560x1440@144"   # WIDTHxHEIGHT or WIDTHxHEIGHT@HZ; fractional HZ allowed
-# position = [0, 0]        # Layout coordinates [x, y]
-# scale = 1.25             # 0.25-4.0
+# mode = "2560x1440@144"
+# position = [0, 0]
+# scale = 1.25
 # workspaces = 5
-# transform = "normal"     # normal|90|180|270|flipped|flipped-90|flipped-180|flipped-270
-
-# [output."HDMI-A-1"]
-# mode = "1920x1080@60"
-# position = [2048, 0]     # right of DP-1 (2560 / 1.25 = 2048 logical pixels)
-# scale = 1.0
-# workspaces = ["TV"]
 
 # Input ----------------------------------------------------------------------
 
 [input.keyboard]
-# Empty layout/variant use the system XKB defaults.
 layout = ""
 variant = ""
-repeat_rate = 25          # 0-1000 Hz; 0 disables repeat
-repeat_delay = 600        # 0-10000 ms
+repeat_rate = 25               # 0-1000 Hz
+repeat_delay = 600             # 0-10000 ms
 
 [input.touchpad]
-# These options are applied only when supported by the libinput device.
-# Leave them commented to preserve each device's defaults.
 # tap = true
 # natural_scroll = true
 
 [input.mouse]
-# Leave commented to preserve each device's default.
 # natural_scroll = false
-# Pixel step used by the `layout-scroll-left` and `layout-scroll-right` actions.
-scroll_wheel_step = 60           # 1-1000
+scroll_wheel_step = 60         # 1-1000
 
 [input.cursor]
-# An empty theme uses the environment/default Xcursor theme.
 theme = ""
-size = 24                 # 1-512
+size = 24                      # 1-512
 
 [input.focus]
-# Focus the window under the pointer as it moves (sloppy focus).
-# Runs only when the pointer enters a different window, then scrolls it on-screen.
 follows_mouse = false
-# Refuse focus when bring-into-view would scroll more than this fraction of the
-# viewport (0.0 = never scroll). Omit for no limit.
 # follows_mouse_max_scroll = 0.0
 
-# Keybinds -------------------------------------------------------------------
+# Keybinds (see docs/keybinds.md) -------------------------------------------
 
 [keybinds]
-# Chords are case-insensitive. Supported modifiers: Mod, Shift, Ctrl/Control,
-# Alt, and Super/Logo/Win (`Mod` is Alt nested / Super on DRM). Bare keys are
-# allowed (e.g. XF86AudioMute).
-# Scroll-wheel chords: WheelUp, WheelDown, WheelLeft, WheelRight (need >=1 modifier).
-# Mouse-button chords: MouseLeft, MouseRight, MouseMiddle, MouseBack, MouseForward (need >=1 modifier).
-#
-# A configured chord replaces its compiled default. `none` removes a binding.
-# Run `umbriel actions` for the full list. Parameterized actions:
-#   spawn:<shell command>, workspace-switch:<workspace>[/<output>],
-#   window-move-to-workspace:<workspace>[/<output>]
-#   window-set-width:<fraction> (0.1-1.0)
-# Workspace selectors are exact names, including numeric names such as `1`.
-# Unique names resolve globally. Duplicates resolve on the preferred output;
-# add `/output` to target a different output explicitly.
-# Defaults: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
-# Binds repeat while held (using input.keyboard repeat_rate/repeat_delay).
-# Opt out per bind with the table form:
-#   "Mod+Return" = { action = "spawn:kitty", repeat = false }
 "Mod+Return" = "spawn:kitty"
 "Mod+T" = "window-toggle-floating"
 "Mod+Shift+Q" = "window-close"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"
-"Mod+O" = "overview-toggle"    # also: overview-open, overview-close
+"Mod+O" = "overview-toggle"
 
-# Direct column width bindings:
-# "Mod+A" = "window-set-width:0.333"
-# "Mod+S" = "window-set-width:0.5"
-# "Mod+D" = "window-set-width:0.667"
-# "Mod+F" = "window-set-width:1.0"
-# "Mod+MouseMiddle" = "overview-toggle"
-# "Mod+Escape" = "none"
+# Window and layer rules (see docs/rules.md) --------------------------------
 
-# Submaps: temporary keybind layers that can be nested.
-# Use `submap:<name>` to enter, `submap:reset` to exit one level.
-# Binds inside a submap use the `submap[name]` prefix on the chord.
-# A `submap:reset` bind in the default context (no prefix) always matches,
-# even inside a submap, for a global emergency exit.
-#
-# "Mod+S" = "submap:screencapture"
-# "submap[screencapture],1" = "spawn:grim screenshot.png"
-# "submap[screencapture],2" = "submap:region"
-# "submap[screencapture],Escape" = "submap:reset"
-# "submap[region],R" = "spawn:grim -g 'slurp -p' screenshot.png"
-# "submap[region],Escape" = "submap:reset"
-# "Escape" = "submap:reset"
-
-# Media keys: bare XF86 key names work without a modifier.
-# Volume (PipeWire/WirePlumber)
-# "XF86AudioRaiseVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
-# "XF86AudioLowerVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
-# "XF86AudioMute" = "spawn:wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
-# Brightness (brightnessctl)
-# "XF86MonBrightnessUp" = "spawn:brightnessctl set +5%"
-# "XF86MonBrightnessDown" = "spawn:brightnessctl set 5%-"
-# Media playback (playerctl)
-# "XF86AudioPlay" = "spawn:playerctl play-pause"
-# "XF86AudioNext" = "spawn:playerctl next"
-# "XF86AudioPrev" = "spawn:playerctl previous"
-
-# Window rules ---------------------------------------------------------------
-# Each [[window_rule]] matches windows by app_id and/or title (regex, ECMAScript).
-# All matching rules are merged top-to-bottom; later rules override earlier ones
-# for each field they set (last-writer-wins).
-#
-# match.app_id and match.title are optional; omitting both matches everything.
-# match.is_focused is optional and matches the focused state dynamically.
-# Use ^ and $ to anchor patterns. Matching uses regex search (partial match).
-#
-# Available effects:
-#   default_output      = "DP-1"        Open the window on a specific output
-#                                        (monitor name, e.g. DP-1, HDMI-A-1)
-#   default_floating    = true/false    Force floating / force tiling
-#   default_size        = [w, h]        Initial size (pixels); floats use both,
-#                                       tiled windows ignore height
-#   default_width       = 0.5           Column width fraction (0.1-1.0);
-#                                       overrides layout.default_width_fraction
-#   default_workspace   = 3             Place on workspace N (1-9)
-#   default_fullscreen  = true          Map fullscreen
-#   default_maximize    = true/false    Map maximized (tiled: column full-width;
-#                                       floating: fill usable area)
-#   opacity             = 0.95          Surface opacity (0.0-1.0)
-#   blur                = true/false    Enable or disable blur for the window
-#   blur_popups         = true/false    Enable or disable blur for its XDG popups
-#   blur_ignore_alpha   = 0.5           Skip blur where surface alpha is below
-#                                       this threshold (0.0-1.0); applies to the
-#                                       window and its popups
-#   blur_optimized      = true/false    Override appearance.blur.optimized
-#
-# One-shot effects (floating, workspace, fullscreen, size, width) are applied
-# at map time. If a window's title arrives after mapping, rules are re-evaluated
-# once. Opacity and blur update continuously on title/app_id/focus changes.
-
-# Enable blur for every window, then use later rules to override specific apps:
-# [[window_rule]]
-# blur = true
-#
 # [[window_rule]]
 # match.app_id = "firefox"
 # match.title = "^Library$"
@@ -286,36 +120,6 @@ follows_mouse = false
 # match.app_id = "pavucontrol"
 # default_floating = true
 # default_size = [800, 600]
-
-# [[window_rule]]
-# match.app_id = "Slack"
-# default_workspace = 3
-
-# [[window_rule]]
-# match.app_id = "mpv"
-# default_fullscreen = true
-
-# [[window_rule]]
-# match.app_id = "ghostty"
-# default_width = 0.667
-
-# [[window_rule]]
-# match.app_id = "org\\.gnome\\."
-# opacity = 0.95
-
-# [[window_rule]]
-# match.app_id = "firefox"
-# default_output = "DP-1"
-# default_workspace = 3
-
-# Focus-based opacity
-# [[window_rule]]
-# match.is_focused = false
-# opacity = 0.85
-#
-# [[window_rule]]
-# match.is_focused = true
-# opacity = 1.0
 
 [[window_rule]]
 match.app_id = "^dev.noctalia.Noctalia$"
@@ -327,22 +131,7 @@ match.app_id = "^dev.noctalia.UmbrielSharePicker$"
 default_floating = true
 default_size = [800, 600]
 
-# Layer rules ----------------------------------------------------------------
-# Each [[layer_rule]] matches layer-shell surfaces such as bars, launchers, and
-# notifications by match.namespace (regex, ECMAScript). Matching uses regex
-# search (partial match); use ^ and $ to anchor patterns.
-# Layer-shell blur is disabled by default. All matching rules are merged
-# top-to-bottom; later rules override earlier ones for each field they set
-# (last writer wins). Run `umbriel layers` to discover surface namespaces.
-#
-# Available effects:
-#   blur               = true/false    Enable or disable blur for the matching layer
-#   blur_popups        = true/false    Enable or disable blur for descendant XDG popups
-#   blur_ignore_alpha  = 0.5           Skip blurring pixels whose own alpha is below
-#                                      this threshold (0.0-1.0). 0.0 blurs the
-#                                      surface's whole rectangle; higher values leave
-#                                      more-transparent regions unblurred.
-#   blur_optimized     = true/false    Override appearance.blur.optimized
+# Layer rules (see docs/rules.md#layer-rules) --------------------------------
 
 [[layer_rule]]
 match.namespace="^noctalia-(bar-[^\"]+|notification|dock|panel|attached-panel|osd)$"

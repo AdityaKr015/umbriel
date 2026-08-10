@@ -1,5 +1,6 @@
 #include "config/config.h"
 #include "config/config_watcher.h"
+#include "core/fdlimit.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/gestures.h"
@@ -225,6 +226,15 @@ namespace umbriel {
   // context — Mesa's context_lost_nop_handler no-ops each one and spams
   // "[GLES2] GL_CONTEXT_LOST in context lost" ~40k lines/sec, and the desktop never comes
   // back. Rebuild the renderer and rebind everything.
+  int Server::onFdPressureTimer(void* data) {
+    auto* self = static_cast<Server*>(data);
+    checkFileDescriptorPressure();
+    if (self->m_fdPressureTimer != nullptr) {
+      wl_event_source_timer_update(self->m_fdPressureTimer, kFdPressureIntervalMs);
+    }
+    return 0;
+  }
+
   void Server::onRendererLost(wl_listener* listener, void* /*data*/) {
     Server* self;
     self = wl_container_of(listener, self, m_rendererLost);

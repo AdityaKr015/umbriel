@@ -53,6 +53,9 @@ struct wlr_virtual_pointer_v1;
 
 namespace umbriel {
 
+  // How often the compositor samples its own fd table (see core/fdlimit.h).
+  inline constexpr int kFdPressureIntervalMs = 30'000;
+
   enum class WheelDirection;
   struct Keybind;
 
@@ -214,6 +217,7 @@ namespace umbriel {
     static void onOutputLayoutChange(wl_listener* listener, void* data);
     static void onToplevelCaptureRequest(wl_listener* listener, void* data);
     static void onRendererLost(wl_listener* listener, void* data);
+    static int onFdPressureTimer(void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -339,6 +343,7 @@ namespace umbriel {
     std::string m_xwaylandDisplay;
     wl_event_source* m_xwaylandExitSource = nullptr;
     wl_event_source* m_xwaylandRespawnTimer = nullptr;
+    wl_event_source* m_fdPressureTimer = nullptr;
     int m_xwaylandFailures = 0;
     std::chrono::steady_clock::time_point m_xwaylandSpawnTime;
 

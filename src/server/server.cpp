@@ -310,6 +310,11 @@ namespace umbriel {
     }
     if (m_xwaylandRespawnTimer != nullptr) {
       wl_event_source_remove(m_xwaylandRespawnTimer);
+      m_xwaylandRespawnTimer = nullptr;
+    }
+    if (m_fdPressureTimer != nullptr) {
+      wl_event_source_remove(m_fdPressureTimer);
+      m_fdPressureTimer = nullptr;
     }
     if (m_xwaylandPidfd >= 0) {
       close(m_xwaylandPidfd);
@@ -343,6 +348,15 @@ namespace umbriel {
     setenv("WAYLAND_DISPLAY", m_socketName.c_str(), true);
     unsetenv("WAYLAND_SOCKET");
     kLog.info("running on WAYLAND_DISPLAY={}", m_socketName);
+    kLog.info("{}", describeOpenFileDescriptors());
+
+    // Sample fd usage periodically. Silent until usage crosses a threshold, so
+    // a client leaking shm pools names itself in the log long before the table
+    // fills and every fd-allocating call starts failing.
+    m_fdPressureTimer = wl_event_loop_add_timer(wl_display_get_event_loop(m_display), onFdPressureTimer, this);
+    if (m_fdPressureTimer != nullptr) {
+      wl_event_source_timer_update(m_fdPressureTimer, kFdPressureIntervalMs);
+    }
     wlr_log(WLR_INFO, "running on WAYLAND_DISPLAY=%s", m_socketName.c_str());
     setenv(
         "UMBRIEL_SOCKET",

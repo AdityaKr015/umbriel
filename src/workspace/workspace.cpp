@@ -157,7 +157,7 @@ namespace umbriel {
     if (initialWidth && m_layoutMode == LayoutMode::Scrolling) {
       m_layout->setWidthFraction(m_layout->columnOf(view), *initialWidth);
     }
-    arrange();
+    arrange(true);
   }
 
   void Workspace::layoutDetach(View* view, bool animate) {
@@ -594,7 +594,7 @@ namespace umbriel {
     m_layoutConfig = std::move(layoutConfig);
     if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
       m_layout->setConfig(&m_layoutConfig);
-      arrange();
+    arrange(true);
       return;
     }
     std::vector<View*> tiledViews;

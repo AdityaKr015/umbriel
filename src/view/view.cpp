@@ -1872,13 +1872,30 @@ namespace umbriel {
       }
       const int gap = m_workspace != nullptr ? m_workspace->layoutConfig().gap : resolveGlobalLayout().gap;
       const int nudge = std::max(32, gap * 2);
-      int floatX = keepX + nudge;
-      int floatY = keepY + nudge;
+      // Clamp the immediate position so the window never starts off-screen.
+      int snapX = keepX;
+      int snapY = keepY;
       if (usable.width > 0 && usable.height > 0 && keepWidth > 0 && keepHeight > 0) {
-        floatX = std::clamp(floatX, usable.x, std::max(usable.x, usable.x + usable.width - keepWidth));
-        floatY = std::clamp(floatY, usable.y, std::max(usable.y, usable.y + usable.height - keepHeight));
+        snapX = std::clamp(snapX, usable.x, std::max(usable.x, usable.x + usable.width - keepWidth));
+        snapY = std::clamp(snapY, usable.y, std::max(usable.y, usable.y + usable.height - keepHeight));
       }
-      setPosition(keepX, keepY);
+      // Nudge away from the tile strip, but only in directions that keep the
+      // window fully on screen: prefer down-right, fall back to up-left.
+      int floatX = snapX;
+      int floatY = snapY;
+      if (usable.width > 0 && usable.height > 0 && keepWidth > 0 && keepHeight > 0) {
+        if (snapY + keepHeight + nudge <= usable.y + usable.height) {
+          floatY += nudge;
+        } else if (snapY - nudge >= usable.y) {
+          floatY -= nudge;
+        }
+        if (snapX + keepWidth + nudge <= usable.x + usable.width) {
+          floatX += nudge;
+        } else if (snapX - nudge >= usable.x) {
+          floatX -= nudge;
+        }
+      }
+      setPosition(snapX, snapY);
       animateTo(floatX, floatY);
       syncFloatingSurfaceClip();
       // Keep the focus ring when floating a tiled window.

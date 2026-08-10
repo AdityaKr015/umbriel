@@ -594,7 +594,7 @@ namespace umbriel {
     m_layoutConfig = std::move(layoutConfig);
     if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
       m_layout->setConfig(&m_layoutConfig);
-    arrange(true);
+      arrange(true);
       return;
     }
     std::vector<View*> tiledViews;

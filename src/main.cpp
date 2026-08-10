@@ -2,6 +2,7 @@
 #include "cli/outputs.h"
 #include "config/config.h"
 #include "config/config_diag.h"
+#include "core/fdlimit.h"
 #include "core/log.h"
 #include "server/server.h"
 #include "wlr.h"
@@ -206,10 +207,12 @@ int main(int argc, char** argv) {
 
   initLogFile();
 #ifdef NDEBUG
-  wlr_log_init(WLR_INFO, nullptr);
+  wlr_log_init(WLR_INFO, wlrLogHandler);
 #else
-  wlr_log_init(WLR_DEBUG, nullptr);
+  wlr_log_init(WLR_DEBUG, wlrLogHandler);
 #endif
+
+  raiseFileDescriptorLimit();
 
   const char* startupCmd = nullptr;
   const char* configPath = nullptr;

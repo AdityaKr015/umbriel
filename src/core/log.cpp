@@ -1,12 +1,15 @@
 #include "core/log.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
+#include <format>
 #include <mutex>
 #include <string>
 #include <system_error>
@@ -33,6 +36,19 @@ namespace {
   constexpr std::size_t kMaxLogLineBytes = 8 * 1024;    // 8 KiB
   constexpr std::size_t kBufferedFileLogFlushLines = 64;
   constexpr auto kBufferedFileLogFlushInterval = std::chrono::milliseconds(500);
+
+  // A per-frame failure (a dead EGL context, an exhausted fd table) turns into
+  // thousands of identical lines per second. When stderr is a VT the write()s
+  // are synchronous and expensive enough to stall the main loop outright, so an
+  // error that should degrade a frame instead freezes the session. Collapse
+  // runs of an identical message and report the count once the run ends.
+  constexpr auto kRepeatWindow = std::chrono::seconds(1);
+
+  std::string gLastMessage;
+  const char* gLastSection = nullptr;
+  LogLevel gLastLevel = LogLevel::Debug;
+  std::size_t gSuppressedRepeats = 0;
+  std::chrono::steady_clock::time_point gRepeatWindowStart{};
 
   struct CappedLogMessage {
     std::string storage;
@@ -242,6 +258,40 @@ namespace {
     openLogFileUnlocked();
   }
 
+  void emitUnlocked(LogLevel level, const char* section, std::string_view msg, const std::tm& tm, long msec) {
+    // Console: respects gMinLevel, ANSI colours, time only
+    if (gConsoleEnabled && level >= gMinLevel) {
+      const std::string prefix = consolePrefix(tm, msec, level, section);
+      const CappedLogMessage capped = capMessageForLine(msg, prefix.size());
+      (void)writeLine(stderr, prefix, capped.text());
+    }
+
+    // File: always unfiltered, no ANSI, full date for context
+    if (gLogFile != nullptr) {
+      const std::string prefix = filePrefix(tm, msec, level, section);
+      const CappedLogMessage capped = capMessageForLine(msg, prefix.size());
+      const std::string_view cappedText = capped.text();
+      const std::uintmax_t lineBytes = prefix.size() + cappedText.size() + 1;
+      if (gLogSizeBytes > 0 && gLogSizeBytes + lineBytes > kMaxLogBytes) {
+        rotateLogFileUnlocked();
+      }
+      gLogSizeBytes += writeLine(gLogFile, prefix, cappedText);
+      if (shouldFlushLogFile(level)) {
+        flushLogFileUnlocked();
+      }
+    }
+  }
+
+  // Emits the pending "repeated N times" summary, if any.
+  void flushRepeatsUnlocked(const std::tm& tm, long msec) {
+    if (gSuppressedRepeats == 0) {
+      return;
+    }
+    const std::size_t count = gSuppressedRepeats;
+    gSuppressedRepeats = 0;
+    emitUnlocked(gLastLevel, gLastSection, std::format("last message repeated {} times", count), tm, msec);
+  }
+
 } // namespace
 
 void initLogFile() {
@@ -295,27 +345,25 @@ namespace detail {
 
     std::scoped_lock lock(gLogMutex);
 
-    // Console: respects gMinLevel, ANSI colours, time only
-    if (gConsoleEnabled && level >= gMinLevel) {
-      const std::string prefix = consolePrefix(tm, msec, level, section);
-      const CappedLogMessage capped = capMessageForLine(msg, prefix.size());
-      (void)writeLine(stderr, prefix, capped.text());
+    const auto now = std::chrono::steady_clock::now();
+    if (msg == gLastMessage && section == gLastSection && level == gLastLevel) {
+      // Identical to the previous line: swallow it, but let one through per
+      // window so a persistent fault stays visible without stalling the caller.
+      if (now - gRepeatWindowStart < kRepeatWindow) {
+        ++gSuppressedRepeats;
+        return;
+      }
+      flushRepeatsUnlocked(tm, msec);
+      gRepeatWindowStart = now;
+    } else {
+      flushRepeatsUnlocked(tm, msec);
+      gLastMessage.assign(msg);
+      gLastSection = section;
+      gLastLevel = level;
+      gRepeatWindowStart = now;
     }
 
-    // File: always unfiltered, no ANSI, full date for context
-    if (gLogFile != nullptr) {
-      const std::string prefix = filePrefix(tm, msec, level, section);
-      const CappedLogMessage capped = capMessageForLine(msg, prefix.size());
-      const std::string_view cappedText = capped.text();
-      const std::uintmax_t lineBytes = prefix.size() + cappedText.size() + 1;
-      if (gLogSizeBytes > 0 && gLogSizeBytes + lineBytes > kMaxLogBytes) {
-        rotateLogFileUnlocked();
-      }
-      gLogSizeBytes += writeLine(gLogFile, prefix, cappedText);
-      if (shouldFlushLogFile(level)) {
-        flushLogFileUnlocked();
-      }
-    }
+    emitUnlocked(level, section, msg, tm, msec);
   }
 
 } // namespace detail
@@ -323,4 +371,33 @@ namespace detail {
 void setConsoleLogging(bool enabled) {
   std::scoped_lock lock(gLogMutex);
   gConsoleEnabled = enabled;
+}
+
+void wlrLogHandler(enum wlr_log_importance importance, const char* fmt, va_list args) {
+  LogLevel level = LogLevel::Debug;
+  switch (importance) {
+  case WLR_ERROR:
+    level = LogLevel::Error;
+    break;
+  case WLR_INFO:
+    level = LogLevel::Info;
+    break;
+  default:
+    level = LogLevel::Debug;
+    break;
+  }
+
+  // wlroots hands us a printf format plus varargs; render once into a fixed
+  // buffer (truncation is fine, the logger caps line length anyway).
+  std::array<char, 1024> buffer{};
+  va_list copy;
+  va_copy(copy, args);
+  const int written = std::vsnprintf(buffer.data(), buffer.size(), fmt, copy);
+  va_end(copy);
+  if (written < 0) {
+    return;
+  }
+
+  const auto length = std::min(static_cast<std::size_t>(written), buffer.size() - 1);
+  detail::logMessage(level, "wlr", std::string_view(buffer.data(), length));
 }

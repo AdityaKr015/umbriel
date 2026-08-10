@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "config/config_diag.h"
 #include "config/config_watcher.h"
+#include "core/fdlimit.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/gestures.h"
@@ -450,6 +451,7 @@ namespace umbriel {
     }
     if (pid == 0) {
       std::signal(SIGCHLD, SIG_DFL);
+      restoreFileDescriptorLimit();
       setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");
       if (!m_xwaylandDisplay.empty()) {
@@ -497,6 +499,7 @@ namespace umbriel {
     }
     if (pid == 0) {
       std::signal(SIGCHLD, SIG_DFL);
+      restoreFileDescriptorLimit();
       setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");
       // Satellite provides DISPLAY — it must not consume one.

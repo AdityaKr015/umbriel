@@ -110,6 +110,7 @@ output_mgmt_client_c = custom_target(
 sources = files(
   'src/main.cpp',
   'src/core/animation.cpp',
+  'src/core/fdlimit.cpp',
   'src/core/log.cpp',
   'src/config/config.cpp',
   'src/config/config_merge.cpp',

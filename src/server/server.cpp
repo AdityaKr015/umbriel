@@ -102,6 +102,9 @@ namespace umbriel {
     if (m_renderer == nullptr) {
       throw std::runtime_error("failed to create fx_renderer");
     }
+    m_rendererLost.notify = onRendererLost;
+    wl_signal_add(&m_renderer->events.lost, &m_rendererLost);
+
     if (!wlr_renderer_init_wl_shm(m_renderer, m_display)) {
       throw std::runtime_error("failed to initialize wl_shm");
     }
@@ -280,6 +283,7 @@ namespace umbriel {
     wl_list_remove(&m_outputManagerApply.link);
     wl_list_remove(&m_outputManagerTest.link);
     wl_list_remove(&m_outputLayoutChange.link);
+    wl_list_remove(&m_rendererLost.link);
     m_configWatcher.reset();
     m_ipc.reset();
 

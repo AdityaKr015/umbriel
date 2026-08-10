@@ -213,6 +213,7 @@ namespace umbriel {
     static void onOutputManagerTest(wl_listener* listener, void* data);
     static void onOutputLayoutChange(wl_listener* listener, void* data);
     static void onToplevelCaptureRequest(wl_listener* listener, void* data);
+    static void onRendererLost(wl_listener* listener, void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -221,6 +222,7 @@ namespace umbriel {
     void updateSeatCapabilities();
     void spawn(const char* command);
     void beginSessionLock(wlr_session_lock_v1* lock);
+    void recreateRenderer();
     void applyConfig();
     void handleConfigReload();
     bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);
@@ -357,6 +359,7 @@ namespace umbriel {
     wl_listener m_outputManagerTest{};
     wl_listener m_outputLayoutChange{};
     wl_listener m_toplevelCaptureRequest{};
+    wl_listener m_rendererLost{};
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;

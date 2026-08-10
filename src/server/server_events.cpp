@@ -220,6 +220,63 @@ namespace umbriel {
     }
   }
 
+  // Fires when the underlying GL context is invalidated (GPU reset, VRAM lost after suspend,
+  // driver-detected hang). Without this, the renderer keeps issuing GL calls into a dead
+  // context — Mesa's context_lost_nop_handler no-ops each one and spams
+  // "[GLES2] GL_CONTEXT_LOST in context lost" ~40k lines/sec, and the desktop never comes
+  // back. Rebuild the renderer and rebind everything.
+  void Server::onRendererLost(wl_listener* listener, void* /*data*/) {
+    Server* self;
+    self = wl_container_of(listener, self, m_rendererLost);
+    self->recreateRenderer();
+  }
+
+  void Server::recreateRenderer() {
+    kLog.warn("GPU context lost — recreating renderer");
+
+    wlr_renderer* oldRenderer = m_renderer;
+    wlr_allocator* oldAllocator = m_allocator;
+
+    wlr_renderer* newRenderer = fx_renderer_create(m_backend);
+    if (newRenderer == nullptr) {
+      kLog.error("could not recreate fx_renderer after GPU reset — terminating");
+      wl_display_terminate(m_display);
+      return;
+    }
+    wlr_allocator* newAllocator = wlr_allocator_autocreate(m_backend, newRenderer);
+    if (newAllocator == nullptr) {
+      kLog.error("could not recreate allocator after GPU reset — terminating");
+      wlr_renderer_destroy(newRenderer);
+      wl_display_terminate(m_display);
+      return;
+    }
+
+    // Rewire the lost signal onto the new renderer BEFORE swapping the pointers so that
+    // a second reset during recreation is delivered.
+    wl_list_remove(&m_rendererLost.link);
+    wl_signal_add(&newRenderer->events.lost, &m_rendererLost);
+
+    m_renderer = newRenderer;
+    m_allocator = newAllocator;
+
+    // Point the compositor at the new renderer so clients' shm/dma-buf textures get
+    // re-imported on next attach.
+    wlr_compositor_set_renderer(m_compositor, newRenderer);
+
+    // Re-init every output's render pipeline with the new renderer/allocator, and force
+    // a fresh frame so damage tracking rebuilds from scratch.
+    for (const auto& output : m_outputs) {
+      wlr_output* wlrOutput = output->wlr();
+      wlr_output_init_render(wlrOutput, newAllocator, newRenderer);
+      wlr_output_schedule_frame(wlrOutput);
+    }
+
+    wlr_allocator_destroy(oldAllocator);
+    wlr_renderer_destroy(oldRenderer);
+
+    kLog.info("renderer recreated");
+  }
+
   void Server::onNewOutput(wl_listener* listener, void* data) {
     Server* self;
     self = wl_container_of(listener, self, m_newOutput);
@@ -343,8 +400,7 @@ namespace umbriel {
     VirtualPointerDevice* device;
     device = wl_container_of(listener, device, button);
     auto* event = static_cast<wlr_pointer_button_event*>(data);
-    wlr_seat_pointer_notify_button(
-        device->server->seat()->wlr(), event->time_msec, event->button, event->state);
+    wlr_seat_pointer_notify_button(device->server->seat()->wlr(), event->time_msec, event->button, event->state);
   }
 
   void Server::onVirtualPointerAxis(wl_listener* listener, void* data) {
@@ -352,8 +408,9 @@ namespace umbriel {
     device = wl_container_of(listener, device, axis);
     auto* event = static_cast<wlr_pointer_axis_event*>(data);
     wlr_seat_pointer_notify_axis(
-        device->server->seat()->wlr(), event->time_msec, event->orientation, event->delta,
-        event->delta_discrete, event->source, event->relative_direction);
+        device->server->seat()->wlr(), event->time_msec, event->orientation, event->delta, event->delta_discrete,
+        event->source, event->relative_direction
+    );
   }
 
   void Server::onVirtualPointerFrame(wl_listener* listener, void* /*data*/) {

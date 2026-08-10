@@ -325,65 +325,72 @@ namespace umbriel {
     m_server->animator().tick(nowMsec);
 
     if (m_output->width <= 0 || m_output->height <= 0) {
+      // Output not configured yet; no clients can be presenting on it either.
       return;
     }
-    if (!wlr_scene_output_needs_frame(m_sceneOutput) && !m_gammaDirty) {
-      if (m_server->animator().active()) {
-        wlr_output_schedule_frame(m_output);
+
+    // Render + commit only if the scene actually changed or a gamma upload is pending.
+    // All exit paths below MUST reach the unconditional wlr_scene_output_send_frame_done
+    // call at the bottom: mailbox/FIFO clients (games via DXVK, video players) block on
+    // wl_surface.frame before submitting their next buffer. If we skip frame_done on the
+    // "nothing to render" path, they never commit again -> damage stays clean ->
+    // wlr_scene_output_needs_frame returns false forever -> compositor parks in epoll_wait.
+    // (Reproducible with any mailbox/FIFO Vulkan game.)
+    if (wlr_scene_output_needs_frame(m_sceneOutput) || m_gammaDirty) {
+      m_inFrame = true;
+
+      wlr_output_state state{};
+      wlr_output_state_init(&state);
+
+      bool commitOk = false;
+      if (wlr_scene_output_build_state(m_sceneOutput, &state, nullptr)) {
+        // Hardware gamma only (DRM). Nested Wayland has no gamma LUT; leave that alone.
+        // Apply only when dirty: uploading the LUT every frame stalls the compositor.
+        bool gammaPending = false;
+        if (m_gammaDirty) {
+          if (wlr_output_get_gamma_size(m_output) > 0) {
+            wlr_gamma_control_v1* control =
+                wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output);
+            if (!wlr_gamma_control_v1_apply(control, &state)) {
+              if (control != nullptr) {
+                wlr_gamma_control_v1_send_failed_and_destroy(control);
+              }
+              m_gammaDirty = false;
+            } else {
+              gammaPending = true;
+            }
+          } else {
+            m_gammaDirty = false;
+          }
+        }
+
+        commitOk = wlr_output_commit_state(m_output, &state);
+        if (commitOk && gammaPending) {
+          m_gammaDirty = false;
+        }
       }
-      return;
-    }
 
-    m_inFrame = true;
-
-    wlr_output_state state{};
-    wlr_output_state_init(&state);
-    if (!wlr_scene_output_build_state(m_sceneOutput, &state, nullptr)) {
       wlr_output_state_finish(&state);
       m_inFrame = false;
-      wlr_output_schedule_frame(m_output);
-      return;
-    }
-    // Hardware gamma only (DRM). Nested Wayland has no gamma LUT; leave that alone.
-    // Apply only when dirty: uploading the LUT every frame stalls the compositor.
-    bool gammaPending = false;
-    if (m_gammaDirty) {
-      if (wlr_output_get_gamma_size(m_output) > 0) {
-        wlr_gamma_control_v1* control = wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output);
-        if (!wlr_gamma_control_v1_apply(control, &state)) {
-          if (control != nullptr) {
-            wlr_gamma_control_v1_send_failed_and_destroy(control);
-          }
-          m_gammaDirty = false;
-        } else {
-          gammaPending = true;
-        }
-      } else {
-        m_gammaDirty = false;
+
+      if (!commitOk) {
+        // Retry on next vblank; scene may have changed or backend may have recovered.
+        wlr_output_schedule_frame(m_output);
       }
     }
 
-    const bool ok = wlr_output_commit_state(m_output, &state);
-    wlr_output_state_finish(&state);
-    m_inFrame = false;
-    if (ok && gammaPending) {
-      m_gammaDirty = false;
-    }
-
+    // A request_state that arrived mid-commit is applied now that we're out of it.
     if (m_hasDeferredMode) {
       m_hasDeferredMode = false;
       applyMode(m_deferredWidth, m_deferredHeight);
-      return;
     }
 
-    if (!ok) {
-      wlr_output_schedule_frame(m_output);
-      return;
-    }
-
+    // Keep animations ticking on the next vblank even when nothing was damaged.
     if (m_server->animator().active()) {
       wlr_output_schedule_frame(m_output);
     }
+
+    // Unconditional: see comment above. Never gate this on commit success.
     wlr_scene_output_send_frame_done(m_sceneOutput, &now);
   }
 

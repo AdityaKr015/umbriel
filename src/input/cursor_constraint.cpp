@@ -26,8 +26,8 @@ namespace umbriel {
     wl_list_remove(&m_constraintDestroy.link);
     m_constraintDestroy.link.next = nullptr;
     m_activeConstraint = nullptr;
-    // Games hide the cursor while locked; restore a theme cursor when the lock ends.
-    wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+    // Cursor visibility belongs to the focused client and remains valid across
+    // pointer-constraint transitions. Focus loss restores the theme cursor.
   }
 
   void Cursor::setActiveConstraint(wlr_pointer_constraint_v1* constraint) {
@@ -44,7 +44,6 @@ namespace umbriel {
       }
       warpToConstraintHint(previous);
       wlr_pointer_constraint_v1_send_deactivated(previous);
-      wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
     }
 
     m_activeConstraint = constraint;

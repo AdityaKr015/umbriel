@@ -1482,6 +1482,7 @@ namespace umbriel {
         const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
         struct InitialLayoutSizing {
           int edgePad;
+          int totalGap;
           double defaultWidthFraction;
         };
         const InitialLayoutSizing layoutSizing = [&] {
@@ -1489,19 +1490,25 @@ namespace umbriel {
             const ResolvedLayoutConfig& layoutConfig = m_workspace->layoutConfig();
             return InitialLayoutSizing{
                 .edgePad = layoutConfig.edgePad,
+                .totalGap = layoutConfig.totalGap,
                 .defaultWidthFraction = layoutConfig.defaultWidthFraction,
             };
           }
           const ResolvedLayoutConfig layoutConfig = resolveGlobalLayout();
           return InitialLayoutSizing{
               .edgePad = layoutConfig.edgePad,
+              .totalGap = layoutConfig.totalGap,
               .defaultWidthFraction = layoutConfig.defaultWidthFraction,
           };
         }();
         const int viewportWidth = std::max(1, usable.width - 2 * layoutSizing.edgePad);
         const int height = std::max(1, usable.height - 2 * layoutSizing.edgePad);
         const double widthFrac = rule.defaultWidth ? *rule.defaultWidth : layoutSizing.defaultWidthFraction;
-        int width = std::max(1, static_cast<int>(std::lround(widthFrac * viewportWidth)));
+        // Match ScrollingLayout::columnWidth so the first configure equals the final arrange.
+        int width = std::max(
+            1,
+            static_cast<int>(std::lround(widthFrac * (viewportWidth + layoutSizing.totalGap) - layoutSizing.totalGap))
+        );
         if (rule.defaultSize) {
           width = (*rule.defaultSize)[0];
         }

@@ -102,7 +102,12 @@ namespace umbriel {
     if (columnIsFullscreen(column)) {
       return std::max(1, viewportWidth);
     }
-    int width = static_cast<int>(std::lround(column.widthFrac * viewportWidth));
+    // Gap-aware: reserve one inter-column gap per column so N columns whose
+    // fractions sum to 1 tile exactly across the viewport (viewport already
+    // excludes edgePad on both sides). Solving Σw + (N-1)g = V with w = p*(V+g) - g
+    // gives Σw = V - (N-1)g, which the (N-1) inter-column gaps fill.
+    const int gap = m_config->totalGap;
+    int width = static_cast<int>(std::lround(column.widthFrac * (viewportWidth + gap) - gap));
     width = std::max(width, columnMinWidthPx(column));
     const int maxWidth = columnMaxWidthPx(column);
     if (maxWidth > 0) {
@@ -111,10 +116,21 @@ namespace umbriel {
     return std::clamp(width, 1, std::max(1, viewportWidth));
   }
 
+  int ScrollingLayout::centeringOffset(int viewportWidth) const {
+    // When the tiled row is narrower than the viewport (Σ widthFrac < 1), split
+    // the leftover space evenly on both sides so a row of three 0.33 columns
+    // doesn't pile the residual against the right edge.
+    const int total = rawTotalWidth(viewportWidth);
+    if (total >= viewportWidth) {
+      return 0;
+    }
+    return (viewportWidth - total) / 2;
+  }
+
   int ScrollingLayout::columnX(int columnIndex, int viewportWidth) const {
     const int end = std::clamp(columnIndex, 0, static_cast<int>(m_columns.size()));
     const int gap = m_config->totalGap;
-    int x = 0;
+    int x = centeringOffset(viewportWidth);
     for (int i = 0; i < end; ++i) {
       x += columnWidth(i, viewportWidth) + gap;
     }
@@ -124,12 +140,22 @@ namespace umbriel {
     return x;
   }
 
-  int ScrollingLayout::totalWidth(int viewportWidth) const {
+  int ScrollingLayout::rawTotalWidth(int viewportWidth) const {
     if (m_columns.empty()) {
       return 0;
     }
-    return columnX(static_cast<int>(m_columns.size()), viewportWidth) - m_config->totalGap;
+    const int gap = m_config->totalGap;
+    int total = -gap;
+    for (size_t i = 0; i < m_columns.size(); ++i) {
+      total += columnWidth(static_cast<int>(i), viewportWidth) + gap;
+    }
+    if (m_insertGap >= 0) {
+      total += kHintWidth + gap;
+    }
+    return std::max(0, total);
   }
+
+  int ScrollingLayout::totalWidth(int viewportWidth) const { return rawTotalWidth(viewportWidth); }
 
   bool ScrollingLayout::isFullWidth(int columnIndex) const {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {

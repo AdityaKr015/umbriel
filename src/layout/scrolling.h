@@ -71,6 +71,8 @@ namespace umbriel {
     };
 
     [[nodiscard]] int totalWidth(int viewportWidth) const;
+    [[nodiscard]] int rawTotalWidth(int viewportWidth) const;
+    [[nodiscard]] int centeringOffset(int viewportWidth) const;
     [[nodiscard]] double targetScrollForEnsureVisible(int columnIndex, int viewportWidth) const;
     void syncHeightWeights(Column& column);
 

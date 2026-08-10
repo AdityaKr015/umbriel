@@ -153,7 +153,8 @@ namespace umbriel {
     const int focusedColumn = m_layout->columnOf(m_focusedView);
     const int index = focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout->columns().size());
     m_layout->insertView(view, index);
-    if (initialWidth) {
+    // default_width is a viewport fraction: scrolling only. Dwindle ignores it.
+    if (initialWidth && m_layoutMode == LayoutMode::Scrolling) {
       m_layout->setWidthFraction(m_layout->columnOf(view), *initialWidth);
     }
     arrange();

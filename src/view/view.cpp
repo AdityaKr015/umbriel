@@ -1503,7 +1503,24 @@ namespace umbriel {
         }();
         const int viewportWidth = std::max(1, usable.width - 2 * layoutSizing.edgePad);
         const int height = std::max(1, usable.height - 2 * layoutSizing.edgePad);
-        const double widthFrac = rule.defaultWidth ? *rule.defaultWidth : layoutSizing.defaultWidthFraction;
+        // Resolve the workspace this view will attach to so we can honor its layout mode.
+        Workspace* target = m_workspace;
+        if (target == nullptr) {
+          if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
+            if (WorkspaceGroup* group = out->workspaceGroup()) {
+              target = group->active();
+              if (rule.defaultWorkspace) {
+                if (Workspace* ruleTarget = group->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1))) {
+                  target = ruleTarget;
+                }
+              }
+            }
+          }
+        }
+        const bool isDwindle = target != nullptr && target->layoutMode() == LayoutMode::Dwindle;
+        // default_width is scrolling-only; dwindle uses tree splits instead.
+        const bool useDefaultWidth = rule.defaultWidth && !isDwindle;
+        const double widthFrac = useDefaultWidth ? *rule.defaultWidth : layoutSizing.defaultWidthFraction;
         // Match ScrollingLayout::columnWidth so the first configure equals the final arrange.
         int width = std::max(
             1,
@@ -1512,30 +1529,11 @@ namespace umbriel {
         if (rule.defaultSize) {
           width = (*rule.defaultSize)[0];
         }
-        // Dwindle: a window opening into an EMPTY dwindle workspace becomes the
-        // sole root leaf and must be full width. Sizing it to the split fraction
-        // here makes its first buffer commit at half; the later full-width
-        // arrange configure then races (Electron & co. keep the half-size buffer
-        // until a redraw). Size it correctly up front so the first configure is
-        // the final one. Non-empty dwindle keeps the fraction: it will split a
-        // leaf and arrange lands on ~that size, so no upward correction races.
-        if (!rule.defaultSize && !rule.defaultWidth) {
-          Workspace* target = m_workspace;
-          if (target == nullptr) {
-            if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
-              if (WorkspaceGroup* group = out->workspaceGroup()) {
-                target = group->active();
-                if (rule.defaultWorkspace) {
-                  if (Workspace* ruleTarget = group->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1))) {
-                    target = ruleTarget;
-                  }
-                }
-              }
-            }
-          }
-          if (target != nullptr && target->layoutMode() == LayoutMode::Dwindle && target->layout().columns().empty()) {
-            width = viewportWidth;
-          }
+        // Empty dwindle: the first leaf fills the viewport. Size it here so the
+        // first buffer matches the arrange configure (Electron & co. keep the
+        // initial buffer until a redraw).
+        if (!rule.defaultSize && isDwindle && target->layout().columns().empty()) {
+          width = viewportWidth;
         }
         wlr_xdg_toplevel_set_size(m_toplevel, width, height);
       } else {
@@ -1998,7 +1996,10 @@ namespace umbriel {
       }
 
       // Column width.
-      if (rule.defaultWidth && m_tiled && m_workspace != nullptr) {
+      if (rule.defaultWidth
+          && m_tiled
+          && m_workspace != nullptr
+          && m_workspace->layoutMode() == LayoutMode::Scrolling) {
         const int column = m_workspace->layout().columnOf(this);
         if (column >= 0) {
           m_workspace->layout().setWidthFraction(column, *rule.defaultWidth);

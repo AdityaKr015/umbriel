@@ -48,6 +48,8 @@ struct wlr_gamma_control_manager_v1;
 struct wlr_output_manager_v1;
 struct wlr_output_configuration_v1;
 struct wlr_scene_tree;
+struct wlr_virtual_pointer_manager_v1;
+struct wlr_virtual_pointer_v1;
 
 namespace umbriel {
 
@@ -137,6 +139,7 @@ namespace umbriel {
     [[nodiscard]] wlr_pointer_constraints_v1* pointerConstraints() const { return m_pointerConstraints; }
     [[nodiscard]] wlr_relative_pointer_manager_v1* relativePointerManager() const { return m_relativePointerManager; }
     [[nodiscard]] wlr_pointer_gestures_v1* pointerGestures() const { return m_pointerGestures; }
+    [[nodiscard]] wlr_virtual_pointer_manager_v1* virtualPointerManager() const { return m_virtualPointerManager; }
     [[nodiscard]] Gestures* gestures() const { return m_gestures.get(); }
     [[nodiscard]] bool nested() const { return m_nested; }
     [[nodiscard]] uint32_t modKey() const;
@@ -192,6 +195,13 @@ namespace umbriel {
     static void onNewLayerSurface(wl_listener* listener, void* data);
     static void onNewSessionLock(wl_listener* listener, void* data);
     static void onNewPointerConstraint(wl_listener* listener, void* data);
+    static void onNewVirtualPointer(wl_listener* listener, void* data);
+    static void onVirtualPointerMotion(wl_listener* listener, void* data);
+    static void onVirtualPointerMotionAbsolute(wl_listener* listener, void* data);
+    static void onVirtualPointerButton(wl_listener* listener, void* data);
+    static void onVirtualPointerAxis(wl_listener* listener, void* data);
+    static void onVirtualPointerFrame(wl_listener* listener, void* data);
+    static void onVirtualPointerDestroy(wl_listener* listener, void* data);
     static void onNewIdleInhibitor(wl_listener* listener, void* data);
     static void onIdleInhibitorDestroy(wl_listener* listener, void* data);
     static void onRequestActivate(wl_listener* listener, void* data);
@@ -247,6 +257,16 @@ namespace umbriel {
       wlr_input_device* device = nullptr;
       wl_listener destroy{};
     };
+    struct VirtualPointerDevice {
+      Server* server = nullptr;
+      wlr_virtual_pointer_v1* vpointer = nullptr;
+      wl_listener motion{};
+      wl_listener motionAbsolute{};
+      wl_listener button{};
+      wl_listener axis{};
+      wl_listener frame{};
+      wl_listener destroy{};
+    };
 
     wl_display* m_display = nullptr;
     wlr_backend* m_backend = nullptr;
@@ -269,6 +289,7 @@ namespace umbriel {
     wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;
     wlr_relative_pointer_manager_v1* m_relativePointerManager = nullptr;
     wlr_pointer_gestures_v1* m_pointerGestures = nullptr;
+    wlr_virtual_pointer_manager_v1* m_virtualPointerManager = nullptr;
     wlr_idle_inhibit_manager_v1* m_idleInhibitManager = nullptr;
     wlr_idle_notifier_v1* m_idleNotifier = nullptr;
     wlr_xdg_activation_v1* m_xdgActivation = nullptr;
@@ -327,6 +348,7 @@ namespace umbriel {
     wl_listener m_newLayerSurface{};
     wl_listener m_newSessionLock{};
     wl_listener m_newPointerConstraint{};
+    wl_listener m_newVirtualPointer{};
     wl_listener m_newIdleInhibitor{};
     wl_listener m_requestActivate{};
     wl_listener m_workspaceCommit{};
@@ -340,6 +362,7 @@ namespace umbriel {
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;
     std::vector<std::unique_ptr<PointerDevice>> m_pointers;
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;
+    std::vector<std::unique_ptr<VirtualPointerDevice>> m_virtualPointers;
     std::vector<std::unique_ptr<View>> m_views;
     std::vector<std::unique_ptr<LayerSurface>> m_layerSurfaces;
   };

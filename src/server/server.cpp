@@ -219,6 +219,9 @@ namespace umbriel {
     m_newPointerConstraint.notify = onNewPointerConstraint;
     wl_signal_add(&m_pointerConstraints->events.new_constraint, &m_newPointerConstraint);
     m_pointerGestures = wlr_pointer_gestures_v1_create(m_display);
+    m_virtualPointerManager = wlr_virtual_pointer_manager_v1_create(m_display);
+    m_newVirtualPointer.notify = onNewVirtualPointer;
+    wl_signal_add(&m_virtualPointerManager->events.new_virtual_pointer, &m_newVirtualPointer);
 
     m_idleNotifier = wlr_idle_notifier_v1_create(m_display);
     m_idleInhibitManager = wlr_idle_inhibit_v1_create(m_display);
@@ -269,6 +272,7 @@ namespace umbriel {
     wl_list_remove(&m_newLayerSurface.link);
     wl_list_remove(&m_newSessionLock.link);
     wl_list_remove(&m_newPointerConstraint.link);
+    wl_list_remove(&m_newVirtualPointer.link);
     wl_list_remove(&m_newIdleInhibitor.link);
     wl_list_remove(&m_requestActivate.link);
     wl_list_remove(&m_workspaceCommit.link);

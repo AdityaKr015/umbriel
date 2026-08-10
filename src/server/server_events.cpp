@@ -298,6 +298,84 @@ namespace umbriel {
     self->m_cursor->handleNewConstraint(static_cast<wlr_pointer_constraint_v1*>(data));
   }
 
+  void Server::onNewVirtualPointer(wl_listener* listener, void* data) {
+    Server* self;
+    self = wl_container_of(listener, self, m_newVirtualPointer);
+    auto* event = static_cast<wlr_virtual_pointer_v1_new_pointer_event*>(data);
+    auto* vpointer = event->new_pointer;
+
+    auto device = std::make_unique<VirtualPointerDevice>();
+    device->server = self;
+    device->vpointer = vpointer;
+
+    device->motion.notify = onVirtualPointerMotion;
+    wl_signal_add(&vpointer->pointer.events.motion, &device->motion);
+    device->motionAbsolute.notify = onVirtualPointerMotionAbsolute;
+    wl_signal_add(&vpointer->pointer.events.motion_absolute, &device->motionAbsolute);
+    device->button.notify = onVirtualPointerButton;
+    wl_signal_add(&vpointer->pointer.events.button, &device->button);
+    device->axis.notify = onVirtualPointerAxis;
+    wl_signal_add(&vpointer->pointer.events.axis, &device->axis);
+    device->frame.notify = onVirtualPointerFrame;
+    wl_signal_add(&vpointer->pointer.events.frame, &device->frame);
+
+    device->destroy.notify = onVirtualPointerDestroy;
+    wl_resource_add_destroy_listener(vpointer->resource, &device->destroy);
+
+    self->m_virtualPointers.push_back(std::move(device));
+  }
+
+  void Server::onVirtualPointerMotion(wl_listener* listener, void* data) {
+    VirtualPointerDevice* device;
+    device = wl_container_of(listener, device, motion);
+    auto* event = static_cast<wlr_pointer_motion_event*>(data);
+    wlr_cursor_move(device->server->cursor()->wlr(), nullptr, event->delta_x, event->delta_y);
+  }
+
+  void Server::onVirtualPointerMotionAbsolute(wl_listener* listener, void* data) {
+    VirtualPointerDevice* device;
+    device = wl_container_of(listener, device, motionAbsolute);
+    auto* event = static_cast<wlr_pointer_motion_absolute_event*>(data);
+    wlr_cursor_warp_absolute(device->server->cursor()->wlr(), nullptr, event->x, event->y);
+  }
+
+  void Server::onVirtualPointerButton(wl_listener* listener, void* data) {
+    VirtualPointerDevice* device;
+    device = wl_container_of(listener, device, button);
+    auto* event = static_cast<wlr_pointer_button_event*>(data);
+    wlr_seat_pointer_notify_button(
+        device->server->seat()->wlr(), event->time_msec, event->button, event->state);
+  }
+
+  void Server::onVirtualPointerAxis(wl_listener* listener, void* data) {
+    VirtualPointerDevice* device;
+    device = wl_container_of(listener, device, axis);
+    auto* event = static_cast<wlr_pointer_axis_event*>(data);
+    wlr_seat_pointer_notify_axis(
+        device->server->seat()->wlr(), event->time_msec, event->orientation, event->delta,
+        event->delta_discrete, event->source, event->relative_direction);
+  }
+
+  void Server::onVirtualPointerFrame(wl_listener* listener, void* /*data*/) {
+    VirtualPointerDevice* device;
+    device = wl_container_of(listener, device, frame);
+    wlr_seat_pointer_notify_frame(device->server->seat()->wlr());
+  }
+
+  void Server::onVirtualPointerDestroy(wl_listener* listener, void* /*data*/) {
+    VirtualPointerDevice* device;
+    device = wl_container_of(listener, device, destroy);
+    wl_list_remove(&device->motion.link);
+    wl_list_remove(&device->motionAbsolute.link);
+    wl_list_remove(&device->button.link);
+    wl_list_remove(&device->axis.link);
+    wl_list_remove(&device->frame.link);
+    wl_list_remove(&device->destroy.link);
+    std::erase_if(device->server->m_virtualPointers, [device](const std::unique_ptr<VirtualPointerDevice>& ptr) {
+      return ptr.get() == device;
+    });
+  }
+
   void Server::onNewIdleInhibitor(wl_listener* listener, void* data) {
     Server* self;
     self = wl_container_of(listener, self, m_newIdleInhibitor);

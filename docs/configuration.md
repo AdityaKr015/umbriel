@@ -164,7 +164,8 @@ workspace_color = "#1A1A1FFF"
 
 Zoomed-out view of every workspace on every output (default `Mod+O`). Windows
 stay live: click to focus, middle-click to close, drag between workspaces,
-scroll the filmstrip, or 4-finger swipe to toggle.
+scroll the filmstrip, or 4-finger swipe to toggle. Dwindle drags preview the
+directional split under the pointer before the window is dropped.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

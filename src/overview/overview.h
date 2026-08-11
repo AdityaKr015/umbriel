@@ -194,6 +194,8 @@ namespace umbriel {
     Workspace* m_dropWorkspace = nullptr;
     int m_dropColumn = -1;
     int m_dropRow = -1;
+    View* m_dropTargetView = nullptr;
+    uint32_t m_dropEdge = 0;
   };
 
 } // namespace umbriel

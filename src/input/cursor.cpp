@@ -884,68 +884,24 @@ namespace umbriel {
       if (m_dropWorkspace != nullptr && m_dropWorkspace != workspace) {
         m_server->hideInsertHint();
       }
-      const int leafIndex = dwindle->leafIndexAt(m_cursor->x, m_cursor->y);
-      if (leafIndex < 0) {
+      const DwindleDropTarget drop = computeDwindleDropTarget(*dwindle, m_cursor->x, m_cursor->y, m_grabbedView);
+      if (drop.view == nullptr || drop.edge == 0) {
         const int leafCount = static_cast<int>(workspace->layout().columns().size());
         m_dropWorkspace = workspace;
-        m_dropColumn = leafCount;
+        m_dropColumn = drop.leaf >= 0 ? drop.leaf : leafCount;
         m_dropRow = -1;
         m_dropTargetView = nullptr;
         m_dropEdge = 0;
         m_server->hideInsertHint();
         wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
         return;
-      }
-      const wlr_box targetBox = dwindle->targetBoxByIndex(leafIndex);
-      const auto& leafColumns = workspace->layout().columns();
-      View* leafView =
-          leafIndex < static_cast<int>(leafColumns.size()) && !leafColumns[static_cast<size_t>(leafIndex)].views.empty()
-          ? leafColumns[static_cast<size_t>(leafIndex)].views.front()
-          : nullptr;
-      if (targetBox.width <= 0 || targetBox.height <= 0 || leafView == nullptr || leafView == m_grabbedView) {
-        // Hovering the dragged window's own slot: no self-split.
-        m_dropWorkspace = workspace;
-        m_dropColumn = leafIndex;
-        m_dropRow = -1;
-        m_dropTargetView = nullptr;
-        m_dropEdge = 0;
-        m_server->hideInsertHint();
-        wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
-        return;
-      }
-      // Pick the nearest edge of the hovered leaf; the dropped window takes that
-      // half, matching where the directional split will place it.
-      const double fx = (m_cursor->x - targetBox.x) / static_cast<double>(targetBox.width);
-      const double fy = (m_cursor->y - targetBox.y) / static_cast<double>(targetBox.height);
-      const double distLeft = fx;
-      const double distRight = 1.0 - fx;
-      const double distTop = fy;
-      const double distBottom = 1.0 - fy;
-      wlr_box hint = targetBox;
-      uint32_t edge = 0;
-      if (std::min(distLeft, distRight) <= std::min(distTop, distBottom)) {
-        if (distLeft <= distRight) {
-          edge = WLR_EDGE_LEFT;
-          hint.width = targetBox.width / 2;
-        } else {
-          edge = WLR_EDGE_RIGHT;
-          hint.x = targetBox.x + targetBox.width / 2;
-          hint.width = targetBox.width - targetBox.width / 2;
-        }
-      } else if (distTop <= distBottom) {
-        edge = WLR_EDGE_TOP;
-        hint.height = targetBox.height / 2;
-      } else {
-        edge = WLR_EDGE_BOTTOM;
-        hint.y = targetBox.y + targetBox.height / 2;
-        hint.height = targetBox.height - targetBox.height / 2;
       }
       m_dropWorkspace = workspace;
-      m_dropColumn = leafIndex;
+      m_dropColumn = drop.leaf;
       m_dropRow = -1;
-      m_dropTargetView = leafView;
-      m_dropEdge = edge;
-      m_server->insertHint().showBox(workspace, hint);
+      m_dropTargetView = drop.view;
+      m_dropEdge = drop.edge;
+      m_server->insertHint().showBox(workspace, drop.hint);
       wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
       return;
     }

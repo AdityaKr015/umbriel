@@ -1,5 +1,6 @@
 #include "layout/drop_target.h"
 
+#include "layout/dwindle.h"
 #include "layout/layout.h"
 #include "workspace/workspace.h"
 // clang-format off
@@ -9,6 +10,51 @@
 // clang-format on
 
 namespace umbriel {
+  DwindleDropTarget
+  computeDwindleDropTarget(const DwindleLayout& layout, double worldX, double worldY, const View* excludedView) {
+    DwindleDropTarget result{};
+    result.leaf = layout.leafIndexAt(worldX, worldY);
+    if (result.leaf < 0) {
+      return result;
+    }
+
+    const wlr_box targetBox = layout.targetBoxByIndex(result.leaf);
+    const auto& leaves = layout.columns();
+    if (targetBox.width <= 0
+        || targetBox.height <= 0
+        || result.leaf >= static_cast<int>(leaves.size())
+        || leaves[static_cast<size_t>(result.leaf)].views.empty()) {
+      return result;
+    }
+
+    result.view = leaves[static_cast<size_t>(result.leaf)].views.front();
+    if (result.view == excludedView) {
+      result.view = nullptr;
+      return result;
+    }
+
+    const double fx = (worldX - targetBox.x) / static_cast<double>(targetBox.width);
+    const double fy = (worldY - targetBox.y) / static_cast<double>(targetBox.height);
+    result.hint = targetBox;
+    if (std::min(fx, 1.0 - fx) <= std::min(fy, 1.0 - fy)) {
+      if (fx <= 0.5) {
+        result.edge = WLR_EDGE_LEFT;
+        result.hint.width = targetBox.width / 2;
+      } else {
+        result.edge = WLR_EDGE_RIGHT;
+        result.hint.x = targetBox.x + targetBox.width / 2;
+        result.hint.width = targetBox.width - targetBox.width / 2;
+      }
+    } else if (fy <= 0.5) {
+      result.edge = WLR_EDGE_TOP;
+      result.hint.height = targetBox.height / 2;
+    } else {
+      result.edge = WLR_EDGE_BOTTOM;
+      result.hint.y = targetBox.y + targetBox.height / 2;
+      result.hint.height = targetBox.height - targetBox.height / 2;
+    }
+    return result;
+  }
 
   ScrollingDropTarget computeScrollingDropTarget(
       const Workspace& workspace, const wlr_box& usable, double scroll, double worldX, double worldY

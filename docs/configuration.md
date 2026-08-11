@@ -179,16 +179,27 @@ directional split under the pointer before the window is dropped.
 [layout]
 mode = "scrolling"                  # "scrolling" or "dwindle"
 gap = 8                             # 0-500
-default_width_fraction = 0.5        # 0.1-1.0
 width_presets = [0.333, 0.5, 0.667]
+
+[layout.scrolling]
+default_width_fraction = 0.5        # 0.1-1.0
+always_center_single_column = true
 ```
+
+Shared layout options:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `mode` | string | `"scrolling"` | Layout algorithm: `"scrolling"` or `"dwindle"`. |
 | `gap` | int | `8` | Gap between windows in pixels (0-500). |
-| `default_width_fraction` | float | `0.5` | Initial width assigned to new columns (0.1-1.0). |
-| `width_presets` | float array | `[0.333, 0.5, 0.667]` | Widths visited by the `window-cycle-width` action. |
+| `width_presets` | float array | `[0.333, 0.5, 0.667]` | Widths visited by the `window-cycle-width` action in both layouts. |
+
+Scrolling layout options:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `default_width_fraction` | float | `0.5` | Initial width assigned to new scrolling columns (0.1-1.0). |
+| `always_center_single_column` | bool | `true` | Center a lone column when it is narrower than the viewport. Set to `false` to align it at the left edge. |
 
 Layout fields can be overridden per-workspace; see
 [Workspace Rules](outputs.md#workspace-rules).

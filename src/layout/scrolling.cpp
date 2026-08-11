@@ -117,6 +117,9 @@ namespace umbriel {
   }
 
   int ScrollingLayout::centeringOffset(int viewportWidth) const {
+    if (m_columns.size() == 1 && !m_config->scrolling.alwaysCenterSingleColumn) {
+      return 0;
+    }
     // When the tiled row is narrower than the viewport (Σ widthFrac < 1), split
     // the leftover space evenly on both sides so a row of three 0.33 columns
     // doesn't pile the residual against the right edge.
@@ -171,7 +174,7 @@ namespace umbriel {
     }
     const int index = std::clamp(columnIndex, 0, static_cast<int>(m_columns.size()));
     Column column;
-    column.widthFrac = m_config->defaultWidthFraction;
+    column.widthFrac = m_config->scrolling.defaultWidthFraction;
     column.views.push_back(view);
     column.heightWeights.push_back(1.0);
     m_columns.insert(m_columns.begin() + index, std::move(column));
@@ -231,7 +234,7 @@ namespace umbriel {
       source.heightWeights.erase(source.heightWeights.begin() + row);
     }
     Column column;
-    column.widthFrac = m_config->defaultWidthFraction;
+    column.widthFrac = m_config->scrolling.defaultWidthFraction;
     column.views.push_back(view);
     column.heightWeights.push_back(weight);
     m_columns.insert(m_columns.begin() + sourceColumn + 1, std::move(column));
@@ -465,7 +468,7 @@ namespace umbriel {
 
   double ScrollingLayout::widthFraction(int columnIndex) const {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {
-      return m_config->defaultWidthFraction;
+      return m_config->scrolling.defaultWidthFraction;
     }
     return m_columns[static_cast<size_t>(columnIndex)].widthFrac;
   }

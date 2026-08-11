@@ -548,6 +548,14 @@ namespace umbriel {
       target = node->value<bool>();
     }
 
+    void readBoolean(const toml::table& section, std::string_view name, std::string_view fullName, bool& target) {
+      std::optional<bool> parsed;
+      readBoolean(section, name, fullName, parsed);
+      if (parsed) {
+        target = *parsed;
+      }
+    }
+
     int hexDigit(char character) {
       if (character >= '0' && character <= '9') {
         return character - '0';
@@ -708,9 +716,7 @@ namespace umbriel {
         warnAt(layoutNode->source(), "ignoring {}.layout (expected table)", context);
         return;
       }
-      warnUnknownKeys(
-          *layout, std::string(context) + ".layout", {"mode", "gap", "default_width_fraction", "width_presets"}
-      );
+      warnUnknownKeys(*layout, std::string(context) + ".layout", {"mode", "gap", "width_presets", "scrolling"});
       if (const toml::node* modeNode = layout->get("mode")) {
         if (const auto* modeStr = modeNode->as_string()) {
           const std::string_view sv = modeStr->get();
@@ -729,11 +735,25 @@ namespace umbriel {
       }
       const std::string ctx(context);
       readOptionalInt(*layout, "gap", ctx + ".layout.gap", 0, 500, overrides.gap);
-      readOptionalDouble(
-          *layout, "default_width_fraction", ctx + ".layout.default_width_fraction", 0.1, 1.0,
-          overrides.defaultWidthFraction
-      );
       readWidthPresetsInto(*layout, ctx + ".layout", overrides.widthPresets);
+      if (const toml::node* scrollingNode = layout->get("scrolling")) {
+        const auto* scrolling = scrollingNode->as_table();
+        if (scrolling == nullptr) {
+          warnAt(scrollingNode->source(), "ignoring {}.layout.scrolling (expected table)", context);
+          return;
+        }
+        warnUnknownKeys(
+            *scrolling, ctx + ".layout.scrolling", {"default_width_fraction", "always_center_single_column"}
+        );
+        readOptionalDouble(
+            *scrolling, "default_width_fraction", ctx + ".layout.scrolling.default_width_fraction", 0.1, 1.0,
+            overrides.scrolling.defaultWidthFraction
+        );
+        readBoolean(
+            *scrolling, "always_center_single_column", ctx + ".layout.scrolling.always_center_single_column",
+            overrides.scrolling.alwaysCenterSingleColumn
+        );
+      }
     }
 
     constexpr size_t kDefaultWorkspaceCount = 9;
@@ -1004,7 +1024,7 @@ namespace umbriel {
         warnAt(node->source(), "ignoring layout (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "layout", {"mode", "gap", "default_width_fraction", "width_presets"});
+      warnUnknownKeys(*section, "layout", {"mode", "gap", "width_presets", "scrolling"});
       if (const toml::node* modeNode = section->get("mode")) {
         if (const auto* modeStr = modeNode->as_string()) {
           const std::string_view sv = modeStr->get();
@@ -1020,11 +1040,23 @@ namespace umbriel {
         }
       }
       readInteger(*section, "gap", "layout.gap", 0, 500, loaded.layout.gap);
-      readDouble(
-          *section, "default_width_fraction", "layout.default_width_fraction", 0.1, 1.0,
-          loaded.layout.defaultWidthFraction
-      );
       readWidthPresets(*section, loaded.layout.widthPresets);
+      if (const toml::node* scrollingNode = section->get("scrolling")) {
+        const auto* scrolling = scrollingNode->as_table();
+        if (scrolling == nullptr) {
+          warnAt(scrollingNode->source(), "ignoring layout.scrolling (expected table)");
+          return;
+        }
+        warnUnknownKeys(*scrolling, "layout.scrolling", {"default_width_fraction", "always_center_single_column"});
+        readDouble(
+            *scrolling, "default_width_fraction", "layout.scrolling.default_width_fraction", 0.1, 1.0,
+            loaded.layout.scrolling.defaultWidthFraction
+        );
+        readBoolean(
+            *scrolling, "always_center_single_column", "layout.scrolling.always_center_single_column",
+            loaded.layout.scrolling.alwaysCenterSingleColumn
+        );
+      }
     }
 
     void readWorkspaceSettings(const toml::table& table, Config& loaded) {
@@ -1968,8 +2000,9 @@ namespace umbriel {
     ResolvedLayoutConfig r;
     r.mode = cfg.layout.mode;
     r.gap = cfg.layout.gap;
-    r.defaultWidthFraction = cfg.layout.defaultWidthFraction;
     r.widthPresets = cfg.layout.widthPresets;
+    r.scrolling.defaultWidthFraction = cfg.layout.scrolling.defaultWidthFraction;
+    r.scrolling.alwaysCenterSingleColumn = cfg.layout.scrolling.alwaysCenterSingleColumn;
     const int borderWidth = cfg.appearance.totalBorderWidth();
     r.totalGap = r.gap + 2 * borderWidth;
     r.edgePad = r.gap + borderWidth;
@@ -1994,8 +2027,11 @@ namespace umbriel {
       if (overrides.gap) {
         resolved.gap = *overrides.gap;
       }
-      if (overrides.defaultWidthFraction) {
-        resolved.defaultWidthFraction = *overrides.defaultWidthFraction;
+      if (overrides.scrolling.defaultWidthFraction) {
+        resolved.scrolling.defaultWidthFraction = *overrides.scrolling.defaultWidthFraction;
+      }
+      if (overrides.scrolling.alwaysCenterSingleColumn) {
+        resolved.scrolling.alwaysCenterSingleColumn = *overrides.scrolling.alwaysCenterSingleColumn;
       }
       if (overrides.widthPresets) {
         resolved.widthPresets = *overrides.widthPresets;

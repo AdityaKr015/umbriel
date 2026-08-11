@@ -1491,14 +1491,14 @@ namespace umbriel {
             return InitialLayoutSizing{
                 .edgePad = layoutConfig.edgePad,
                 .totalGap = layoutConfig.totalGap,
-                .defaultWidthFraction = layoutConfig.defaultWidthFraction,
+                .defaultWidthFraction = layoutConfig.scrolling.defaultWidthFraction,
             };
           }
           const ResolvedLayoutConfig layoutConfig = resolveGlobalLayout();
           return InitialLayoutSizing{
               .edgePad = layoutConfig.edgePad,
               .totalGap = layoutConfig.totalGap,
-              .defaultWidthFraction = layoutConfig.defaultWidthFraction,
+              .defaultWidthFraction = layoutConfig.scrolling.defaultWidthFraction,
           };
         }();
         const int viewportWidth = std::max(1, usable.width - 2 * layoutSizing.edgePad);

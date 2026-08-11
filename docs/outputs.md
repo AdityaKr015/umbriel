@@ -109,7 +109,9 @@ rules apply afterward and take precedence.
 | `output` | string | Restrict to this output. |
 | `layout.mode` | string | `"scrolling"` or `"dwindle"`. |
 | `layout.gap` | int | Gap in pixels (0-500). |
-| `layout.default_width_fraction` | float | Initial column width (0.1-1.0). |
+| `layout.width_presets` | float array | Widths used by the width-cycle action in both layouts. |
+| `layout.scrolling.default_width_fraction` | float | Initial scrolling column width (0.1-1.0). |
+| `layout.scrolling.always_center_single_column` | bool | Center a lone scrolling column when narrower than the viewport. |
 
 ## Examples
 
@@ -136,5 +138,5 @@ layout.mode = "dwindle"
 index = 4
 output = "DP-1"
 layout.gap = 0
-layout.default_width_fraction = 0.667
+layout.scrolling.default_width_fraction = 0.667
 ```

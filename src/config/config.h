@@ -76,8 +76,11 @@ namespace umbriel {
   struct WorkspaceLayoutOverrides {
     std::optional<LayoutMode> mode;
     std::optional<int> gap;
-    std::optional<double> defaultWidthFraction;
     std::optional<std::vector<double>> widthPresets;
+    struct Scrolling {
+      std::optional<double> defaultWidthFraction;
+      std::optional<bool> alwaysCenterSingleColumn;
+    } scrolling;
   };
 
   // Layout rule parsed from a [[workspace]] entry. Exactly one selector is set.
@@ -92,8 +95,11 @@ namespace umbriel {
   struct ResolvedLayoutConfig {
     LayoutMode mode = LayoutMode::Scrolling;
     int gap = 8;
-    double defaultWidthFraction = 0.5;
     std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
+    struct Scrolling {
+      double defaultWidthFraction = 0.5;
+      bool alwaysCenterSingleColumn = true;
+    } scrolling;
     // Derived from gap + appearance border widths; set by resolve function.
     int totalGap = 0; // gap + 2 * totalBorderWidth
     int edgePad = 0;  // gap + totalBorderWidth
@@ -219,8 +225,11 @@ namespace umbriel {
     struct Layout {
       LayoutMode mode = LayoutMode::Scrolling;
       int gap = 8;
-      double defaultWidthFraction = 0.5;
       std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
+      struct Scrolling {
+        double defaultWidthFraction = 0.5;
+        bool alwaysCenterSingleColumn = true;
+      } scrolling;
     } layout;
 
     // Clear `layout.gap` outside decoration edges: borders are drawn outside the

@@ -60,14 +60,18 @@ workspace_color = "#1A1A1FFF"
 [layout]
 mode = "scrolling"             # "scrolling" or "dwindle"
 gap = 8                        # 0-500
+width_presets = [0.333, 0.5, 0.667] # shared by scrolling and dwindle
+
+[layout.scrolling]
 default_width_fraction = 0.5   # 0.1-1.0
-width_presets = [0.333, 0.5, 0.667]
+always_center_single_column = true # false aligns a lone column left
 
 # Workspace layout overrides (see docs/outputs.md#workspace-rules)
 # [[workspace]]
 # name = "chat"
 # layout.mode = "dwindle"
 # layout.gap = 4
+# layout.scrolling.always_center_single_column = false
 
 # Outputs (see docs/outputs.md) ---------------------------------------------
 

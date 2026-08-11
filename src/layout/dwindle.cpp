@@ -535,7 +535,7 @@ namespace umbriel {
   double DwindleLayout::widthFraction(int columnIndex) const {
     const std::vector<WidthSplit> splits = widthSplits(nodeAtFlatIndex(columnIndex));
     if (splits.empty()) {
-      return m_config->defaultWidthFraction;
+      return 1.0;
     }
     double fraction = 1.0;
     for (const WidthSplit& split : splits) {

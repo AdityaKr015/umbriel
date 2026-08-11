@@ -14,12 +14,3 @@
 
 void raiseFileDescriptorLimit();
 void restoreFileDescriptorLimit();
-
-// "open_fds=712, rlimit_nofile=1048576/1048576, top_fd_targets=[memfd=664, ...]"
-// Buckets by target kind so a runaway client is named rather than guessed at.
-[[nodiscard]] std::string describeOpenFileDescriptors(std::size_t maxTargets = 8);
-
-// Samples the fd table and logs the description above the first time usage
-// crosses each of 25/50/75/90% of the soft limit. Silent otherwise, so it is
-// safe to call on a timer. Thresholds re-arm if usage falls back below them.
-void checkFileDescriptorPressure();

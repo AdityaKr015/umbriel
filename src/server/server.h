@@ -53,8 +53,14 @@ struct wlr_virtual_pointer_v1;
 
 namespace umbriel {
 
-  // How often the compositor samples its own fd table (see core/fdlimit.h).
-  inline constexpr int kFdPressureIntervalMs = 30'000;
+  // Slow tick that ferries wl_surface.frame callbacks to toplevels that are
+  // mapped but not on the active workspace. wlroots' scene helper only walks
+  // enabled scene nodes, so a hidden view otherwise never receives another
+  // frame_done and any client that gates its game/network loop on the frame
+  // callback stalls until it becomes visible again (Overwatch under
+  // Proton-CachyOS times out its server heartbeat within ~30 s of alt-tab).
+  // 10 Hz keeps game logic and networking alive at negligible cost.
+  inline constexpr int kBackgroundFrameIntervalMs = 100;
 
   enum class WheelDirection;
   struct Keybind;
@@ -217,7 +223,7 @@ namespace umbriel {
     static void onOutputLayoutChange(wl_listener* listener, void* data);
     static void onToplevelCaptureRequest(wl_listener* listener, void* data);
     static void onRendererLost(wl_listener* listener, void* data);
-    static int onFdPressureTimer(void* data);
+    static int onBackgroundFrameTimer(void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -343,7 +349,7 @@ namespace umbriel {
     std::string m_xwaylandDisplay;
     wl_event_source* m_xwaylandExitSource = nullptr;
     wl_event_source* m_xwaylandRespawnTimer = nullptr;
-    wl_event_source* m_fdPressureTimer = nullptr;
+    wl_event_source* m_backgroundFrameTimer = nullptr;
     int m_xwaylandFailures = 0;
     std::chrono::steady_clock::time_point m_xwaylandSpawnTime;
 

@@ -1,6 +1,5 @@
 #include "config/config.h"
 #include "config/config_watcher.h"
-#include "core/fdlimit.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/gestures.h"
@@ -221,20 +220,41 @@ namespace umbriel {
     }
   }
 
-  // Fires when the underlying GL context is invalidated (GPU reset, VRAM lost after suspend,
-  // driver-detected hang). Without this, the renderer keeps issuing GL calls into a dead
-  // context — Mesa's context_lost_nop_handler no-ops each one and spams
-  // "[GLES2] GL_CONTEXT_LOST in context lost" ~40k lines/sec, and the desktop never comes
-  // back. Rebuild the renderer and rebind everything.
-  int Server::onFdPressureTimer(void* data) {
+  // Slow tick that keeps hidden-workspace toplevels driving their game/network
+  // loops (see kBackgroundFrameIntervalMs). wlr_scene_output_send_frame_done
+  // walks only enabled scene nodes, so a view whose workspace has been
+  // deactivated stops receiving wl_surface.frame callbacks entirely; any
+  // client that gates advance-work on the callback stalls until it is shown
+  // again.
+  int Server::onBackgroundFrameTimer(void* data) {
     auto* self = static_cast<Server*>(data);
-    checkFileDescriptorPressure();
-    if (self->m_fdPressureTimer != nullptr) {
-      wl_event_source_timer_update(self->m_fdPressureTimer, kFdPressureIntervalMs);
+    timespec now{};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    for (const auto& view : self->m_views) {
+      if (!view->mapped() || view->onActiveWorkspace()) {
+        continue;
+      }
+      wlr_xdg_surface_for_each_surface(
+          view->toplevel()->base,
+          [](wlr_surface* surface, int /*sx*/, int /*sy*/, void* userData) {
+            wlr_surface_send_frame_done(surface, static_cast<timespec*>(userData));
+          },
+          &now
+      );
+    }
+
+    if (self->m_backgroundFrameTimer != nullptr) {
+      wl_event_source_timer_update(self->m_backgroundFrameTimer, kBackgroundFrameIntervalMs);
     }
     return 0;
   }
 
+  // Fires when the underlying GL context is invalidated (GPU reset, VRAM lost after suspend,
+  // driver-detected hang). Without this, the renderer keeps issuing GL calls into a dead
+  // context — Mesa's context_lost_nop_handler no-ops each one and spams "[GLES2]
+  // GL_CONTEXT_LOST in context lost" ~40k lines/sec, and the desktop never comes back.
+  // Rebuild the renderer and rebind everything.
   void Server::onRendererLost(wl_listener* listener, void* /*data*/) {
     Server* self;
     self = wl_container_of(listener, self, m_rendererLost);

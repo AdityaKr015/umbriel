@@ -195,20 +195,18 @@ namespace umbriel {
         continue;
       }
       const wlr_box target = m_layout->targetBox(view);
-      const wlr_box& geometry = view->toplevel()->base->geometry;
       const XdgSizeHints hints = xdgSizeHints(view->toplevel());
       const int width = clampXdgWidth(target.width, hints);
       const int height = clampXdgHeight(target.height, hints);
-      if (geometry.width != width || geometry.height != height) {
+      const auto& scheduled = view->toplevel()->scheduled;
+      if (scheduled.width != width || scheduled.height != height) {
         wlr_xdg_toplevel_set_size(view->toplevel(), width, height);
-      }
-      // Start the presented-size animation here, where the new size is decided.
-      // Waiting for the client's commit is too late: applyPositions below runs
-      // syncViewPresentation, whose clip already reports the new (smaller) size,
-      // so a shrink would land in m_presentedW/H and the commit would see no
-      // change left to animate.
-      if (animate) {
-        view->beginResizeAnimation(width, height);
+        // Start the presentation animation when the compositor changes the
+        // assigned size. Client geometry can differ from a stable configure,
+        // notably with Chromium CSD, and must not replay the resize on focus.
+        if (animate) {
+          view->beginResizeAnimation(width, height);
+        }
       }
     }
 

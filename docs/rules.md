@@ -39,7 +39,7 @@ mapping, rules are re-evaluated once.
 | `default_width` | float | Scrolling only. Column width fraction (0.1-1.0). Gap-aware: fractions that sum to 1 tile exactly. Overrides `layout.scrolling.default_width_fraction`. Ignored in dwindle. |
 | `default_workspace` | int | Place on workspace N (1-based). |
 | `default_fullscreen` | bool | Map fullscreen. |
-| `default_maximize` | bool | Map maximized. Tiled: column full-width. Floating: fill usable area. |
+| `default_maximize` | bool | Map maximized. Tiled: compositor-owned column full-width; client maximize requests do not change the layout. Floating: fill usable area. |
 
 ### Continuous effects (update on title/app_id/focus changes)
 

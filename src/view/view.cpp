@@ -1517,8 +1517,10 @@ namespace umbriel {
       scheduleFrame();
     }
 
-    // Honor the client's pre-map request as well as the compositor default.
-    if (m_toplevel->requested.maximized || (rule.defaultMaximize && *rule.defaultMaximize)) {
+    // Tiled maximize is compositor-owned so client restore-state churn cannot
+    // resize a column. Window rules and floating client requests still apply.
+    const bool ruleMaximized = rule.defaultMaximize && *rule.defaultMaximize;
+    if (ruleMaximized || (!m_tiled && m_toplevel->requested.maximized)) {
       setMaximized(true);
     }
 
@@ -1655,42 +1657,26 @@ namespace umbriel {
       }
     }
     applyCornerRadius();
-    // Size animation trigger: animate presented size when the client's geometry
-    // changes due to a layout resize (not during an interactive resize grab).
+    // Layout-assigned size changes start their presentation animation in
+    // Workspace::arrange. Client commits are not resize requests: Chromium can
+    // change its geometry while keeping the same configure, and retargeting to
+    // that geometry lets a tiled surface escape its assigned box.
     if (m_mapped
         && m_tiled
         && m_onActiveWorkspace
         && m_workspace != nullptr
         && !m_toplevel->scheduled.fullscreen
         && !m_toplevel->current.fullscreen
-        && m_presentedW > 0
-        && m_presentedH > 0) {
+        && sizeGrabActive()) {
+      // During interactive resize, track geometry so no spurious animation
+      // replays the drag when the grab ends and mode returns to Passthrough.
       const wlr_box& geometry = m_toplevel->base->geometry;
-      if (sizeGrabActive()) {
-        // During interactive resize, track geometry so no spurious animation
-        // replays the drag when the grab ends and mode returns to Passthrough.
-        if (geometry.width > 0 && geometry.height > 0) {
-          if (sizeAnimating()) {
-            cancelSizeAnimation();
-          }
-          m_presentedW = geometry.width;
-          m_presentedH = geometry.height;
+      if (geometry.width > 0 && geometry.height > 0) {
+        if (sizeAnimating()) {
+          cancelSizeAnimation();
         }
-      } else if (
-          geometry.width > 0
-          && geometry.height > 0
-          && (geometry.width != m_presentedW || geometry.height != m_presentedH)
-          && !(
-              sizeAnimating()
-              && geometry.width == static_cast<int>(m_animW.target())
-              && geometry.height == static_cast<int>(m_animH.target())
-          )
-      ) {
-        m_animW.snap(m_presentedW);
-        m_animW.retarget(geometry.width, config().appearance.animationMs);
-        m_animH.snap(m_presentedH);
-        m_animH.retarget(geometry.height, config().appearance.animationMs);
-        scheduleFrame();
+        m_presentedW = geometry.width;
+        m_presentedH = geometry.height;
       }
     }
     // Re-apply output clip after configure ack so Super+F / resize sizes show
@@ -1826,6 +1812,13 @@ namespace umbriel {
 
   void View::handleRequestMaximize() {
     if (!m_toplevel->base->initialized || !m_mapped) {
+      return;
+    }
+    if (m_tiled && m_workspace != nullptr) {
+      const int column = m_workspace->layout().columnOf(this);
+      const bool maximized = column >= 0 && m_workspace->layout().isFullWidth(column);
+      wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+      updateForeignState();
       return;
     }
     setMaximized(m_toplevel->requested.maximized);

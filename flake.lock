@@ -22,18 +22,18 @@
     "scenefx": {
       "flake": false,
       "locked": {
-        "lastModified": 1786019314,
-        "narHash": "sha256-6Ha8CgM+hiH9XC4gakcJHLL8AiOR0V0E1PS0qWUc+xk=",
-        "ref": "origin/umbriel",
-        "rev": "e16c85d579ada0e76a66374e28a1c4fcc6943105",
-        "revCount": 315,
+        "lastModified": 1786441623,
+        "narHash": "sha256-yUCmoeCxNOhDL2o+18TfN/czExQWNvfB5EgsewKfEzs=",
+        "ref": "umbriel",
+        "rev": "51a76db48508a5987bd9969135c93721f9ee9476",
+        "revCount": 316,
         "type": "git",
-        "url": "file:/mnt/storage/GitHub/noctalia-dev/scenefx"
+        "url": "https://github.com/noctalia-dev/scenefx"
       },
       "original": {
-        "ref": "origin/umbriel",
+        "ref": "umbriel",
         "type": "git",
-        "url": "file:/mnt/storage/GitHub/noctalia-dev/scenefx"
+        "url": "https://github.com/noctalia-dev/scenefx"
       }
     }
   },

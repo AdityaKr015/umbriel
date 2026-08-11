@@ -148,7 +148,7 @@ Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `true` | Enable drop shadows. |
-| `softness` | int | `10` | Gaussian blur sigma in pixels (0-200). 0 disables. |
+| `softness` | int | `10` | Gaussian blur sigma in pixels (0-200). 0 produces a hard-edged shadow. |
 | `offset_x` | int | `2` | Horizontal shadow offset (-200 to 200). |
 | `offset_y` | int | `2` | Vertical shadow offset (-200 to 200). |
 | `color` | color | `#0000008C` | Shadow color. |

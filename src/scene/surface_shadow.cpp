@@ -21,7 +21,7 @@ namespace umbriel {
     const int decWidth = contentWidth + 2 * borderTotal;
     const int decHeight = contentHeight + 2 * borderTotal;
 
-    const bool want = cfg.enabled && sigma > 0 && cfg.color[3] > 0.0F && contentWidth > 0 && contentHeight > 0;
+    const bool want = cfg.enabled && cfg.color[3] > 0.0F && contentWidth > 0 && contentHeight > 0;
     if (!want) {
       if (m_node != nullptr) {
         wlr_scene_node_set_enabled(&m_node->node, false);

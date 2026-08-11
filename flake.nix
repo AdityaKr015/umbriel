@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
     scenefx = {
-      url = "git+file:/mnt/storage/GitHub/noctalia-dev/scenefx?ref=origin/umbriel";
+      url = "git+https://github.com/noctalia-dev/scenefx?ref=umbriel";
       flake = false;
     };
   };

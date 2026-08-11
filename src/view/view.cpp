@@ -395,9 +395,9 @@ namespace umbriel {
     m_presentedH = height;
   }
 
-  // Fullscreen PRESENTATION follows the client's COMMITTED state, not the
-  // scheduled intent (niri's sizing_mode rule): the backdrop and centering
-  // only appear once the client actually committed fullscreen, so a client
+  // Fullscreen presentation follows the client's committed state, not the
+  // scheduled intent. The backdrop and centering only appear once the client
+  // actually committed fullscreen, so a client
   // mid-transition (wine flipping modes) never renders as a mismatched pair
   // of stale buffer + fullscreen chrome. Never scale buffers (wrong aspect).
   void View::updateFullscreenPresentation(int width, int height) {
@@ -409,7 +409,7 @@ namespace umbriel {
     if (fullscreen && validSize) {
       wlr_scene_rect_set_size(m_fullscreenBackdrop, width, height);
       wlr_scene_node_set_position(&m_fullscreenBackdrop->node, 0, 0);
-      // Centering may go negative for oversized buffers (crop equally, like niri).
+      // Centering may go negative for oversized buffers to crop both sides equally.
       m_fullscreenOffsetX = geo.width > 0 ? (width - geo.width) / 2 : 0;
       m_fullscreenOffsetY = geo.height > 0 ? (height - geo.height) / 2 : 0;
       if (surfaceNode != nullptr) {

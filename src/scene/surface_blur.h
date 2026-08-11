@@ -3,6 +3,7 @@
 #include <optional>
 
 struct wlr_box;
+struct wlr_scene_buffer;
 struct wlr_scene_blur;
 struct wlr_scene_tree;
 struct wlr_surface;
@@ -24,9 +25,11 @@ namespace umbriel {
     // nodeBox: content box in `parent` coordinates (position + size of the node).
     // surfaceBox: content box in surface-local coordinates (opaque-region test).
     // clipBox: optional visible subset in `parent` coordinates; nullptr = full nodeBox.
+    // maskSource: optional scene buffer to use instead of finding the surface's regular scene buffer.
     void update(
         wlr_scene_tree* parent, wlr_surface* surface, const wlr_box& nodeBox, const wlr_box& surfaceBox,
-        int cornerRadius, const wlr_box* clipBox = nullptr, const SurfaceBlurOptions& options = {}
+        int cornerRadius, const wlr_box* clipBox = nullptr, const SurfaceBlurOptions& options = {},
+        wlr_scene_buffer* maskSource = nullptr
     );
     void setAlpha(float alpha);
     // Disable the node (unmap path); update() re-enables.

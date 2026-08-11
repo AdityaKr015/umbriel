@@ -3,6 +3,7 @@
 #include "core/animation.h"
 #include "layout/drop_target.h"
 #include "scene/hint_rect.h"
+#include "scene/surface_blur.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -27,7 +28,7 @@ namespace umbriel {
   class Workspace;
   class WorkspaceGroup;
 
-  // Niri-style zoomed-out view of every workspace on every output, arranged as
+  // Zoomed-out view of every workspace on every output, arranged as
   // one vertical filmstrip per output. Clients are never reconfigured: the real
   // window trees are hidden and re-rendered as "cards", per-surface scene
   // buffers sharing the client textures and scaled by the scene graph. The
@@ -105,6 +106,7 @@ namespace umbriel {
       size_t row = 0; // workspace index inside the output's group
       wlr_scene_tree* tree = nullptr;
       wlr_scene_rect* border = nullptr;
+      SurfaceBlur blur;
       std::vector<std::unique_ptr<CardSurface>> surfaces;
       wlr_box box{}; // content box in layout coordinates
     };
@@ -112,8 +114,8 @@ namespace umbriel {
     struct OutputState {
       Output* output = nullptr;
       wlr_scene_tree* tree = nullptr;
-      wlr_scene_rect* backdrop = nullptr;
-      std::vector<wlr_scene_rect*> rowRects;
+      wlr_scene_rect* backgroundTint = nullptr;
+      std::vector<wlr_scene_rect*> emptyPlaceholders;
       std::vector<std::unique_ptr<Card>> cards;
       double rowScroll = 0;
       double rowFrom = 0;

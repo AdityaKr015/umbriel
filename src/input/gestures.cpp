@@ -28,7 +28,7 @@ namespace umbriel {
     constexpr double kCommitVelocityPxMs = 0.9;
     constexpr double kOverscrollCompress = 0.15;
     constexpr double kOverscrollMaxWs = 0.08;
-    // niri's OVERVIEW_GESTURE_MOVEMENT: finger travel for a full open/close.
+    // Finger travel for a full overview open or close.
     constexpr double kOverviewDistancePx = 300.0;
   } // namespace
 

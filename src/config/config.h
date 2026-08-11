@@ -218,14 +218,10 @@ namespace umbriel {
     } appearance;
 
     struct Overview {
-      // Workspace scale when fully zoomed out (niri's compute_overview_zoom).
+      // Workspace scale when fully zoomed out.
       double zoom = 0.5;
-      // Tint laid over the desktop background while the overview is up. The
-      // wallpaper (background layer) is never hidden by anything else, so a
-      // transparent default leaves it untouched; raise the alpha to dim it,
-      // FF to replace it outright.
-      std::array<float, 4> backdropColor{0.0627451F, 0.0627451F, 0.0784314F, 0.0F};
-      std::array<float, 4> workspaceColor{0.1019608F, 0.1019608F, 0.1215686F, 1.0F};
+      // Tint composited over the desktop background while overview is visible.
+      std::array<float, 4> backgroundTint{0.0627451F, 0.0627451F, 0.0784314F, 0.1882353F};
     } overview;
 
     struct Layout {

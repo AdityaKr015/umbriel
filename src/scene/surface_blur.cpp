@@ -45,7 +45,7 @@ namespace umbriel {
 
   void SurfaceBlur::update(
       wlr_scene_tree* parent, wlr_surface* surface, const wlr_box& nodeBox, const wlr_box& surfaceBox, int cornerRadius,
-      const wlr_box* clipBox, const SurfaceBlurOptions& options
+      const wlr_box* clipBox, const SurfaceBlurOptions& options, wlr_scene_buffer* maskSource
   ) {
     const Config::Appearance::Blur& cfg = config().appearance.blur;
     wlr_box drawBox = nodeBox;
@@ -85,7 +85,12 @@ namespace umbriel {
       m_masked = options.ignoreAlpha > 0.0F;
     }
 
-    if (wlr_scene_blur_get_transparency_mask_source(m_node) == nullptr) {
+    wlr_scene_buffer* currentMask = wlr_scene_blur_get_transparency_mask_source(m_node);
+    if (maskSource != nullptr) {
+      if (currentMask != maskSource) {
+        wlr_scene_blur_set_transparency_mask_source(m_node, maskSource);
+      }
+    } else if (currentMask == nullptr) {
       if (wlr_scene_buffer* mask = findSurfaceBuffer(parent->node, surface)) {
         wlr_scene_blur_set_transparency_mask_source(m_node, mask);
       }

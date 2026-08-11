@@ -25,8 +25,7 @@ namespace umbriel {
   namespace {
     constexpr Logger kLog("overview");
 
-    // Gap between workspace thumbnails, as a fraction of the scaled row height
-    // (niri's Monitor::workspace_gap).
+    // Gap between workspace thumbnails, as a fraction of the scaled row height.
     constexpr double kRowGapFraction = 0.1;
     // Pointer travel that promotes a press on a card into a relocate drag.
     constexpr double kDragThreshold = 10.0;
@@ -43,6 +42,37 @@ namespace umbriel {
       std::array<float, 4> out{};
       premultiplied(out.data(), base, static_cast<float>(opacity));
       return out;
+    }
+    void layoutEmptyPlaceholder(
+        wlr_scene_rect* placeholder, const wlr_box& full, const wlr_box& clip, int radius,
+        const std::array<float, 4>& color
+    ) {
+      if (placeholder == nullptr) {
+        return;
+      }
+      wlr_box visible{};
+      if (color[3] <= 0.001F || !wlr_box_intersection(&visible, &full, &clip)) {
+        wlr_scene_node_set_enabled(&placeholder->node, false);
+        return;
+      }
+
+      wlr_scene_node_set_enabled(&placeholder->node, true);
+      wlr_scene_node_set_position(&placeholder->node, visible.x, visible.y);
+      wlr_scene_rect_set_size(placeholder, visible.width, visible.height);
+      wlr_scene_rect_set_color(placeholder, color.data());
+      wlr_scene_rect_set_clipped_region(placeholder, clipped_region_get_default());
+
+      const bool trimLeft = visible.x > full.x;
+      const bool trimRight = visible.x + visible.width < full.x + full.width;
+      const bool trimTop = visible.y > full.y;
+      const bool trimBottom = visible.y + visible.height < full.y + full.height;
+      wlr_scene_rect_set_corner_radii(
+          placeholder,
+          corner_radii_new(
+              trimLeft || trimTop ? 0 : radius, trimRight || trimTop ? 0 : radius, trimRight || trimBottom ? 0 : radius,
+              trimLeft || trimBottom ? 0 : radius
+          )
+      );
     }
 
     // Cards are pure output: hit testing runs off Overview's own boxes, so scene
@@ -136,6 +166,7 @@ namespace umbriel {
     View* view = card.view;
     const wlr_box& geometry = view->toplevel()->base->geometry;
     if (geometry.width <= 0 || geometry.height <= 0) {
+      card.blur.hide();
       wlr_scene_node_set_enabled(&card.tree->node, false);
       return;
     }
@@ -166,6 +197,7 @@ namespace umbriel {
     const bool clipped = &card != m_dragCard;
     wlr_box visible = card.box;
     if (clipped && !wlr_box_intersection(&visible, &card.box, &metrics.outputBox)) {
+      card.blur.hide();
       wlr_scene_node_set_enabled(&card.tree->node, false);
       return;
     }
@@ -205,6 +237,7 @@ namespace umbriel {
 
     const double fx = static_cast<double>(contentW) / geometry.width;
     const double fy = static_cast<double>(contentH) / geometry.height;
+    bool blurUpdated = false;
     for (const auto& entry : card.surfaces) {
       wlr_surface* surface = entry->surface;
       if (entry->buffer == nullptr || surface->current.width <= 0 || surface->current.height <= 0) {
@@ -257,6 +290,19 @@ namespace umbriel {
       wlr_scene_buffer_set_source_box(entry->buffer, &src);
       wlr_scene_buffer_set_dest_size(entry->buffer, visible.width, visible.height);
       wlr_scene_buffer_set_corner_radius(entry->buffer, radius);
+      const wlr_box blurBox{0, 0, contentW, contentH};
+      const wlr_box blurClip{
+          visible.x - card.box.x,
+          visible.y - card.box.y,
+          visible.width,
+          visible.height,
+      };
+      card.blur.setAlpha(entry->buffer->opacity);
+      card.blur.update(card.tree, surface, blurBox, geometry, radius, &blurClip, view->blurOptions(), entry->buffer);
+      blurUpdated = true;
+    }
+    if (!blurUpdated) {
+      card.blur.hide();
     }
   }
 
@@ -266,28 +312,27 @@ namespace umbriel {
       return;
     }
 
-    wlr_scene_node_set_position(&state.backdrop->node, metrics.outputBox.x, metrics.outputBox.y);
-    wlr_scene_rect_set_size(state.backdrop, metrics.outputBox.width, metrics.outputBox.height);
-    const std::array<float, 4> backdrop = tint(config().overview.backdropColor, m_progress);
-    // A fully transparent backdrop means "leave the wallpaper alone"; skip the
-    // full-screen draw entirely. Input is gated in Cursor, not by this rect.
-    wlr_scene_node_set_enabled(&state.backdrop->node, backdrop[3] > 0.001F);
-    wlr_scene_rect_set_color(state.backdrop, backdrop.data());
+    wlr_scene_node_set_position(&state.backgroundTint->node, metrics.outputBox.x, metrics.outputBox.y);
+    wlr_scene_rect_set_size(state.backgroundTint, metrics.outputBox.width, metrics.outputBox.height);
+    const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, m_progress);
+    // A fully transparent tint leaves the wallpaper untouched.
+    wlr_scene_node_set_enabled(&state.backgroundTint->node, backgroundTint[3] > 0.001F);
+    wlr_scene_rect_set_color(state.backgroundTint, backgroundTint.data());
 
-    const std::array<float, 4> rowColor = tint(config().overview.workspaceColor, m_progress);
-    for (size_t row = 0; row < state.rowRects.size(); ++row) {
-      wlr_scene_rect* rect = state.rowRects[row];
-      const wlr_box full{metrics.rowX, rowTop(metrics, state.rowScroll, row), metrics.rowW, metrics.rowH};
-      wlr_box visible{};
-      if (!wlr_box_intersection(&visible, &full, &metrics.outputBox)) {
-        wlr_scene_node_set_enabled(&rect->node, false);
+    const int placeholderRadius = static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom));
+    const std::array<float, 4> placeholderColor = tint(config().appearance.borderUnfocused, m_progress * 0.18);
+    for (size_t row = 0; row < state.emptyPlaceholders.size(); ++row) {
+      wlr_scene_rect* placeholder = state.emptyPlaceholders[row];
+      const bool empty =
+          std::ranges::none_of(state.cards, [row](const std::unique_ptr<Card>& card) { return card->row == row; });
+      if (!empty) {
+        if (placeholder != nullptr) {
+          wlr_scene_node_set_enabled(&placeholder->node, false);
+        }
         continue;
       }
-      wlr_scene_node_set_enabled(&rect->node, true);
-      wlr_scene_node_set_position(&rect->node, visible.x, visible.y);
-      wlr_scene_rect_set_size(rect, visible.width, visible.height);
-      wlr_scene_rect_set_color(rect, rowColor.data());
-      wlr_scene_rect_set_corner_radius(rect, config().appearance.cornerRadius);
+      const wlr_box full{metrics.rowX, rowTop(metrics, state.rowScroll, row), metrics.rowW, metrics.rowH};
+      layoutEmptyPlaceholder(placeholder, full, metrics.outputBox, placeholderRadius, placeholderColor);
     }
 
     for (const auto& card : state.cards) {
@@ -597,13 +642,13 @@ namespace umbriel {
       if (state->tree == nullptr) {
         continue;
       }
-      const std::array<float, 4> backdropColor = tint(config().overview.backdropColor, 0.0);
-      state->backdrop = wlr_scene_rect_create(state->tree, 1, 1, backdropColor.data());
-      wlr_scene_rect_set_corner_radius(state->backdrop, 0);
-      state->rowRects.reserve(group->workspaceCount());
-      const std::array<float, 4> rowColor = tint(config().overview.workspaceColor, 0.0);
+      const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, 0.0);
+      state->backgroundTint = wlr_scene_rect_create(state->tree, 1, 1, backgroundTint.data());
+      wlr_scene_rect_set_corner_radius(state->backgroundTint, 0);
+      state->emptyPlaceholders.reserve(group->workspaceCount());
+      const std::array<float, 4> placeholderColor = tint(config().appearance.borderUnfocused, 0.0);
       for (size_t row = 0; row < group->workspaceCount(); ++row) {
-        state->rowRects.push_back(wlr_scene_rect_create(state->tree, 1, 1, rowColor.data()));
+        state->emptyPlaceholders.push_back(wlr_scene_rect_create(state->tree, 1, 1, placeholderColor.data()));
       }
       state->rowScroll = group->active() != nullptr ? static_cast<double>(group->active()->index()) : 0.0;
       state->rowFrom = state->rowScroll;
@@ -992,7 +1037,7 @@ namespace umbriel {
       if (group == nullptr) {
         continue;
       }
-      for (size_t row = 0; row < state->rowRects.size(); ++row) {
+      for (size_t row = 0; row < state->emptyPlaceholders.size(); ++row) {
         const wlr_box box{metrics.rowX, rowTop(metrics, state->rowScroll, row), metrics.rowW, metrics.rowH};
         if (!boxContains(box, lx, ly)) {
           continue;

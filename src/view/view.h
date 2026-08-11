@@ -86,6 +86,7 @@ namespace umbriel {
     friend class Cursor;
     friend class Server;
     friend class Popup;
+    friend class Overview;
 
     static void onMap(wl_listener* listener, void* data);
     static void onUnmap(wl_listener* listener, void* data);

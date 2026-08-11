@@ -163,6 +163,7 @@ Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
 [overview]
 zoom = 0.5                     # 0.1-0.75
 background_tint = "#10101430"
+workspace_background = "#00000044"
 ```
 
 Zoomed-out view of every workspace on every output (default `Mod+O`). Windows
@@ -170,13 +171,14 @@ stay live: click to focus, middle-click to close, drag between workspaces,
 scroll the filmstrip, or 4-finger swipe to toggle. Dwindle drags preview the
 directional split under the pointer before the window is dropped.
 Transparent windows keep their configured window-rule blur throughout the zoom
-transition. Nonempty workspaces have no row chrome. Empty workspaces show a
-subtle rounded placeholder derived from `appearance.border_unfocused`.
+transition. Each workspace has a rounded background behind its cards; use the
+configured alpha for anything from a subtle tint to an opaque fill.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `zoom` | float | `0.5` | Workspace scale when fully zoomed out (0.1-0.75). |
 | `background_tint` | color | `#10101430` | Tint composited over the desktop background. Alpha `00` leaves it untouched; `FF` hides it. |
+| `workspace_background` | color | `#00000044` | Rounded background behind each workspace. Alpha `00` makes it invisible; `FF` makes it opaque. |
 
 ## Layout
 

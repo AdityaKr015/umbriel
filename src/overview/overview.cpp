@@ -320,7 +320,7 @@ namespace umbriel {
     wlr_scene_rect_set_color(state.backgroundTint, backgroundTint.data());
 
     const int backgroundRadius = static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom));
-    const std::array<float, 4> backgroundColor = tint(config().appearance.borderUnfocused, m_progress * 0.18);
+    const std::array<float, 4> backgroundColor = tint(config().overview.workspaceBackground, m_progress);
     for (size_t row = 0; row < state.workspaceBackgrounds.size(); ++row) {
       wlr_scene_rect* background = state.workspaceBackgrounds[row];
       const wlr_box full{metrics.rowX, rowTop(metrics, state.rowScroll, row), metrics.rowW, metrics.rowH};
@@ -638,7 +638,7 @@ namespace umbriel {
       state->backgroundTint = wlr_scene_rect_create(state->tree, 1, 1, backgroundTint.data());
       wlr_scene_rect_set_corner_radius(state->backgroundTint, 0);
       state->workspaceBackgrounds.reserve(group->workspaceCount());
-      const std::array<float, 4> backgroundColor = tint(config().appearance.borderUnfocused, 0.0);
+      const std::array<float, 4> backgroundColor = tint(config().overview.workspaceBackground, 0.0);
       for (size_t row = 0; row < group->workspaceCount(); ++row) {
         state->workspaceBackgrounds.push_back(wlr_scene_rect_create(state->tree, 1, 1, backgroundColor.data()));
       }

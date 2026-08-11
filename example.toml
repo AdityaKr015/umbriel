@@ -55,6 +55,7 @@ color = "#0000008C"
 [overview]
 zoom = 0.5                     # 0.1-0.75
 background_tint = "#10101430"
+workspace_background = "#00000044" # set alpha to FF for an opaque background
 
 # Layout ---------------------------------------------------------------------
 

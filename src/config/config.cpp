@@ -1020,9 +1020,10 @@ namespace umbriel {
         warnAt(node->source(), "ignoring overview (expected table)");
         return;
       }
-      warnUnknownKeys(*section, "overview", {"zoom", "background_tint"});
+      warnUnknownKeys(*section, "overview", {"zoom", "background_tint", "workspace_background"});
       readDouble(*section, "zoom", "overview.zoom", 0.1, 0.75, loaded.overview.zoom);
       readColor(*section, "background_tint", "overview.background_tint", loaded.overview.backgroundTint);
+      readColor(*section, "workspace_background", "overview.workspace_background", loaded.overview.workspaceBackground);
     }
 
     void readLayout(const toml::table& table, Config& loaded) {

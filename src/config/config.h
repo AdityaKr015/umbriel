@@ -222,6 +222,8 @@ namespace umbriel {
       double zoom = 0.5;
       // Tint composited over the desktop background while overview is visible.
       std::array<float, 4> backgroundTint{0.0627451F, 0.0627451F, 0.0784314F, 0.1882353F};
+      // Rounded background behind each workspace; alpha controls opacity.
+      std::array<float, 4> workspaceBackground{0.0F, 0.0F, 0.0F, 0.2666667F};
     } overview;
 
     struct Layout {

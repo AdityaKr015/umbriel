@@ -178,6 +178,10 @@ namespace umbriel {
     if (mode == CursorMode::Move || mode == CursorMode::MoveTile) {
       m_grabX = m_cursor->x - view->sceneTree()->node.x;
       m_grabY = m_cursor->y - view->sceneTree()->node.y;
+      if (mode == CursorMode::Move) {
+        wlr_scene_node_reparent(&view->sceneTree()->node, m_server->dragTree());
+        wlr_scene_node_raise_to_top(&view->sceneTree()->node);
+      }
       if (mode == CursorMode::MoveTile) {
         m_tileDragPending = true;
         m_tileDragStartX = m_cursor->x;
@@ -207,6 +211,15 @@ namespace umbriel {
 
   void Cursor::resetMode() {
     m_server->hideInsertHint();
+    const CursorMode previousMode = m_mode;
+    if ((previousMode == CursorMode::Move || previousMode == CursorMode::MoveTile)
+        && m_grabbedView != nullptr
+        && m_grabbedView->workspace() != nullptr) {
+      wlr_scene_node_reparent(
+          &m_grabbedView->sceneTree()->node,
+          m_grabbedView->workspace()->viewLayer(m_grabbedView->tiled())
+      );
+    }
     m_mode = CursorMode::Passthrough;
     m_grabbedView = nullptr;
     m_dragSourceWorkspace = nullptr;
@@ -717,6 +730,8 @@ namespace umbriel {
           if (m_dragSourceWorkspace != nullptr) {
             m_dragSourceWorkspace->layoutDetach(m_grabbedView);
           }
+          // Present a dragged tile above every workspace window while it moves.
+          wlr_scene_node_reparent(&m_grabbedView->sceneTree()->node, m_server->dragTree());
           wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
           presentGrabbedViewSpanning();
         }
@@ -902,6 +917,9 @@ namespace umbriel {
         }
       }
       view->setNodeEnabled(true);
+      if (view->workspace() != nullptr) {
+        wlr_scene_node_reparent(&view->sceneTree()->node, view->workspace()->viewLayer(false));
+      }
       m_server->focusView(view, FocusReason::DragDrop);
     }
     resetMode();

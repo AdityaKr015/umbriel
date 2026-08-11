@@ -12,6 +12,11 @@ namespace umbriel {
   class View;
   class Workspace;
 
+  struct DropColumnWidth {
+    double fraction = 0.5;
+    bool fullWidth = false;
+  };
+
   // Where a dragged tile would land, plus the world-space hint rectangle.
   // Scrolling: row >= 0 inserts into column `column` at that row; row < 0 opens
   // a new column at gap index `column`. Dwindle: `view`/`edge` name a
@@ -33,8 +38,12 @@ namespace umbriel {
   [[nodiscard]] DropTarget
   computeDropTarget(Workspace& workspace, double scroll, double worldX, double worldY, const View* excludedView);
 
-  // Inserts `view` at `drop` in `target` and focuses it.
+  // Inserts `view` at `drop` in `target` and focuses it. `columnWidth` restores
+  // a detached scrolling column before the target is arranged.
   // The caller has already detached `view` from its source layout.
-  void applyDrop(Server& server, View& view, Workspace& target, const DropTarget& drop, bool animate);
+  void applyDrop(
+      Server& server, View& view, Workspace& target, const DropTarget& drop, const DropColumnWidth* columnWidth,
+      bool animate
+  );
 
 } // namespace umbriel

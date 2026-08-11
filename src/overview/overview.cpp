@@ -1284,7 +1284,7 @@ namespace umbriel {
     }
 
     if (target != nullptr && view->tiled()) {
-      applyDrop(*m_server, *view, *target, targetDrop, /*animate=*/false);
+      applyDrop(*m_server, *view, *target, targetDrop, nullptr, /*animate=*/false);
     } else if (target != nullptr && dropState != nullptr) {
       // Floating: map the card origin back out of the thumbnail.
       RowMetrics metrics{};

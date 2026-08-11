@@ -188,6 +188,22 @@ namespace umbriel {
         m_tileDragStartY = m_cursor->y;
         m_dragSourceWorkspace = view->workspace();
         m_dragSourceColumn = m_dragSourceWorkspace != nullptr ? m_dragSourceWorkspace->layout().columnOf(view) : -1;
+        m_hasDragSourceWidth = false;
+        if (m_dragSourceWorkspace != nullptr
+            && m_dragSourceWorkspace->layoutMode() == LayoutMode::Scrolling
+            && m_dragSourceColumn >= 0) {
+          const auto& columns = m_dragSourceWorkspace->layout().columns();
+          if (m_dragSourceColumn < static_cast<int>(columns.size())) {
+            const Column& column = columns[static_cast<size_t>(m_dragSourceColumn)];
+            if (column.views.size() == 1) {
+              m_dragSourceWidth = {
+                  .fraction = column.savedWidthFrac > 0.0 ? column.savedWidthFrac : column.widthFrac,
+                  .fullWidth = column.savedWidthFrac > 0.0,
+              };
+              m_hasDragSourceWidth = true;
+            }
+          }
+        }
         m_drop = {
             .workspace = m_dragSourceWorkspace,
             .column = std::max(0, m_dragSourceColumn),
@@ -222,6 +238,7 @@ namespace umbriel {
     m_mode = CursorMode::Passthrough;
     m_grabbedView = nullptr;
     m_dragSourceWorkspace = nullptr;
+    m_hasDragSourceWidth = false;
     m_drop = {};
     m_tileDragPending = false;
     m_resizeWorkspace = nullptr;
@@ -894,7 +911,11 @@ namespace umbriel {
     View* view = m_grabbedView;
     Workspace* target = m_drop.workspace != nullptr ? m_drop.workspace : m_dragSourceWorkspace;
     if (view != nullptr && view->mapped() && target != nullptr) {
-      applyDrop(*m_server, *view, *target, m_drop, /*animate=*/true);
+      const bool restoreSourceWidth = m_hasDragSourceWidth
+          && target == m_dragSourceWorkspace
+          && m_drop.row < 0
+          && std::max(0, m_drop.column) == m_dragSourceColumn;
+      applyDrop(*m_server, *view, *target, m_drop, restoreSourceWidth ? &m_dragSourceWidth : nullptr, /*animate=*/true);
     }
     resetMode();
   }

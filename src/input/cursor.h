@@ -120,6 +120,8 @@ namespace umbriel {
     uint32_t m_resizeEdges = 0;
     Workspace* m_dragSourceWorkspace = nullptr;
     int m_dragSourceColumn = -1;
+    DropColumnWidth m_dragSourceWidth{};
+    bool m_hasDragSourceWidth = false;
     DropTarget m_drop{};
     bool m_tileDragPending = false;
     double m_tileDragStartX = 0;

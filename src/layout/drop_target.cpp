@@ -245,7 +245,10 @@ namespace umbriel {
     return result;
   }
 
-  void applyDrop(Server& server, View& view, Workspace& target, const DropTarget& drop, bool animate) {
+  void applyDrop(
+      Server& server, View& view, Workspace& target, const DropTarget& drop, const DropColumnWidth* columnWidth,
+      bool animate
+  ) {
     if (target.layoutMode() == LayoutMode::Dwindle) {
       if (auto* dwindle = dynamic_cast<DwindleLayout*>(&target.layout())) {
         const bool splitDrop =
@@ -276,6 +279,14 @@ namespace umbriel {
       target.layout().insertViewIntoColumn(&view, std::max(0, drop.column), drop.row);
     } else {
       target.layout().insertView(&view, std::max(0, drop.column));
+    }
+    if (columnWidth != nullptr) {
+      const int column = target.layout().columnOf(&view);
+      target.layout().setWidthFraction(column, columnWidth->fraction);
+      if (columnWidth->fullWidth) {
+        target.layout().toggleFullWidth(column);
+      }
+      wlr_xdg_toplevel_set_maximized(view.toplevel(), columnWidth->fullWidth);
     }
     wlr_scene_node_reparent(&view.sceneTree()->node, target.viewLayer(true));
     target.arrange(animate);

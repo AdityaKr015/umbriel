@@ -24,7 +24,7 @@ default_floating = true
 All selectors are optional. Omitting every selector matches all windows.
 Matching uses regex search (partial match); use `^` and `$` to anchor.
 
-Run `umbriel apps` to list running app IDs.
+Run `umbriel windows` to list running app IDs.
 
 ### One-shot effects (applied at map time)
 

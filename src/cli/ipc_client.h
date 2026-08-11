@@ -3,8 +3,8 @@
 
 namespace umbriel {
 
-  enum class IpcCommand { Apps, Layers, Action };
+  struct IpcCommandSpec;
 
-  int runIpcCommand(IpcCommand cmd, std::string_view arg = {}, bool json = false);
+  int runIpcCommand(const IpcCommandSpec& spec, std::string_view arg = {}, bool json = false);
 
 } // namespace umbriel

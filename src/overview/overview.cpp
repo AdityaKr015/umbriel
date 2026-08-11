@@ -43,31 +43,31 @@ namespace umbriel {
       premultiplied(out.data(), base, static_cast<float>(opacity));
       return out;
     }
-    void layoutEmptyPlaceholder(
-        wlr_scene_rect* placeholder, const wlr_box& full, const wlr_box& clip, int radius,
+    void layoutWorkspaceBackground(
+        wlr_scene_rect* background, const wlr_box& full, const wlr_box& clip, int radius,
         const std::array<float, 4>& color
     ) {
-      if (placeholder == nullptr) {
+      if (background == nullptr) {
         return;
       }
       wlr_box visible{};
       if (color[3] <= 0.001F || !wlr_box_intersection(&visible, &full, &clip)) {
-        wlr_scene_node_set_enabled(&placeholder->node, false);
+        wlr_scene_node_set_enabled(&background->node, false);
         return;
       }
 
-      wlr_scene_node_set_enabled(&placeholder->node, true);
-      wlr_scene_node_set_position(&placeholder->node, visible.x, visible.y);
-      wlr_scene_rect_set_size(placeholder, visible.width, visible.height);
-      wlr_scene_rect_set_color(placeholder, color.data());
-      wlr_scene_rect_set_clipped_region(placeholder, clipped_region_get_default());
+      wlr_scene_node_set_enabled(&background->node, true);
+      wlr_scene_node_set_position(&background->node, visible.x, visible.y);
+      wlr_scene_rect_set_size(background, visible.width, visible.height);
+      wlr_scene_rect_set_color(background, color.data());
+      wlr_scene_rect_set_clipped_region(background, clipped_region_get_default());
 
       const bool trimLeft = visible.x > full.x;
       const bool trimRight = visible.x + visible.width < full.x + full.width;
       const bool trimTop = visible.y > full.y;
       const bool trimBottom = visible.y + visible.height < full.y + full.height;
       wlr_scene_rect_set_corner_radii(
-          placeholder,
+          background,
           corner_radii_new(
               trimLeft || trimTop ? 0 : radius, trimRight || trimTop ? 0 : radius, trimRight || trimBottom ? 0 : radius,
               trimLeft || trimBottom ? 0 : radius
@@ -319,20 +319,12 @@ namespace umbriel {
     wlr_scene_node_set_enabled(&state.backgroundTint->node, backgroundTint[3] > 0.001F);
     wlr_scene_rect_set_color(state.backgroundTint, backgroundTint.data());
 
-    const int placeholderRadius = static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom));
-    const std::array<float, 4> placeholderColor = tint(config().appearance.borderUnfocused, m_progress * 0.18);
-    for (size_t row = 0; row < state.emptyPlaceholders.size(); ++row) {
-      wlr_scene_rect* placeholder = state.emptyPlaceholders[row];
-      const bool empty =
-          std::ranges::none_of(state.cards, [row](const std::unique_ptr<Card>& card) { return card->row == row; });
-      if (!empty) {
-        if (placeholder != nullptr) {
-          wlr_scene_node_set_enabled(&placeholder->node, false);
-        }
-        continue;
-      }
+    const int backgroundRadius = static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom));
+    const std::array<float, 4> backgroundColor = tint(config().appearance.borderUnfocused, m_progress * 0.18);
+    for (size_t row = 0; row < state.workspaceBackgrounds.size(); ++row) {
+      wlr_scene_rect* background = state.workspaceBackgrounds[row];
       const wlr_box full{metrics.rowX, rowTop(metrics, state.rowScroll, row), metrics.rowW, metrics.rowH};
-      layoutEmptyPlaceholder(placeholder, full, metrics.outputBox, placeholderRadius, placeholderColor);
+      layoutWorkspaceBackground(background, full, metrics.outputBox, backgroundRadius, backgroundColor);
     }
 
     for (const auto& card : state.cards) {
@@ -645,10 +637,10 @@ namespace umbriel {
       const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, 0.0);
       state->backgroundTint = wlr_scene_rect_create(state->tree, 1, 1, backgroundTint.data());
       wlr_scene_rect_set_corner_radius(state->backgroundTint, 0);
-      state->emptyPlaceholders.reserve(group->workspaceCount());
-      const std::array<float, 4> placeholderColor = tint(config().appearance.borderUnfocused, 0.0);
+      state->workspaceBackgrounds.reserve(group->workspaceCount());
+      const std::array<float, 4> backgroundColor = tint(config().appearance.borderUnfocused, 0.0);
       for (size_t row = 0; row < group->workspaceCount(); ++row) {
-        state->emptyPlaceholders.push_back(wlr_scene_rect_create(state->tree, 1, 1, placeholderColor.data()));
+        state->workspaceBackgrounds.push_back(wlr_scene_rect_create(state->tree, 1, 1, backgroundColor.data()));
       }
       state->rowScroll = group->active() != nullptr ? static_cast<double>(group->active()->index()) : 0.0;
       state->rowFrom = state->rowScroll;
@@ -1037,7 +1029,7 @@ namespace umbriel {
       if (group == nullptr) {
         continue;
       }
-      for (size_t row = 0; row < state->emptyPlaceholders.size(); ++row) {
+      for (size_t row = 0; row < state->workspaceBackgrounds.size(); ++row) {
         const wlr_box box{metrics.rowX, rowTop(metrics, state->rowScroll, row), metrics.rowW, metrics.rowH};
         if (!boxContains(box, lx, ly)) {
           continue;

@@ -115,7 +115,7 @@ namespace umbriel {
       Output* output = nullptr;
       wlr_scene_tree* tree = nullptr;
       wlr_scene_rect* backgroundTint = nullptr;
-      std::vector<wlr_scene_rect*> emptyPlaceholders;
+      std::vector<wlr_scene_rect*> workspaceBackgrounds;
       std::vector<std::unique_ptr<Card>> cards;
       double rowScroll = 0;
       double rowFrom = 0;

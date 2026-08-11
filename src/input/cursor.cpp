@@ -14,7 +14,6 @@
 // clang-format off
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <linux/input-event-codes.h>
 #include "wlr.h"
 // clang-format on
@@ -70,6 +69,7 @@ namespace umbriel {
       *sy = ly - position.y;
       return true;
     }
+
   } // namespace
 
   Cursor::Cursor(Server& server) : m_server(&server) {
@@ -779,14 +779,12 @@ namespace umbriel {
     if (seat->drag == nullptr
         && seat->pointer_state.button_count > 0
         && seat->pointer_state.focused_surface != nullptr) {
-      double sx = 0;
-      double sy = 0;
-      if (!surfaceLocalCoordinates(
-              m_server->scene(), seat->pointer_state.focused_surface, m_cursor->x, m_cursor->y, &sx, &sy
-          )) {
-        sx = seat->pointer_state.sx + (m_cursor->x - oldX);
-        sy = seat->pointer_state.sy + (m_cursor->y - oldY);
-      }
+      // Keep an implicit grab in the coordinate space established by the
+      // press. Re-resolving against the scene would turn compositor-driven
+      // window animation into apparent pointer travel and make small clicks
+      // look like client drags.
+      const double sx = seat->pointer_state.sx + (m_cursor->x - oldX);
+      const double sy = seat->pointer_state.sy + (m_cursor->y - oldY);
       wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);
       updateConstraintForSurface(seat->pointer_state.focused_surface);
       return;

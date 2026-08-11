@@ -48,10 +48,6 @@ namespace umbriel {
   }
 
   Workspace::~Workspace() {
-    if (m_scrollAnim != 0) {
-      m_group->server()->animator().cancel(m_scrollAnim);
-      m_scrollAnim = 0;
-    }
     for (View* view : m_views) {
       view->cancelPositionAnimation();
       const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
@@ -90,9 +86,6 @@ namespace umbriel {
     applyVisibility();
     if (active) {
       arrange(false);
-    } else if (m_scrollAnim != 0) {
-      m_group->server()->animator().cancel(m_scrollAnim);
-      m_scrollAnim = 0;
     }
   }
 
@@ -222,38 +215,8 @@ namespace umbriel {
       return;
     }
 
-    if (m_layoutMode == LayoutMode::Scrolling) {
-      const double targetScroll = m_layout->scroll();
-      const bool scrollChanged = std::abs(targetScroll - m_visualScroll) > 0.01;
-      if (m_scrollAnim != 0) {
-        m_group->server()->animator().cancel(m_scrollAnim);
-        m_scrollAnim = 0;
-      }
-      if (animate && scrollChanged) {
-        for (View* view : m_views) {
-          view->cancelPositionAnimation();
-        }
-        m_scrollAnim = m_group->server()->animator().animate(
-            m_visualScroll, targetScroll, config().appearance.animationMs, Easing::EaseOutCubic,
-            [this](double value) {
-              m_visualScroll = value;
-              applyPositions(false);
-            },
-            [this] { m_scrollAnim = 0; }
-        );
-        applyPositions(false);
-        wlr_output_schedule_frame(output->wlr());
-        return;
-      }
-      m_visualScroll = targetScroll;
-    } else {
-      if (m_scrollAnim != 0) {
-        m_group->server()->animator().cancel(m_scrollAnim);
-        m_scrollAnim = 0;
-      }
-      m_visualScroll = 0;
-    }
-
+    // One positioning path for both layouts: the layout owns the scroll, the
+    // targets below already include it, and each view animates or snaps itself.
     applyPositions(animate);
   }
 
@@ -337,9 +300,6 @@ namespace umbriel {
     Output* output = m_group->output();
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
-    const int scrollOffset = (m_layoutMode == LayoutMode::Scrolling)
-        ? static_cast<int>(std::lround(m_layout->scroll() - m_visualScroll))
-        : 0;
     const int viewportWidth = std::max(1, output->usableArea().width - 2 * m_layoutConfig.edgePad);
 
     // Position first, then let syncViewPresentation derive enable + clip from
@@ -354,7 +314,7 @@ namespace umbriel {
           wlr_box target = outputBox; // fullscreen fills the whole output, not the dwindle tile box
           if (m_layoutMode == LayoutMode::Scrolling) {
             target.x =
-                outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_visualScroll));
+                outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_layout->scroll()));
           }
           if (animate) {
             view->animateTo(target.x, target.y);
@@ -371,7 +331,6 @@ namespace umbriel {
         continue;
       }
       wlr_box target = m_layout->targetBox(view);
-      target.x += scrollOffset;
       if (animate) {
         view->animateTo(target.x, target.y);
       } else {
@@ -607,7 +566,6 @@ namespace umbriel {
     m_layoutMode = m_layoutConfig.mode;
     m_layout = createLayout(m_layoutMode);
     m_layout->setConfig(&m_layoutConfig);
-    m_visualScroll = 0;
     for (View* view : tiledViews) {
       m_layout->insertView(view, static_cast<int>(m_layout->columns().size()));
     }
@@ -755,10 +713,7 @@ namespace umbriel {
   }
 
   void WorkspaceGroup::slideFinish() {
-    if (m_switchAnim != 0) {
-      m_server->animator().cancel(m_switchAnim);
-      m_switchAnim = 0;
-    }
+    m_slideAnim.snap(0.0);
     if (m_slide.base != nullptr) {
       m_slide.base->endSwitchTransition();
       m_slide.base->setSlideOffset(0);
@@ -847,10 +802,21 @@ namespace umbriel {
       }
     }
     kLog.debug("slide workspace {} → {} on {}", m_slide.base->name(), target->name(), m_output->wlr()->name);
-    m_switchAnim = m_server->animator().animate(
-        m_slide.progress, static_cast<double>(delta), config().appearance.animationMs, Easing::EaseOutCubic,
-        [this](double v) { slideApply(v); }, [this] { slideFinish(); }
-    );
+    m_slideAnim.snap(m_slide.progress);
+    m_slideAnim.retarget(static_cast<double>(delta), config().appearance.animationMs, Easing::EaseOutCubic);
+    wlr_output_schedule_frame(m_output->wlr());
+  }
+
+  bool WorkspaceGroup::tickAnimations(uint64_t nowMsec) {
+    if (!m_slideAnim.tick(nowMsec)) {
+      return false;
+    }
+    slideApply(m_slideAnim.current());
+    if (!m_slideAnim.animating()) {
+      slideFinish();
+      return false;
+    }
+    return true;
   }
 
   void WorkspaceGroup::activate(Workspace* workspace, bool animate) {

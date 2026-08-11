@@ -1,44 +1,39 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
-#include <vector>
 
 namespace umbriel {
 
-  using AnimId = uint64_t;
-
   enum class Easing { Linear, EaseOutCubic, EaseInOutCubic };
 
-  class Animator {
+  // A single animatable scalar owned by the animated object. The owner ticks it
+  // from the central Server tick and reads current() to drive its scene state.
+  // Retargeting mid-flight restarts the curve from the current value, so there
+  // is no cancel bookkeeping and no snapping when a target changes.
+  class AnimatedValue {
   public:
-    AnimId animate(
-        double from, double to, int durationMs, Easing easing, std::function<void(double)> onUpdate,
-        std::function<void()> onDone = {}
-    );
-    void cancel(AnimId id);
-    [[nodiscard]] double currentValue(AnimId id) const;
+    // current = target = value; stops animating.
+    void snap(double value);
+    // Always animates, even when `to` equals current(), so completion is always
+    // observable via a final tick. Restarts from current with the full duration.
+    void retarget(double to, int durationMs, Easing easing = Easing::EaseOutCubic);
+    // Advances the value. Returns true when the value was animating at entry
+    // (i.e. the owner must apply current()). The call that reaches the target
+    // returns true and leaves animating() false, so owners detect completion as
+    // (tick(now) && !animating()).
     bool tick(uint64_t nowMsec);
-    [[nodiscard]] bool active() const { return !m_animations.empty(); }
+    [[nodiscard]] double current() const { return m_current; }
+    [[nodiscard]] double target() const { return m_target; }
+    [[nodiscard]] bool animating() const { return m_animating; }
 
   private:
-    struct Animation {
-      AnimId id = 0;
-      double from = 0;
-      double to = 0;
-      double current = 0;
-      uint64_t startMsec = 0;
-      uint64_t durationMsec = 1;
-      Easing easing = Easing::EaseOutCubic;
-      std::function<void(double)> onUpdate;
-      std::function<void()> onDone;
-    };
-
-    [[nodiscard]] static uint64_t monotonicMsec();
-
-    std::vector<Animation> m_animations;
-    AnimId m_nextId = 1;
-    uint64_t m_lastTickMsec = 0;
+    double m_from = 0;
+    double m_target = 0;
+    double m_current = 0;
+    uint64_t m_startMsec = 0; // 0 = clock starts on the first tick
+    uint64_t m_durationMsec = 1;
+    Easing m_easing = Easing::EaseOutCubic;
+    bool m_animating = false;
   };
 
 } // namespace umbriel

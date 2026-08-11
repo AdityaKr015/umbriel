@@ -58,6 +58,10 @@ namespace umbriel {
     void gestureUpdate(double progress);
     void gestureEnd(bool commitOpen);
 
+    // Advances the zoom animation; returns true while it is still running.
+    bool tickAnimations(uint64_t nowMsec);
+    [[nodiscard]] bool hasActiveAnimations() const { return m_anim.animating(); }
+
     void onViewMapped(View* view);
     void onViewUnmapped(View* view);
     void onWorkspaceActivated(WorkspaceGroup* group);
@@ -176,7 +180,8 @@ namespace umbriel {
     bool m_closing = false;
     double m_progress = 0;
     double m_targetProgress = 0;
-    AnimId m_anim = 0;
+    double m_progressFrom = 0;
+    AnimatedValue m_anim;
     View* m_pendingFocus = nullptr;
     bool m_gestureOpenedHere = false;
 

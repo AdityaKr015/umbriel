@@ -921,7 +921,7 @@ namespace umbriel {
       workspace->arrange(false);
     }
     const ScrollingDropTarget target =
-        computeScrollingDropTarget(*workspace, usable, workspace->visualScroll(), m_cursor->x, m_cursor->y);
+        computeScrollingDropTarget(*workspace, usable, workspace->layout().scroll(), m_cursor->x, m_cursor->y);
     m_dropWorkspace = workspace;
     m_dropColumn = target.column;
     m_dropRow = target.row;

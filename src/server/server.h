@@ -129,8 +129,10 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_output_layout* sceneLayout() const { return m_sceneLayout; }
     [[nodiscard]] Seat* seat() const { return m_seat.get(); }
     [[nodiscard]] Cursor* cursor() const { return m_cursor.get(); }
-    [[nodiscard]] Animator& animator() { return m_animator; }
-    [[nodiscard]] const Animator& animator() const { return m_animator; }
+    // Central animation tick: advances every animated owner once per msec and
+    // reports whether anything is still animating.
+    bool tickAnimations(uint64_t nowMsec);
+    [[nodiscard]] bool animationsActive() const;
     [[nodiscard]] InsertHint& insertHint();
     void hideInsertHint();
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
@@ -318,11 +320,12 @@ namespace umbriel {
     wlr_scene_rect* m_backdrop = nullptr;
     bool m_sessionLocked = false;
     std::vector<std::string> m_activeSubmaps;
-    Animator m_animator;
+    // Same-msec dedupe: several outputs can call tickAnimations per vblank.
+    uint64_t m_lastAnimTickMsec = 0;
 
     struct CloseSnapshot {
       wlr_scene_tree* tree = nullptr;
-      AnimId anim = 0;
+      AnimatedValue alpha;
       std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects;
     };
     std::vector<CloseSnapshot> m_closeSnapshots;

@@ -431,10 +431,15 @@ namespace umbriel {
     case KeybindAction::LayoutScrollLeft:
     case KeybindAction::LayoutScrollRight:
       if (Workspace* workspace = activeWorkspace()) {
-        if (workspace->layoutMode() == LayoutMode::Scrolling) {
+        if (workspace->layoutMode() == LayoutMode::Scrolling && workspace->group()->output() != nullptr) {
           const auto step = static_cast<double>(config().input.mouse.scrollWheelStep);
           const double delta = bind.action == KeybindAction::LayoutScrollLeft ? -step : step;
-          workspace->layout().setScroll(workspace->layout().scroll() + delta);
+          // Clamp to the real scroll range: overscroll here would park the strip
+          // past an edge and seed sub-pixel scroll residue.
+          const int viewportWidth =
+              std::max(1, workspace->group()->output()->usableArea().width - 2 * workspace->layoutConfig().edgePad);
+          const auto maxScroll = static_cast<double>(workspace->layout().maxScroll(viewportWidth));
+          workspace->layout().setScroll(std::clamp(workspace->layout().scroll() + delta, 0.0, maxScroll));
           workspace->arrange();
         }
       }

@@ -73,10 +73,7 @@ namespace umbriel {
   Overview::Overview(Server& server) : m_server(&server) {}
 
   Overview::~Overview() {
-    if (m_anim != 0) {
-      m_server->animator().cancel(m_anim);
-      m_anim = 0;
-    }
+    m_anim.snap(0.0);
     for (const auto& state : m_outputs) {
       for (const auto& card : state->cards) {
         destroyCard(card.get());
@@ -727,10 +724,7 @@ namespace umbriel {
     if (!m_active) {
       return;
     }
-    if (m_anim != 0) {
-      m_server->animator().cancel(m_anim);
-      m_anim = 0;
-    }
+    m_anim.snap(0.0);
     if (m_dragCard != nullptr) {
       endDrag(false);
     }
@@ -740,32 +734,32 @@ namespace umbriel {
   }
 
   void Overview::startAnimation(double target, bool closing) {
-    if (m_anim != 0) {
-      m_server->animator().cancel(m_anim);
-      m_anim = 0;
-    }
     m_closing = closing;
     m_targetProgress = target;
-    const double start = m_progress;
-    m_anim = m_server->animator().animate(
-        0.0, 1.0, std::max(1, config().appearance.animationMs), Easing::EaseOutCubic,
-        [this, start, target](double value) {
-          m_progress = start + (target - start) * value;
-          for (const auto& state : m_outputs) {
-            state->rowScroll = state->rowFrom + (state->rowTo - state->rowFrom) * value;
-          }
-          applyProgress();
-        },
-        [this] {
-          m_anim = 0;
-          finishAnimation();
-        }
-    );
-    // The animator only ticks from an output frame, and it clocks from
-    // animate(). Without a frame pending (idle desktop, e.g. closing after the
-    // open animation settled) the first tick would arrive past the duration and
-    // snap straight to the target; kick one frame so it self-sustains.
+    m_progressFrom = m_progress;
+    m_anim.snap(0.0);
+    m_anim.retarget(1.0, std::max(1, config().appearance.animationMs), Easing::EaseOutCubic);
+    // Animations only tick from an output frame; kick one so the zoom starts on
+    // an idle desktop (the value itself clocks from its first tick).
     scheduleFrames();
+  }
+
+  bool Overview::tickAnimations(uint64_t nowMsec) {
+    if (!m_anim.tick(nowMsec)) {
+      return false;
+    }
+    const double value = m_anim.current();
+    m_progress = m_progressFrom + (m_targetProgress - m_progressFrom) * value;
+    for (const auto& state : m_outputs) {
+      state->rowScroll = state->rowFrom + (state->rowTo - state->rowFrom) * value;
+    }
+    applyProgress();
+    if (!m_anim.animating()) {
+      // May tear down m_outputs; safe now that the loop above is done.
+      finishAnimation();
+      return false;
+    }
+    return true;
   }
 
   void Overview::finishAnimation() {
@@ -839,10 +833,7 @@ namespace umbriel {
       }
       m_gestureOpenedHere = true;
     }
-    if (m_anim != 0) {
-      m_server->animator().cancel(m_anim);
-      m_anim = 0;
-    }
+    m_anim.snap(0.0);
     m_closing = false;
     m_progress = progress;
     m_targetProgress = progress;
@@ -918,7 +909,7 @@ namespace umbriel {
       return;
     }
     const auto row = static_cast<double>(group->active()->index());
-    if (std::abs(target->rowTo - row) < 0.001 && m_anim != 0) {
+    if (std::abs(target->rowTo - row) < 0.001 && m_anim.animating()) {
       return;
     }
     for (const auto& state : m_outputs) {

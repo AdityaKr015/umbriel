@@ -181,15 +181,6 @@ namespace umbriel {
   }
 
   View::~View() {
-    if (m_fadeAnim != 0) {
-      m_server->animator().cancel(m_fadeAnim);
-      m_fadeAnim = 0;
-    }
-    if (m_sizeAnim != 0) {
-      m_server->animator().cancel(m_sizeAnim);
-      m_sizeAnim = 0;
-    }
-    cancelPositionAnimation();
     setWorkspace(nullptr);
     if (m_map.link.next != nullptr) {
       wl_list_remove(&m_map.link);
@@ -319,9 +310,15 @@ namespace umbriel {
   }
 
   void View::cancelPositionAnimation() {
-    if (m_posAnim != 0) {
-      m_server->animator().cancel(m_posAnim);
-      m_posAnim = 0;
+    // Freeze wherever the node currently sits; callers use this to take over
+    // positioning (drags, layout snaps) without a jump.
+    m_posX.snap(m_sceneTree->node.x);
+    m_posY.snap(m_sceneTree->node.y);
+  }
+
+  void View::scheduleFrame() {
+    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+      wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
     }
   }
 
@@ -358,10 +355,7 @@ namespace umbriel {
   }
 
   void View::cancelFadeAnimation() {
-    if (m_fadeAnim != 0) {
-      m_server->animator().cancel(m_fadeAnim);
-      m_fadeAnim = 0;
-    }
+    m_fade.snap(1.0);
     setFadeAlpha(1.0F);
   }
 
@@ -369,7 +363,7 @@ namespace umbriel {
     if (m_toplevel->current.fullscreen) {
       return target.width;
     }
-    if (m_sizeAnim != 0) {
+    if (sizeAnimating()) {
       return m_presentedW;
     }
     return std::min(m_toplevel->base->geometry.width, target.width);
@@ -379,13 +373,13 @@ namespace umbriel {
     if (m_toplevel->current.fullscreen) {
       return target.height;
     }
-    if (m_sizeAnim != 0) {
+    if (sizeAnimating()) {
       return m_presentedH;
     }
     return std::min(m_toplevel->base->geometry.height, target.height);
   }
   void View::trackPresentedSize(int width, int height) {
-    if (m_sizeAnim != 0 || width <= 0 || height <= 0) {
+    if (sizeAnimating() || width <= 0 || height <= 0) {
       return;
     }
     m_presentedW = width;
@@ -540,25 +534,32 @@ namespace umbriel {
     setSurfaceTreeClip(nullptr);
   }
 
-  void View::cancelSizeAnimation() {
-    if (m_sizeAnim != 0) {
-      m_server->animator().cancel(m_sizeAnim);
-      m_sizeAnim = 0;
-      const wlr_box& geo = m_toplevel->base->geometry;
-      m_presentedW = geo.width;
-      m_presentedH = geo.height;
-      resetPresentedSurface();
-      updateBorderGeometry();
-      updateBlur();
-      updateShadow();
-      if (m_workspace != nullptr) {
-        m_workspace->syncViewPresentation(this);
-      }
+  void View::finishSizeAnimation() {
+    const wlr_box& geo = m_toplevel->base->geometry;
+    m_presentedW = geo.width;
+    m_presentedH = geo.height;
+    resetPresentedSurface();
+    updateBorderGeometry();
+    updateBlur();
+    updateShadow();
+    if (m_workspace != nullptr) {
+      m_workspace->syncViewPresentation(this);
     }
   }
 
+  void View::cancelSizeAnimation() {
+    if (!sizeAnimating()) {
+      return;
+    }
+    const wlr_box& geo = m_toplevel->base->geometry;
+    m_animW.snap(geo.width);
+    m_animH.snap(geo.height);
+    finishSizeAnimation();
+  }
+
   void View::setPosition(int x, int y) {
-    cancelPositionAnimation();
+    m_posX.snap(x);
+    m_posY.snap(y);
     m_positioned = true;
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
     if (m_shadowContainer != nullptr) {
@@ -577,30 +578,60 @@ namespace umbriel {
     const int fromX = m_sceneTree->node.x;
     const int fromY = m_sceneTree->node.y;
     if (fromX == x && fromY == y) {
-      cancelPositionAnimation();
+      m_posX.snap(x);
+      m_posY.snap(y);
       return;
     }
-    cancelPositionAnimation();
-    m_posAnim = m_server->animator().animate(
-        0.0, 1.0, config().appearance.animationMs, Easing::EaseOutCubic,
-        [this, fromX, fromY, x, y](double progress) {
-          const int cx = static_cast<int>(std::lround(fromX + (x - fromX) * progress));
-          const int cy = static_cast<int>(std::lround(fromY + (y - fromY) * progress));
-          wlr_scene_node_set_position(&m_sceneTree->node, cx, cy);
-          if (m_shadowContainer != nullptr) {
-            wlr_scene_node_set_position(&m_shadowContainer->node, cx, cy);
-          }
-          // Clips are derived from the node's current position; refresh them as
-          // the node moves or partial-visibility trims land displaced.
-          if (m_workspace != nullptr) {
-            m_workspace->syncViewPresentation(this);
-          }
-        },
-        [this] { m_posAnim = 0; }
-    );
-    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-      wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
+    // Animate from wherever the node visually is, not from the last target.
+    m_posX.snap(fromX);
+    m_posX.retarget(x, config().appearance.animationMs);
+    m_posY.snap(fromY);
+    m_posY.retarget(y, config().appearance.animationMs);
+    scheduleFrame();
+  }
+
+  bool View::tickAnimations(uint64_t nowMsec) {
+    bool active = false;
+
+    const bool movedX = m_posX.tick(nowMsec);
+    const bool movedY = m_posY.tick(nowMsec);
+    if (movedX || movedY) {
+      const int cx = static_cast<int>(std::lround(m_posX.current()));
+      const int cy = static_cast<int>(std::lround(m_posY.current()));
+      wlr_scene_node_set_position(&m_sceneTree->node, cx, cy);
+      if (m_shadowContainer != nullptr) {
+        wlr_scene_node_set_position(&m_shadowContainer->node, cx, cy);
+      }
+      // Clips are derived from the node's current position; refresh them as the
+      // node moves or partial-visibility trims land displaced.
+      if (m_workspace != nullptr) {
+        m_workspace->syncViewPresentation(this);
+      }
+      active = m_posX.animating() || m_posY.animating();
     }
+
+    const bool resizedW = m_animW.tick(nowMsec);
+    const bool resizedH = m_animH.tick(nowMsec);
+    if (resizedW || resizedH) {
+      m_presentedW = static_cast<int>(std::lround(m_animW.current()));
+      m_presentedH = static_cast<int>(std::lround(m_animH.current()));
+      applyPresentedSize();
+      if (sizeAnimating()) {
+        active = true;
+      } else {
+        finishSizeAnimation();
+      }
+    }
+
+    if (m_fade.tick(nowMsec)) {
+      setFadeAlpha(static_cast<float>(m_fade.current()));
+      active = active || m_fade.animating();
+    }
+    return active;
+  }
+
+  bool View::hasActiveAnimations() const {
+    return m_posX.animating() || m_posY.animating() || sizeAnimating() || m_fade.animating();
   }
 
   void View::onMap(wl_listener* listener, void* /*data*/) {
@@ -1030,7 +1061,7 @@ namespace umbriel {
     }
     // A clip change runs wlroots' scene surface reconfigure, which resets the
     // scene-buffer opacity (to the client alpha, 1.0 without wp_alpha_modifier).
-    // This runs in the render path after the animator tick, so re-apply our
+    // This runs in the render path after the animation tick, so re-apply our
     // fade/rule opacity or the frame renders fully opaque (the fade then only
     // survives on frames whose clip is unchanged, seen as transparent flashes).
     applyEffectiveOpacity();
@@ -1229,7 +1260,7 @@ namespace umbriel {
       // Crop the toplevel surface to the visible tile; popup children are unclipped in
       // setSurfaceTreeClip so context menus can extend past the window edge.
       setSurfaceTreeClip(&surfaceClip);
-      if (m_sizeAnim != 0) {
+      if (sizeAnimating()) {
         // The clip crops 1:1 in surface coordinates and caps the destination at
         // the committed surface size, so it cannot express the size animation's
         // "scale to presented, then crop". Program the buffer directly; the clip
@@ -1414,13 +1445,9 @@ namespace umbriel {
     }
     if (m_onActiveWorkspace) {
       setFadeAlpha(0.0F);
-      m_fadeAnim = m_server->animator().animate(
-          0.0, 1.0, std::max(1, config().appearance.animationMs / 2), Easing::EaseOutCubic,
-          [this](double v) { setFadeAlpha(static_cast<float>(v)); }, [this] { m_fadeAnim = 0; }
-      );
-      if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-        wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
-      }
+      m_fade.snap(0.0);
+      m_fade.retarget(1.0, std::max(1, config().appearance.animationMs / 2));
+      scheduleFrame();
     }
 
     // Honor the client's pre-map request as well as the compositor default.
@@ -1545,7 +1572,7 @@ namespace umbriel {
         }
       }
     }
-    if (m_borderTree != nullptr && m_sizeAnim == 0) {
+    if (m_borderTree != nullptr && !sizeAnimating()) {
       const wlr_box& geometry = m_toplevel->base->geometry;
       if (m_borderRects[0]->width != geometry.width + 2 * config().appearance.borderWidth
           || m_borderRects[2]->height != std::max(0, geometry.height - 2 * config().appearance.cornerRadius)
@@ -1580,42 +1607,17 @@ namespace umbriel {
           geometry.width > 0
           && geometry.height > 0
           && (geometry.width != m_presentedW || geometry.height != m_presentedH)
-          && !(m_sizeAnim != 0 && geometry.width == m_sizeTargetW && geometry.height == m_sizeTargetH)
+          && !(
+              sizeAnimating()
+              && geometry.width == static_cast<int>(m_animW.target())
+              && geometry.height == static_cast<int>(m_animH.target())
+          )
       ) {
-        if (m_sizeAnim != 0) {
-          m_server->animator().cancel(m_sizeAnim);
-          m_sizeAnim = 0;
-        }
-        const int fromW = m_presentedW;
-        const int fromH = m_presentedH;
-        const int toW = geometry.width;
-        const int toH = geometry.height;
-        m_sizeTargetW = toW;
-        m_sizeTargetH = toH;
-        m_sizeAnim = m_server->animator().animate(
-            0.0, 1.0, config().appearance.animationMs, Easing::EaseOutCubic,
-            [this, fromW, fromH, toW, toH](double t) {
-              m_presentedW = static_cast<int>(std::lround(fromW + (toW - fromW) * t));
-              m_presentedH = static_cast<int>(std::lround(fromH + (toH - fromH) * t));
-              applyPresentedSize();
-            },
-            [this] {
-              m_sizeAnim = 0;
-              const wlr_box& geo = m_toplevel->base->geometry;
-              m_presentedW = geo.width;
-              m_presentedH = geo.height;
-              resetPresentedSurface();
-              updateBorderGeometry();
-              updateBlur();
-              updateShadow();
-              if (m_workspace != nullptr) {
-                m_workspace->syncViewPresentation(this);
-              }
-            }
-        );
-        if (m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-          wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
-        }
+        m_animW.snap(m_presentedW);
+        m_animW.retarget(geometry.width, config().appearance.animationMs);
+        m_animH.snap(m_presentedH);
+        m_animH.retarget(geometry.height, config().appearance.animationMs);
+        scheduleFrame();
       }
     }
     // Re-apply output clip after configure ack so Super+F / resize sizes show

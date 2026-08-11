@@ -322,7 +322,7 @@ namespace umbriel {
     timespec now{};
     clock_gettime(CLOCK_MONOTONIC, &now);
     const uint64_t nowMsec = static_cast<uint64_t>(now.tv_sec) * 1000 + static_cast<uint64_t>(now.tv_nsec) / 1'000'000;
-    m_server->animator().tick(nowMsec);
+    m_server->tickAnimations(nowMsec);
 
     if (m_output->width <= 0 || m_output->height <= 0) {
       // Output not configured yet; no clients can be presenting on it either.
@@ -386,7 +386,7 @@ namespace umbriel {
     }
 
     // Keep animations ticking on the next vblank even when nothing was damaged.
-    if (m_server->animator().active()) {
+    if (m_server->animationsActive()) {
       wlr_output_schedule_frame(m_output);
     }
 

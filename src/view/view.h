@@ -39,7 +39,7 @@ namespace umbriel {
     [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
-    [[nodiscard]] bool sizeAnimActive() const { return m_sizeAnim != 0; }
+    [[nodiscard]] bool sizeAnimActive() const { return sizeAnimating(); }
     [[nodiscard]] int presentedWidth(const wlr_box& target) const;
     [[nodiscard]] int presentedHeight(const wlr_box& target) const;
     [[nodiscard]] wlr_scene_tree* homeTree() const;
@@ -73,6 +73,9 @@ namespace umbriel {
     void setNodeEnabled(bool enabled);
     // Create or destroy the shadow container in the given workspace shadow layer.
     void reparentShadow(wlr_scene_tree* shadowLayer);
+    // Advances this view's animations; returns true while any is still running.
+    bool tickAnimations(uint64_t nowMsec);
+    [[nodiscard]] bool hasActiveAnimations() const;
 
   private:
     friend class Cursor;
@@ -144,6 +147,12 @@ namespace umbriel {
     void applyPresentedCrop(const wlr_box& content, const wlr_box& surfaceClip);
     // Undo applyPresentedCrop/size-anim buffer state when the animation ends.
     void resetPresentedSurface();
+    // Shared tail of a finished/cancelled size animation: settle the presented
+    // size on the committed geometry and refresh the derived chrome.
+    void finishSizeAnimation();
+    [[nodiscard]] bool sizeAnimating() const { return m_animW.animating() || m_animH.animating(); }
+    // Kick the owning output so an animation started outside a frame gets ticked.
+    void scheduleFrame();
     void cancelSizeAnimation();
     void updateFullscreenPresentation(int width, int height);
     // Apply subsurface clip to the toplevel surface only, not xdg popup children.
@@ -185,17 +194,17 @@ namespace umbriel {
     bool m_positioned = false;
     bool m_tiled = false;
     bool m_onActiveWorkspace = false;
-    AnimId m_posAnim = 0;
-    AnimId m_fadeAnim = 0;
+    AnimatedValue m_posX;
+    AnimatedValue m_posY;
+    AnimatedValue m_fade;
     float m_fadeAlpha = 1.0F;
     bool m_borderFocusedState = false;
-    AnimId m_sizeAnim = 0;
+    AnimatedValue m_animW;
+    AnimatedValue m_animH;
     // Dimensions currently rendered by the scene. These follow the layout clip
     // while client geometry lags, and the interpolated size during animation.
     int m_presentedW = 0;
     int m_presentedH = 0;
-    int m_sizeTargetW = 0;
-    int m_sizeTargetH = 0;
     // Fullscreen: content offset centering a stale (smaller) buffer in the tile.
     int m_fullscreenOffsetX = 0;
     int m_fullscreenOffsetY = 0;

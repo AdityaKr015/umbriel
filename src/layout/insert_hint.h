@@ -33,6 +33,9 @@ namespace umbriel {
 
     void hide();
     [[nodiscard]] bool visible() const { return m_visible; }
+    // Advances the fade; returns true while it is still running.
+    bool tickAnimations(uint64_t nowMsec);
+    [[nodiscard]] bool hasActiveAnimations() const { return m_fade.animating(); }
 
   private:
     void ensureScene();
@@ -43,7 +46,7 @@ namespace umbriel {
     Server* m_server = nullptr;
     wlr_scene_tree* m_tree = nullptr;
     wlr_scene_rect* m_rect = nullptr;
-    AnimId m_fadeAnim = 0;
+    AnimatedValue m_fade;
     bool m_visible = false;
   };
 

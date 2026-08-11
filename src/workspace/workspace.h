@@ -42,7 +42,6 @@ namespace umbriel {
     [[nodiscard]] const ResolvedLayoutConfig& layoutConfig() const { return m_layoutConfig; }
     [[nodiscard]] LayoutMode layoutMode() const { return m_layoutMode; }
     [[nodiscard]] View* focusedView() const { return m_focusedView; }
-    [[nodiscard]] double visualScroll() const { return m_visualScroll; }
     [[nodiscard]] int slideOffsetY() const { return m_slideOffsetY; }
     [[nodiscard]] wlr_scene_tree* viewLayer(bool tiled) const { return tiled ? m_tiledLayer : m_floatingLayer; }
     [[nodiscard]] wlr_scene_tree* shadowLayer() const { return m_shadowLayer; }
@@ -92,8 +91,6 @@ namespace umbriel {
     ResolvedLayoutConfig m_layoutConfig;
     LayoutMode m_layoutMode = LayoutMode::Scrolling;
     View* m_focusedView = nullptr;
-    double m_visualScroll = 0;
-    AnimId m_scrollAnim = 0;
     bool m_inSwitchTransition = false;
     int m_slideOffsetY = 0;
     std::vector<View*> m_switchViews;
@@ -133,6 +130,9 @@ namespace umbriel {
     void slideApply(double progress);
     void slideSettle(int delta);
     void slideFinish();
+    // Advances the workspace slide; returns true while it is still running.
+    bool tickAnimations(uint64_t nowMsec);
+    [[nodiscard]] bool hasActiveAnimations() const { return m_slideAnim.animating(); }
 
   private:
     std::unique_ptr<Workspace> createConfiguredWorkspace(ResolvedWorkspace workspace, size_t index);
@@ -151,7 +151,7 @@ namespace umbriel {
     Workspace* m_active = nullptr;
     Workspace* m_previous = nullptr;
     std::vector<std::unique_ptr<Workspace>> m_workspaces;
-    AnimId m_switchAnim = 0;
+    AnimatedValue m_slideAnim;
     Slide m_slide;
   };
 

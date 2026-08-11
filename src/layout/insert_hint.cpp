@@ -15,8 +15,6 @@
 namespace umbriel {
 
   namespace {
-    constexpr int kHintFadeMs = 80;
-
     // Width of the column-insert preview rectangle (logical pixels).
     // Matches the layout-gap reservation in ScrollingLayout::columnX.
     constexpr int kColumnHintWidth = 300;
@@ -158,7 +156,7 @@ namespace umbriel {
     if (workspace == nullptr) {
       return;
     }
-    const wlr_box box = gapHintBox(*workspace, gapIndex, workspace->visualScroll());
+    const wlr_box box = gapHintBox(*workspace, gapIndex, workspace->layout().scroll());
     if (box.width <= 0 || box.height <= 0) {
       return;
     }
@@ -169,7 +167,7 @@ namespace umbriel {
     if (workspace == nullptr) {
       return;
     }
-    const wlr_box box = rowHintBox(*workspace, columnIndex, rowIndex, workspace->visualScroll());
+    const wlr_box box = rowHintBox(*workspace, columnIndex, rowIndex, workspace->layout().scroll());
     if (box.width <= 0 || box.height <= 0) {
       return;
     }
@@ -216,29 +214,32 @@ namespace umbriel {
     if (!m_visible) {
       wlr_scene_node_set_enabled(&m_tree->node, true);
       setAlpha(0.0F);
-      if (m_fadeAnim != 0) {
-        m_server->animator().cancel(m_fadeAnim);
-      }
-      m_fadeAnim = m_server->animator().animate(
-          0.0, 1.0, kHintFadeMs, Easing::EaseOutCubic, [this](double alpha) { setAlpha(static_cast<float>(alpha)); },
-          [this] { m_fadeAnim = 0; }
-      );
+      m_fade.snap(0.0);
+      // Same duration as the other appear-fades (map fade-in, close snapshot).
+      m_fade.retarget(1.0, std::max(1, config().appearance.animationMs / 2), Easing::EaseOutCubic);
       m_visible = true;
-    } else {
+    } else if (!m_fade.animating()) {
+      // Only force full alpha once the fade is done: drag motion re-enters here
+      // every event, and overriding a running fade flickers the hint.
       setAlpha(1.0F);
     }
     scheduleFrame(workspace);
   }
 
   void InsertHint::hide() {
-    if (m_fadeAnim != 0) {
-      m_server->animator().cancel(m_fadeAnim);
-      m_fadeAnim = 0;
-    }
+    m_fade.snap(1.0);
     if (m_tree != nullptr) {
       wlr_scene_node_set_enabled(&m_tree->node, false);
     }
     m_visible = false;
+  }
+
+  bool InsertHint::tickAnimations(uint64_t nowMsec) {
+    if (!m_fade.tick(nowMsec)) {
+      return false;
+    }
+    setAlpha(static_cast<float>(m_fade.current()));
+    return m_fade.animating();
   }
 
 } // namespace umbriel

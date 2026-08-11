@@ -22,6 +22,7 @@
 #include "wlr.h"
 #include "workspace/workspace.h"
 
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
@@ -290,7 +291,6 @@ namespace umbriel {
 
     m_insertHint.reset();
     for (auto& snap : m_closeSnapshots) {
-      m_animator.cancel(snap.anim);
       wlr_scene_node_destroy(&snap.tree->node);
     }
     m_closeSnapshots.clear();
@@ -593,39 +593,86 @@ namespace umbriel {
     return 0;
   }
 
+  bool Server::tickAnimations(uint64_t nowMsec) {
+    if (nowMsec == m_lastAnimTickMsec) {
+      return animationsActive();
+    }
+    m_lastAnimTickMsec = nowMsec;
+
+    bool active = false;
+    // Views first: the overview's finish path calls focusView, which reorders
+    // m_views, and it may tear down workspaces the earlier owners just touched.
+    for (const auto& view : m_views) {
+      active = view->tickAnimations(nowMsec) || active;
+    }
+    for (const auto& output : m_outputs) {
+      if (WorkspaceGroup* group = output->workspaceGroup()) {
+        active = group->tickAnimations(nowMsec) || active;
+      }
+    }
+    if (m_overview != nullptr) {
+      active = m_overview->tickAnimations(nowMsec) || active;
+    }
+    if (m_insertHint != nullptr) {
+      active = m_insertHint->tickAnimations(nowMsec) || active;
+    }
+    for (CloseSnapshot& snap : m_closeSnapshots) {
+      if (!snap.alpha.tick(nowMsec)) {
+        continue;
+      }
+      const auto alpha = static_cast<float>(snap.alpha.current());
+      wlr_scene_node_for_each_buffer(
+          &snap.tree->node,
+          [](wlr_scene_buffer* buf, int /*sx*/, int /*sy*/, void* data) {
+            wlr_scene_buffer_set_opacity(buf, *static_cast<float*>(data));
+          },
+          const_cast<float*>(&alpha)
+      );
+      for (auto& [rect, base] : snap.rects) {
+        float color[4];
+        premultiplied(color, base, alpha);
+        wlr_scene_rect_set_color(rect, color);
+      }
+      active = snap.alpha.animating() || active;
+    }
+    // A snapshot only exists while fading out, so a settled one is finished.
+    std::erase_if(m_closeSnapshots, [](const CloseSnapshot& snap) {
+      if (snap.alpha.animating()) {
+        return false;
+      }
+      wlr_scene_node_destroy(&snap.tree->node);
+      return true;
+    });
+    return active;
+  }
+
+  bool Server::animationsActive() const {
+    if (std::ranges::any_of(m_views, [](const auto& view) { return view->hasActiveAnimations(); })) {
+      return true;
+    }
+    if (std::ranges::any_of(m_outputs, [](const auto& output) {
+          const WorkspaceGroup* group = output->workspaceGroup();
+          return group != nullptr && group->hasActiveAnimations();
+        })) {
+      return true;
+    }
+    if (m_overview != nullptr && m_overview->hasActiveAnimations()) {
+      return true;
+    }
+    if (m_insertHint != nullptr && m_insertHint->hasActiveAnimations()) {
+      return true;
+    }
+    return std::ranges::any_of(m_closeSnapshots, [](const CloseSnapshot& snap) { return snap.alpha.animating(); });
+  }
+
   void Server::animateCloseSnapshot(
       wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
   ) {
     CloseSnapshot& snap = m_closeSnapshots.emplace_back();
     snap.tree = tree;
     snap.rects = std::move(rects);
-    wlr_scene_tree* snapTree = snap.tree;
-    snap.anim = m_animator.animate(
-        1.0, 0.0, std::max(1, config().appearance.animationMs / 2), Easing::EaseOutCubic,
-        [this, snapTree](double v) {
-          const auto alpha = static_cast<float>(v);
-          wlr_scene_node_for_each_buffer(
-              &snapTree->node,
-              [](wlr_scene_buffer* buf, int /*sx*/, int /*sy*/, void* data) {
-                wlr_scene_buffer_set_opacity(buf, *static_cast<float*>(data));
-              },
-              const_cast<float*>(&alpha)
-          );
-          auto it =
-              std::ranges::find_if(m_closeSnapshots, [snapTree](const CloseSnapshot& s) { return s.tree == snapTree; });
-          if (it != m_closeSnapshots.end()) {
-            for (auto& [rect, base] : it->rects) {
-              float color[4];
-              premultiplied(color, base, alpha);
-              wlr_scene_rect_set_color(rect, color);
-            }
-          }
-        },
-        [this, snapTree] {
-          wlr_scene_node_destroy(&snapTree->node);
-          std::erase_if(m_closeSnapshots, [snapTree](const CloseSnapshot& s) { return s.tree == snapTree; });
-        }
-    );
+    snap.alpha.snap(1.0);
+    snap.alpha.retarget(0.0, std::max(1, config().appearance.animationMs / 2), Easing::EaseOutCubic);
   }
 
 } // namespace umbriel

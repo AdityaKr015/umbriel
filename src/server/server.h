@@ -77,7 +77,7 @@ namespace umbriel {
   class Cursor;
   class ConfigWatcher;
   class Gestures;
-  class InsertHint;
+  class HintRect;
   class Keyboard;
   class LayerSurface;
   class Output;
@@ -134,7 +134,7 @@ namespace umbriel {
     bool tickAnimations(uint64_t nowMsec);
     [[nodiscard]] bool animationsActive() const;
     [[nodiscard]] bool animationsActiveFor(const Output* output) const;
-    [[nodiscard]] InsertHint& insertHint();
+    [[nodiscard]] HintRect& insertHint();
     void hideInsertHint();
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
     [[nodiscard]] bool sessionLocked() const { return m_sessionLocked; }
@@ -338,7 +338,7 @@ namespace umbriel {
     std::unique_ptr<Gestures> m_gestures;
     std::unique_ptr<SessionLock> m_sessionLock;
     std::unique_ptr<Overview> m_overview;
-    std::unique_ptr<InsertHint> m_insertHint;
+    std::unique_ptr<HintRect> m_insertHint;
     std::unique_ptr<ConfigWatcher> m_configWatcher;
     std::unique_ptr<Ipc> m_ipc;
     wlr_scene_tree* m_bannerTree = nullptr;

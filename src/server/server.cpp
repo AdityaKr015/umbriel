@@ -10,13 +10,13 @@
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/surface.h"
-#include "layout/insert_hint.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
 #include "scene/color.h"
 #include "scene/config_banner.h"
+#include "scene/hint_rect.h"
 #include "server/ipc.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -430,9 +430,9 @@ namespace umbriel {
 
   uint32_t Server::modKey() const { return m_nested ? WLR_MODIFIER_ALT : WLR_MODIFIER_LOGO; }
 
-  InsertHint& Server::insertHint() {
+  HintRect& Server::insertHint() {
     if (m_insertHint == nullptr) {
-      m_insertHint = std::make_unique<InsertHint>(*this);
+      m_insertHint = std::make_unique<HintRect>(*this, dragTree());
     }
     return *m_insertHint;
   }

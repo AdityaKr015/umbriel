@@ -106,9 +106,6 @@ namespace umbriel {
     [[nodiscard]] virtual bool isFullWidth(int) const { return false; }
     [[nodiscard]] virtual int columnX(int, int) const { return 0; }
     [[nodiscard]] virtual int columnWidth(int, int) const { return 0; }
-    [[nodiscard]] virtual int insertGap() const { return -1; }
-    virtual void setInsertGap(int) {}
-    virtual void clearInsertGap() {}
 
     virtual bool setRowBoundary(int, int, double, double) { return false; }
     virtual bool setHeightWeight(int, int, double) { return false; }

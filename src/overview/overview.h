@@ -1,6 +1,8 @@
 #pragma once
 
 #include "core/animation.h"
+#include "layout/drop_target.h"
+#include "scene/hint_rect.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -60,7 +62,9 @@ namespace umbriel {
 
     // Advances the zoom animation; returns true while it is still running.
     bool tickAnimations(uint64_t nowMsec);
-    [[nodiscard]] bool hasActiveAnimations() const { return m_anim.animating(); }
+    [[nodiscard]] bool hasActiveAnimations() const {
+      return m_anim.animating() || (m_dropHint != nullptr && m_dropHint->hasActiveAnimations());
+    }
 
     void onViewMapped(View* view);
     void onViewUnmapped(View* view);
@@ -168,12 +172,12 @@ namespace umbriel {
     void beginDrag();
     void updateDrag(double lx, double ly);
     void endDrag(bool drop);
-    void showDropHint(const wlr_box& worldBox, const RowMetrics& metrics, double rowScroll, size_t row);
+    void showDropHint(const wlr_box& worldBox, const RowMetrics& metrics, double rowScroll, size_t row, Output* output);
     void hideDropHint();
 
     Server* m_server = nullptr;
-    wlr_scene_tree* m_tree = nullptr;     // Server::overviewTree()
-    wlr_scene_rect* m_dropHint = nullptr; // child of m_tree, created on demand
+    wlr_scene_tree* m_tree = nullptr; // Server::overviewTree()
+    std::unique_ptr<HintRect> m_dropHint;
     std::vector<std::unique_ptr<OutputState>> m_outputs;
 
     bool m_active = false;
@@ -196,11 +200,7 @@ namespace umbriel {
     Workspace* m_dragSourceWorkspace = nullptr;
     int m_dragSourceColumn = -1;
     int m_dragSourceRow = -1;
-    Workspace* m_dropWorkspace = nullptr;
-    int m_dropColumn = -1;
-    int m_dropRow = -1;
-    View* m_dropTargetView = nullptr;
-    uint32_t m_dropEdge = 0;
+    DropTarget m_drop{};
   };
 
 } // namespace umbriel

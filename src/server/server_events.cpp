@@ -6,11 +6,11 @@
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/surface.h"
-#include "layout/insert_hint.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
+#include "scene/hint_rect.h"
 #include "server/server.h"
 #include "view/popup.h"
 #include "view/view.h"
@@ -728,7 +728,7 @@ namespace umbriel {
     m_overview->onOutputRemoved(output);
     m_gestures->cancelForOutput(output);
     if (m_insertHint != nullptr && m_insertHint->output() == output) {
-      m_insertHint->hide();
+      m_insertHint->hideImmediate();
     }
     std::erase_if(m_closeSnapshots, [output](CloseSnapshot& snap) {
       if (snap.output != output) {

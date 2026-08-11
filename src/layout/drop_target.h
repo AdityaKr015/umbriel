@@ -8,35 +8,33 @@ extern "C" {
 
 namespace umbriel {
 
-  class Workspace;
-  class DwindleLayout;
+  class Server;
   class View;
+  class Workspace;
 
-  // Where a dropped window lands in a scrolling workspace.
-  // `row >= 0` inserts into the existing column `column` at that row;
-  // `row < 0` opens a new column at gap index `column`.
-  struct ScrollingDropTarget {
-    int column = 0;
+  // Where a dragged tile would land, plus the world-space hint rectangle.
+  // Scrolling: row >= 0 inserts into column `column` at that row; row < 0 opens
+  // a new column at gap index `column`. Dwindle: `view`/`edge` name a
+  // directional split; when there is no splittable leaf they are null/0 and
+  // `column` falls back to the append index. hintBox is clamped to the target
+  // output's usable area; zero-sized means "draw nothing".
+  struct DropTarget {
+    Workspace* workspace = nullptr;
+    int column = -1;
     int row = -1;
-  };
-  // Directional split under a pointer in a dwindle layout. A null `view` and
-  // zero `edge` mean there is no splittable leaf at that point.
-  struct DwindleDropTarget {
     View* view = nullptr;
     uint32_t edge = 0;
-    int leaf = -1;
-    wlr_box hint{};
+    wlr_box hintBox{};
   };
 
-  [[nodiscard]] DwindleDropTarget
-  computeDwindleDropTarget(const DwindleLayout& layout, double worldX, double worldY, const View* excludedView);
+  // `scroll` is the horizontal offset the caller renders the workspace at.
+  // `worldX`/`worldY` are layout coordinates in that same frame. Derives the
+  // usable area from workspace.group()->output() internally.
+  [[nodiscard]] DropTarget
+  computeDropTarget(Workspace& workspace, double scroll, double worldX, double worldY, const View* excludedView);
 
-  // `usable` is the target output's usable area and `scroll` the horizontal
-  // offset the caller renders the workspace at (visual scroll for a live drag,
-  // the layout's authoritative scroll for overview cards). `worldX`/`worldY`
-  // are layout coordinates already mapped into that same frame.
-  [[nodiscard]] ScrollingDropTarget computeScrollingDropTarget(
-      const Workspace& workspace, const wlr_box& usable, double scroll, double worldX, double worldY
-  );
+  // Inserts `view` at `drop` in `target` and focuses it.
+  // The caller has already detached `view` from its source layout.
+  void applyDrop(Server& server, View& view, Workspace& target, const DropTarget& drop, bool animate);
 
 } // namespace umbriel

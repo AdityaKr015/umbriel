@@ -10,8 +10,6 @@ namespace umbriel {
 
   class View;
 
-  inline constexpr int kHintWidth = 300;
-
   class ScrollingLayout : public Layout {
   public:
     [[nodiscard]] LayoutMode mode() const override { return LayoutMode::Scrolling; }
@@ -20,7 +18,6 @@ namespace umbriel {
     [[nodiscard]] int columnOf(const View* view) const override;
     [[nodiscard]] int rowOf(const View* view) const override;
     [[nodiscard]] double scroll() const override { return m_scroll; }
-    [[nodiscard]] int insertGap() const override { return m_insertGap; }
     [[nodiscard]] int columnX(int columnIndex, int viewportWidth) const override;
     [[nodiscard]] int columnWidth(int columnIndex, int viewportWidth) const override;
     [[nodiscard]] bool isFullWidth(int columnIndex) const override;
@@ -36,8 +33,6 @@ namespace umbriel {
     void removeView(View* view) override;
     void moveColumn(int from, int to) override;
     void setScroll(double scroll) override;
-    void setInsertGap(int gapIndex) override;
-    void clearInsertGap() override;
     void ensureVisible(int columnIndex, int viewportWidth) override;
     [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportWidth) const override;
     void arrange(const wlr_box& usable) override;
@@ -79,7 +74,6 @@ namespace umbriel {
     std::vector<Column> m_columns;
     std::vector<Target> m_targets;
     double m_scroll = 0;
-    int m_insertGap = -1;
   };
 
 } // namespace umbriel

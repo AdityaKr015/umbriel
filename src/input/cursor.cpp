@@ -4,12 +4,10 @@
 #include "input/seat.h"
 #include "layer/surface.h"
 #include "layout/drop_target.h"
-#include "layout/dwindle.h"
-#include "layout/insert_hint.h"
-#include "layout/scrolling.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
+#include "scene/hint_rect.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "view/xdg_size.h"
@@ -186,9 +184,10 @@ namespace umbriel {
         m_tileDragStartY = m_cursor->y;
         m_dragSourceWorkspace = view->workspace();
         m_dragSourceColumn = m_dragSourceWorkspace != nullptr ? m_dragSourceWorkspace->layout().columnOf(view) : -1;
-        m_dropWorkspace = m_dragSourceWorkspace;
-        m_dropColumn = std::max(0, m_dragSourceColumn);
-        m_dropRow = -1;
+        m_drop = {
+            .workspace = m_dragSourceWorkspace,
+            .column = std::max(0, m_dragSourceColumn),
+        };
       }
       updateInteractiveCursor(view);
       return;
@@ -207,20 +206,11 @@ namespace umbriel {
   }
 
   void Cursor::resetMode() {
-    if (m_dropWorkspace != nullptr && m_dropWorkspace->layout().insertGap() >= 0) {
-      m_dropWorkspace->layout().clearInsertGap();
-      m_dropWorkspace->arrange(false);
-    }
     m_server->hideInsertHint();
     m_mode = CursorMode::Passthrough;
     m_grabbedView = nullptr;
     m_dragSourceWorkspace = nullptr;
-    m_dropWorkspace = nullptr;
-    m_dragSourceColumn = -1;
-    m_dropColumn = -1;
-    m_dropRow = -1;
-    m_dropTargetView = nullptr;
-    m_dropEdge = 0;
+    m_drop = {};
     m_tileDragPending = false;
     m_resizeWorkspace = nullptr;
     m_resizeEdges = 0;
@@ -876,59 +866,11 @@ namespace umbriel {
     }
 
     Workspace* workspace = output->workspaceGroup()->active();
-    if (workspace->layoutMode() == LayoutMode::Dwindle) {
-      auto* dwindle = dynamic_cast<DwindleLayout*>(&workspace->layout());
-      if (dwindle == nullptr) {
-        return;
-      }
-      if (m_dropWorkspace != nullptr && m_dropWorkspace != workspace) {
-        m_server->hideInsertHint();
-      }
-      const DwindleDropTarget drop = computeDwindleDropTarget(*dwindle, m_cursor->x, m_cursor->y, m_grabbedView);
-      if (drop.view == nullptr || drop.edge == 0) {
-        const int leafCount = static_cast<int>(workspace->layout().columns().size());
-        m_dropWorkspace = workspace;
-        m_dropColumn = drop.leaf >= 0 ? drop.leaf : leafCount;
-        m_dropRow = -1;
-        m_dropTargetView = nullptr;
-        m_dropEdge = 0;
-        m_server->hideInsertHint();
-        wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
-        return;
-      }
-      m_dropWorkspace = workspace;
-      m_dropColumn = drop.leaf;
-      m_dropRow = -1;
-      m_dropTargetView = drop.view;
-      m_dropEdge = drop.edge;
-      m_server->insertHint().showBox(workspace, drop.hint);
-      wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
-      return;
-    }
-    if (workspace->layoutMode() != LayoutMode::Scrolling) {
-      return;
-    }
-    const wlr_box usable = output->usableArea();
-    if (usable.width <= 0 || usable.height <= 0) {
-      return;
-    }
-    if (m_dropWorkspace != nullptr && m_dropWorkspace != workspace && m_dropWorkspace->layout().insertGap() >= 0) {
-      m_dropWorkspace->layout().clearInsertGap();
-      m_dropWorkspace->arrange(false);
-    }
-    if (workspace->layout().insertGap() >= 0) {
-      workspace->layout().clearInsertGap();
-      workspace->arrange(false);
-    }
-    const ScrollingDropTarget target =
-        computeScrollingDropTarget(*workspace, usable, workspace->layout().scroll(), m_cursor->x, m_cursor->y);
-    m_dropWorkspace = workspace;
-    m_dropColumn = target.column;
-    m_dropRow = target.row;
-    if (target.row >= 0) {
-      m_server->insertHint().showRow(workspace, target.column, target.row);
+    m_drop = computeDropTarget(*workspace, workspace->layout().scroll(), m_cursor->x, m_cursor->y, m_grabbedView);
+    if (m_drop.hintBox.width > 0 && m_drop.hintBox.height > 0) {
+      m_server->insertHint().show(output, m_drop.hintBox, config().appearance.cornerRadius);
     } else {
-      m_server->insertHint().show(workspace, target.column);
+      m_server->hideInsertHint();
     }
     wlr_scene_node_raise_to_top(&m_grabbedView->sceneTree()->node);
   }
@@ -936,56 +878,9 @@ namespace umbriel {
   void Cursor::finishTileMove() {
     m_server->hideInsertHint();
     View* view = m_grabbedView;
-    Workspace* target = m_dropWorkspace != nullptr ? m_dropWorkspace : m_dragSourceWorkspace;
-    const int column = std::max(0, m_dropColumn);
-    if (target != nullptr) {
-      target->layout().clearInsertGap();
-    }
+    Workspace* target = m_drop.workspace != nullptr ? m_drop.workspace : m_dragSourceWorkspace;
     if (view != nullptr && view->mapped() && target != nullptr) {
-      if (target->layoutMode() == LayoutMode::Dwindle) {
-        auto* dwindle = dynamic_cast<DwindleLayout*>(&target->layout());
-        if (dwindle != nullptr) {
-          View* dropTarget = m_dropTargetView;
-          if (dropTarget != nullptr && dwindle->columnOf(dropTarget) < 0) {
-            dropTarget = nullptr;
-          }
-          const bool crossWs = view->workspace() != target;
-          const bool splitDrop = dropTarget != nullptr && dropTarget != view && m_dropEdge != 0;
-          if (crossWs) {
-            // Move without the layout auto-attach: attaching would split the
-            // focused leaf and arrange(), sending a stale half-size configure to
-            // that window before the real placement below.
-            view->setWorkspace(target, /*attachToLayout=*/false);
-            if (splitDrop) {
-              dwindle->insertViewSplitOnView(view, dropTarget, m_dropEdge);
-            } else {
-              dwindle->insertView(view, static_cast<int>(dwindle->columns().size()));
-            }
-            target->arrange();
-            m_server->focusView(view, FocusReason::DragDrop);
-          } else if (splitDrop) {
-            dwindle->removeView(view);
-            dwindle->insertViewSplitOnView(view, dropTarget, m_dropEdge);
-            target->arrange();
-            m_server->focusView(view, FocusReason::DragDrop);
-          }
-          // else: same workspace with no valid target — snap back (no-op).
-        }
-        resetMode();
-        return;
-      }
-      if (view->workspace() != target) {
-        // Skip the layout auto-attach; the explicit insertion below places the
-        // view at the requested drop position with a single arrange.
-        view->setWorkspace(target, /*attachToLayout=*/false);
-      }
-      if (m_dropRow >= 0) {
-        target->layout().insertViewIntoColumn(view, column, m_dropRow);
-      } else {
-        target->layout().insertView(view, column);
-      }
-      target->arrange();
-      m_server->focusView(view, FocusReason::DragDrop);
+      applyDrop(*m_server, *view, *target, m_drop, /*animate=*/true);
     }
     resetMode();
   }

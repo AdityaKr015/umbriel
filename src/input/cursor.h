@@ -1,4 +1,5 @@
 #pragma once
+#include "layout/drop_target.h"
 
 #include <cstdint>
 #include <memory>
@@ -118,14 +119,8 @@ namespace umbriel {
     int m_grabGeoHeight = 0;
     uint32_t m_resizeEdges = 0;
     Workspace* m_dragSourceWorkspace = nullptr;
-    Workspace* m_dropWorkspace = nullptr;
     int m_dragSourceColumn = -1;
-    int m_dropColumn = -1;
-    int m_dropRow = -1;
-    // Dwindle drag-and-drop: which leaf the pointer is over and the edge of it
-    // the dropped view will occupy (0 = none/append).
-    View* m_dropTargetView = nullptr;
-    uint32_t m_dropEdge = 0;
+    DropTarget m_drop{};
     bool m_tileDragPending = false;
     double m_tileDragStartX = 0;
     double m_tileDragStartY = 0;

@@ -5,11 +5,10 @@
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layout/drop_target.h"
-#include "layout/dwindle.h"
-#include "layout/insert_hint.h"
 #include "layout/layout.h"
 #include "output/output.h"
 #include "scene/color.h"
+#include "scene/hint_rect.h"
 #include "server/server.h"
 #include "view/view.h"
 // clang-format off
@@ -745,21 +744,21 @@ namespace umbriel {
   }
 
   bool Overview::tickAnimations(uint64_t nowMsec) {
-    if (!m_anim.tick(nowMsec)) {
-      return false;
+    bool active = m_dropHint != nullptr && m_dropHint->tickAnimations(nowMsec);
+    if (m_anim.tick(nowMsec)) {
+      const double value = m_anim.current();
+      m_progress = m_progressFrom + (m_targetProgress - m_progressFrom) * value;
+      for (const auto& state : m_outputs) {
+        state->rowScroll = state->rowFrom + (state->rowTo - state->rowFrom) * value;
+      }
+      applyProgress();
+      if (!m_anim.animating()) {
+        // May tear down m_outputs; safe now that the loop above is done.
+        finishAnimation();
+      }
+      active = m_anim.animating() || active;
     }
-    const double value = m_anim.current();
-    m_progress = m_progressFrom + (m_targetProgress - m_progressFrom) * value;
-    for (const auto& state : m_outputs) {
-      state->rowScroll = state->rowFrom + (state->rowTo - state->rowFrom) * value;
-    }
-    applyProgress();
-    if (!m_anim.animating()) {
-      // May tear down m_outputs; safe now that the loop above is done.
-      finishAnimation();
-      return false;
-    }
-    return true;
+    return active;
   }
 
   void Overview::finishAnimation() {
@@ -787,7 +786,9 @@ namespace umbriel {
   }
 
   void Overview::teardown() {
-    hideDropHint();
+    if (m_dropHint != nullptr) {
+      m_dropHint->hideImmediate();
+    }
     for (const auto& state : m_outputs) {
       for (const auto& card : state->cards) {
         destroyCard(card.get());
@@ -816,11 +817,7 @@ namespace umbriel {
     m_pressWorkspace = nullptr;
     m_dragCard = nullptr;
     m_dragSourceWorkspace = nullptr;
-    m_dropWorkspace = nullptr;
-    m_dropColumn = -1;
-    m_dropRow = -1;
-    m_dropTargetView = nullptr;
-    m_dropEdge = 0;
+    m_drop = {};
     m_gestureOpenedHere = false;
   }
 
@@ -878,18 +875,16 @@ namespace umbriel {
     if (m_pressCard != nullptr && m_pressCard->view == view) {
       m_pressCard = nullptr;
     }
-    if (m_dropTargetView == view) {
-      m_dropTargetView = nullptr;
-      m_dropEdge = 0;
+    if (m_drop.view == view) {
+      m_drop.view = nullptr;
+      m_drop.edge = 0;
       hideDropHint();
     }
     if (m_dragCard != nullptr && m_dragCard->view == view) {
       hideDropHint();
       m_dragCard = nullptr;
       m_dragSourceWorkspace = nullptr;
-      m_dropWorkspace = nullptr;
-      m_dropTargetView = nullptr;
-      m_dropEdge = 0;
+      m_drop = {};
       m_server->cursor()->overrideCursor(nullptr);
     }
     OutputState* state = stateForWorkspace(view->workspace());
@@ -946,19 +941,15 @@ namespace umbriel {
     if (it == m_outputs.end()) {
       return;
     }
-    if (m_dropWorkspace != nullptr && stateForWorkspace(m_dropWorkspace) == it->get()) {
+    if (m_drop.workspace != nullptr && stateForWorkspace(m_drop.workspace) == it->get()) {
       hideDropHint();
-      m_dropWorkspace = nullptr;
-      m_dropTargetView = nullptr;
-      m_dropEdge = 0;
+      m_drop = {};
     }
     if (m_dragCard != nullptr && m_dragCard->owner == it->get()) {
       hideDropHint();
       m_dragCard = nullptr;
       m_dragSourceWorkspace = nullptr;
-      m_dropWorkspace = nullptr;
-      m_dropTargetView = nullptr;
-      m_dropEdge = 0;
+      m_drop = {};
       m_server->cursor()->overrideCursor(nullptr);
     }
     if (m_pressCard != nullptr && m_pressCard->owner == it->get()) {
@@ -1178,11 +1169,7 @@ namespace umbriel {
     m_dragSourceWorkspace = view->workspace();
     m_dragSourceColumn = -1;
     m_dragSourceRow = -1;
-    m_dropWorkspace = nullptr;
-    m_dropColumn = -1;
-    m_dropRow = -1;
-    m_dropTargetView = nullptr;
-    m_dropEdge = 0;
+    m_drop = {};
 
     if (m_dragSourceWorkspace != nullptr && view->tiled()) {
       m_dragSourceColumn = m_dragSourceWorkspace->layout().columnOf(view);
@@ -1207,11 +1194,7 @@ namespace umbriel {
     OutputState* state = nullptr;
     size_t row = 0;
     Workspace* workspace = rowAt(lx, ly, &state, &row);
-    m_dropWorkspace = workspace;
-    m_dropColumn = -1;
-    m_dropRow = -1;
-    m_dropTargetView = nullptr;
-    m_dropEdge = 0;
+    m_drop = {.workspace = workspace};
     if (workspace == nullptr || state == nullptr) {
       hideDropHint();
       scheduleFrames();
@@ -1227,40 +1210,19 @@ namespace umbriel {
     const double worldX = metrics.outputBox.x + (lx - metrics.rowX) / metrics.zoom;
     const double worldY = metrics.outputBox.y + (ly - rowTop(metrics, state->rowScroll, row)) / metrics.zoom;
 
-    if (workspace->layoutMode() == LayoutMode::Dwindle) {
-      auto* dwindle = dynamic_cast<DwindleLayout*>(&workspace->layout());
-      if (dwindle != nullptr && card->view->tiled()) {
-        const DwindleDropTarget target = computeDwindleDropTarget(*dwindle, worldX, worldY, card->view);
-        m_dropColumn = target.leaf >= 0 ? target.leaf : static_cast<int>(workspace->layout().columns().size());
-        m_dropTargetView = target.view;
-        m_dropEdge = target.edge;
-        if (target.view != nullptr && target.edge != 0) {
-          showDropHint(target.hint, metrics, state->rowScroll, row);
-        } else {
-          hideDropHint();
-        }
-      } else {
-        m_dropColumn = static_cast<int>(workspace->layout().columns().size());
-        hideDropHint();
-      }
-      scheduleFrames();
-      return;
+    if (card->view->tiled()) {
+      m_drop = computeDropTarget(*workspace, workspace->layout().scroll(), worldX, worldY, card->view);
+    } else {
+      m_drop = {
+          .workspace = workspace,
+          .column = static_cast<int>(workspace->layout().columns().size()),
+      };
     }
-    if (workspace->layoutMode() != LayoutMode::Scrolling) {
-      m_dropColumn = static_cast<int>(workspace->layout().columns().size());
+    if (m_drop.hintBox.width > 0 && m_drop.hintBox.height > 0) {
+      showDropHint(m_drop.hintBox, metrics, state->rowScroll, row, state->output);
+    } else {
       hideDropHint();
-      scheduleFrames();
-      return;
     }
-
-    const wlr_box usable = state->output->usableArea();
-    const double scroll = workspace->layout().scroll();
-    const ScrollingDropTarget target = computeScrollingDropTarget(*workspace, usable, scroll, worldX, worldY);
-    m_dropColumn = target.column;
-    m_dropRow = target.row;
-    const wlr_box hint = target.row >= 0 ? InsertHint::rowHintBox(*workspace, target.column, target.row, scroll)
-                                         : InsertHint::gapHintBox(*workspace, target.column, scroll);
-    showDropHint(hint, metrics, state->rowScroll, row);
     scheduleFrames();
   }
 
@@ -1270,20 +1232,13 @@ namespace umbriel {
       return;
     }
     View* view = card->view;
-    Workspace* target = drop ? m_dropWorkspace : nullptr;
-    const int column = m_dropColumn;
-    const int row = m_dropRow;
-    View* dropTargetView = m_dropTargetView;
-    const uint32_t dropEdge = m_dropEdge;
+    Workspace* target = drop ? m_drop.workspace : nullptr;
+    const DropTarget targetDrop = m_drop;
     const wlr_box cardBox = card->box;
     OutputState* dropState = target != nullptr ? stateForWorkspace(target) : nullptr;
 
     m_dragCard = nullptr;
-    m_dropWorkspace = nullptr;
-    m_dropColumn = -1;
-    m_dropRow = -1;
-    m_dropTargetView = nullptr;
-    m_dropEdge = 0;
+    m_drop = {};
     hideDropHint();
     m_server->cursor()->overrideCursor(nullptr);
 
@@ -1292,35 +1247,7 @@ namespace umbriel {
     }
 
     if (target != nullptr && view->tiled()) {
-      if (target->layoutMode() == LayoutMode::Dwindle) {
-        auto* dwindle = dynamic_cast<DwindleLayout*>(&target->layout());
-        const bool splitDrop = dwindle != nullptr
-            && dropTargetView != nullptr
-            && dropTargetView != view
-            && dropEdge != 0
-            && dwindle->columnOf(dropTargetView) >= 0;
-        if (view->workspace() != target) {
-          // Explicit insertion below; the auto-attach would land it elsewhere.
-          view->setWorkspace(target, /*attachToLayout=*/false);
-        }
-        if (splitDrop) {
-          dwindle->insertViewSplitOnView(view, dropTargetView, dropEdge);
-        } else {
-          target->layout().insertView(view, static_cast<int>(target->layout().columns().size()));
-        }
-      } else {
-        if (view->workspace() != target) {
-          // Explicit insertion below; the auto-attach would land it elsewhere.
-          view->setWorkspace(target, /*attachToLayout=*/false);
-        }
-        if (row >= 0) {
-          target->layout().insertViewIntoColumn(view, std::max(0, column), row);
-        } else {
-          target->layout().insertView(view, std::max(0, column));
-        }
-      }
-      target->arrange(false);
-      m_server->focusView(view, FocusReason::DragDrop);
+      applyDrop(*m_server, *view, *target, targetDrop, /*animate=*/false);
     } else if (target != nullptr && dropState != nullptr) {
       // Floating: map the card origin back out of the thumbnail.
       RowMetrics metrics{};
@@ -1355,32 +1282,24 @@ namespace umbriel {
     applyProgress();
   }
 
-  void Overview::showDropHint(const wlr_box& worldBox, const RowMetrics& metrics, double rowScroll, size_t row) {
+  void Overview::showDropHint(
+      const wlr_box& worldBox, const RowMetrics& metrics, double rowScroll, size_t row, Output* output
+  ) {
     if (worldBox.width <= 0 || worldBox.height <= 0) {
       hideDropHint();
       return;
     }
-    if (m_dropHint == nullptr) {
-      m_dropHint = wlr_scene_rect_create(m_tree, 1, 1, config().appearance.insertHintColor.data());
-      if (m_dropHint == nullptr) {
-        return;
-      }
-    }
     const double z = metrics.zoom;
-    const int x = metrics.rowX + static_cast<int>(std::lround((worldBox.x - metrics.outputBox.x) * z));
-    const int y =
-        rowTop(metrics, rowScroll, row) + static_cast<int>(std::lround((worldBox.y - metrics.outputBox.y) * z));
-    const std::array<float, 4> hintColor = tint(config().appearance.insertHintColor, 1.0);
-    wlr_scene_rect_set_color(m_dropHint, hintColor.data());
-    wlr_scene_rect_set_size(
-        m_dropHint, std::max(1, static_cast<int>(std::lround(worldBox.width * z))),
-        std::max(1, static_cast<int>(std::lround(worldBox.height * z)))
-    );
-    wlr_scene_rect_set_corner_radius(m_dropHint, static_cast<int>(std::lround(config().appearance.cornerRadius * z)));
-    wlr_scene_node_set_position(&m_dropHint->node, x, y);
-    wlr_scene_node_set_enabled(&m_dropHint->node, true);
-    // Below the dragged card, above every thumbnail.
-    wlr_scene_node_raise_to_top(&m_dropHint->node);
+    const wlr_box mappedBox{
+        .x = metrics.rowX + static_cast<int>(std::lround((worldBox.x - metrics.outputBox.x) * z)),
+        .y = rowTop(metrics, rowScroll, row) + static_cast<int>(std::lround((worldBox.y - metrics.outputBox.y) * z)),
+        .width = std::max(1, static_cast<int>(std::lround(worldBox.width * z))),
+        .height = std::max(1, static_cast<int>(std::lround(worldBox.height * z))),
+    };
+    if (m_dropHint == nullptr) {
+      m_dropHint = std::make_unique<HintRect>(*m_server, m_tree);
+    }
+    m_dropHint->show(output, mappedBox, static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom)));
     if (m_dragCard != nullptr && m_dragCard->tree != nullptr) {
       wlr_scene_node_raise_to_top(&m_dragCard->tree->node);
     }
@@ -1388,7 +1307,7 @@ namespace umbriel {
 
   void Overview::hideDropHint() {
     if (m_dropHint != nullptr) {
-      wlr_scene_node_set_enabled(&m_dropHint->node, false);
+      m_dropHint->hide();
     }
   }
 

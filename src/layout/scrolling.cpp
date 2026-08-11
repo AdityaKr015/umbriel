@@ -137,9 +137,6 @@ namespace umbriel {
     for (int i = 0; i < end; ++i) {
       x += columnWidth(i, viewportWidth) + gap;
     }
-    if (m_insertGap >= 0 && end >= m_insertGap) {
-      x += kHintWidth + gap;
-    }
     return x;
   }
 
@@ -151,9 +148,6 @@ namespace umbriel {
     int total = -gap;
     for (size_t i = 0; i < m_columns.size(); ++i) {
       total += columnWidth(static_cast<int>(i), viewportWidth) + gap;
-    }
-    if (m_insertGap >= 0) {
-      total += kHintWidth + gap;
     }
     return std::max(0, total);
   }
@@ -288,12 +282,6 @@ namespace umbriel {
     m_columns.erase(m_columns.begin() + from);
     m_columns.insert(m_columns.begin() + destination, std::move(column));
   }
-
-  void ScrollingLayout::setInsertGap(int gapIndex) {
-    m_insertGap = std::clamp(gapIndex, 0, static_cast<int>(m_columns.size()));
-  }
-
-  void ScrollingLayout::clearInsertGap() { m_insertGap = -1; }
 
   void ScrollingLayout::setScroll(double scroll) { m_scroll = scroll; }
 

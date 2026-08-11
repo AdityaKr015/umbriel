@@ -1044,10 +1044,14 @@ namespace umbriel {
       return;
     }
 
-    m_server->animateCloseSnapshot(snap, std::move(snapRects));
-    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-      wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
+    Output* output =
+        m_workspace != nullptr && m_workspace->group() != nullptr ? m_workspace->group()->output() : nullptr;
+    if (output == nullptr) {
+      wlr_scene_node_destroy(&snap->node);
+      return;
     }
+    m_server->animateCloseSnapshot(output, snap, std::move(snapRects));
+    wlr_output_schedule_frame(output->wlr());
   }
 
   void View::setSurfaceTreeClip(const wlr_box* clip) {
@@ -1596,7 +1600,7 @@ namespace umbriel {
         && m_presentedW > 0
         && m_presentedH > 0) {
       const wlr_box& geometry = m_toplevel->base->geometry;
-      if (m_server->cursor()->mode() != CursorMode::Passthrough) {
+      if (m_server->cursor()->grabbedView() == this) {
         // During interactive resize, track geometry so no spurious animation
         // replays the drag when the grab ends and mode returns to Passthrough.
         if (geometry.width > 0 && geometry.height > 0) {

@@ -6,6 +6,7 @@
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/surface.h"
+#include "layout/insert_hint.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
@@ -726,6 +727,16 @@ namespace umbriel {
   void Server::removeOutput(Output* output) {
     m_overview->onOutputRemoved(output);
     m_gestures->cancelForOutput(output);
+    if (m_insertHint != nullptr && m_insertHint->output() == output) {
+      m_insertHint->hide();
+    }
+    std::erase_if(m_closeSnapshots, [output](CloseSnapshot& snap) {
+      if (snap.output != output) {
+        return false;
+      }
+      wlr_scene_node_destroy(&snap.tree->node);
+      return true;
+    });
     // wlroots 0.20 does not track output lifetime for layer surfaces, so
     // their wlr_output pointer would dangle once the output is freed.
     // Destroy them now while the wlr_output is still valid.

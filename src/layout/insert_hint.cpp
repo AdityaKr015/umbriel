@@ -210,6 +210,7 @@ namespace umbriel {
     // Snap to the drop target; animating the indicator lags behind the cursor.
     wlr_scene_node_set_position(&m_tree->node, x, y);
     wlr_scene_node_raise_to_top(&m_tree->node);
+    m_output = workspace->group()->output();
 
     if (!m_visible) {
       wlr_scene_node_set_enabled(&m_tree->node, true);
@@ -232,6 +233,7 @@ namespace umbriel {
       wlr_scene_node_set_enabled(&m_tree->node, false);
     }
     m_visible = false;
+    m_output = nullptr;
   }
 
   bool InsertHint::tickAnimations(uint64_t nowMsec) {

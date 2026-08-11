@@ -385,8 +385,8 @@ namespace umbriel {
       applyMode(m_deferredWidth, m_deferredHeight);
     }
 
-    // Keep animations ticking on the next vblank even when nothing was damaged.
-    if (m_server->animationsActive()) {
+    // Keep this output ticking on the next vblank while it owns an animation.
+    if (m_server->animationsActiveFor(this)) {
       wlr_output_schedule_frame(m_output);
     }
 

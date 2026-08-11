@@ -133,6 +133,7 @@ namespace umbriel {
     // reports whether anything is still animating.
     bool tickAnimations(uint64_t nowMsec);
     [[nodiscard]] bool animationsActive() const;
+    [[nodiscard]] bool animationsActiveFor(const Output* output) const;
     [[nodiscard]] InsertHint& insertHint();
     void hideInsertHint();
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
@@ -183,8 +184,9 @@ namespace umbriel {
     // Drop xdg activated / focus border / foreign activated on mapped views (except `except`).
     void deactivateViews(View* except = nullptr);
     [[nodiscard]] LayerSurface* exclusiveKeyboardLayer() const;
-    void
-    animateCloseSnapshot(wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects);
+    void animateCloseSnapshot(
+        Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
+    );
 
   private:
     friend class Output;
@@ -325,6 +327,7 @@ namespace umbriel {
 
     struct CloseSnapshot {
       wlr_scene_tree* tree = nullptr;
+      Output* output = nullptr;
       AnimatedValue alpha;
       std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects;
     };

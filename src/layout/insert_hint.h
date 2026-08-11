@@ -11,6 +11,7 @@ struct wlr_scene_tree;
 namespace umbriel {
 
   class Server;
+  class Output;
   class Workspace;
 
   class InsertHint {
@@ -36,6 +37,7 @@ namespace umbriel {
     // Advances the fade; returns true while it is still running.
     bool tickAnimations(uint64_t nowMsec);
     [[nodiscard]] bool hasActiveAnimations() const { return m_fade.animating(); }
+    [[nodiscard]] Output* output() const { return m_output; }
 
   private:
     void ensureScene();
@@ -44,6 +46,7 @@ namespace umbriel {
     void showGeometry(Workspace* workspace, int x, int y, int width, int height);
 
     Server* m_server = nullptr;
+    Output* m_output = nullptr;
     wlr_scene_tree* m_tree = nullptr;
     wlr_scene_rect* m_rect = nullptr;
     AnimatedValue m_fade;

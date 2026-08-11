@@ -493,7 +493,6 @@ namespace umbriel {
     m_switchViews.clear();
     for (View* view : m_views) {
       if (view->mapped() && (view->sceneTree()->node.enabled || !m_active)) {
-        view->cancelFadeAnimation();
         m_switchViews.push_back(view);
       }
     }

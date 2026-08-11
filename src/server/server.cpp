@@ -665,11 +665,41 @@ namespace umbriel {
     return std::ranges::any_of(m_closeSnapshots, [](const CloseSnapshot& snap) { return snap.alpha.animating(); });
   }
 
+  bool Server::animationsActiveFor(const Output* output) const {
+    if (output == nullptr) {
+      return false;
+    }
+    if (std::ranges::any_of(m_views, [output](const auto& view) {
+          const Workspace* workspace = view->workspace();
+          return view->hasActiveAnimations()
+              && workspace != nullptr
+              && workspace->group() != nullptr
+              && workspace->group()->output() == output;
+        })) {
+      return true;
+    }
+    const WorkspaceGroup* group = output->workspaceGroup();
+    if (group != nullptr && group->hasActiveAnimations()) {
+      return true;
+    }
+    // Overview zooms every output at once.
+    if (m_overview != nullptr && m_overview->hasActiveAnimations()) {
+      return true;
+    }
+    if (m_insertHint != nullptr && m_insertHint->hasActiveAnimations() && m_insertHint->output() == output) {
+      return true;
+    }
+    return std::ranges::any_of(m_closeSnapshots, [output](const CloseSnapshot& snap) {
+      return snap.output == output && snap.alpha.animating();
+    });
+  }
+
   void Server::animateCloseSnapshot(
-      wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
+      Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
   ) {
     CloseSnapshot& snap = m_closeSnapshots.emplace_back();
     snap.tree = tree;
+    snap.output = output;
     snap.rects = std::move(rects);
     snap.alpha.snap(1.0);
     snap.alpha.retarget(0.0, std::max(1, config().appearance.animationMs / 2), Easing::EaseOutCubic);

@@ -216,8 +216,7 @@ namespace umbriel {
         && m_grabbedView != nullptr
         && m_grabbedView->workspace() != nullptr) {
       wlr_scene_node_reparent(
-          &m_grabbedView->sceneTree()->node,
-          m_grabbedView->workspace()->viewLayer(m_grabbedView->tiled())
+          &m_grabbedView->sceneTree()->node, m_grabbedView->workspace()->viewLayer(m_grabbedView->tiled())
       );
     }
     m_mode = CursorMode::Passthrough;

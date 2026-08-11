@@ -566,6 +566,47 @@ namespace umbriel {
     finishSizeAnimation();
   }
 
+  bool View::sizeGrabActive() const {
+    const Cursor* cursor = m_server->cursor();
+    if (cursor == nullptr) {
+      return false;
+    }
+    const bool interactiveTileResize = cursor->mode() == CursorMode::ResizeTile
+        && cursor->grabbedView() != nullptr
+        && cursor->grabbedView()->workspace() == m_workspace;
+    return cursor->grabbedView() == this || interactiveTileResize;
+  }
+
+  void View::beginResizeAnimation(int width, int height) {
+    if (!m_mapped
+        || !m_tiled
+        || !m_onActiveWorkspace
+        || m_workspace == nullptr
+        || m_toplevel->scheduled.fullscreen
+        || m_toplevel->current.fullscreen
+        || width <= 0
+        || height <= 0) {
+      return;
+    }
+    // Nothing presented yet (first map): the fade-in covers the appear.
+    if (m_presentedW <= 0 || m_presentedH <= 0) {
+      return;
+    }
+    if (sizeGrabActive() || (width == m_presentedW && height == m_presentedH)) {
+      return;
+    }
+    if (sizeAnimating()
+        && width == static_cast<int>(m_animW.target())
+        && height == static_cast<int>(m_animH.target())) {
+      return;
+    }
+    m_animW.snap(m_presentedW);
+    m_animW.retarget(width, config().appearance.animationMs);
+    m_animH.snap(m_presentedH);
+    m_animH.retarget(height, config().appearance.animationMs);
+    scheduleFrame();
+  }
+
   void View::setPosition(int x, int y) {
     m_posX.snap(x);
     m_posY.snap(y);
@@ -1625,12 +1666,7 @@ namespace umbriel {
         && m_presentedW > 0
         && m_presentedH > 0) {
       const wlr_box& geometry = m_toplevel->base->geometry;
-      const Cursor* cursor = m_server->cursor();
-      const bool interactiveTileResize = cursor != nullptr
-          && cursor->mode() == CursorMode::ResizeTile
-          && cursor->grabbedView() != nullptr
-          && cursor->grabbedView()->workspace() == m_workspace;
-      if ((cursor != nullptr && cursor->grabbedView() == this) || interactiveTileResize) {
+      if (sizeGrabActive()) {
         // During interactive resize, track geometry so no spurious animation
         // replays the drag when the grab ends and mode returns to Passthrough.
         if (geometry.width > 0 && geometry.height > 0) {

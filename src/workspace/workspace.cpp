@@ -202,6 +202,14 @@ namespace umbriel {
       if (geometry.width != width || geometry.height != height) {
         wlr_xdg_toplevel_set_size(view->toplevel(), width, height);
       }
+      // Start the presented-size animation here, where the new size is decided.
+      // Waiting for the client's commit is too late: applyPositions below runs
+      // syncViewPresentation, whose clip already reports the new (smaller) size,
+      // so a shrink would land in m_presentedW/H and the commit would see no
+      // change left to animate.
+      if (animate) {
+        view->beginResizeAnimation(width, height);
+      }
     }
 
     // Card geometry derives from the layout math above, so it stays correct for

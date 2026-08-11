@@ -56,6 +56,10 @@ namespace umbriel {
     void setScratchpadBorder(bool scratchpad);
     void animateTo(int x, int y);
     void setPosition(int x, int y);
+    // Animate the presented size toward a layout-assigned size. Called by
+    // Workspace::arrange when it configures the client, so the animation owns
+    // m_presentedW/H before the clip can report the final size.
+    void beginResizeAnimation(int width, int height);
     void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
     // Drop the per-output clip so the view renders unclipped (e.g. a window
     // dragged across a monitor boundary spans both outputs).
@@ -152,6 +156,9 @@ namespace umbriel {
     // size on the committed geometry and refresh the derived chrome.
     void finishSizeAnimation();
     [[nodiscard]] bool sizeAnimating() const { return m_animW.animating() || m_animH.animating(); }
+    // True while an interactive grab owns this view's size, so the layout must
+    // not animate it (the drag tracks the pointer 1:1).
+    [[nodiscard]] bool sizeGrabActive() const;
     // Kick the owning output so an animation started outside a frame gets ticked.
     void scheduleFrame();
     void cancelSizeAnimation();

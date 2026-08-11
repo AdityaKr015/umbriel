@@ -593,6 +593,17 @@ namespace umbriel {
   bool View::tickAnimations(uint64_t nowMsec) {
     bool active = false;
 
+    // Disable sibling size animations during a tiled resize, so they do not
+    // trail the pointer while clients acknowledge successive configures.
+    const Cursor* cursor = m_server->cursor();
+    const bool interactiveTileResize = cursor != nullptr
+        && cursor->mode() == CursorMode::ResizeTile
+        && cursor->grabbedView() != nullptr
+        && cursor->grabbedView()->workspace() == m_workspace;
+    if (interactiveTileResize && sizeAnimating()) {
+      cancelSizeAnimation();
+    }
+
     const bool movedX = m_posX.tick(nowMsec);
     const bool movedY = m_posY.tick(nowMsec);
     if (movedX || movedY) {
@@ -1600,10 +1611,18 @@ namespace umbriel {
         && m_presentedW > 0
         && m_presentedH > 0) {
       const wlr_box& geometry = m_toplevel->base->geometry;
-      if (m_server->cursor()->grabbedView() == this) {
+      const Cursor* cursor = m_server->cursor();
+      const bool interactiveTileResize = cursor != nullptr
+          && cursor->mode() == CursorMode::ResizeTile
+          && cursor->grabbedView() != nullptr
+          && cursor->grabbedView()->workspace() == m_workspace;
+      if ((cursor != nullptr && cursor->grabbedView() == this) || interactiveTileResize) {
         // During interactive resize, track geometry so no spurious animation
         // replays the drag when the grab ends and mode returns to Passthrough.
         if (geometry.width > 0 && geometry.height > 0) {
+          if (sizeAnimating()) {
+            cancelSizeAnimation();
+          }
           m_presentedW = geometry.width;
           m_presentedH = geometry.height;
         }

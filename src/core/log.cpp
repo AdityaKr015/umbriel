@@ -8,11 +8,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <fcntl.h>
 #include <filesystem>
 #include <format>
 #include <mutex>
 #include <string>
 #include <system_error>
+#include <unistd.h>
 
 namespace {
 
@@ -292,24 +294,73 @@ namespace {
     emitUnlocked(gLastLevel, gLastSection, std::format("last message repeated {} times", count), tm, msec);
   }
 
+  [[nodiscard]] std::string resolveCacheDir() {
+    const char* cacheHome = std::getenv("XDG_CACHE_HOME");
+    const char* home = std::getenv("HOME");
+    if (cacheHome != nullptr && cacheHome[0] != '\0') {
+      return std::string(cacheHome) + "/umbriel";
+    }
+    if (home != nullptr && home[0] != '\0') {
+      return std::string(home) + "/.cache/umbriel";
+    }
+    return {};
+  }
+
+  // If fd 1 or fd 2 points at a TTY (greetd wires them to /dev/tty1), replace
+  // them with an append-mode file inside `cacheDir` — synchronous VT writes on
+  // the main thread turned a per-frame wlroots error into a hard livelock
+  // (see gpu-hang-handoff.md, Bug C). `cacheDir` may be empty; we fall through
+  // to /dev/null in that case. Silencing raw writes is strictly better than
+  // leaving fd 1/2 pointing at /dev/tty1.
+  void redirectStdioIfTty(const std::string& cacheDir) {
+    const bool stdoutIsTty = isatty(STDOUT_FILENO) != 0;
+    const bool stderrIsTty = isatty(STDERR_FILENO) != 0;
+    if (!stdoutIsTty && !stderrIsTty) {
+      return;
+    }
+
+    int fd = -1;
+    if (!cacheDir.empty()) {
+      const std::string path = cacheDir + "/umbriel-stderr.log";
+      fd = ::open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
+    }
+    if (fd < 0) {
+      fd = ::open("/dev/null", O_WRONLY | O_CLOEXEC);
+    }
+    if (fd < 0) {
+      return;
+    }
+
+    // dup2 leaves the target fd without O_CLOEXEC, which is what we want:
+    // spawned children inherit the redirected stderr instead of /dev/tty1.
+    if (stdoutIsTty) {
+      (void)::dup2(fd, STDOUT_FILENO);
+    }
+    if (stderrIsTty) {
+      (void)::dup2(fd, STDERR_FILENO);
+    }
+    ::close(fd);
+  }
+
 } // namespace
 
 void initLogFile() {
-  const char* cacheHome = std::getenv("XDG_CACHE_HOME");
-  const char* home = std::getenv("HOME");
-
-  std::string dir;
-  if (cacheHome != nullptr && cacheHome[0] != '\0') {
-    dir = std::string(cacheHome) + "/umbriel";
-  } else if (home != nullptr && home[0] != '\0') {
-    dir = std::string(home) + "/.cache/umbriel";
-  } else {
-    return;
+  std::error_code ec;
+  const std::string dir = resolveCacheDir();
+  if (!dir.empty()) {
+    std::filesystem::create_directories(dir, ec);
+    if (ec) {
+      // Directory unavailable; still redirect fd 1/2 so raw writes don't hit
+      // the VT. redirectStdioIfTty falls back to /dev/null when its path is
+      // empty.
+      redirectStdioIfTty({});
+      return;
+    }
   }
 
-  std::error_code ec;
-  std::filesystem::create_directories(dir, ec);
-  if (ec) {
+  redirectStdioIfTty(dir);
+
+  if (dir.empty()) {
     return;
   }
 

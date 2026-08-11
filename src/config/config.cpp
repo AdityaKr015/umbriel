@@ -315,6 +315,8 @@ namespace umbriel {
       {"overview-close", "", KeybindAction::OverviewClose},
       {"overview-open", "", KeybindAction::OverviewOpen},
       {"overview-toggle", "", KeybindAction::OverviewToggle},
+      {"scratchpad-focus-next", "", KeybindAction::ScratchpadFocusNext},
+      {"scratchpad-toggle", "", KeybindAction::ScratchpadToggle},
       {"session-quit", "", KeybindAction::SessionQuit},
       {"spawn", "<cmd>", KeybindAction::Spawn, ActionArgKind::Command},
       {"window-close", "", KeybindAction::WindowClose},
@@ -330,6 +332,8 @@ namespace umbriel {
       {"window-move-down", "", KeybindAction::WindowMoveDown},
       {"window-move-to-workspace", "<workspace>[/<output>]", KeybindAction::WindowMoveToWorkspace,
        ActionArgKind::Workspace},
+      {"window-move-to-scratchpad", "", KeybindAction::WindowMoveToScratchpad},
+      {"window-restore-from-scratchpad", "", KeybindAction::WindowRestoreFromScratchpad},
       {"window-move-up", "", KeybindAction::WindowMoveUp},
       {"window-toggle-floating", "", KeybindAction::ToggleFloating},
       {"window-toggle-fullscreen", "", KeybindAction::ToggleFullscreen},
@@ -925,8 +929,8 @@ namespace umbriel {
       warnUnknownKeys(
           *section, "appearance",
           {"border_width", "outer_border_width", "corner_radius", "border_focused", "border_unfocused",
-           "outer_border_color", "insert_hint_color", "backdrop_color", "animation_ms", "blur", "shadow",
-           "prefer_no_csd"}
+           "scratchpad_border_focused", "scratchpad_border_unfocused", "outer_border_color", "insert_hint_color",
+           "backdrop_color", "animation_ms", "blur", "shadow", "prefer_no_csd"}
       );
       readInteger(*section, "border_width", "appearance.border_width", 0, 100, loaded.appearance.borderWidth);
       readInteger(
@@ -935,6 +939,14 @@ namespace umbriel {
       readInteger(*section, "corner_radius", "appearance.corner_radius", 0, 500, loaded.appearance.cornerRadius);
       readColor(*section, "border_focused", "appearance.border_focused", loaded.appearance.borderFocused);
       readColor(*section, "border_unfocused", "appearance.border_unfocused", loaded.appearance.borderUnfocused);
+      readColor(
+          *section, "scratchpad_border_focused", "appearance.scratchpad_border_focused",
+          loaded.appearance.scratchpadBorderFocused
+      );
+      readColor(
+          *section, "scratchpad_border_unfocused", "appearance.scratchpad_border_unfocused",
+          loaded.appearance.scratchpadBorderUnfocused
+      );
       readColor(*section, "outer_border_color", "appearance.outer_border_color", loaded.appearance.outerBorderColor);
       readColor(*section, "insert_hint_color", "appearance.insert_hint_color", loaded.appearance.insertHintColor);
       readColor(*section, "backdrop_color", "appearance.backdrop_color", loaded.appearance.backdropColor);

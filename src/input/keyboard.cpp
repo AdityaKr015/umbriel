@@ -183,7 +183,9 @@ namespace umbriel {
   void Keyboard::armRepeat(const Keybind& bind, uint32_t keycode) {
     const int32_t rate = m_keyboard->repeat_info.rate;
     const int32_t delay = m_keyboard->repeat_info.delay;
-    if (!bind.repeat || rate <= 0 || delay <= 0) {
+    const bool repeatable =
+        bind.action != KeybindAction::ScratchpadToggle && bind.action != KeybindAction::ScratchpadFocusNext;
+    if (!bind.repeat || !repeatable || rate <= 0 || delay <= 0) {
       cancelRepeat();
       return;
     }

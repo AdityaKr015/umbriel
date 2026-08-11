@@ -53,6 +53,7 @@ namespace umbriel {
     void setWorkspace(Workspace* workspace, bool attachToLayout = true);
     void detachWorkspace();
     void setOnActiveWorkspace(bool active);
+    void setScratchpadBorder(bool scratchpad);
     void animateTo(int x, int y);
     void setPosition(int x, int y);
     void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
@@ -194,6 +195,7 @@ namespace umbriel {
     bool m_positioned = false;
     bool m_tiled = false;
     bool m_onActiveWorkspace = false;
+    bool m_scratchpadBorder = false;
     AnimatedValue m_posX;
     AnimatedValue m_posY;
     AnimatedValue m_fade;

@@ -82,6 +82,8 @@ outer_border_width = 0         # 0-100
 corner_radius = 10             # 0-500, 0 disables
 border_focused = "#7AA3FFFF"   # #RRGGBB or #RRGGBBAA
 border_unfocused = "#292933FF"
+scratchpad_border_focused = "#E5C07BFF"
+scratchpad_border_unfocused = "#5C4A2AFF"
 outer_border_color = "#1A1A1FFF"
 insert_hint_color = "#7FC8FF80"
 backdrop_color = "#000000FF"
@@ -96,6 +98,8 @@ animation_ms = 250             # 1-10000
 | `corner_radius` | int | `10` | Rounded corner radius (0-500). 0 disables. |
 | `border_focused` | color | `#7AA3FFFF` | Border color for the focused window. |
 | `border_unfocused` | color | `#292933FF` | Border color for unfocused windows. |
+| `scratchpad_border_focused` | color | `#E5C07BFF` | Border color for the focused scratchpad window. |
+| `scratchpad_border_unfocused` | color | `#5C4A2AFF` | Border color for unfocused scratchpad windows. |
 | `outer_border_color` | color | `#1A1A1FFF` | Outer border color (no focus variant). |
 | `insert_hint_color` | color | `#7FC8FF80` | Drop-target preview during drag. |
 | `backdrop_color` | color | `#000000FF` | Background for fullscreen gaps and lock screen. |

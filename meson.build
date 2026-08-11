@@ -141,6 +141,7 @@ sources = files(
   'src/lock/session_lock.cpp',
   'src/overview/overview.cpp',
   'src/workspace/workspace.cpp',
+  'src/workspace/scratchpad.cpp',
   'src/cli/outputs.cpp',
   'src/cli/ipc_client.cpp',
   'src/server/ipc.cpp',
@@ -177,4 +178,3 @@ install_data(
   'data/umbriel-session.target',
   install_dir: get_option('prefix') / 'lib' / 'systemd' / 'user',
 )
-

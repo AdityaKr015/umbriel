@@ -59,6 +59,13 @@ names resolve globally; duplicate names resolve on the preferred output. Append
 
 `cheatsheet-toggle`, `cheatsheet-open`, `cheatsheet-close`.
 
+### Scratchpad actions
+
+`window-move-to-scratchpad` minimizes the focused window into the current
+output's scratchpad. `scratchpad-toggle` shows or hides that output's pool.
+`window-restore-from-scratchpad` returns its focused window to its saved
+workspace, and `scratchpad-focus-next` cycles visible scratchpad windows.
+
 The keybinds cheatsheet overlay lists every active keybind in a styled panel.
 It appears automatically on startup when `general.show_cheatsheet` is `true`
 (the default). At runtime, toggle it via IPC (`umbriel msg cheatsheet-toggle`)
@@ -73,6 +80,9 @@ Binds repeat while held, using `input.keyboard.repeat_rate` and
 ```toml
 "Mod+Return" = { action = "spawn:kitty", repeat = false }
 ```
+
+Scratchpad visibility and cycling actions never repeat, even if their binding
+does not set `repeat = false`.
 
 ## Submaps
 

@@ -15,6 +15,7 @@
 #include <cmath>
 #include "wlr.h"
 // clang-format on
+#include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
 namespace umbriel {
@@ -262,6 +263,14 @@ namespace umbriel {
     if (m_shadowContainer != nullptr) {
       wlr_scene_node_set_enabled(&m_shadowContainer->node, enabled);
     }
+  }
+
+  void View::setScratchpadBorder(bool scratchpad) {
+    if (m_scratchpadBorder == scratchpad) {
+      return;
+    }
+    m_scratchpadBorder = scratchpad;
+    setBorderFocused(m_borderFocusedState);
   }
 
   void View::reparentShadow(wlr_scene_tree* shadowLayer) {
@@ -792,7 +801,9 @@ namespace umbriel {
       }
       return;
     }
-    const auto& baseColor = focused ? config().appearance.borderFocused : config().appearance.borderUnfocused;
+    const auto& baseColor = m_scratchpadBorder
+        ? (focused ? config().appearance.scratchpadBorderFocused : config().appearance.scratchpadBorderUnfocused)
+        : (focused ? config().appearance.borderFocused : config().appearance.borderUnfocused);
     float color[4];
     premultiplied(color, baseColor, m_fadeAlpha);
     for (wlr_scene_rect* rect : m_borderRects) {
@@ -1481,6 +1492,9 @@ namespace umbriel {
   }
 
   void View::handleUnmap() {
+    if (m_server->scratchpadManager() != nullptr) {
+      m_server->scratchpadManager()->remove(this);
+    }
     if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
       overview->onViewUnmapped(this);
     }

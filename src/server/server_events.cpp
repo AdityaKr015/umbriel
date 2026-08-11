@@ -15,6 +15,7 @@
 #include "view/popup.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
 namespace umbriel {
@@ -775,6 +776,9 @@ namespace umbriel {
         entry->setWorkspace(destination);
       }
     }
+    if (m_scratchpadManager != nullptr) {
+      m_scratchpadManager->moveOutput(output, fallback);
+    }
 
     std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) { return entry.get() == output; });
     relayoutBanner();
@@ -795,6 +799,9 @@ namespace umbriel {
       return;
     }
     const bool hadKeyboardFocus = m_seat->wlr()->keyboard_state.focused_surface == view->toplevel()->base->surface;
+    if (m_scratchpadManager != nullptr) {
+      m_scratchpadManager->remove(view);
+    }
     View* replacement = nullptr;
     Output* output = nullptr;
     if (Workspace* workspace = view->workspace()) {

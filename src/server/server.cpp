@@ -20,6 +20,7 @@
 #include "server/ipc.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
 #include <algorithm>
@@ -156,14 +157,17 @@ namespace umbriel {
     );
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_outputLayout);
 
-    // Fixed global stacking: backdrop < background < bottom < xdg < drag < top < fullscreen < overlay < cheatsheet <
-    // banner < lock. Per-output layer trees are children of these roots so normal windows cannot raise above panels.
-    // Fullscreen views are reparented into m_fullscreenTree so they cover top panels; overlay stays above.
+    // Global stacking keeps scratchpads above normal windows and below drag, panels, fullscreen, overlays, and lock.
+    // Per-output layer trees keep normal windows below panels.
     m_backdrop = wlr_scene_rect_create(&m_scene->tree, 0, 0, config().appearance.backdropColor.data());
     wlr_scene_rect_set_corner_radius(m_backdrop, 0);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&m_scene->tree);
     m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
+    m_scratchpadTree = wlr_scene_tree_create(&m_scene->tree);
+    m_scratchpadShadowTree = wlr_scene_tree_create(m_scratchpadTree);
+    m_scratchpadContentTree = wlr_scene_tree_create(m_scratchpadTree);
+    m_scratchpadManager = std::make_unique<ScratchpadManager>(*this, m_scratchpadContentTree, m_scratchpadShadowTree);
     m_overviewTree = wlr_scene_tree_create(&m_scene->tree);
     wlr_scene_node_set_enabled(&m_overviewTree->node, false);
     m_dragTree = wlr_scene_tree_create(&m_scene->tree);

@@ -87,6 +87,7 @@ namespace umbriel {
   class View;
   class Workspace;
   class WorkspaceGroup;
+  class ScratchpadManager;
   class ConfigBanner;
   class Cheatsheet;
   class Ipc;
@@ -112,6 +113,9 @@ namespace umbriel {
     [[nodiscard]] wlr_allocator* allocator() const { return m_allocator; }
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
     [[nodiscard]] wlr_scene_tree* xdgTree() const { return m_xdgTree; }
+    [[nodiscard]] wlr_scene_tree* scratchpadTree() const { return m_scratchpadTree; }
+    [[nodiscard]] wlr_scene_tree* scratchpadShadowTree() const { return m_scratchpadShadowTree; }
+    [[nodiscard]] ScratchpadManager* scratchpadManager() const { return m_scratchpadManager.get(); }
     // Between windows and the drag/insert-hint tree: overview cards render here
     // while the real window trees are disabled.
     [[nodiscard]] wlr_scene_tree* overviewTree() const { return m_overviewTree; }
@@ -313,6 +317,9 @@ namespace umbriel {
     wlr_output_manager_v1* m_outputManager = nullptr;
     wlr_scene_tree* m_shellLayerTrees[kLayerCount]{};
     wlr_scene_tree* m_xdgTree = nullptr;
+    wlr_scene_tree* m_scratchpadTree = nullptr;
+    wlr_scene_tree* m_scratchpadShadowTree = nullptr;
+    wlr_scene_tree* m_scratchpadContentTree = nullptr;
     wlr_scene_tree* m_overviewTree = nullptr;
     wlr_scene_tree* m_dragTree = nullptr;
     wlr_scene_tree* m_dragIconTree = nullptr;
@@ -338,6 +345,7 @@ namespace umbriel {
     std::unique_ptr<Gestures> m_gestures;
     std::unique_ptr<SessionLock> m_sessionLock;
     std::unique_ptr<Overview> m_overview;
+    std::unique_ptr<ScratchpadManager> m_scratchpadManager;
     std::unique_ptr<HintRect> m_insertHint;
     std::unique_ptr<ConfigWatcher> m_configWatcher;
     std::unique_ptr<Ipc> m_ipc;

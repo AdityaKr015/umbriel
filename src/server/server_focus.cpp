@@ -9,6 +9,7 @@
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
 #include <algorithm>
@@ -42,6 +43,9 @@ namespace umbriel {
     }
     if (!view->onActiveWorkspace()) {
       return;
+    }
+    if (m_scratchpadManager != nullptr) {
+      m_scratchpadManager->noteFocus(view);
     }
 
     auto it = std::ranges::find_if(m_views, [view](const std::unique_ptr<View>& entry) { return entry.get() == view; });
@@ -252,6 +256,14 @@ namespace umbriel {
       spawn(bind.spawnCommand.c_str());
       return true;
     case KeybindAction::WindowClose:
+      if (m_scratchpadManager != nullptr) {
+        if (Output* output = outputFromWlr(preferredOutput())) {
+          if (View* view = m_scratchpadManager->focused(output)) {
+            wlr_xdg_toplevel_send_close(view->toplevel());
+            return true;
+          }
+        }
+      }
       if (Workspace* workspace = activeWorkspace()) {
         if (View* view = workspace->focusedView()) {
           wlr_xdg_toplevel_send_close(view->toplevel());
@@ -468,6 +480,15 @@ namespace umbriel {
         m_cheatsheet->hide();
       }
       return true;
+    case KeybindAction::WindowMoveToScratchpad:
+      return m_scratchpadManager != nullptr
+          && m_scratchpadManager->moveFocusedToScratchpad(outputFromWlr(preferredOutput()));
+    case KeybindAction::ScratchpadToggle:
+      return m_scratchpadManager != nullptr && m_scratchpadManager->toggle(outputFromWlr(preferredOutput()));
+    case KeybindAction::WindowRestoreFromScratchpad:
+      return m_scratchpadManager != nullptr && m_scratchpadManager->restoreFocused(outputFromWlr(preferredOutput()));
+    case KeybindAction::ScratchpadFocusNext:
+      return m_scratchpadManager != nullptr && m_scratchpadManager->focusNext(outputFromWlr(preferredOutput()));
     case KeybindAction::Submap:
       if (bind.spawnCommand == "reset" || bind.spawnCommand == "disable") {
         if (m_activeSubmaps.empty()) {

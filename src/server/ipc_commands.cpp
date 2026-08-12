@@ -31,7 +31,11 @@ namespace umbriel {
       for (const auto& entry : ok) {
         const std::string appId = entry.value("app_id", "");
         const std::string title = entry.value("title", "");
-        std::println("{}\t{}", appId.empty() ? "-" : appId, title.empty() ? "-" : title);
+        std::println(
+            "{}\t{}\t[{} {}x{}{:+}{:+}]", appId.empty() ? "-" : appId, title.empty() ? "-" : title,
+            entry.value("floating", false) ? "float" : "tile", entry.value("w", 0), entry.value("h", 0),
+            entry.value("x", 0), entry.value("y", 0)
+        );
       }
     }
 
@@ -57,6 +61,11 @@ namespace umbriel {
       nlohmann::json entry;
       entry["app_id"] = v->toplevel()->app_id != nullptr ? v->toplevel()->app_id : "";
       entry["title"] = v->toplevel()->title != nullptr ? v->toplevel()->title : "";
+      entry["floating"] = v->floating();
+      entry["x"] = v->sceneTree()->node.x;
+      entry["y"] = v->sceneTree()->node.y;
+      entry["w"] = v->toplevel()->base->geometry.width;
+      entry["h"] = v->toplevel()->base->geometry.height;
       windows.push_back(std::move(entry));
     }
     return nlohmann::json{{"ok", windows}};

@@ -591,7 +591,6 @@ namespace umbriel {
 
   void View::beginResizeAnimation(int width, int height) {
     if (!m_mapped
-        || !m_tiled
         || !m_onActiveWorkspace
         || m_workspace == nullptr
         || m_toplevel->scheduled.fullscreen
@@ -755,6 +754,43 @@ namespace umbriel {
   void View::onSetAppId(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_setAppId);
     self->handleSetAppId();
+  }
+
+  wlr_box View::floatingUsableArea() const {
+    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+      return m_workspace->group()->output()->usableArea();
+    }
+    return m_server->usableAreaAt(m_sceneTree->node.x, m_sceneTree->node.y);
+  }
+
+  void View::clampFloatingPosition() {
+    if (m_tiled
+        || !m_mapped
+        || m_toplevel->scheduled.fullscreen
+        || m_toplevel->scheduled.maximized
+        || sizeGrabActive()
+        || m_posX.animating()
+        || m_posY.animating()) {
+      return;
+    }
+    if (Cursor* cursor = m_server->cursor(); cursor != nullptr && cursor->isDraggingView(this)) {
+      return;
+    }
+
+    const wlr_box usable = floatingUsableArea();
+    const wlr_box& geo = m_toplevel->base->geometry;
+    if (usable.width <= 0 || usable.height <= 0 || geo.width <= 0 || geo.height <= 0) {
+      return;
+    }
+
+    const int visibleX = std::clamp(geo.width / 4, 10, 75);
+    const int visibleY = std::clamp(geo.height / 4, 10, 75);
+    const int x = std::clamp(m_sceneTree->node.x, usable.x + visibleX - geo.width, usable.x + usable.width - visibleX);
+    const int y =
+        std::clamp(m_sceneTree->node.y, usable.y + visibleY - geo.height, usable.y + usable.height - visibleY);
+    if (x != m_sceneTree->node.x || y != m_sceneTree->node.y) {
+      setPosition(x, y);
+    }
   }
 
   void View::placeInUsableArea() {
@@ -1212,6 +1248,76 @@ namespace umbriel {
     updateShadow();
   }
 
+  void View::requestFloatingSize(int width, int height) {
+    m_floatingSizeRequestSerial = wlr_xdg_toplevel_set_size(m_toplevel, width, height);
+  }
+  void View::beginFloatingResize(uint32_t edges) {
+    const wlr_box& geo = m_toplevel->base->geometry;
+    m_floatingResizeAnchor = {
+        .x = m_sceneTree->node.x + geo.x,
+        .y = m_sceneTree->node.y + geo.y,
+        .width = geo.width,
+        .height = geo.height,
+    };
+    m_floatingResizeEdges = edges;
+    m_floatingResizeActive = true;
+    syncFloatingResizePosition();
+  }
+
+  void View::resizeFloating(int width, int height) {
+    syncFloatingResizePosition();
+    requestFloatingSize(width, height);
+  }
+
+  void View::finishFloatingResize() {
+    m_floatingResizeActive = false;
+    if (!m_floatingSizeRequestSerial) {
+      m_floatingResizeAnchor.reset();
+      m_floatingResizeEdges = 0;
+    }
+  }
+
+  void View::syncFloatingResizePosition() {
+    if (!m_floatingResizeAnchor) {
+      return;
+    }
+    const wlr_box& anchor = *m_floatingResizeAnchor;
+    const wlr_box& geo = m_toplevel->base->geometry;
+    const int contentX = (m_floatingResizeEdges & WLR_EDGE_LEFT) != 0 ? anchor.x + anchor.width - geo.width : anchor.x;
+    const int contentY = (m_floatingResizeEdges & WLR_EDGE_TOP) != 0 ? anchor.y + anchor.height - geo.height : anchor.y;
+    setPosition(contentX - geo.x, contentY - geo.y);
+  }
+
+  void View::adoptFloatingClientSize() {
+    if (m_tiled || !m_mapped || m_toplevel->scheduled.fullscreen || m_toplevel->scheduled.maximized) {
+      return;
+    }
+    wlr_xdg_surface* base = m_toplevel->base;
+    if (m_floatingSizeRequestSerial) {
+      const uint32_t committedSerial = base->current.configure_serial;
+      const uint32_t requestedSerial = *m_floatingSizeRequestSerial;
+      if (static_cast<int32_t>(committedSerial - requestedSerial) < 0) {
+        return;
+      }
+      m_floatingSizeRequestSerial.reset();
+      if (!m_floatingResizeActive) {
+        m_floatingResizeAnchor.reset();
+        m_floatingResizeEdges = 0;
+      }
+    }
+    const wlr_box& geo = base->geometry;
+    if (geo.width <= 0 || geo.height <= 0) {
+      return;
+    }
+    if (m_toplevel->scheduled.width != geo.width || m_toplevel->scheduled.height != geo.height) {
+      // Once the latest compositor size request is committed, a floating
+      // client owns its size. Direct assignment avoids an echo configure.
+      m_toplevel->scheduled.width = geo.width;
+      m_toplevel->scheduled.height = geo.height;
+      clampFloatingPosition();
+    }
+  }
+
   void View::syncFloatingSurfaceClip() {
     if (m_tiled || m_toplevel->scheduled.fullscreen) {
       return;
@@ -1499,9 +1605,8 @@ namespace umbriel {
       }
     }
     if (!m_tiled) {
-      if (rule.defaultSize) {
-        wlr_xdg_toplevel_set_size(m_toplevel, (*rule.defaultSize)[0], (*rule.defaultSize)[1]);
-      }
+      // The initial commit already applied default_size. Re-requesting it here
+      // races the client's first content-driven resize.
       placeInUsableArea();
       // Enable + clip the float against its home output now that per-output
       // visibility is resolved data-side (no per-render-pass pass to do it).
@@ -1580,6 +1685,7 @@ namespace umbriel {
     m_initialRulesSettled = false;
     m_ruleOpacity = 1.0F;
     m_hasMaximizeRestoreBox = false;
+    m_floatingSizeRequestSerial.reset();
   }
 
   void View::handleCommit() {
@@ -1649,10 +1755,13 @@ namespace umbriel {
         wlr_xdg_toplevel_set_size(m_toplevel, width, height);
       } else {
         wlr_xdg_toplevel_set_tiled(m_toplevel, 0);
+        const XdgSizeHints hints = xdgSizeHints(m_toplevel);
         if (rule.defaultSize) {
-          wlr_xdg_toplevel_set_size(m_toplevel, (*rule.defaultSize)[0], (*rule.defaultSize)[1]);
+          requestFloatingSize(
+              clampXdgWidth((*rule.defaultSize)[0], hints), clampXdgHeight((*rule.defaultSize)[1], hints)
+          );
         } else {
-          wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
+          requestFloatingSize(0, 0);
         }
       }
     }
@@ -1701,7 +1810,11 @@ namespace umbriel {
         // reset the surface offset for this commit.
         applyFullscreenLayout();
       } else {
-        syncFloatingSurfaceClip();
+        syncFloatingResizePosition();
+        adoptFloatingClientSize();
+        if (!sizeAnimating()) {
+          syncFloatingSurfaceClip();
+        }
         // Enable + clip to the home output (previously done per render pass).
         if (m_workspace != nullptr) {
           m_workspace->syncViewPresentation(this);
@@ -1787,6 +1900,7 @@ namespace umbriel {
 
     const bool wasMaximized = m_toplevel->scheduled.maximized;
     if (maximized && !wasMaximized) {
+      m_floatingSizeRequestSerial.reset();
       const wlr_box& geometry = m_toplevel->base->geometry;
       m_maximizeRestoreBox = {
           .x = m_sceneTree->node.x,
@@ -1796,12 +1910,7 @@ namespace umbriel {
       };
       m_hasMaximizeRestoreBox = geometry.width > 0 && geometry.height > 0;
 
-      wlr_box usable{};
-      if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-        usable = m_workspace->group()->output()->usableArea();
-      } else {
-        usable = m_server->usableAreaAt(m_sceneTree->node.x, m_sceneTree->node.y);
-      }
+      const wlr_box usable = floatingUsableArea();
       if (usable.width > 0 && usable.height > 0) {
         wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
         wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
@@ -1810,7 +1919,7 @@ namespace umbriel {
         }
       }
     } else if (!maximized && wasMaximized && m_hasMaximizeRestoreBox) {
-      wlr_xdg_toplevel_set_size(m_toplevel, m_maximizeRestoreBox.width, m_maximizeRestoreBox.height);
+      requestFloatingSize(m_maximizeRestoreBox.width, m_maximizeRestoreBox.height);
       wlr_scene_node_set_position(&m_sceneTree->node, m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
       if (m_shadowContainer != nullptr) {
         wlr_scene_node_set_position(&m_shadowContainer->node, m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
@@ -1899,39 +2008,48 @@ namespace umbriel {
     }
 
     if (floating) {
-      // Prefer the last acked/scheduled configure size (what the user already sees),
-      // not the raw layout target (may be unclamped) or surface geometry (may lag).
-      int keepWidth = m_toplevel->current.width;
-      int keepHeight = m_toplevel->current.height;
-      if (keepWidth <= 0 || keepHeight <= 0) {
-        keepWidth = m_toplevel->scheduled.width;
-        keepHeight = m_toplevel->scheduled.height;
-      }
-      if (m_workspace != nullptr) {
-        const wlr_box target = m_workspace->layout().targetBox(this);
-        if (target.width > 0 && target.height > 0) {
-          const XdgSizeHints hints = xdgSizeHints(m_toplevel);
-          const int tw = clampXdgWidth(target.width, hints);
-          const int th = clampXdgHeight(target.height, hints);
-          if (keepWidth <= 0 || keepHeight <= 0) {
-            keepWidth = tw;
-            keepHeight = th;
-          } else {
-            keepWidth = std::min(keepWidth, tw);
-            keepHeight = std::min(keepHeight, th);
+      int keepWidth = 0;
+      int keepHeight = 0;
+      if (m_floatingSize) {
+        keepWidth = (*m_floatingSize)[0];
+        keepHeight = (*m_floatingSize)[1];
+      } else {
+        // First-time floats prefer the last acked or scheduled configure size,
+        // then fall back to the layout target and committed geometry.
+        keepWidth = m_toplevel->current.width;
+        keepHeight = m_toplevel->current.height;
+        if (keepWidth <= 0 || keepHeight <= 0) {
+          keepWidth = m_toplevel->scheduled.width;
+          keepHeight = m_toplevel->scheduled.height;
+        }
+        if (m_workspace != nullptr) {
+          const wlr_box target = m_workspace->layout().targetBox(this);
+          if (target.width > 0 && target.height > 0) {
+            const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+            const int tw = clampXdgWidth(target.width, hints);
+            const int th = clampXdgHeight(target.height, hints);
+            if (keepWidth <= 0 || keepHeight <= 0) {
+              keepWidth = tw;
+              keepHeight = th;
+            } else {
+              keepWidth = std::min(keepWidth, tw);
+              keepHeight = std::min(keepHeight, th);
+            }
           }
         }
+        if (keepWidth <= 0 || keepHeight <= 0) {
+          const wlr_box& geo = m_toplevel->base->geometry;
+          keepWidth = geo.width;
+          keepHeight = geo.height;
+        }
+      }
+      if (m_workspace != nullptr) {
         const int column = m_workspace->layout().columnOf(this);
         if (column >= 0 && m_workspace->layout().isFullWidth(column)) {
           m_workspace->layout().clearFullWidthState(column);
           wlr_xdg_toplevel_set_maximized(m_toplevel, false);
         }
         m_workspace->layoutDetach(this);
-      }
-      if (keepWidth <= 0 || keepHeight <= 0) {
-        const wlr_box& geo = m_toplevel->base->geometry;
-        keepWidth = geo.width;
-        keepHeight = geo.height;
       }
       const int keepX = m_sceneTree->node.x;
       const int keepY = m_sceneTree->node.y;
@@ -1945,41 +2063,24 @@ namespace umbriel {
       if (keepWidth > 0
           && keepHeight > 0
           && (m_toplevel->scheduled.width != keepWidth || m_toplevel->scheduled.height != keepHeight)) {
-        wlr_xdg_toplevel_set_size(m_toplevel, keepWidth, keepHeight);
+        requestFloatingSize(keepWidth, keepHeight);
       }
-      // Nudge down-right so the float is obviously detached from the tile strip.
-      wlr_box usable{};
-      if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-        usable = m_workspace->group()->output()->usableArea();
-      } else {
-        usable = m_server->usableAreaAt(keepX, keepY);
+      beginResizeAnimation(keepWidth, keepHeight);
+      const wlr_box usable = floatingUsableArea();
+      int floatX = keepX + 50;
+      int floatY = keepY + 50;
+      if (m_floatingPosFrac && usable.width > 0 && usable.height > 0) {
+        floatX = usable.x + static_cast<int>(std::lround((*m_floatingPosFrac)[0] * usable.width));
+        floatY = usable.y + static_cast<int>(std::lround((*m_floatingPosFrac)[1] * usable.height));
       }
-      const int gap = m_workspace != nullptr ? m_workspace->layoutConfig().gap : resolveGlobalLayout().gap;
-      const int nudge = std::max(32, gap * 2);
-      // Clamp the immediate position so the window never starts off-screen.
-      int snapX = keepX;
-      int snapY = keepY;
       if (usable.width > 0 && usable.height > 0 && keepWidth > 0 && keepHeight > 0) {
-        snapX = std::clamp(snapX, usable.x, std::max(usable.x, usable.x + usable.width - keepWidth));
-        snapY = std::clamp(snapY, usable.y, std::max(usable.y, usable.y + usable.height - keepHeight));
+        floatX = std::clamp(floatX, usable.x, std::max(usable.x, usable.x + usable.width - keepWidth));
+        floatY = std::clamp(floatY, usable.y, std::max(usable.y, usable.y + usable.height - keepHeight));
+        m_floatingPosFrac = {{
+            static_cast<double>(floatX - usable.x) / usable.width,
+            static_cast<double>(floatY - usable.y) / usable.height,
+        }};
       }
-      // Nudge away from the tile strip, but only in directions that keep the
-      // window fully on screen: prefer down-right, fall back to up-left.
-      int floatX = snapX;
-      int floatY = snapY;
-      if (usable.width > 0 && usable.height > 0 && keepWidth > 0 && keepHeight > 0) {
-        if (snapY + keepHeight + nudge <= usable.y + usable.height) {
-          floatY += nudge;
-        } else if (snapY - nudge >= usable.y) {
-          floatY -= nudge;
-        }
-        if (snapX + keepWidth + nudge <= usable.x + usable.width) {
-          floatX += nudge;
-        } else if (snapX - nudge >= usable.x) {
-          floatX -= nudge;
-        }
-      }
-      setPosition(snapX, snapY);
       animateTo(floatX, floatY);
       syncFloatingSurfaceClip();
       // Keep the focus ring when floating a tiled window.
@@ -1994,6 +2095,19 @@ namespace umbriel {
       return;
     }
 
+    const wlr_box usable = floatingUsableArea();
+    const wlr_box& geo = m_toplevel->base->geometry;
+    if (geo.width > 0 && geo.height > 0) {
+      m_floatingSize = {{geo.width, geo.height}};
+    }
+    if (usable.width > 0 && usable.height > 0) {
+      m_floatingPosFrac = {{
+          static_cast<double>(m_sceneTree->node.x - usable.x) / usable.width,
+          static_cast<double>(m_sceneTree->node.y - usable.y) / usable.height,
+      }};
+    }
+
+    m_floatingSizeRequestSerial.reset();
     m_tiled = true;
     if (m_workspace != nullptr) {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(m_tiled));
@@ -2026,6 +2140,9 @@ namespace umbriel {
         m_workspace->layout().clearFullWidthState(column);
         wlr_xdg_toplevel_set_maximized(m_toplevel, false);
       }
+    }
+    if (fullscreen) {
+      m_floatingSizeRequestSerial.reset();
     }
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     updateFullscreenPresentation(0, 0);
@@ -2114,7 +2231,10 @@ namespace umbriel {
 
       // Float size.
       if (rule.defaultSize && !m_tiled) {
-        wlr_xdg_toplevel_set_size(m_toplevel, (*rule.defaultSize)[0], (*rule.defaultSize)[1]);
+        const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+        requestFloatingSize(
+            clampXdgWidth((*rule.defaultSize)[0], hints), clampXdgHeight((*rule.defaultSize)[1], hints)
+        );
         placeInUsableArea();
       }
 

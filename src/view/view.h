@@ -5,6 +5,7 @@
 #include "scene/surface_shadow.h"
 
 #include <array>
+#include <optional>
 #include <wayland-server-core.h>
 
 extern "C" {
@@ -56,6 +57,8 @@ namespace umbriel {
     void setScratchpadBorder(bool scratchpad);
     void animateTo(int x, int y);
     void setPosition(int x, int y);
+    // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
+    void clampFloatingPosition();
     // Animate the presented size toward a layout-assigned size. Called by
     // Workspace::arrange when it configures the client, so the animation owns
     // m_presentedW/H before the clip can report the final size.
@@ -170,6 +173,13 @@ namespace umbriel {
     void unconstrainPopup(wlr_xdg_popup* popup);
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
+    void requestFloatingSize(int width, int height);
+    void beginFloatingResize(uint32_t edges);
+    void resizeFloating(int width, int height);
+    void finishFloatingResize();
+    void syncFloatingResizePosition();
+    void adoptFloatingClientSize();
+    [[nodiscard]] wlr_box floatingUsableArea() const;
     void placeInUsableArea();
     void ensureBorders();
     void updateForeignIdentity();
@@ -226,6 +236,17 @@ namespace umbriel {
     float m_ruleOpacity = 1.0F;
     bool m_hasMaximizeRestoreBox = false;
     wlr_box m_maximizeRestoreBox{};
+    // Floating geometry memory survives tiled-to-floating round trips.
+    std::optional<std::array<int, 2>> m_floatingSize;
+    std::optional<std::array<double, 2>> m_floatingPosFrac;
+    // Latest compositor-owned floating size request. Client geometry becomes
+    // authoritative after committing this configure serial.
+    std::optional<uint32_t> m_floatingSizeRequestSerial;
+    // Content box at interactive-resize start. Left/top resizes keep the
+    // opposite edge fixed while client geometry catches up asynchronously.
+    std::optional<wlr_box> m_floatingResizeAnchor;
+    uint32_t m_floatingResizeEdges = 0;
+    bool m_floatingResizeActive = false;
 
     wl_listener m_map{};
     wl_listener m_unmap{};

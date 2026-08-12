@@ -305,10 +305,10 @@ namespace umbriel {
           .width = geometry.width,
           .height = geometry.height,
       };
+      const int presentW = view->presentedWidth(target);
+      const int presentH = view->presentedHeight(target);
       const int border = config().appearance.totalBorderWidth();
-      const wlr_box decorated{
-          target.x - border, target.y - border, target.width + 2 * border, target.height + 2 * border
-      };
+      const wlr_box decorated{target.x - border, target.y - border, presentW + 2 * border, presentH + 2 * border};
       wlr_box intersection{};
       const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
       view->setNodeEnabled(visible);
@@ -362,6 +362,7 @@ namespace umbriel {
       }
       if (m_layout->columnOf(view) < 0) {
         // Floating (non-fullscreen): clip + enable against the home output.
+        view->clampFloatingPosition();
         syncViewPresentation(view);
         continue;
       }

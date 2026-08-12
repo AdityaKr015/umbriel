@@ -51,6 +51,11 @@ Workspace selectors are exact names (including numeric ones like `1`). Unique
 names resolve globally; duplicate names resolve on the preferred output. Append
 `/output` to target a different output explicitly.
 
+### Floating action
+
+`window-toggle-floating` remembers the window's floating size and position.
+The first float lands slightly down-right of the tile, clamped on-screen.
+
 ### Overview actions
 
 `overview-toggle`, `overview-open`, `overview-close`.

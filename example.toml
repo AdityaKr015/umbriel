@@ -140,7 +140,7 @@ follows_mouse = false
 [[window_rule]]
 match.app_id = "^dev.noctalia.Noctalia$"
 default_floating = true
-default_size = [1000, 900]
+default_size = [1020, 900]
 
 [[window_rule]]
 match.app_id = "^dev.noctalia.UmbrielSharePicker$"

@@ -232,6 +232,7 @@ namespace umbriel {
     m_grabGeoY = geo->y + view->sceneTree()->node.y;
     m_grabGeoWidth = geo->width;
     m_grabGeoHeight = geo->height;
+    view->beginFloatingResize(edges);
     updateInteractiveCursor(view);
   }
 
@@ -245,6 +246,9 @@ namespace umbriel {
           &m_grabbedView->sceneTree()->node, m_grabbedView->workspace()->viewLayer(m_grabbedView->tiled())
       );
       m_grabbedView->workspace()->restackFloatingViews();
+    }
+    if (previousMode == CursorMode::Resize && m_grabbedView != nullptr) {
+      m_grabbedView->finishFloatingResize();
     }
     m_mode = CursorMode::Passthrough;
     m_grabbedView = nullptr;
@@ -1007,9 +1011,7 @@ namespace umbriel {
       }
     }
 
-    wlr_box* geo = &m_grabbedView->toplevel()->base->geometry;
-    wlr_scene_node_set_position(&m_grabbedView->sceneTree()->node, newLeft - geo->x, newTop - geo->y);
-    wlr_xdg_toplevel_set_size(m_grabbedView->toplevel(), newRight - newLeft, newBottom - newTop);
+    m_grabbedView->resizeFloating(newRight - newLeft, newBottom - newTop);
   }
 
   uint32_t Cursor::floatResizeEdges(View* view) const {

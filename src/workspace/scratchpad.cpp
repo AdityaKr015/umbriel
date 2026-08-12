@@ -94,8 +94,9 @@ namespace umbriel {
     wlr_scene_node_reparent(&view->sceneTree()->node, m_root);
     view->reparentShadow(m_shadowRoot);
     view->setScratchpadBorder(true);
+    const bool wasVisible = std::ranges::find(m_visibleOutputs, output) != m_visibleOutputs.end();
     m_entries.push_back(std::move(entry));
-    setVisible(output, false);
+    setVisible(output, wasVisible);
     m_server->refocus(sourceOutput);
     return true;
   }

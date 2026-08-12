@@ -4,9 +4,10 @@
 #include "config/config_diag.h"
 #include "core/fdlimit.h"
 #include "core/log.h"
+#include "server/ipc_commands.h"
 #include "server/server.h"
-#include "wlr.h"
 
+#include <algorithm>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -61,26 +62,31 @@ namespace {
   }
 
   void printHelp(FILE* stream) {
+    auto row = [stream](std::string_view lead, std::string_view cmd, std::string_view desc) {
+      std::println(stream, "{}umbriel {:<30} {}", lead, cmd, desc);
+    };
+    std::println(stream, "umbriel {} — a wayland compositor\n", UMBRIEL_VERSION);
+    row("Usage: ", "[-s <command>] [-c <config>]", "run the compositor");
+    row("       ", "validate [-c <config>]", "check the config file");
+    row("       ", "outputs", "list outputs and modes");
+    for (const auto& spec : umbriel::ipcCommands()) {
+      std::string cmd{spec.name};
+      if (!spec.argSpec.empty()) {
+        cmd += ' ';
+        cmd += spec.argSpec;
+      }
+      row("       ", cmd, spec.description);
+    }
+    row("       ", "actions", "list available actions");
+    row("       ", "help | -h | --help", "show this help");
+    row("       ", "--version", "print version");
     std::println(
         stream,
-        "umbriel {} — a wayland compositor\n"
-        "\n"
-        "Usage: umbriel [-s <command>] [-c <config>]   run the compositor\n"
-        "       umbriel validate [-c <config>]          check the config file\n"
-        "       umbriel outputs                          list outputs and modes\n"
-        "       umbriel apps                             list running application ids\n"
-        "       umbriel layers                           list layer-shell surfaces\n"
-        "       umbriel msg <action> [args...]           send an action to the compositor\n"
-        "       umbriel actions                           list available actions\n"
-        "       umbriel help | -h | --help               show this help\n"
-        "       umbriel --version                        print version\n"
-        "\n"
-        "Options:\n"
+        "\nOptions:\n"
         "  -s <command>   spawn <command> once the compositor starts\n"
         "  -c <config>    use <config> instead of the default config path\n"
         "\n"
-        "Run `umbriel actions` to list all available actions for `msg` and keybinds.",
-        UMBRIEL_VERSION
+        "Run `umbriel actions` to list all available actions for `msg` and keybinds."
     );
   }
 
@@ -116,41 +122,47 @@ int main(int argc, char** argv) {
       return EXIT_SUCCESS;
     }
 
-    // IPC subcommands: apps, layers, msg
+    // IPC subcommands
     auto isJsonFlag = [](const char* arg) { return std::strcmp(arg, "--json") == 0 || std::strcmp(arg, "-j") == 0; };
     auto isHelpFlag = [](const char* arg) { return std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0; };
 
-    if (std::strcmp(argv[1], "apps") == 0 || std::strcmp(argv[1], "layers") == 0) {
-      bool jf = false;
-      for (int i = 2; i < argc; ++i) {
-        if (isHelpFlag(argv[i])) {
-          printHelp(stdout);
-          return EXIT_SUCCESS;
+    if (const auto* spec = umbriel::findIpcCommand(argv[1])) {
+      if (!spec->takesArg) {
+        bool jf = false;
+        for (int i = 2; i < argc; ++i) {
+          if (isHelpFlag(argv[i])) {
+            printHelp(stdout);
+            return EXIT_SUCCESS;
+          }
+          if (isJsonFlag(argv[i])) {
+            jf = true;
+          } else {
+            printHelp(stderr);
+            return EXIT_FAILURE;
+          }
         }
-        if (isJsonFlag(argv[i])) {
-          jf = true;
-        } else {
-          printHelp(stderr);
-          return EXIT_FAILURE;
-        }
+        return umbriel::runIpcCommand(*spec, {}, jf);
       }
-      auto cmd = std::strcmp(argv[1], "apps") == 0 ? umbriel::IpcCommand::Apps : umbriel::IpcCommand::Layers;
-      return umbriel::runIpcCommand(cmd, {}, jf);
-    }
-    if (std::strcmp(argv[1], "msg") == 0) {
+
       // Help only when -h/--help is the immediate argument (not buried in spawn args).
       if (argc == 3 && isHelpFlag(argv[2])) {
-        std::println("Usage: umbriel msg <action> [args...]");
+        std::println("Usage: umbriel {} {}", spec->name, spec->argSpec);
         std::println("");
         std::println("Send an action to the running compositor.");
         std::println("Use `msg spawn <cmd...>` as shorthand for `msg spawn:<cmd...>`.");
         std::println("");
         std::println("Available actions:");
-        for (const auto& spec : umbriel::actionSpecs()) {
-          if (spec.param.empty()) {
-            std::println("  {}", spec.name);
+        std::vector<const umbriel::ActionSpec*> sortedActions;
+        sortedActions.reserve(umbriel::actionSpecs().size());
+        for (const auto& actionSpec : umbriel::actionSpecs()) {
+          sortedActions.push_back(&actionSpec);
+        }
+        std::ranges::sort(sortedActions, {}, [](const auto* actionSpec) { return actionSpec->name; });
+        for (const auto* actionSpec : sortedActions) {
+          if (actionSpec->param.empty()) {
+            std::println("  {}", actionSpec->name);
           } else {
-            std::println("  {}:{}", spec.name, spec.param);
+            std::println("  {}:{}", actionSpec->name, actionSpec->param);
           }
         }
         return EXIT_SUCCESS;
@@ -195,7 +207,7 @@ int main(int argc, char** argv) {
           actionString += args[i];
         }
       }
-      return umbriel::runIpcCommand(umbriel::IpcCommand::Action, actionString, jf);
+      return umbriel::runIpcCommand(*spec, actionString, jf);
     }
   }
 

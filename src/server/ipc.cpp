@@ -1,11 +1,8 @@
 #include "server/ipc.h"
 
-#include "config/config.h"
 #include "core/log.h"
-#include "layer/surface.h"
+#include "server/ipc_commands.h"
 #include "server/server.h"
-#include "view/view.h"
-#include "wlr.h"
 
 #include <cerrno>
 #include <cstdlib>
@@ -22,20 +19,6 @@ namespace umbriel {
     constexpr Logger kLog("ipc");
     constexpr size_t kMaxRequestSize = 65536;
 
-    const char* layerName(uint32_t layer) {
-      switch (layer) {
-      case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
-        return "background";
-      case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        return "bottom";
-      case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
-        return "top";
-      case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
-        return "overlay";
-      default:
-        return "unknown";
-      }
-    }
   } // namespace
 
   Ipc::Ipc(Server& server, const std::string& waylandSocketName) : m_server(&server) {
@@ -167,55 +150,19 @@ namespace umbriel {
     if (req.is_discarded() || !req.is_object() || !req.contains("cmd") || !req["cmd"].is_string()) {
       return R"({"err":"malformed request"})";
     }
-
     const std::string cmd = req["cmd"].get<std::string>();
-
-    if (cmd == "apps") {
-      nlohmann::json apps = nlohmann::json::array();
-      for (const auto& v : m_server->m_views) {
-        if (!v->mapped()) {
-          continue;
-        }
-        nlohmann::json entry;
-        entry["app_id"] = v->toplevel()->app_id != nullptr ? v->toplevel()->app_id : "";
-        entry["title"] = v->toplevel()->title != nullptr ? v->toplevel()->title : "";
-        apps.push_back(std::move(entry));
-      }
-      return nlohmann::json{{"ok", apps}}.dump();
+    const IpcCommandSpec* spec = findIpcCommand(cmd);
+    if (spec == nullptr) {
+      return nlohmann::json{{"err", "unknown command: " + cmd}}.dump();
     }
-
-    if (cmd == "layers") {
-      nlohmann::json layers = nlohmann::json::array();
-      for (const auto& l : m_server->m_layerSurfaces) {
-        auto* s = l->layerSurface();
-        nlohmann::json entry;
-        entry["layer"] = layerName(s->current.layer);
-        entry["namespace"] = s->namespace_ != nullptr ? s->namespace_ : "";
-        entry["output"] = s->output != nullptr ? s->output->name : "";
-        entry["mapped"] = l->mapped();
-        layers.push_back(std::move(entry));
-      }
-      return nlohmann::json{{"ok", layers}}.dump();
-    }
-
-    if (cmd == "action") {
-      if (!req.contains("action") || !req["action"].is_string()) {
+    std::string arg;
+    if (spec->takesArg) {
+      if (!req.contains("arg") || !req["arg"].is_string()) {
         return R"({"err":"malformed request"})";
       }
-      const std::string actionStr = req["action"].get<std::string>();
-      Keybind bind{};
-      if (!parseAction(actionStr, bind)) {
-        return nlohmann::json{{"err", "unknown action: " + actionStr}}.dump();
-      }
-      std::string error;
-      m_server->executeKeybindAction(bind, &error);
-      if (!error.empty()) {
-        return nlohmann::json{{"err", error}}.dump();
-      }
-      return R"({"ok":null})";
+      arg = req["arg"].get<std::string>();
     }
-
-    return nlohmann::json{{"err", "unknown command: " + cmd}}.dump();
+    return spec->handle(*m_server, arg).dump();
   }
 
 } // namespace umbriel

@@ -145,6 +145,7 @@ sources = files(
   'src/cli/outputs.cpp',
   'src/cli/ipc_client.cpp',
   'src/server/ipc.cpp',
+  'src/server/ipc_commands.cpp',
 )
 
 umbriel = executable(

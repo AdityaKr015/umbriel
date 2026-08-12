@@ -91,6 +91,7 @@ namespace umbriel {
   class ConfigBanner;
   class Cheatsheet;
   class Ipc;
+  struct IpcCommands;
 
   class Server {
   public:
@@ -202,6 +203,7 @@ namespace umbriel {
     friend class SessionLock;
     friend class LockSurface;
     friend class Ipc;
+    friend struct IpcCommands;
     friend class Overview;
 
     static void onNewOutput(wl_listener* listener, void* data);

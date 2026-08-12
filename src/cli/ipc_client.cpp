@@ -1,5 +1,7 @@
 #include "cli/ipc_client.h"
 
+#include "server/ipc_commands.h"
+
 #include <cstdlib>
 #include <nlohmann/json.hpp>
 #include <print>
@@ -24,7 +26,7 @@ namespace umbriel {
     }
   } // namespace
 
-  int runIpcCommand(IpcCommand cmd, std::string_view arg, bool json) {
+  int runIpcCommand(const IpcCommandSpec& spec, std::string_view arg, bool json) {
     std::string socketPath = resolveSocketPath();
     if (socketPath.empty()) {
       std::println(stderr, "error: cannot find umbriel socket (is the compositor running?)");
@@ -59,17 +61,9 @@ namespace umbriel {
 
     // Build request.
     nlohmann::json req;
-    switch (cmd) {
-    case IpcCommand::Apps:
-      req["cmd"] = "apps";
-      break;
-    case IpcCommand::Layers:
-      req["cmd"] = "layers";
-      break;
-    case IpcCommand::Action:
-      req["cmd"] = "action";
-      req["action"] = std::string(arg);
-      break;
+    req["cmd"] = spec.name;
+    if (spec.takesArg) {
+      req["arg"] = std::string(arg);
     }
     std::string payload = req.dump() + "\n";
 
@@ -130,25 +124,9 @@ namespace umbriel {
       return EXIT_SUCCESS;
     }
 
-    // Human-readable output.
-    if (cmd == IpcCommand::Apps) {
-      for (const auto& entry : ok) {
-        const std::string appId = entry.value("app_id", "");
-        const std::string title = entry.value("title", "");
-        std::println("{}\t{}", appId.empty() ? "-" : appId, title.empty() ? "-" : title);
-      }
-    } else if (cmd == IpcCommand::Layers) {
-      for (const auto& entry : ok) {
-        const std::string layer = entry.value("layer", "");
-        const std::string ns = entry.value("namespace", "");
-        const std::string output = entry.value("output", "");
-        bool mapped = entry.value("mapped", false);
-        std::println(
-            "{}\t{}\t{}\t{}", layer, ns.empty() ? "-" : ns, output.empty() ? "-" : output, mapped ? "yes" : "no"
-        );
-      }
+    if (spec.printHuman != nullptr) {
+      spec.printHuman(ok);
     }
-    // action → print nothing on success.
 
     return EXIT_SUCCESS;
   }

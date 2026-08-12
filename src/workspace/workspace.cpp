@@ -92,6 +92,33 @@ namespace umbriel {
   void Workspace::setFocusedView(View* view) {
     if (view == nullptr || view->workspace() == this) {
       m_focusedView = view;
+      if (view != nullptr && view->floating()) {
+        std::erase(m_floatingStack, view);
+        m_floatingStack.push_back(view);
+        restackFloatingViews();
+      }
+    }
+  }
+
+  void Workspace::syncFloatingStack(View* view) {
+    if (view == nullptr || view->workspace() != this) {
+      return;
+    }
+    if (view->floating()) {
+      if (std::ranges::find(m_floatingStack, view) == m_floatingStack.end()) {
+        m_floatingStack.push_back(view);
+      }
+    } else {
+      std::erase(m_floatingStack, view);
+    }
+    restackFloatingViews();
+  }
+
+  void Workspace::restackFloatingViews() {
+    for (View* view : m_floatingStack) {
+      if (view != nullptr && view->workspace() == this && view->floating()) {
+        view->raiseToTop();
+      }
     }
   }
 
@@ -103,6 +130,7 @@ namespace umbriel {
     const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
     wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : viewLayer(view->tiled()));
     view->reparentShadow(m_shadowLayer);
+    syncFloatingStack(view);
     applyVisibility();
     if (attachToLayout) {
       layoutAttach(view);
@@ -121,6 +149,7 @@ namespace umbriel {
     const int removedColumn = m_layout->columnOf(view);
     m_layout->removeView(view);
     std::erase(m_views, view);
+    std::erase(m_floatingStack, view);
     std::erase(m_switchViews, view);
 
     View* replacement = nullptr;

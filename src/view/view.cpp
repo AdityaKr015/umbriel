@@ -270,6 +270,13 @@ namespace umbriel {
     }
   }
 
+  void View::raiseToTop() {
+    wlr_scene_node_raise_to_top(&m_sceneTree->node);
+    if (m_shadowContainer != nullptr) {
+      wlr_scene_node_raise_to_top(&m_shadowContainer->node);
+    }
+  }
+
   void View::setScratchpadBorder(bool scratchpad) {
     if (m_scratchpadBorder == scratchpad) {
       return;
@@ -310,7 +317,7 @@ namespace umbriel {
     // deactivating only that surface can leave another window's focus border on.
     m_server->deactivateViews(this);
 
-    wlr_scene_node_raise_to_top(&m_sceneTree->node);
+    raiseToTop();
     wlr_xdg_toplevel_set_activated(m_toplevel, true);
     setBorderFocused(true);
     setForeignActivated(true);
@@ -1931,6 +1938,7 @@ namespace umbriel {
       m_tiled = false;
       if (m_workspace != nullptr) {
         wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(m_tiled));
+        m_workspace->syncFloatingStack(this);
       }
       // Do not clear xdg tiled edges: GTK/Qt often resize (CSD / preferred size) when
       // tiled state is dropped. Floating is a compositor layout concern.
@@ -1989,6 +1997,7 @@ namespace umbriel {
     m_tiled = true;
     if (m_workspace != nullptr) {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(m_tiled));
+      m_workspace->syncFloatingStack(this);
     }
     wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
     wlr_xdg_toplevel_set_maximized(m_toplevel, false);
@@ -2037,6 +2046,9 @@ namespace umbriel {
       }
     } else {
       wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
+      if (!m_tiled && m_workspace != nullptr) {
+        m_workspace->restackFloatingViews();
+      }
     }
     if (m_borderTree != nullptr) {
       wlr_scene_node_set_enabled(&m_borderTree->node, !fullscreen);

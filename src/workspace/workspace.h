@@ -51,6 +51,8 @@ namespace umbriel {
 
     void setActive(bool active);
     void setFocusedView(View* view);
+    void syncFloatingStack(View* view);
+    void restackFloatingViews();
     void addView(View* view, bool attachToLayout = true);
     View* removeView(View* view);
     void layoutAttach(View* view, std::optional<double> initialWidth = std::nullopt);
@@ -87,6 +89,7 @@ namespace umbriel {
     size_t m_index = 0;
     bool m_active = false;
     std::vector<View*> m_views;
+    std::vector<View*> m_floatingStack;
     std::unique_ptr<Layout> m_layout;
     ResolvedLayoutConfig m_layoutConfig;
     LayoutMode m_layoutMode = LayoutMode::Scrolling;

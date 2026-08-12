@@ -76,6 +76,7 @@ namespace umbriel {
     void toggleFloating();
     // Enable/disable the view's scene tree and its shadow container together.
     void setNodeEnabled(bool enabled);
+    void raiseToTop();
     // Create or destroy the shadow container in the given workspace shadow layer.
     void reparentShadow(wlr_scene_tree* shadowLayer);
     // Advances this view's animations; returns true while any is still running.

@@ -6,6 +6,7 @@
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
+#include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
 // clang-format off
@@ -249,6 +250,9 @@ namespace umbriel {
       Server& server, View& view, Workspace& target, const DropTarget& drop, const DropColumnWidth* columnWidth,
       bool animate
   ) {
+    if (server.scratchpadManager() != nullptr && server.scratchpadManager()->contains(&view)) {
+      return;
+    }
     if (target.layoutMode() == LayoutMode::Dwindle) {
       if (auto* dwindle = dynamic_cast<DwindleLayout*>(&target.layout())) {
         const bool splitDrop =

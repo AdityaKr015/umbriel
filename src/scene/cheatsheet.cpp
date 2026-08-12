@@ -190,6 +190,9 @@ namespace {
         if (bind.action == umbriel::KeybindAction::Submap) {
           return name + ": " + bind.spawnCommand;
         }
+        if (!bind.scratchpadOutput.empty()) {
+          return name + ": " + bind.scratchpadOutput;
+        }
         return name;
       }
     }

@@ -74,6 +74,7 @@ namespace umbriel {
     std::string workspaceOutput;
     double widthFraction = 0.0;
     bool repeat = true;
+    std::string scratchpadOutput;
   };
 
   // Per-workspace layout overrides (all optional → inherit Config::Layout).
@@ -308,7 +309,7 @@ namespace umbriel {
   [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();
   [[nodiscard]] std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName);
 
-  enum class ActionArgKind : uint8_t { None, Command, WidthFraction, Workspace };
+  enum class ActionArgKind : uint8_t { None, Command, WidthFraction, Workspace, OptionalOutput };
 
   struct ActionSpec {
     std::string_view name;  // e.g. "spawn", "workspace-switch", "window-close"

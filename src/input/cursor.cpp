@@ -17,6 +17,7 @@
 #include <linux/input-event-codes.h>
 #include "wlr.h"
 // clang-format on
+#include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
 namespace umbriel {
@@ -140,6 +141,15 @@ namespace umbriel {
   void Cursor::beginInteractive(View* view, CursorMode mode, uint32_t edges) {
     if (view == nullptr) {
       return;
+    }
+    if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
+        scratchpad != nullptr && scratchpad->contains(view)) {
+      view->setFloating(true);
+      if (mode == CursorMode::MoveTile) {
+        mode = CursorMode::Move;
+      } else if (mode == CursorMode::ResizeTile) {
+        mode = CursorMode::Resize;
+      }
     }
     setActiveConstraint(nullptr);
     m_grabbedView = view;
@@ -923,9 +933,17 @@ namespace umbriel {
     if (view != nullptr && view->mapped()) {
       const int x = view->sceneTree()->node.x;
       const int y = view->sceneTree()->node.y;
-      // Own the drop output so per-frame home-output culling does not hide the window.
       wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
       Output* output = m_server->outputFromWlr(wlrOutput);
+      if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
+          scratchpad != nullptr && scratchpad->contains(view)) {
+        scratchpad->finishMove(view, output);
+        view->setPosition(x, y);
+        m_server->focusView(view, FocusReason::DragDrop);
+        resetMode();
+        return;
+      }
+      // Own the drop output so per-frame home-output culling does not hide the window.
       if (output != nullptr && output->workspaceGroup() != nullptr) {
         if (Workspace* target = output->workspaceGroup()->active()) {
           if (view->workspace() != target) {

@@ -65,6 +65,11 @@ names resolve globally; duplicate names resolve on the preferred output. Append
 output's scratchpad. `scratchpad-toggle` shows or hides that output's pool.
 `window-restore-from-scratchpad` returns its focused window to its saved
 workspace, and `scratchpad-focus-next` cycles visible scratchpad windows.
+Append `:<output>` to any of these actions to target its per-output pool from
+anywhere, for example `scratchpad-toggle:DP-1` or
+`window-move-to-scratchpad:DP-1`.
+Scratchpad windows always remain floating; dragging them never tiles or
+restores them into the workspace underneath.
 
 The keybinds cheatsheet overlay lists every active keybind in a styled panel.
 It appears automatically on startup when `general.show_cheatsheet` is `true`

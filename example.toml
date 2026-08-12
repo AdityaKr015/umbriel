@@ -117,6 +117,11 @@ follows_mouse = false
 "Mod+Space" = "scratchpad-toggle"
 "Mod+Ctrl+Space" = "window-restore-from-scratchpad"
 "Mod+Tab" = "scratchpad-focus-next"
+# Add `:DP-1` to any scratchpad action to target that output from anywhere.
+# "Mod+0" = "scratchpad-toggle:DP-1"
+# "Mod+Shift+0" = "window-move-to-scratchpad:DP-1"
+# "Mod+Ctrl+0" = "window-restore-from-scratchpad:DP-1"
+# "Mod+Alt+0" = "scratchpad-focus-next:DP-1"
 "Mod+R" = "spawn:noctalia msg panel-toggle launcher"
 "Mod+O" = "overview-toggle"
 

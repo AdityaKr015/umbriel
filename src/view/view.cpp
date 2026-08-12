@@ -212,6 +212,11 @@ namespace umbriel {
   }
 
   void View::setWorkspace(Workspace* workspace, bool attachToLayout) {
+    if (workspace != nullptr
+        && m_server->scratchpadManager() != nullptr
+        && m_server->scratchpadManager()->contains(this)) {
+      return;
+    }
     if (m_workspace == workspace) {
       return;
     }
@@ -1870,6 +1875,9 @@ namespace umbriel {
 
   void View::setFloating(bool floating) {
     if (!m_mapped || !m_toplevel->base->initialized) {
+      return;
+    }
+    if (!floating && m_server->scratchpadManager() != nullptr && m_server->scratchpadManager()->contains(this)) {
       return;
     }
     cancelSizeAnimation();

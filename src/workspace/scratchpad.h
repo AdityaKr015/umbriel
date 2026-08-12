@@ -16,12 +16,14 @@ namespace umbriel {
     ScratchpadManager(Server& server, wlr_scene_tree* root, wlr_scene_tree* shadowRoot);
 
     [[nodiscard]] bool contains(const View* view) const;
-    [[nodiscard]] bool moveFocusedToScratchpad(Output* output);
+    [[nodiscard]] bool moveToScratchpad(View* view, Output* output);
     bool toggle(Output* output);
     bool restoreFocused(Output* output);
     bool focusNext(Output* output);
     [[nodiscard]] View* focused(Output* output) const;
+    [[nodiscard]] bool hasFocus(Output* output) const;
     void noteFocus(View* view);
+    void finishMove(View* view, Output* output);
     void remove(View* view);
     void moveOutput(Output* from, Output* to);
 

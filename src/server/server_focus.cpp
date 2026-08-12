@@ -248,6 +248,19 @@ namespace umbriel {
       }
       return output->workspaceGroup()->active();
     };
+    auto scratchpadOutput = [this, &bind, error]() -> Output* {
+      if (bind.scratchpadOutput.empty()) {
+        return outputFromWlr(preferredOutput());
+      }
+
+      Output* output = outputFromName(bind.scratchpadOutput);
+      if (output == nullptr) {
+        if (error != nullptr) {
+          *error = "unknown output: " + bind.scratchpadOutput;
+        }
+      }
+      return output;
+    };
 
     switch (bind.action) {
     case KeybindAction::None:
@@ -355,6 +368,9 @@ namespace umbriel {
       }
       return true;
     case KeybindAction::ToggleFloating:
+      if (m_scratchpadManager != nullptr && m_scratchpadManager->hasFocus(outputFromWlr(preferredOutput()))) {
+        return true;
+      }
       if (Workspace* workspace = activeWorkspace()) {
         workspace->toggleFocusedFloating();
       }
@@ -481,14 +497,28 @@ namespace umbriel {
       }
       return true;
     case KeybindAction::WindowMoveToScratchpad:
-      return m_scratchpadManager != nullptr
-          && m_scratchpadManager->moveFocusedToScratchpad(outputFromWlr(preferredOutput()));
+      if (Output* output = scratchpadOutput()) {
+        Workspace* workspace = activeWorkspace();
+        return m_scratchpadManager != nullptr
+            && workspace != nullptr
+            && m_scratchpadManager->moveToScratchpad(workspace->focusedView(), output);
+      }
+      return false;
     case KeybindAction::ScratchpadToggle:
-      return m_scratchpadManager != nullptr && m_scratchpadManager->toggle(outputFromWlr(preferredOutput()));
+      if (Output* output = scratchpadOutput()) {
+        return m_scratchpadManager != nullptr && m_scratchpadManager->toggle(output);
+      }
+      return false;
     case KeybindAction::WindowRestoreFromScratchpad:
-      return m_scratchpadManager != nullptr && m_scratchpadManager->restoreFocused(outputFromWlr(preferredOutput()));
+      if (Output* output = scratchpadOutput()) {
+        return m_scratchpadManager != nullptr && m_scratchpadManager->restoreFocused(output);
+      }
+      return false;
     case KeybindAction::ScratchpadFocusNext:
-      return m_scratchpadManager != nullptr && m_scratchpadManager->focusNext(outputFromWlr(preferredOutput()));
+      if (Output* output = scratchpadOutput()) {
+        return m_scratchpadManager != nullptr && m_scratchpadManager->focusNext(output);
+      }
+      return false;
     case KeybindAction::Submap:
       if (bind.spawnCommand == "reset" || bind.spawnCommand == "disable") {
         if (m_activeSubmaps.empty()) {

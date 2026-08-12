@@ -80,6 +80,7 @@ namespace umbriel {
             .spawnCommand = {},
             .workspaceName = {},
             .workspaceOutput = {},
+            .scratchpadOutput = {},
         });
       };
 
@@ -121,6 +122,7 @@ namespace umbriel {
           .workspaceName = {},
           .workspaceOutput = {},
           .repeat = false,
+          .scratchpadOutput = {},
       });
 
       for (int index = 0; index < 9; ++index) {
@@ -136,6 +138,7 @@ namespace umbriel {
               .spawnCommand = {},
               .workspaceName = std::to_string(index + 1),
               .workspaceOutput = {},
+              .scratchpadOutput = {},
           });
         };
         addWorkspace(KeybindAction::WorkspaceSwitch, digit, 0);
@@ -154,7 +157,8 @@ namespace umbriel {
            .action = KeybindAction::WindowFocusLeft,
            .spawnCommand = {},
            .workspaceName = {},
-           .workspaceOutput = {}}
+           .workspaceOutput = {},
+           .scratchpadOutput = {}}
       );
       keybinds.push_back(
           {.submap = {},
@@ -165,7 +169,8 @@ namespace umbriel {
            .action = KeybindAction::WindowFocusRight,
            .spawnCommand = {},
            .workspaceName = {},
-           .workspaceOutput = {}}
+           .workspaceOutput = {},
+           .scratchpadOutput = {}}
       );
 
       return keybinds;
@@ -315,8 +320,8 @@ namespace umbriel {
       {"overview-close", "", KeybindAction::OverviewClose},
       {"overview-open", "", KeybindAction::OverviewOpen},
       {"overview-toggle", "", KeybindAction::OverviewToggle},
-      {"scratchpad-focus-next", "", KeybindAction::ScratchpadFocusNext},
-      {"scratchpad-toggle", "", KeybindAction::ScratchpadToggle},
+      {"scratchpad-focus-next", "[<output>]", KeybindAction::ScratchpadFocusNext, ActionArgKind::OptionalOutput},
+      {"scratchpad-toggle", "[<output>]", KeybindAction::ScratchpadToggle, ActionArgKind::OptionalOutput},
       {"session-quit", "", KeybindAction::SessionQuit},
       {"spawn", "<cmd>", KeybindAction::Spawn, ActionArgKind::Command},
       {"window-close", "", KeybindAction::WindowClose},
@@ -332,8 +337,9 @@ namespace umbriel {
       {"window-move-down", "", KeybindAction::WindowMoveDown},
       {"window-move-to-workspace", "<workspace>[/<output>]", KeybindAction::WindowMoveToWorkspace,
        ActionArgKind::Workspace},
-      {"window-move-to-scratchpad", "", KeybindAction::WindowMoveToScratchpad},
-      {"window-restore-from-scratchpad", "", KeybindAction::WindowRestoreFromScratchpad},
+      {"window-move-to-scratchpad", "[<output>]", KeybindAction::WindowMoveToScratchpad, ActionArgKind::OptionalOutput},
+      {"window-restore-from-scratchpad", "[<output>]", KeybindAction::WindowRestoreFromScratchpad,
+       ActionArgKind::OptionalOutput},
       {"window-move-up", "", KeybindAction::WindowMoveUp},
       {"window-toggle-floating", "", KeybindAction::ToggleFloating},
       {"window-toggle-fullscreen", "", KeybindAction::ToggleFullscreen},
@@ -406,6 +412,19 @@ namespace umbriel {
         output.workspaceName = selector;
         return true;
       }
+      case ActionArgKind::OptionalOutput:
+        if (value == spec.name) {
+          output.action = spec.action;
+          output.scratchpadOutput.clear();
+          return true;
+        }
+        if (value.size() <= spec.name.size() + 1 || value[spec.name.size()] != ':' || !value.starts_with(spec.name)) {
+          break;
+        }
+
+        output.action = spec.action;
+        output.scratchpadOutput = value.substr(spec.name.size() + 1);
+        return true;
       }
     }
     return false;

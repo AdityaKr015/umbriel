@@ -21,7 +21,7 @@ workspaces = 5
 | `mode` | string | (native) | Resolution and refresh rate: `"WIDTHxHEIGHT"` or `"WIDTHxHEIGHT@HZ"`. Fractional Hz allowed. Ignored in nested sessions (the parent controls size). |
 | `position` | `[x, y]` | (auto) | Layout coordinates. |
 | `scale` | float | (auto) | Output scale (0.25-4.0). |
-| `workspaces` | int or string array | `9` | Workspace inventory: a count (`5` creates `"1"` through `"5"`) or an ordered list of names (`["main", "code", "chat"]`). |
+| `workspaces` | int, string array, or `"dynamic"` | `"dynamic"` | Dynamic numbered workspaces, a static count from 1 to 64, or a static ordered list of 1 to 64 names. |
 | `transform` | string | `"normal"` | Output rotation/flip. |
 
 ### Transform values
@@ -75,23 +75,32 @@ files = [
 
 ## Workspace inventory
 
-Each output may declare its own set of workspaces. Omitting `workspaces`
-creates the default 9 numeric workspaces (`"1"` through `"9"`).
+Omitting `workspaces` or setting it to `"dynamic"` enables auto-managed
+numbered workspaces. A dynamic output starts with one empty workspace named
+`"1"`. When the trailing workspace gains a window, Umbriel appends another
+empty workspace. Empty workspaces are removed after they are left, except when
+still active, and the remaining workspaces are renumbered.
 
-Reloading the config reconciles inventories live. Existing workspaces survive by
-name, then by position; windows from removed workspaces move to the nearest
-survivor.
+An explicit count or name list creates a fully static inventory containing
+exactly those workspaces. Static workspaces are not removed when empty.
+Numeric switch targets beyond the current dynamic workspace count clamp to the
+last workspace.
+
+Reloading the config reconciles inventories live. Existing static workspaces
+survive by name, then by position; windows from removed static workspaces move
+to the nearest survivor. Switching to dynamic mode preserves populated and
+active workspaces, renumbers them, and appends a trailing empty workspace.
 
 ---
 
 # Workspace Rules
 
-`[[workspace]]` entries customize the layout of an existing workspace. They
-never create, remove, append, or rename workspaces (the inventory comes from
-each output's `workspaces` setting above).
+`[[workspace]]` entries customize the layout of static inventory entries or
+numbered dynamic workspace positions. They do not create workspaces directly.
 
 Each rule selects a workspace by exactly one of `name` (string) or `index`
-(1-based integer). An optional `output` restricts the rule to that output.
+(1-based integer from 1 to 64). An optional `output` restricts the rule to that
+output.
 
 ## Inheritance
 
@@ -103,13 +112,15 @@ Layout fields inherit in this order:
 
 Rules without `output` apply wherever the selector matches. Output-specific
 rules apply afterward and take precedence.
+On dynamic outputs, rules match numbered positions and names as those
+workspaces exist.
 
 ## Available fields
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `name` | string | Select by workspace name (mutually exclusive with `index`). |
-| `index` | int | Select by 1-based position (mutually exclusive with `name`). |
+| `index` | int | Select by 1-based position from 1 to 64 (mutually exclusive with `name`). |
 | `output` | string | Restrict to this output. |
 | `layout.mode` | string | `"scrolling"` or `"dwindle"`. |
 | `layout.gap` | int | Gap in pixels (0-500). |

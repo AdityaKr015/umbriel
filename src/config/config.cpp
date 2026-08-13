@@ -779,7 +779,7 @@ namespace umbriel {
       }
     }
 
-    constexpr size_t kDefaultWorkspaceCount = 9;
+    constexpr size_t kMaxWorkspaces = 64;
 
     std::vector<std::string> numericWorkspaceNames(size_t count) {
       std::vector<std::string> names;
@@ -790,13 +790,13 @@ namespace umbriel {
       return names;
     }
 
-    std::vector<std::string> workspaceNamesForOutput(const Config& cfg, std::string_view outputName) {
+    std::optional<std::vector<std::string>> workspaceNamesForOutput(const Config& cfg, std::string_view outputName) {
       const auto rule =
           std::ranges::find_if(cfg.outputs, [&](const OutputRule& candidate) { return candidate.name == outputName; });
       if (rule != cfg.outputs.end() && rule->workspaces) {
         return *rule->workspaces;
       }
-      return numericWorkspaceNames(kDefaultWorkspaceCount);
+      return std::nullopt;
     }
 
     bool workspaceRuleMatches(const WorkspaceConfig& rule, const std::vector<std::string>& names) {
@@ -804,6 +804,22 @@ namespace umbriel {
         return static_cast<size_t>(*rule.index) <= names.size();
       }
       return std::ranges::find(names, rule.name) != names.end();
+    }
+
+    bool dynamicRuleMatches(const WorkspaceConfig& rule) {
+      if (rule.index) {
+        return *rule.index >= 1 && static_cast<size_t>(*rule.index) <= kMaxWorkspaces;
+      }
+      if (rule.name.empty()
+          || !std::ranges::all_of(rule.name, [](char value) { return value >= '0' && value <= '9'; })) {
+        return false;
+      }
+      size_t index = 0;
+      const auto [end, error] = std::from_chars(rule.name.data(), rule.name.data() + rule.name.size(), index);
+      return error == std::errc{}
+      && end == rule.name.data() + rule.name.size()
+          && index >= 1
+          && index <= kMaxWorkspaces;
     }
 
     WorkspaceConfig parseWorkspaceEntry(const toml::table& section, std::string_view context) {
@@ -834,8 +850,8 @@ namespace umbriel {
       }
       if (const toml::node* indexNode = section.get("index")) {
         const auto value = indexNode->value<std::int64_t>();
-        if (!value || *value < 1 || *value > static_cast<std::int64_t>(kDefaultWorkspaceCount)) {
-          errorAt(indexNode->source(), "{}.index must be an integer from 1 to {}", context, kDefaultWorkspaceCount);
+        if (!value || *value < 1 || *value > static_cast<std::int64_t>(kMaxWorkspaces)) {
+          errorAt(indexNode->source(), "{}.index must be an integer from 1 to {}", context, kMaxWorkspaces);
         } else {
           ws.index = static_cast<int>(*value);
         }
@@ -909,14 +925,18 @@ namespace umbriel {
 
         bool targetExists = false;
         if (!ws.output.empty()) {
-          targetExists = workspaceRuleMatches(ws, workspaceNamesForOutput(loaded, ws.output));
+          const auto names = workspaceNamesForOutput(loaded, ws.output);
+          targetExists = names ? workspaceRuleMatches(ws, *names) : dynamicRuleMatches(ws);
         } else {
-          targetExists = workspaceRuleMatches(ws, numericWorkspaceNames(kDefaultWorkspaceCount));
+          targetExists = dynamicRuleMatches(ws);
           for (const auto& output : loaded.outputs) {
             if (targetExists) {
               break;
             }
-            targetExists = workspaceRuleMatches(ws, workspaceNamesForOutput(loaded, output.name));
+            const auto names = workspaceNamesForOutput(loaded, output.name);
+            if (names) {
+              targetExists = workspaceRuleMatches(ws, *names);
+            }
           }
         }
         if (!targetExists) {
@@ -1342,20 +1362,18 @@ namespace umbriel {
         rule.name = name;
         if (const toml::node* workspacesNode = section->get("workspaces")) {
           if (const auto count = workspacesNode->value<std::int64_t>()) {
-            if (*count < 1 || *count > static_cast<std::int64_t>(kDefaultWorkspaceCount)) {
+            if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {
               errorAt(
-                  workspacesNode->source(), "output.{}.workspaces must be an integer from 1 to {}", name,
-                  kDefaultWorkspaceCount
+                  workspacesNode->source(), "output.{}.workspaces must be an integer from 1 to {}", name, kMaxWorkspaces
               );
             } else {
               rule.workspaces = numericWorkspaceNames(static_cast<size_t>(*count));
             }
           } else if (const auto* names = workspacesNode->as_array()) {
             bool valid = true;
-            if (names->empty() || names->size() > kDefaultWorkspaceCount) {
+            if (names->empty() || names->size() > kMaxWorkspaces) {
               errorAt(
-                  workspacesNode->source(), "output.{}.workspaces must contain 1 to {} names", name,
-                  kDefaultWorkspaceCount
+                  workspacesNode->source(), "output.{}.workspaces must contain 1 to {} names", name, kMaxWorkspaces
               );
               valid = false;
             }
@@ -1379,8 +1397,16 @@ namespace umbriel {
             if (valid) {
               rule.workspaces = std::move(parsed);
             }
+          } else if (const auto value = workspacesNode->value<std::string>()) {
+            if (*value != "dynamic") {
+              errorAt(
+                  workspacesNode->source(), R"(output.{}.workspaces must be a count, a name array, or "dynamic")", name
+              );
+            }
           } else {
-            errorAt(workspacesNode->source(), "output.{}.workspaces must be an integer or an array of names", name);
+            errorAt(
+                workspacesNode->source(), R"(output.{}.workspaces must be a count, a name array, or "dynamic")", name
+            );
           }
         }
 
@@ -1654,8 +1680,8 @@ namespace umbriel {
 
         if (const toml::node* n = section->get("default_workspace")) {
           const auto value = n->value<std::int64_t>();
-          if (!value || *value < 1 || *value > 9) {
-            warnAt(n->source(), "ignoring window_rule.default_workspace (expected integer 1-9)");
+          if (!value || *value < 1 || *value > static_cast<std::int64_t>(kMaxWorkspaces)) {
+            warnAt(n->source(), "ignoring window_rule.default_workspace (expected integer 1-{})", kMaxWorkspaces);
           } else {
             rule.defaultWorkspace = static_cast<int>(*value);
           }
@@ -2040,65 +2066,60 @@ namespace umbriel {
     return r;
   }
 
-  std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName) {
-    const auto& cfg = g_config;
-    const std::string_view outName = outputName != nullptr ? outputName : "";
-    std::vector<std::string> names = workspaceNamesForOutput(cfg, outName);
-
-    std::vector<ResolvedWorkspace> result;
-    result.reserve(names.size());
-    for (auto& name : names) {
-      result.push_back({std::move(name), resolveGlobalLayout()});
+  static void applyWorkspaceLayoutOverrides(ResolvedLayoutConfig& resolved, const WorkspaceLayoutOverrides& overrides) {
+    if (overrides.mode) {
+      resolved.mode = *overrides.mode;
     }
+    if (overrides.gap) {
+      resolved.gap = *overrides.gap;
+    }
+    if (overrides.scrolling.defaultWidthFraction) {
+      resolved.scrolling.defaultWidthFraction = *overrides.scrolling.defaultWidthFraction;
+    }
+    if (overrides.scrolling.alwaysCenterSingleColumn) {
+      resolved.scrolling.alwaysCenterSingleColumn = *overrides.scrolling.alwaysCenterSingleColumn;
+    }
+    if (overrides.widthPresets) {
+      resolved.widthPresets = *overrides.widthPresets;
+    }
+    const int borderWidth = g_config.appearance.totalBorderWidth();
+    resolved.totalGap = resolved.gap + 2 * borderWidth;
+    resolved.edgePad = resolved.gap + borderWidth;
+  }
 
-    const auto applyOverrides = [&](ResolvedLayoutConfig& resolved, const WorkspaceLayoutOverrides& overrides) {
-      if (overrides.mode) {
-        resolved.mode = *overrides.mode;
-      }
-      if (overrides.gap) {
-        resolved.gap = *overrides.gap;
-      }
-      if (overrides.scrolling.defaultWidthFraction) {
-        resolved.scrolling.defaultWidthFraction = *overrides.scrolling.defaultWidthFraction;
-      }
-      if (overrides.scrolling.alwaysCenterSingleColumn) {
-        resolved.scrolling.alwaysCenterSingleColumn = *overrides.scrolling.alwaysCenterSingleColumn;
-      }
-      if (overrides.widthPresets) {
-        resolved.widthPresets = *overrides.widthPresets;
-      }
-      const int borderWidth = cfg.appearance.totalBorderWidth();
-      resolved.totalGap = resolved.gap + 2 * borderWidth;
-      resolved.edgePad = resolved.gap + borderWidth;
-    };
-
-    const auto applyRule = [&](const WorkspaceConfig& rule) {
-      size_t target = result.size();
-      if (rule.index) {
-        target = static_cast<size_t>(*rule.index - 1);
-      } else {
-        const auto match = std::ranges::find_if(result, [&](const ResolvedWorkspace& workspace) {
-          return workspace.name == rule.name;
-        });
-        if (match != result.end()) {
-          target = static_cast<size_t>(std::distance(result.begin(), match));
+  ResolvedLayoutConfig resolveWorkspaceLayout(const char* outputName, std::string_view name, size_t index) {
+    const std::string_view outName = outputName != nullptr ? outputName : "";
+    ResolvedLayoutConfig resolved = resolveGlobalLayout();
+    const auto applyMatchingRules = [&](std::string_view output) {
+      for (const auto& rule : g_config.workspaceRules) {
+        if (rule.output == output
+            && ((rule.index && static_cast<size_t>(*rule.index - 1) == index) || (!rule.index && rule.name == name))) {
+          applyWorkspaceLayoutOverrides(resolved, rule.layout);
         }
       }
-      if (target < result.size()) {
-        applyOverrides(result[target].layout, rule.layout);
-      }
     };
 
-    // Global rules apply first; output-specific rules always take precedence.
-    for (const auto& rule : cfg.workspaceRules) {
-      if (rule.output.empty()) {
-        applyRule(rule);
-      }
+    applyMatchingRules("");
+    if (!outName.empty()) {
+      applyMatchingRules(outName);
     }
-    for (const auto& rule : cfg.workspaceRules) {
-      if (rule.output == outName) {
-        applyRule(rule);
-      }
+    return resolved;
+  }
+
+  ResolvedWorkspaceSet resolveWorkspacesForOutput(const char* outputName) {
+    const std::string_view outName = outputName != nullptr ? outputName : "";
+    const auto names = workspaceNamesForOutput(g_config, outName);
+    ResolvedWorkspaceSet result;
+    if (!names) {
+      result.dynamic = true;
+      result.workspaces.push_back({"1", resolveWorkspaceLayout(outputName, "1", 0)});
+      return result;
+    }
+
+    result.workspaces.reserve(names->size());
+    for (size_t index = 0; index < names->size(); ++index) {
+      const auto& name = (*names)[index];
+      result.workspaces.push_back({name, resolveWorkspaceLayout(outputName, name, index)});
     }
     return result;
   }

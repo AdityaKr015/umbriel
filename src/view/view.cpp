@@ -1579,7 +1579,7 @@ namespace umbriel {
         if (WorkspaceGroup* group = targetOutput->workspaceGroup()) {
           Workspace* target = group->active();
           if (rule.defaultWorkspace) {
-            Workspace* ruleTarget = group->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1));
+            Workspace* ruleTarget = group->workspaceAtClamped(static_cast<size_t>(*rule.defaultWorkspace - 1));
             if (ruleTarget != nullptr) {
               target = ruleTarget;
             }
@@ -1716,7 +1716,8 @@ namespace umbriel {
             if (WorkspaceGroup* group = out->workspaceGroup()) {
               target = group->active();
               if (rule.defaultWorkspace) {
-                if (Workspace* ruleTarget = group->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1))) {
+                if (Workspace* ruleTarget =
+                        group->workspaceAtClamped(static_cast<size_t>(*rule.defaultWorkspace - 1))) {
                   target = ruleTarget;
                 }
               }
@@ -2196,7 +2197,7 @@ namespace umbriel {
         }
         if (targetGroup != nullptr) {
           Workspace* target = rule.defaultWorkspace
-              ? targetGroup->workspaceAt(static_cast<size_t>(*rule.defaultWorkspace - 1))
+              ? targetGroup->workspaceAtClamped(static_cast<size_t>(*rule.defaultWorkspace - 1))
               : targetGroup->active();
           if (target != nullptr && target != m_workspace) {
             setWorkspace(target);

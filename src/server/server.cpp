@@ -597,6 +597,14 @@ namespace umbriel {
     return 0;
   }
 
+  void Server::reconcileDynamicWorkspaces() {
+    for (const auto& output : m_outputs) {
+      if (WorkspaceGroup* group = output->workspaceGroup()) {
+        group->reconcileDynamic();
+      }
+    }
+  }
+
   bool Server::tickAnimations(uint64_t nowMsec) {
     if (nowMsec == m_lastAnimTickMsec) {
       return animationsActive();

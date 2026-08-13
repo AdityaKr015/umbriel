@@ -78,8 +78,10 @@ namespace umbriel {
     void endSwitchTransition();
     void setSlideOffset(double y);
     void applyConfig(std::string name, size_t index, ResolvedLayoutConfig layoutConfig);
+    void rename(std::string name, size_t index);
 
     [[nodiscard]] std::vector<View*> allViews() const { return m_views; }
+    [[nodiscard]] bool hasViews() const { return !m_views.empty(); }
 
   private:
     void applyPositions(bool animate);
@@ -117,8 +119,11 @@ namespace umbriel {
     [[nodiscard]] wlr_ext_workspace_group_handle_v1* handle() const { return m_handle; }
     [[nodiscard]] Workspace* active() const { return m_active; }
     [[nodiscard]] Workspace* previous() const { return m_previous; }
+    [[nodiscard]] bool dynamic() const { return m_dynamic; }
     [[nodiscard]] Workspace* workspaceAt(size_t index) const;
+    [[nodiscard]] Workspace* workspaceAtClamped(size_t index) const;
     [[nodiscard]] Workspace* workspaceNamed(std::string_view name) const;
+    [[nodiscard]] Workspace* workspaceForSelector(std::string_view name) const;
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     [[nodiscard]] size_t workspaceCount() const { return m_workspaces.size(); }
 
@@ -127,6 +132,7 @@ namespace umbriel {
     void deactivate(Workspace* workspace);
     Workspace* createWorkspace(const char* name);
     void reconcileConfig();
+    void reconcileDynamic();
 
     [[nodiscard]] bool slideActive() const { return m_slide.base != nullptr; }
     bool slideBegin(bool includePrev, bool includeNext);
@@ -139,6 +145,7 @@ namespace umbriel {
 
   private:
     std::unique_ptr<Workspace> createConfiguredWorkspace(ResolvedWorkspace workspace, size_t index);
+    Workspace* appendDynamicWorkspace();
 
     struct Slide {
       Workspace* base = nullptr;
@@ -153,6 +160,8 @@ namespace umbriel {
     wlr_ext_workspace_group_handle_v1* m_handle = nullptr;
     Workspace* m_active = nullptr;
     Workspace* m_previous = nullptr;
+    bool m_dynamic = false;
+    uint32_t m_nextHandleSerial = 1;
     std::vector<std::unique_ptr<Workspace>> m_workspaces;
     AnimatedValue m_slideAnim;
     Slide m_slide;

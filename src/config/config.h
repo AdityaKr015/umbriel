@@ -104,16 +104,22 @@ namespace umbriel {
     struct Scrolling {
       double defaultWidthFraction = 0.5;
       bool alwaysCenterSingleColumn = true;
+      bool operator==(const Scrolling&) const = default;
     } scrolling;
     // Derived from gap + appearance border widths; set by resolve function.
     int totalGap = 0; // gap + 2 * totalBorderWidth
     int edgePad = 0;  // gap + totalBorderWidth
+    bool operator==(const ResolvedLayoutConfig&) const = default;
   };
 
   // Resolved workspace entry for a specific output (name + layout config).
   struct ResolvedWorkspace {
     std::string name;
     ResolvedLayoutConfig layout;
+  };
+  struct ResolvedWorkspaceSet {
+    bool dynamic = false;
+    std::vector<ResolvedWorkspace> workspaces;
   };
   struct OutputMode {
     int width = 0;
@@ -127,7 +133,7 @@ namespace umbriel {
     std::optional<std::array<int, 2>> position;
     std::optional<double> scale;
     std::optional<int> transform;
-    // Explicit workspace inventory. Omitted means nine numeric workspaces.
+    // Explicit workspace inventory. Omitted means dynamic workspaces.
     std::optional<std::vector<std::string>> workspaces;
   };
 
@@ -141,7 +147,7 @@ namespace umbriel {
     std::optional<bool> defaultFloating;
     std::optional<std::array<int, 2>> defaultSize; // [width, height]
     std::optional<double> defaultWidth;            // column width fraction override
-    std::optional<int> defaultWorkspace;           // 1-9
+    std::optional<int> defaultWorkspace;           // 1-64
     std::optional<bool> defaultFullscreen;
     std::optional<bool> defaultMaximize;
     std::optional<double> opacity; // 0.0-1.0
@@ -307,7 +313,9 @@ namespace umbriel {
   [[nodiscard]] ResolvedLayerRule resolveLayerRules(const char* layerNamespace);
   [[nodiscard]] bool anyWindowRuleHasTitlePattern();
   [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();
-  [[nodiscard]] std::vector<ResolvedWorkspace> resolveWorkspacesForOutput(const char* outputName);
+  [[nodiscard]] ResolvedLayoutConfig
+  resolveWorkspaceLayout(const char* outputName, std::string_view name, size_t index);
+  [[nodiscard]] ResolvedWorkspaceSet resolveWorkspacesForOutput(const char* outputName);
 
   enum class ActionArgKind : uint8_t { None, Command, WidthFraction, Workspace, OptionalOutput };
 

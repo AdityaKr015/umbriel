@@ -47,9 +47,11 @@ set.
 | `window-move-to-workspace:<ws>` | Same as above | `"window-move-to-workspace:2"` |
 | `window-set-width:<frac>` | Fraction 0.1-1.0 | `"window-set-width:0.667"` |
 
-Workspace selectors are exact names (including numeric ones like `1`). Unique
-names resolve globally; duplicate names resolve on the preferred output. Append
-`/output` to target a different output explicitly.
+Workspace selectors use exact names, including numeric names such as `1`.
+Unique names resolve globally; duplicate names resolve on the preferred output.
+Append `/output` to target a different output explicitly. On a dynamic output,
+a numeric target beyond its current workspace count clamps to the last
+workspace.
 
 ### Floating action
 

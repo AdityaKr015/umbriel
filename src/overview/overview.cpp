@@ -856,6 +856,7 @@ namespace umbriel {
     m_dragSourceWorkspace = nullptr;
     m_drop = {};
     m_gestureOpenedHere = false;
+    m_server->reconcileDynamicWorkspaces();
   }
 
   // ----------------------------------------------------------------- gesture

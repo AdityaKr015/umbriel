@@ -185,6 +185,7 @@ namespace umbriel {
     void notifyIdleActivity();
     // Prefer focusing a view on `preferred` when set (workspace switch on one output).
     void refocus(Output* preferred = nullptr);
+    void reconcileDynamicWorkspaces();
     void clearKeyboardFocus();
     // Drop xdg activated / focus border / foreign activated on mapped views (except `except`).
     void deactivateViews(View* except = nullptr);

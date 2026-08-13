@@ -407,7 +407,7 @@ namespace umbriel {
         if (group == nullptr) {
           return reject("output has no workspace group: " + bind.workspaceOutput);
         }
-        target = group->workspaceNamed(bind.workspaceName);
+        target = group->workspaceForSelector(bind.workspaceName);
         if (target == nullptr) {
           return reject("unknown workspace on output " + bind.workspaceOutput + ": " + bind.workspaceName);
         }
@@ -426,7 +426,12 @@ namespace umbriel {
           }
         }
         if (target == nullptr) {
-          return reject("unknown workspace: " + bind.workspaceName);
+          Output* preferred = outputFromWlr(preferredOutput());
+          WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
+          target = preferredGroup != nullptr ? preferredGroup->workspaceForSelector(bind.workspaceName) : nullptr;
+          if (target == nullptr) {
+            return reject("unknown workspace: " + bind.workspaceName);
+          }
         }
         if (ambiguous) {
           Output* preferred = outputFromWlr(preferredOutput());

@@ -81,6 +81,7 @@ always_center_single_column = true # false fixes the left edge; resize from the 
 # mode = "2560x1440@144"
 # position = [0, 0]
 # scale = 1.25
+# Dynamic workspaces are the default; use a count or name list for static workspaces.
 # workspaces = 5
 
 # Input ----------------------------------------------------------------------

@@ -68,7 +68,8 @@ back_and_forth = true
 |-----|------|---------|-------------|
 | `back_and_forth` | bool | `false` | Re-selecting the active workspace jumps back to the previously active workspace on that output. |
 
-See [Outputs](outputs.md) for per-output workspace inventories and
+Output workspaces are dynamic by default. See [Outputs](outputs.md) for dynamic
+behavior and static per-output inventories, and
 [Outputs: Workspace Rules](outputs.md#workspace-rules) for per-workspace layout
 overrides.
 

@@ -37,7 +37,7 @@ mapping, rules are re-evaluated once.
 | `default_floating` | bool | Force floating (`true`) or force tiling (`false`). |
 | `default_size` | `[w, h]` | Initial size in pixels, clamped to the client's min/max hints. Floats use both, then own their size and honor client resizes; tiled windows ignore height. |
 | `default_width` | float | Scrolling only. Column width fraction (0.1-1.0). Gap-aware: fractions that sum to 1 tile exactly. Overrides `layout.scrolling.default_width_fraction`. Ignored in dwindle. |
-| `default_workspace` | int | Place on workspace N (1-based). |
+| `default_workspace` | int | Place on workspace N from 1 to 64. On dynamic outputs, values beyond the current count clamp to the last workspace. |
 | `default_fullscreen` | bool | Map fullscreen. |
 | `default_maximize` | bool | Map maximized. Tiled: compositor-owned column full-width; client maximize requests do not change the layout. Floating: fill usable area. |
 

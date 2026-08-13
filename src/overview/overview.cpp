@@ -30,8 +30,6 @@ namespace umbriel {
     // Pointer travel that promotes a press on a card into a relocate drag.
     constexpr double kDragThreshold = 10.0;
 
-    int expandedRadius(int radius, int thickness) { return radius > 0 ? radius + thickness : 0; }
-
     bool boxContains(const wlr_box& box, double x, double y) {
       return x >= box.x && y >= box.y && x < box.x + box.width && y < box.y + box.height;
     }

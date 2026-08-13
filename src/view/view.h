@@ -3,6 +3,7 @@
 #include "scene/node.h"
 #include "scene/surface_blur.h"
 #include "scene/surface_shadow.h"
+#include "view/border_ring.h"
 
 #include <array>
 #include <optional>
@@ -131,9 +132,7 @@ namespace umbriel {
     void handleForeignClose();
     void handleForeignDestroy();
     void handleExtForeignDestroy();
-    struct BorderEdge;
     void handleCaptureSourceDestroy();
-    static std::array<BorderEdge, 4> makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness);
     [[nodiscard]] std::array<BorderEdge, 4> borderEdges() const;
     [[nodiscard]] std::array<BorderEdge, 4> borderEdges(int contentWidth, int contentHeight) const;
     void updateBorderGeometry();

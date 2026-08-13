@@ -132,21 +132,22 @@ pure_sources = files(
   'src/layout/scrolling.cpp',
   'src/layout/dwindle.cpp',
   'src/scene/cheatsheet_rows.cpp',
+  'src/view/border_ring.cpp',
 )
 
 umbriel_pure = static_library(
   'umbriel-pure',
   pure_sources,
   include_directories: include_directories('src'),
-  dependencies: [wlroots_dep, xkbcommon_dep],
+  dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep],
 )
 
 # What a test needs to use the pure layer: the library, the include root, and
-# the two dependencies its headers pull in.
+# the dependencies its headers pull in (scenefx for the border ring's corner radii).
 umbriel_pure_dep = declare_dependency(
   link_with: umbriel_pure,
   include_directories: include_directories('src'),
-  dependencies: [wlroots_dep, xkbcommon_dep],
+  dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep],
 )
 
 # The compositor itself. main.cpp is deliberately not here: everything lives in
@@ -241,6 +242,7 @@ unit_tests = [
   ['scrolling-layout', ['tests/scrolling_layout.cpp'], []],
   ['dwindle-layout', ['tests/dwindle_layout.cpp'], []],
   ['cheatsheet-rows', ['tests/cheatsheet_rows.cpp'], []],
+  ['border-ring', ['tests/border_ring.cpp'], []],
   # Reaches compositor code, so it takes the heavier library.
   ['config-resolve', ['tests/config_resolve.cpp'], [umbriel_core_dep]],
 ]

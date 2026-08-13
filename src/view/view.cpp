@@ -20,14 +20,6 @@
 #include "workspace/workspace.h"
 
 namespace umbriel {
-  struct View::BorderEdge {
-    wlr_box box;
-    fx_corner_radii outer;
-    bool hasHole;
-    wlr_box hole;
-    fx_corner_radii holeCorners;
-  };
-
   namespace {
     constexpr Logger kLog("view");
 
@@ -37,8 +29,6 @@ namespace umbriel {
       const bool fixedHeight = state.max_height > 0 && state.min_height == state.max_height;
       return toplevel->parent == nullptr && !fixedWidth && !fixedHeight;
     }
-
-    int expandedRadius(int radius, int thickness) { return radius > 0 ? radius + thickness : 0; }
 
     bool sceneNodeShowsSurface(wlr_scene_node* node, wlr_surface* surface) {
       switch (node->type) {
@@ -73,43 +63,6 @@ namespace umbriel {
       return nullptr;
     }
   } // namespace
-
-  std::array<View::BorderEdge, 4> View::makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness) {
-    const int width = contentWidth + 2 * thickness;
-    const int innerWidth = std::max(0, width - 2 * thickness);
-    const int sideHeight = std::max(0, contentHeight - 2 * radius);
-    const int outer = expandedRadius(radius, thickness);
-    return {{
-        {
-            .box = {-thickness, -thickness, width, thickness + radius},
-            .outer = corner_radii_top(outer),
-            .hasHole = true,
-            .hole = {thickness, thickness, innerWidth, thickness + radius},
-            .holeCorners = corner_radii_top(radius),
-        },
-        {
-            .box = {-thickness, contentHeight - radius, width, thickness + radius},
-            .outer = corner_radii_bottom(outer),
-            .hasHole = true,
-            .hole = {thickness, -1, innerWidth, radius + 1},
-            .holeCorners = corner_radii_bottom(radius),
-        },
-        {
-            .box = {-thickness, radius, thickness, sideHeight},
-            .outer = corner_radii_none(),
-            .hasHole = false,
-            .hole = {},
-            .holeCorners = corner_radii_none(),
-        },
-        {
-            .box = {contentWidth, radius, thickness, sideHeight},
-            .outer = corner_radii_none(),
-            .hasHole = false,
-            .hole = {},
-            .holeCorners = corner_radii_none(),
-        },
-    }};
-  }
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
       : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
@@ -823,12 +776,12 @@ namespace umbriel {
     }
   }
 
-  std::array<View::BorderEdge, 4> View::borderEdges() const {
+  std::array<BorderEdge, 4> View::borderEdges() const {
     const wlr_box& geometry = m_toplevel->base->geometry;
     return borderEdges(geometry.width, geometry.height);
   }
 
-  std::array<View::BorderEdge, 4> View::borderEdges(int contentWidth, int contentHeight) const {
+  std::array<BorderEdge, 4> View::borderEdges(int contentWidth, int contentHeight) const {
     return makeBorderRing(
         contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.borderWidth
     );

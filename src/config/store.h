@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config/change.h"
 #include "config/config.h"
 
 #include <cstdint>
@@ -8,52 +9,6 @@
 #include <vector>
 
 namespace umbriel {
-
-  // Which parts of the configuration a reload actually altered.
-  //
-  // A reload used to re-apply everything: every keyboard reprogrammed, every
-  // border rebuilt, every output reconfigured, whether or not anything about
-  // them had changed. That is both visible (a no-op reload flickers) and a
-  // maintenance trap, because keeping it correct meant remembering to wire each
-  // new field into Server::applyConfig by hand.
-  struct ConfigChange {
-    bool appearance = true;
-    bool overview = true;
-    bool layout = true;
-    bool workspaces = true;
-    bool general = true;
-    bool environment = true;
-    bool input = true;
-    bool keybinds = true;
-    bool outputs = true;
-    bool windowRules = true;
-    bool layerRules = true;
-    bool workspaceRules = true;
-
-    [[nodiscard]] bool any() const {
-      return appearance
-          || overview
-          || layout
-          || workspaces
-          || general
-          || environment
-          || input
-          || keybinds
-          || outputs
-          || windowRules
-          || layerRules
-          || workspaceRules;
-    }
-
-    // Comma-separated names of the sections that changed, empty when none did.
-    // Logged on reload so the answer to "did my edit take effect" does not
-    // require guessing from the result.
-    [[nodiscard]] std::string summary() const;
-
-    // What a first load reports: everything is new.
-    [[nodiscard]] static ConfigChange everything() { return {}; }
-    [[nodiscard]] static ConfigChange between(const Config& before, const Config& after);
-  };
 
   // One loaded configuration, with everything that was learned while loading it.
   //

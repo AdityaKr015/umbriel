@@ -1,5 +1,5 @@
 #include "check.h"
-#include "config/store.h"
+#include "config/change.h"
 
 using umbriel::Config;
 using umbriel::ConfigChange;

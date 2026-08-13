@@ -1,38 +1,167 @@
 #include "check.h"
-#include "config/config.h"
+#include "config/resolve.h"
 
-// Links the compositor library rather than the pure one, which is the point:
-// resolveGlobalLayout lives in config.cpp alongside the config singleton, so
-// this is also the proof that a test can reach compositor code without listing
-// or recompiling any source.
+#include <regex>
+#include <string>
+#include <utility>
+#include <vector>
 
-UMBRIEL_TEST(defaultLayoutMetricsAreDerivedFromGapAndBorder) {
-  // Everything that positions a window works in these two derived numbers, and
-  // the layout tests and the harness both hardcode 12 and 10. This is where
-  // that arithmetic actually comes from:
-  //   totalGap = gap + 2 * totalBorderWidth   (a gap plus a border on each side)
-  //   edgePad  = gap + totalBorderWidth       (one edge of the screen)
-  const umbriel::ResolvedLayoutConfig layout = umbriel::resolveGlobalLayout();
-  const umbriel::Config& config = umbriel::config();
+using umbriel::Config;
+using umbriel::LayerRule;
+using umbriel::LayoutMode;
+using umbriel::OutputRule;
+using umbriel::WindowRule;
+using umbriel::WorkspaceConfig;
 
-  const int border = config.appearance.totalBorderWidth();
-  CHECK_EQ(layout.gap, config.layout.gap);
-  CHECK_EQ(layout.totalGap, layout.gap + 2 * border);
-  CHECK_EQ(layout.edgePad, layout.gap + border);
+UMBRIEL_TEST(globalLayoutUsesTheCallerOwnedConfig) {
+  Config first;
+  first.layout.gap = 11;
+  first.appearance.borderWidth = 5;
+  first.appearance.outerBorderWidth = 3;
+  const umbriel::ResolvedLayoutConfig firstLayout = umbriel::resolveGlobalLayout(first);
 
-  // The shipped defaults, which the other tests assume.
-  CHECK_EQ(layout.gap, 8);
-  CHECK_EQ(border, 2);
-  CHECK_EQ(layout.totalGap, 12);
-  CHECK_EQ(layout.edgePad, 10);
+  CHECK_EQ(firstLayout.gap, 11);
+  CHECK_EQ(firstLayout.totalGap, 27);
+  CHECK_EQ(firstLayout.edgePad, 19);
+  CHECK_EQ(first.layoutGap(), firstLayout.totalGap);
+  CHECK_EQ(first.layoutEdgePad(), firstLayout.edgePad);
+
+  Config second;
+  second.layout.gap = 4;
+  second.appearance.borderWidth = 1;
+  second.appearance.outerBorderWidth = 0;
+  const umbriel::ResolvedLayoutConfig secondLayout = umbriel::resolveGlobalLayout(second);
+
+  CHECK_EQ(secondLayout.totalGap, 6);
+  CHECK_EQ(secondLayout.edgePad, 5);
+  CHECK(firstLayout != secondLayout);
 }
 
-UMBRIEL_TEST(configHelpersAgreeWithTheResolvedLayout) {
-  // Config exposes the same two numbers for callers that have no workspace yet.
-  const umbriel::Config& config = umbriel::config();
-  const umbriel::ResolvedLayoutConfig layout = umbriel::resolveGlobalLayout();
-  CHECK_EQ(config.layoutGap(), layout.totalGap);
-  CHECK_EQ(config.layoutEdgePad(), layout.edgePad);
+UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
+  Config config;
+  config.layout.gap = 8;
+  config.appearance.borderWidth = 2;
+
+  WorkspaceConfig global;
+  global.name = "dev";
+  global.layout.gap = 12;
+  global.layout.scrolling.defaultWidthFraction = 0.6;
+  config.workspaceRules.push_back(std::move(global));
+
+  WorkspaceConfig dpOne;
+  dpOne.name = "dev";
+  dpOne.output = "DP-1";
+  dpOne.layout.gap = 20;
+  dpOne.layout.mode = LayoutMode::Dwindle;
+  config.workspaceRules.push_back(std::move(dpOne));
+
+  WorkspaceConfig dpTwo;
+  dpTwo.name = "dev";
+  dpTwo.output = "DP-2";
+  dpTwo.layout.gap = 30;
+  config.workspaceRules.push_back(std::move(dpTwo));
+
+  const auto onDpOne = umbriel::resolveWorkspaceLayout(config, "DP-1", "dev", 0);
+  CHECK(onDpOne.mode == LayoutMode::Dwindle);
+  CHECK_EQ(onDpOne.gap, 20);
+  CHECK_EQ(onDpOne.totalGap, 24);
+  CHECK_EQ(onDpOne.edgePad, 22);
+  CHECK_EQ(onDpOne.scrolling.defaultWidthFraction, 0.6);
+
+  const auto onDpTwo = umbriel::resolveWorkspaceLayout(config, "DP-2", "dev", 0);
+  CHECK(onDpTwo.mode == LayoutMode::Scrolling);
+  CHECK_EQ(onDpTwo.gap, 30);
+  CHECK_EQ(onDpTwo.scrolling.defaultWidthFraction, 0.6);
+
+  const auto elsewhere = umbriel::resolveWorkspaceLayout(config, "HDMI-A-1", "dev", 0);
+  CHECK_EQ(elsewhere.gap, 12);
+  CHECK_EQ(elsewhere.scrolling.defaultWidthFraction, 0.6);
+}
+
+UMBRIEL_TEST(workspaceInventoryResolvesStaticAndDynamicOutputs) {
+  Config config;
+  OutputRule fixed;
+  fixed.name = "DP-1";
+  fixed.workspaces = std::vector<std::string>{"main", "web"};
+  config.outputs.push_back(std::move(fixed));
+
+  WorkspaceConfig web;
+  web.name = "web";
+  web.output = "DP-1";
+  web.layout.gap = 24;
+  config.workspaceRules.push_back(std::move(web));
+
+  const auto staticSet = umbriel::resolveWorkspacesForOutput(config, "DP-1");
+  CHECK(!staticSet.dynamic);
+  CHECK_EQ(staticSet.workspaces.size(), size_t{2});
+  CHECK_EQ(staticSet.workspaces[0].name, std::string{"main"});
+  CHECK_EQ(staticSet.workspaces[1].name, std::string{"web"});
+  CHECK_EQ(staticSet.workspaces[1].layout.gap, 24);
+
+  const auto dynamicSet = umbriel::resolveWorkspacesForOutput(config, "DP-2");
+  CHECK(dynamicSet.dynamic);
+  CHECK_EQ(dynamicSet.workspaces.size(), size_t{1});
+  CHECK_EQ(dynamicSet.workspaces[0].name, std::string{"1"});
+}
+
+UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
+  Config config;
+
+  WindowRule app;
+  app.appIdPattern = "^foot$";
+  app.appIdRegex = std::regex(app.appIdPattern);
+  app.opacity = 0.5;
+  app.blur = true;
+  config.windowRules.push_back(std::move(app));
+
+  WindowRule title;
+  title.titlePattern = "shell";
+  title.titleRegex = std::regex(title.titlePattern);
+  title.opacity = 0.8;
+  config.windowRules.push_back(std::move(title));
+
+  WindowRule unfocused;
+  unfocused.matchFocused = false;
+  unfocused.defaultFloating = true;
+  config.windowRules.push_back(std::move(unfocused));
+
+  const auto resolved = umbriel::resolveWindowRules(config, "foot", "project shell", false);
+  CHECK(resolved.opacity && *resolved.opacity == 0.8);
+  CHECK(resolved.blur && *resolved.blur);
+  CHECK(resolved.defaultFloating && *resolved.defaultFloating);
+
+  const auto focused = umbriel::resolveWindowRules(config, "foot", "project shell", true);
+  CHECK(focused.opacity && *focused.opacity == 0.8);
+  CHECK(!focused.defaultFloating);
+  CHECK(umbriel::anyWindowRuleHasTitlePattern(config));
+}
+
+UMBRIEL_TEST(layerRulesMergeMatchingFieldsInOrder) {
+  Config config;
+
+  LayerRule first;
+  first.namespacePattern = "^panel$";
+  first.namespaceRegex = std::regex(first.namespacePattern);
+  first.blur = true;
+  first.ignoreAlpha = 0.2;
+  config.layerRules.push_back(std::move(first));
+
+  LayerRule second;
+  second.namespacePattern = "^panel$";
+  second.namespaceRegex = std::regex(second.namespacePattern);
+  second.ignoreAlpha = 0.75;
+  second.optimized = true;
+  config.layerRules.push_back(std::move(second));
+
+  const auto resolved = umbriel::resolveLayerRules(config, "panel");
+  CHECK(resolved.blur && *resolved.blur);
+  CHECK(resolved.ignoreAlpha && *resolved.ignoreAlpha == 0.75);
+  CHECK(resolved.optimized && *resolved.optimized);
+
+  const auto unmatched = umbriel::resolveLayerRules(config, "wallpaper");
+  CHECK(!unmatched.blur);
+  CHECK(!unmatched.ignoreAlpha);
+  CHECK(!unmatched.optimized);
 }
 
 int main() { return RUN_TESTS(); }

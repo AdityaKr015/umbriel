@@ -1,6 +1,7 @@
 #include "view/view.h"
 
 #include "config/config.h"
+#include "config/resolve.h"
 #include "config/store.h"
 #include "core/log.h"
 #include "input/cursor.h"
@@ -1084,7 +1085,7 @@ namespace umbriel {
     // Unsettled when any rule uses a title pattern: the first handleSetTitle
     // after map re-applies disruptive effects with the real title, even if
     // the client mapped with a placeholder.
-    m_initialRulesSettled = !anyWindowRuleHasTitlePattern();
+    m_initialRulesSettled = !anyWindowRuleHasTitlePattern(config());
 
     showDecorations(!m_toplevel->current.fullscreen);
 
@@ -1235,7 +1236,8 @@ namespace umbriel {
         // No workspace yet (no output, or none active): fall back to a throwaway
         // layout built from the global config, so the sizing rule stays the
         // layout's either way.
-        const ResolvedLayoutConfig globalConfig = target != nullptr ? ResolvedLayoutConfig{} : resolveGlobalLayout();
+        const ResolvedLayoutConfig globalConfig =
+            target != nullptr ? ResolvedLayoutConfig{} : resolveGlobalLayout(config());
         std::unique_ptr<Layout> fallbackLayout;
         if (target == nullptr) {
           fallbackLayout = createLayout(globalConfig.mode);
@@ -1796,7 +1798,7 @@ namespace umbriel {
       return m_rules;
     }
 
-    m_rules = resolveWindowRules(appId, title, m_borderFocusedState);
+    m_rules = resolveWindowRules(config(), appId, title, m_borderFocusedState);
     m_rulesGeneration = generation;
     m_rulesFocused = m_borderFocusedState;
     m_rulesAppId = appIdView;

@@ -126,6 +126,8 @@ virtual_pointer_client_c = custom_target(
 # Keep this list free of anything needing SceneFX, pango, or a running server;
 # that is what makes these tests cheap and the coverage honest.
 pure_sources = files(
+  'src/config/change.cpp',
+  'src/config/resolve.cpp',
   'src/config/keybind_parse.cpp',
   'src/config/value_parse.cpp',
   'src/config/section.cpp',
@@ -255,10 +257,8 @@ unit_tests = [
   ['border-ring', ['tests/border_ring.cpp'], []],
   ['floating', ['tests/floating.cpp'], []],
   ['config-section', ['tests/config_section.cpp'], []],
-  # ConfigChange lives with the loader in the core library.
-  ['config-change', ['tests/config_change.cpp'], [umbriel_core_dep]],
-  # Reaches compositor code, so it takes the heavier library.
-  ['config-resolve', ['tests/config_resolve.cpp'], [umbriel_core_dep]],
+  ['config-change', ['tests/config_change.cpp'], []],
+  ['config-resolve', ['tests/config_resolve.cpp'], []],
 ]
 
 # Harness helper, not a unit test: drives a virtual pointer against a running

@@ -1,4 +1,5 @@
 #include "config/config.h"
+#include "config/resolve.h"
 #include "core/log.h"
 #include "output/output.h"
 #include "server/server.h"
@@ -105,7 +106,7 @@ namespace umbriel {
     if (!m_initialRulesSettled) {
       // Title hasn't arrived yet. If no rule cares about title, we can settle now.
       // Otherwise only update non-disruptive effects; disruptive rules wait for the title.
-      if (!anyWindowRuleHasTitlePattern()) {
+      if (!anyWindowRuleHasTitlePattern(config())) {
         m_initialRulesSettled = true;
         applyWindowRules(true);
       } else {

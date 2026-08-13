@@ -3,6 +3,7 @@
 #include "config/config_diag.h"
 #include "config/config_merge.h"
 #include "config/keybind_parse.h"
+#include "config/resolve.h"
 #include "config/section.h"
 #include "config/store.h"
 #include "config/value_parse.h"
@@ -11,12 +12,9 @@
 // clang-format off
 #include <linux/input-event-codes.h>
 #include <xkbcommon/xkbcommon.h>
-#include "wlr.h"
 // clang-format on
 
 #include <algorithm>
-#include <cctype>
-#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -197,8 +195,6 @@ namespace umbriel {
       );
     }
 
-    constexpr size_t kMaxWorkspaces = 64;
-
     std::vector<std::string> numericWorkspaceNames(size_t count) {
       std::vector<std::string> names;
       names.reserve(count);
@@ -206,38 +202,6 @@ namespace umbriel {
         names.push_back(std::to_string(i + 1));
       }
       return names;
-    }
-
-    std::optional<std::vector<std::string>> workspaceNamesForOutput(const Config& cfg, std::string_view outputName) {
-      const auto rule =
-          std::ranges::find_if(cfg.outputs, [&](const OutputRule& candidate) { return candidate.name == outputName; });
-      if (rule != cfg.outputs.end() && rule->workspaces) {
-        return rule->workspaces;
-      }
-      return std::nullopt;
-    }
-
-    bool workspaceRuleMatches(const WorkspaceConfig& rule, const std::vector<std::string>& names) {
-      if (rule.index) {
-        return static_cast<size_t>(*rule.index) <= names.size();
-      }
-      return std::ranges::find(names, rule.name) != names.end();
-    }
-
-    bool dynamicRuleMatches(const WorkspaceConfig& rule) {
-      if (rule.index) {
-        return *rule.index >= 1 && static_cast<size_t>(*rule.index) <= kMaxWorkspaces;
-      }
-      if (rule.name.empty()
-          || !std::ranges::all_of(rule.name, [](char value) { return value >= '0' && value <= '9'; })) {
-        return false;
-      }
-      size_t index = 0;
-      const auto [end, error] = std::from_chars(rule.name.data(), rule.name.data() + rule.name.size(), index);
-      return error == std::errc{}
-      && end == rule.name.data() + rule.name.size()
-          && index >= 1
-          && index <= kMaxWorkspaces;
     }
 
     WorkspaceConfig parseWorkspaceEntry(const toml::table& section, std::string_view context) {
@@ -344,22 +308,7 @@ namespace umbriel {
           }
         }
 
-        bool targetExists = false;
-        if (!ws.output.empty()) {
-          const auto names = workspaceNamesForOutput(loaded, ws.output);
-          targetExists = names ? workspaceRuleMatches(ws, *names) : dynamicRuleMatches(ws);
-        } else {
-          targetExists = dynamicRuleMatches(ws);
-          for (const auto& output : loaded.outputs) {
-            if (targetExists) {
-              break;
-            }
-            const auto names = workspaceNamesForOutput(loaded, output.name);
-            if (names) {
-              targetExists = workspaceRuleMatches(ws, *names);
-            }
-          }
-        }
+        const bool targetExists = workspaceRuleTargetExists(loaded, ws);
         if (!targetExists) {
           const std::string selector =
               ws.index ? std::format("index {}", *ws.index) : std::format("name '{}'", ws.name);
@@ -1066,168 +1015,5 @@ namespace umbriel {
   bool reloadConfig() { return configStore().reload(); }
 
   const std::vector<std::filesystem::path>& configWatchPaths() { return configStore().watchPaths(); }
-
-  ResolvedWindowRule resolveWindowRules(const char* appId, const char* title, bool focused) {
-    ResolvedWindowRule resolved;
-    const std::string_view appIdView = appId != nullptr ? appId : "";
-    const std::string_view titleView = title != nullptr ? title : "";
-
-    for (const auto& rule : configStore().config().windowRules) {
-      if (!rule.appIdPattern.empty()) {
-        if (appIdView.empty() || !std::regex_search(appIdView.begin(), appIdView.end(), rule.appIdRegex)) {
-          continue;
-        }
-      }
-      if (!rule.titlePattern.empty()) {
-        if (titleView.empty() || !std::regex_search(titleView.begin(), titleView.end(), rule.titleRegex)) {
-          continue;
-        }
-      }
-      if (rule.matchFocused && *rule.matchFocused != focused) {
-        continue;
-      }
-      // Last writer wins: overwrite each field the rule sets.
-      if (rule.defaultOutput) {
-        resolved.defaultOutput = rule.defaultOutput;
-      }
-      if (rule.defaultFloating) {
-        resolved.defaultFloating = rule.defaultFloating;
-      }
-      if (rule.defaultSize) {
-        resolved.defaultSize = rule.defaultSize;
-      }
-      if (rule.defaultWidth) {
-        resolved.defaultWidth = rule.defaultWidth;
-      }
-      if (rule.defaultWorkspace) {
-        resolved.defaultWorkspace = rule.defaultWorkspace;
-      }
-      if (rule.defaultFullscreen) {
-        resolved.defaultFullscreen = rule.defaultFullscreen;
-      }
-      if (rule.defaultMaximize) {
-        resolved.defaultMaximize = rule.defaultMaximize;
-      }
-      if (rule.opacity) {
-        resolved.opacity = rule.opacity;
-      }
-      if (rule.blur) {
-        resolved.blur = rule.blur;
-      }
-      if (rule.blurPopups) {
-        resolved.blurPopups = rule.blurPopups;
-      }
-      if (rule.blurIgnoreAlpha) {
-        resolved.blurIgnoreAlpha = rule.blurIgnoreAlpha;
-      }
-      if (rule.blurOptimized) {
-        resolved.blurOptimized = rule.blurOptimized;
-      }
-    }
-    return resolved;
-  }
-
-  ResolvedLayerRule resolveLayerRules(const char* layerNamespace) {
-    ResolvedLayerRule resolved;
-    const std::string_view nsView = layerNamespace != nullptr ? layerNamespace : "";
-    for (const auto& rule : configStore().config().layerRules) {
-      if (!rule.namespacePattern.empty()) {
-        if (nsView.empty() || !std::regex_search(nsView.begin(), nsView.end(), rule.namespaceRegex)) {
-          continue;
-        }
-      }
-      if (rule.blur) {
-        resolved.blur = rule.blur;
-      }
-      if (rule.blurPopups) {
-        resolved.blurPopups = rule.blurPopups;
-      }
-      if (rule.ignoreAlpha) {
-        resolved.ignoreAlpha = rule.ignoreAlpha;
-      }
-      if (rule.optimized) {
-        resolved.optimized = rule.optimized;
-      }
-    }
-    return resolved;
-  }
-
-  bool anyWindowRuleHasTitlePattern() {
-    return std::ranges::any_of(configStore().config().windowRules, [](const WindowRule& rule) {
-      return !rule.titlePattern.empty();
-    });
-  }
-
-  ResolvedLayoutConfig resolveGlobalLayout() {
-    const auto& cfg = configStore().config();
-    ResolvedLayoutConfig r;
-    r.mode = cfg.layout.mode;
-    r.gap = cfg.layout.gap;
-    r.widthPresets = cfg.layout.widthPresets;
-    r.scrolling.defaultWidthFraction = cfg.layout.scrolling.defaultWidthFraction;
-    r.scrolling.alwaysCenterSingleColumn = cfg.layout.scrolling.alwaysCenterSingleColumn;
-    const int borderWidth = cfg.appearance.totalBorderWidth();
-    r.totalGap = r.gap + 2 * borderWidth;
-    r.edgePad = r.gap + borderWidth;
-    return r;
-  }
-
-  static void applyWorkspaceLayoutOverrides(ResolvedLayoutConfig& resolved, const WorkspaceLayoutOverrides& overrides) {
-    if (overrides.mode) {
-      resolved.mode = *overrides.mode;
-    }
-    if (overrides.gap) {
-      resolved.gap = *overrides.gap;
-    }
-    if (overrides.scrolling.defaultWidthFraction) {
-      resolved.scrolling.defaultWidthFraction = *overrides.scrolling.defaultWidthFraction;
-    }
-    if (overrides.scrolling.alwaysCenterSingleColumn) {
-      resolved.scrolling.alwaysCenterSingleColumn = *overrides.scrolling.alwaysCenterSingleColumn;
-    }
-    if (overrides.widthPresets) {
-      resolved.widthPresets = *overrides.widthPresets;
-    }
-    const int borderWidth = configStore().config().appearance.totalBorderWidth();
-    resolved.totalGap = resolved.gap + 2 * borderWidth;
-    resolved.edgePad = resolved.gap + borderWidth;
-  }
-
-  ResolvedLayoutConfig resolveWorkspaceLayout(const char* outputName, std::string_view name, size_t index) {
-    const std::string_view outName = outputName != nullptr ? outputName : "";
-    ResolvedLayoutConfig resolved = resolveGlobalLayout();
-    const auto applyMatchingRules = [&](std::string_view output) {
-      for (const auto& rule : configStore().config().workspaceRules) {
-        if (rule.output == output
-            && ((rule.index && static_cast<size_t>(*rule.index - 1) == index) || (!rule.index && rule.name == name))) {
-          applyWorkspaceLayoutOverrides(resolved, rule.layout);
-        }
-      }
-    };
-
-    applyMatchingRules("");
-    if (!outName.empty()) {
-      applyMatchingRules(outName);
-    }
-    return resolved;
-  }
-
-  ResolvedWorkspaceSet resolveWorkspacesForOutput(const char* outputName) {
-    const std::string_view outName = outputName != nullptr ? outputName : "";
-    const auto names = workspaceNamesForOutput(configStore().config(), outName);
-    ResolvedWorkspaceSet result;
-    if (!names) {
-      result.dynamic = true;
-      result.workspaces.push_back({"1", resolveWorkspaceLayout(outputName, "1", 0)});
-      return result;
-    }
-
-    result.workspaces.reserve(names->size());
-    for (size_t index = 0; index < names->size(); ++index) {
-      const auto& name = (*names)[index];
-      result.workspaces.push_back({name, resolveWorkspaceLayout(outputName, name, index)});
-    }
-    return result;
-  }
 
 } // namespace umbriel

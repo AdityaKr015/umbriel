@@ -6,6 +6,7 @@
 #include "layout/layout.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -16,6 +17,8 @@
 #include <vector>
 
 namespace umbriel {
+
+  inline constexpr size_t kMaxWorkspaces = 64;
 
   // Per-workspace layout overrides (all optional → inherit Config::Layout).
   struct WorkspaceLayoutOverrides {
@@ -298,11 +301,4 @@ namespace umbriel {
   [[nodiscard]] const std::vector<ConfigDiagnostic>& configDiagnostics();
   [[nodiscard]] const std::filesystem::path& configRootPath();
   [[nodiscard]] bool configFileMissing();
-  [[nodiscard]] ResolvedWindowRule resolveWindowRules(const char* appId, const char* title, bool focused);
-  [[nodiscard]] ResolvedLayerRule resolveLayerRules(const char* layerNamespace);
-  [[nodiscard]] bool anyWindowRuleHasTitlePattern();
-  [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout();
-  [[nodiscard]] ResolvedLayoutConfig
-  resolveWorkspaceLayout(const char* outputName, std::string_view name, size_t index);
-  [[nodiscard]] ResolvedWorkspaceSet resolveWorkspacesForOutput(const char* outputName);
 } // namespace umbriel

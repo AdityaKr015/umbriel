@@ -3,6 +3,7 @@
 #include "config/config_diag.h"
 #include "config/config_merge.h"
 #include "config/keybind_parse.h"
+#include "config/store.h"
 #include "config/value_parse.h"
 #include "core/log.h"
 
@@ -30,12 +31,6 @@ namespace umbriel {
   namespace {
 
     constexpr Logger kLog("config");
-    Config g_config;
-    std::filesystem::path g_rootPath;
-    bool g_explicitPath = false;
-    std::vector<std::filesystem::path> g_watchPaths;
-    std::vector<ConfigDiagnostic> g_diagnostics;
-    bool g_fileMissing = false;
 
     void emitDiag(ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
       ConfigDiagnostic diag;
@@ -54,7 +49,7 @@ namespace umbriel {
       } else {
         kLog.warn("{}{}", loc.empty() ? "" : loc + ": ", msg);
       }
-      g_diagnostics.push_back(std::move(diag));
+      configStore().addDiagnostic(std::move(diag));
     }
 
     template <typename... A> void warnAt(const toml::source_region& src, std::format_string<A...> fmt, A&&... args) {
@@ -1416,25 +1411,21 @@ namespace umbriel {
       }
     }
     bool parseInto(Config& out) {
-      g_diagnostics.clear();
-      g_watchPaths.clear();
-      g_watchPaths.push_back(g_rootPath);
+      ConfigStore& store = configStore();
+      store.beginLoad();
 
       std::error_code error;
-      if (!std::filesystem::is_regular_file(g_rootPath, error) || error) {
+      if (!std::filesystem::is_regular_file(store.rootPath(), error) || error) {
         return false;
       }
 
       try {
-        auto result = configmerge::mergeWithIncludes(g_rootPath);
-        g_diagnostics.insert(
-            g_diagnostics.end(), std::make_move_iterator(result.diagnostics.begin()),
-            std::make_move_iterator(result.diagnostics.end())
-        );
+        auto result = configmerge::mergeWithIncludes(store.rootPath());
+        for (auto& diagnostic : result.diagnostics) {
+          store.addDiagnostic(std::move(diagnostic));
+        }
         for (const auto& path : result.loadedFiles) {
-          if (std::ranges::find(g_watchPaths, path) == g_watchPaths.end()) {
-            g_watchPaths.push_back(path);
-          }
+          store.addWatchPath(path);
         }
         if (result.hadParseError) {
           return false;
@@ -1456,7 +1447,7 @@ namespace umbriel {
         readWorkspaces(result.merged, loaded);
 
         // Reject config if any error-level diagnostics were emitted.
-        const bool hasErrors = std::ranges::any_of(g_diagnostics, [](const ConfigDiagnostic& d) {
+        const bool hasErrors = std::ranges::any_of(configStore().diagnostics(), [](const ConfigDiagnostic& d) {
           return d.severity == ConfigDiagnostic::Severity::Error;
         });
         if (hasErrors) {
@@ -1475,61 +1466,69 @@ namespace umbriel {
 
   } // namespace
 
-  const Config& config() { return g_config; }
+  ConfigStore& configStore() {
+    static ConfigStore store;
+    return store;
+  }
 
-  const std::vector<ConfigDiagnostic>& configDiagnostics() { return g_diagnostics; }
+  const Config& config() { return configStore().config(); }
 
-  const std::filesystem::path& configRootPath() { return g_rootPath; }
+  const std::vector<ConfigDiagnostic>& configDiagnostics() { return configStore().diagnostics(); }
 
-  bool configFileMissing() { return g_fileMissing; }
+  const std::filesystem::path& configRootPath() { return configStore().rootPath(); }
 
-  void loadConfig(const char* explicitPath) {
-    g_rootPath = explicitPath == nullptr ? defaultConfigPath() : std::filesystem::path(explicitPath);
-    g_explicitPath = explicitPath != nullptr;
+  bool configFileMissing() { return configStore().fileMissing(); }
+
+  namespace {
+    // Whether the root config actually exists on disk right now, which is not the
+    // same as whether parsing succeeded: defaults are a valid way to run.
+    bool rootFileMissing(const std::filesystem::path& root) {
+      std::error_code ec;
+      return !std::filesystem::is_regular_file(root, ec) || static_cast<bool>(ec);
+    }
+  } // namespace
+
+  void ConfigStore::load(const char* explicitPath) {
+    setRootPath(
+        explicitPath == nullptr ? defaultConfigPath() : std::filesystem::path(explicitPath), explicitPath != nullptr
+    );
 
     Config loaded;
     loaded.keybinds = defaultKeybinds();
-    if (!parseInto(loaded)) {
-      std::error_code error;
-      if (!std::filesystem::is_regular_file(g_rootPath, error) || error) {
-        if (g_explicitPath) {
-          emitDiag(
-              ConfigDiagnostic::Severity::Error, nullptr, std::format("config file not found: {}", g_rootPath.string())
-          );
-        } else {
-          kLog.info("no config file found: {}, using defaults", g_rootPath.string());
-        }
+    if (!parseInto(loaded) && rootFileMissing(m_rootPath)) {
+      if (m_explicitPath) {
+        emitDiag(
+            ConfigDiagnostic::Severity::Error, nullptr, std::format("config file not found: {}", m_rootPath.string())
+        );
+      } else {
+        kLog.info("no config file found: {}, using defaults", m_rootPath.string());
       }
     }
-    g_config = std::move(loaded);
-    {
-      std::error_code ec;
-      g_fileMissing = !std::filesystem::is_regular_file(g_rootPath, ec) || ec;
-    }
+    commit(std::move(loaded), rootFileMissing(m_rootPath));
   }
 
-  bool reloadConfig() {
+  bool ConfigStore::reload() {
     Config loaded;
-    if (parseInto(loaded)) {
-      g_config = std::move(loaded);
-      {
-        std::error_code ec;
-        g_fileMissing = !std::filesystem::is_regular_file(g_rootPath, ec) || ec;
-      }
-      return true;
+    if (!parseInto(loaded)) {
+      kLog.warn("config reload failed; keeping previous configuration");
+      return false;
     }
-    kLog.warn("config reload failed; keeping previous configuration");
-    return false;
+    commit(std::move(loaded), rootFileMissing(m_rootPath));
+    return true;
   }
 
-  const std::vector<std::filesystem::path>& configWatchPaths() { return g_watchPaths; }
+  void loadConfig(const char* explicitPath) { configStore().load(explicitPath); }
+
+  bool reloadConfig() { return configStore().reload(); }
+
+  const std::vector<std::filesystem::path>& configWatchPaths() { return configStore().watchPaths(); }
 
   ResolvedWindowRule resolveWindowRules(const char* appId, const char* title, bool focused) {
     ResolvedWindowRule resolved;
     const std::string_view appIdView = appId != nullptr ? appId : "";
     const std::string_view titleView = title != nullptr ? title : "";
 
-    for (const auto& rule : g_config.windowRules) {
+    for (const auto& rule : configStore().config().windowRules) {
       if (!rule.appIdPattern.empty()) {
         if (appIdView.empty() || !std::regex_search(appIdView.begin(), appIdView.end(), rule.appIdRegex)) {
           continue;
@@ -1587,7 +1586,7 @@ namespace umbriel {
   ResolvedLayerRule resolveLayerRules(const char* layerNamespace) {
     ResolvedLayerRule resolved;
     const std::string_view nsView = layerNamespace != nullptr ? layerNamespace : "";
-    for (const auto& rule : g_config.layerRules) {
+    for (const auto& rule : configStore().config().layerRules) {
       if (!rule.namespacePattern.empty()) {
         if (nsView.empty() || !std::regex_search(nsView.begin(), nsView.end(), rule.namespaceRegex)) {
           continue;
@@ -1610,11 +1609,13 @@ namespace umbriel {
   }
 
   bool anyWindowRuleHasTitlePattern() {
-    return std::ranges::any_of(g_config.windowRules, [](const WindowRule& rule) { return !rule.titlePattern.empty(); });
+    return std::ranges::any_of(configStore().config().windowRules, [](const WindowRule& rule) {
+      return !rule.titlePattern.empty();
+    });
   }
 
   ResolvedLayoutConfig resolveGlobalLayout() {
-    const auto& cfg = g_config;
+    const auto& cfg = configStore().config();
     ResolvedLayoutConfig r;
     r.mode = cfg.layout.mode;
     r.gap = cfg.layout.gap;
@@ -1643,7 +1644,7 @@ namespace umbriel {
     if (overrides.widthPresets) {
       resolved.widthPresets = *overrides.widthPresets;
     }
-    const int borderWidth = g_config.appearance.totalBorderWidth();
+    const int borderWidth = configStore().config().appearance.totalBorderWidth();
     resolved.totalGap = resolved.gap + 2 * borderWidth;
     resolved.edgePad = resolved.gap + borderWidth;
   }
@@ -1652,7 +1653,7 @@ namespace umbriel {
     const std::string_view outName = outputName != nullptr ? outputName : "";
     ResolvedLayoutConfig resolved = resolveGlobalLayout();
     const auto applyMatchingRules = [&](std::string_view output) {
-      for (const auto& rule : g_config.workspaceRules) {
+      for (const auto& rule : configStore().config().workspaceRules) {
         if (rule.output == output
             && ((rule.index && static_cast<size_t>(*rule.index - 1) == index) || (!rule.index && rule.name == name))) {
           applyWorkspaceLayoutOverrides(resolved, rule.layout);
@@ -1669,7 +1670,7 @@ namespace umbriel {
 
   ResolvedWorkspaceSet resolveWorkspacesForOutput(const char* outputName) {
     const std::string_view outName = outputName != nullptr ? outputName : "";
-    const auto names = workspaceNamesForOutput(g_config, outName);
+    const auto names = workspaceNamesForOutput(configStore().config(), outName);
     ResolvedWorkspaceSet result;
     if (!names) {
       result.dynamic = true;

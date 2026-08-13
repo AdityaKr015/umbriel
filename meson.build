@@ -159,6 +159,7 @@ core_sources = files(
   'src/core/fdlimit.cpp',
   'src/core/log.cpp',
   'src/config/config.cpp',
+  'src/config/store.cpp',
   'src/config/config_merge.cpp',
   'src/config/config_watcher.cpp',
   'src/layout/drop_target.cpp',

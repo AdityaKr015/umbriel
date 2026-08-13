@@ -15,6 +15,7 @@ What works today:
 - Per-monitor workspace inventories via `ext_workspace_manager_v1`, isolated and configurable per output
 - Scrolling column layout with keyboard/mouse focus, movement, width presets, and animated transitions
 - Floating windows with mouse move/resize, mod+drag tile reorder with drop-target preview
+- Pinned floating windows above fullscreen applications, toggleable with `window-toggle-pinned`
 - Window rules: per-app float, size, column width, workspace, fullscreen, and opacity via `[[window_rule]]` with regex matching on app_id and title
 - Blur, shadows, rounded corners, double borders (inner + outer ring), animated position/size/fade transitions, close animation snapshots
 - Touchpad/trackpad gestures: 3-finger horizontal swipe (scroll layout), 3-finger vertical swipe (workspace switch), pinch/hold forwarding
@@ -125,6 +126,7 @@ Inside the session:
 | mod+Shift+H/J/K/L or arrows | Move focused window |
 | mod+comma / mod+period | Consume left / expel right |
 | mod+R / mod+F | Cycle width / toggle full width |
+| mod+P | Toggle pin for the focused window |
 | mod+1..9 | Switch workspace on focused monitor |
 | mod+Shift+1..9 | Move focused window to workspace and follow |
 

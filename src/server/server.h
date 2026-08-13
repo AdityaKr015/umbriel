@@ -128,6 +128,8 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* dragIconTree() const { return m_dragIconTree; }
     // Above top panels, below overlay/lock (fullscreen xdg views).
     [[nodiscard]] wlr_scene_tree* fullscreenTree() const { return m_fullscreenTree; }
+    [[nodiscard]] wlr_scene_tree* pinnedTree() const { return m_pinnedTree; }
+    [[nodiscard]] wlr_scene_tree* pinnedShadowTree() const { return m_pinnedShadowTree; }
     [[nodiscard]] wlr_scene_tree* lockTree() const { return m_lockTree; }
     [[nodiscard]] wlr_scene_tree* shellLayerTree(uint32_t layer) const;
     [[nodiscard]] wlr_output_layout* outputLayout() const { return m_outputLayout; }
@@ -327,6 +329,8 @@ namespace umbriel {
     wlr_scene_tree* m_dragTree = nullptr;
     wlr_scene_tree* m_dragIconTree = nullptr;
     wlr_scene_tree* m_fullscreenTree = nullptr;
+    wlr_scene_tree* m_pinnedShadowTree = nullptr;
+    wlr_scene_tree* m_pinnedTree = nullptr;
     wlr_scene_tree* m_lockTree = nullptr;
     wlr_scene_rect* m_lockBlank = nullptr;
     wlr_scene_rect* m_backdrop = nullptr;

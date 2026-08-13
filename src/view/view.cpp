@@ -242,6 +242,9 @@ namespace umbriel {
   }
 
   void View::setOnActiveWorkspace(bool active) {
+    if (m_pinned) {
+      return;
+    }
     if (m_onActiveWorkspace == active) {
       return;
     }
@@ -308,7 +311,7 @@ namespace umbriel {
   void View::applySeatFocus(bool withKeyboard) {
     // Mechanism only. Policy lives in Server::focusView — do not call directly
     // from input/event code.
-    if (!m_onActiveWorkspace) {
+    if (!m_onActiveWorkspace && !m_pinned) {
       return;
     }
 
@@ -1646,6 +1649,14 @@ namespace umbriel {
   }
 
   void View::handleUnmap() {
+    if (m_pinned) {
+      m_pinned = false;
+      if (m_workspace != nullptr) {
+        wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(false));
+        reparentShadow(m_workspace->shadowLayer());
+        setOnActiveWorkspace(m_workspace->active());
+      }
+    }
     if (m_server->scratchpadManager() != nullptr) {
       m_server->scratchpadManager()->remove(this);
     }
@@ -1984,12 +1995,66 @@ namespace umbriel {
 
   void View::toggleFloating() { setFloating(m_tiled); }
 
+  void View::restorePinnedSceneParent() {
+    if (!m_pinned) {
+      return;
+    }
+    wlr_scene_node_place_above(&m_server->pinnedShadowTree()->node, &m_server->fullscreenTree()->node);
+    wlr_scene_node_place_above(&m_server->pinnedTree()->node, &m_server->pinnedShadowTree()->node);
+    wlr_scene_node_reparent(&m_sceneTree->node, m_server->pinnedTree());
+    reparentShadow(m_server->pinnedShadowTree());
+    setNodeEnabled(true);
+    raiseToTop();
+  }
+
+  void View::togglePinned() {
+    if (!m_mapped
+        || !m_toplevel->base->initialized
+        || m_toplevel->scheduled.fullscreen
+        || m_toplevel->current.fullscreen) {
+      return;
+    }
+    if (!m_pinned) {
+      if (m_tiled) {
+        setFloating(true);
+      }
+      m_pinned = true;
+      restorePinnedSceneParent();
+      if (m_workspace != nullptr) {
+        m_workspace->syncViewPresentation(this);
+      }
+      if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+        wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
+      }
+      m_server->focusView(this);
+      return;
+    }
+
+    m_pinned = false;
+    if (m_workspace != nullptr) {
+      wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(false));
+      reparentShadow(m_workspace->shadowLayer());
+      setOnActiveWorkspace(m_workspace->active());
+      m_workspace->syncFloatingStack(this);
+      m_workspace->syncViewPresentation(this);
+    }
+    setNodeEnabled(m_onActiveWorkspace);
+  }
+
   void View::setFloating(bool floating) {
     if (!m_mapped || !m_toplevel->base->initialized) {
       return;
     }
     if (!floating && m_server->scratchpadManager() != nullptr && m_server->scratchpadManager()->contains(this)) {
       return;
+    }
+    if (!floating && m_pinned) {
+      m_pinned = false;
+      if (m_workspace != nullptr) {
+        wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(false));
+        reparentShadow(m_workspace->shadowLayer());
+        setOnActiveWorkspace(m_workspace->active());
+      }
     }
     cancelSizeAnimation();
     // Fullscreen owns its own scene tree; leave it before changing tile/float.
@@ -2135,6 +2200,14 @@ namespace umbriel {
       }
     }
     if (fullscreen) {
+      if (m_pinned) {
+        m_pinned = false;
+        if (m_workspace != nullptr) {
+          wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(false));
+          reparentShadow(m_workspace->shadowLayer());
+          setOnActiveWorkspace(m_workspace->active());
+        }
+      }
       m_floatingSizeRequestSerial.reset();
     }
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);

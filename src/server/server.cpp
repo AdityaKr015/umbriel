@@ -174,6 +174,8 @@ namespace umbriel {
     m_dragIconTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);
     m_fullscreenTree = wlr_scene_tree_create(&m_scene->tree);
+    m_pinnedShadowTree = wlr_scene_tree_create(&m_scene->tree);
+    m_pinnedTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
     m_cheatsheetTree = wlr_scene_tree_create(&m_scene->tree);
     m_bannerTree = wlr_scene_tree_create(&m_scene->tree);

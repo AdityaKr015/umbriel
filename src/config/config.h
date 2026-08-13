@@ -42,6 +42,7 @@ namespace umbriel {
     ToggleMaximize,
     ToggleFullscreen,
     ToggleFloating,
+    TogglePinned,
     WindowFocusNext,
     WorkspaceSwitch,
     WindowMoveToWorkspace,

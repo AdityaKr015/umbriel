@@ -213,7 +213,7 @@ namespace umbriel {
     if (mode == CursorMode::Move || mode == CursorMode::MoveTile) {
       m_grabX = m_cursor->x - view->sceneTree()->node.x;
       m_grabY = m_cursor->y - view->sceneTree()->node.y;
-      if (mode == CursorMode::Move) {
+      if (mode == CursorMode::Move && !view->pinned()) {
         wlr_scene_node_reparent(&view->sceneTree()->node, m_server->dragTree());
         wlr_scene_node_raise_to_top(&view->sceneTree()->node);
       }
@@ -267,10 +267,14 @@ namespace umbriel {
     if ((previousMode == CursorMode::Move || previousMode == CursorMode::MoveTile)
         && m_grabbedView != nullptr
         && m_grabbedView->workspace() != nullptr) {
-      wlr_scene_node_reparent(
-          &m_grabbedView->sceneTree()->node, m_grabbedView->workspace()->viewLayer(m_grabbedView->tiled())
-      );
-      m_grabbedView->workspace()->restackFloatingViews();
+      if (m_grabbedView->pinned()) {
+        m_grabbedView->restorePinnedSceneParent();
+      } else {
+        wlr_scene_node_reparent(
+            &m_grabbedView->sceneTree()->node, m_grabbedView->workspace()->viewLayer(m_grabbedView->tiled())
+        );
+        m_grabbedView->workspace()->restackFloatingViews();
+      }
     }
     if (previousMode == CursorMode::Resize && m_grabbedView != nullptr) {
       m_grabbedView->finishFloatingResize();
@@ -983,8 +987,13 @@ namespace umbriel {
         }
       }
       view->setNodeEnabled(true);
-      if (view->workspace() != nullptr) {
+      if (view->pinned()) {
+        view->restorePinnedSceneParent();
+      } else if (view->workspace() != nullptr) {
         wlr_scene_node_reparent(&view->sceneTree()->node, view->workspace()->viewLayer(false));
+      }
+      if (view->workspace() != nullptr) {
+        view->workspace()->syncViewPresentation(view);
       }
       m_server->focusView(view, FocusReason::DragDrop);
     }

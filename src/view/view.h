@@ -40,6 +40,7 @@ namespace umbriel {
     [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
+    [[nodiscard]] bool pinned() const { return m_pinned; }
     [[nodiscard]] bool sizeAnimActive() const { return sizeAnimating(); }
     [[nodiscard]] int presentedWidth(const wlr_box& target) const;
     [[nodiscard]] int presentedHeight(const wlr_box& target) const;
@@ -77,6 +78,9 @@ namespace umbriel {
     // Detach from the scrolling layout (float) or re-insert as a tiled column.
     void setFloating(bool floating);
     void toggleFloating();
+    void togglePinned();
+    // Restore the global pinned scene layer after temporary drag reparenting.
+    void restorePinnedSceneParent();
     // Enable/disable the view's scene tree and its shadow container together.
     void setNodeEnabled(bool enabled);
     void raiseToTop();
@@ -213,6 +217,7 @@ namespace umbriel {
     // placement snaps (avoids animating from the default (0,0) world origin).
     bool m_positioned = false;
     bool m_tiled = false;
+    bool m_pinned = false;
     bool m_onActiveWorkspace = false;
     bool m_scratchpadBorder = false;
     AnimatedValue m_posX;

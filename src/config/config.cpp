@@ -111,6 +111,7 @@ namespace umbriel {
       add(KeybindAction::ToggleFullscreen, XKB_KEY_f);
       add(KeybindAction::ToggleMaximize, XKB_KEY_f, WLR_MODIFIER_CTRL);
       add(KeybindAction::ToggleFloating, XKB_KEY_t);
+      add(KeybindAction::TogglePinned, XKB_KEY_p);
       // Overview must not repeat: holding the key would thrash open/close.
       keybinds.push_back({
           .submap = {},
@@ -343,6 +344,7 @@ namespace umbriel {
        ActionArgKind::OptionalOutput},
       {"window-set-width", "<fraction>", KeybindAction::WindowSetWidth, ActionArgKind::WidthFraction},
       {"window-toggle-floating", "", KeybindAction::ToggleFloating},
+      {"window-toggle-pinned", "", KeybindAction::TogglePinned},
       {"window-toggle-fullscreen", "", KeybindAction::ToggleFullscreen},
       {"window-toggle-maximize", "", KeybindAction::ToggleMaximize},
       {"workspace-switch", "<workspace>[/<output>]", KeybindAction::WorkspaceSwitch, ActionArgKind::Workspace},

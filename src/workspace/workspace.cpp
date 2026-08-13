@@ -129,8 +129,10 @@ namespace umbriel {
     }
     m_views.push_back(view);
     const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
-    wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : viewLayer(view->tiled()));
-    view->reparentShadow(m_shadowLayer);
+    if (!view->pinned()) {
+      wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : viewLayer(view->tiled()));
+      view->reparentShadow(m_shadowLayer);
+    }
     syncFloatingStack(view);
     applyVisibility();
     if (attachToLayout) {
@@ -143,11 +145,13 @@ namespace umbriel {
     if (view == nullptr) {
       return nullptr;
     }
-    const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
-    wlr_scene_node_reparent(
-        &view->sceneTree()->node, fs ? m_group->server()->fullscreenTree() : m_group->server()->xdgTree()
-    );
-    view->reparentShadow(nullptr);
+    if (!view->pinned()) {
+      const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
+      wlr_scene_node_reparent(
+          &view->sceneTree()->node, fs ? m_group->server()->fullscreenTree() : m_group->server()->xdgTree()
+      );
+      view->reparentShadow(nullptr);
+    }
     const int removedColumn = m_layout->columnOf(view);
     m_layout->removeView(view);
     std::erase(m_views, view);
@@ -259,11 +263,7 @@ namespace umbriel {
   }
 
   void Workspace::syncViewPresentation(View* view) {
-    if ((!m_active && !m_inSwitchTransition)
-        || view == nullptr
-        || !view->mapped()
-        || m_group == nullptr
-        || m_group->output() == nullptr) {
+    if (view == nullptr || !view->mapped() || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
     // A window under an interactive move spans outputs unclipped; leave it as
@@ -274,6 +274,24 @@ namespace umbriel {
     Output* output = m_group->output();
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
+
+    if (view->pinned()) {
+      const wlr_box& geometry = view->toplevel()->base->geometry;
+      const wlr_box target{view->sceneTree()->node.x, view->sceneTree()->node.y, geometry.width, geometry.height};
+      const int border = config().appearance.totalBorderWidth();
+      const wlr_box decorated{
+          target.x - border, target.y - border, target.width + 2 * border, target.height + 2 * border
+      };
+      wlr_box intersection{};
+      const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
+      view->setNodeEnabled(visible);
+      view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
+      return;
+    }
+
+    if (!m_active && !m_inSwitchTransition) {
+      return;
+    }
 
     // Clip against the node's CURRENT position, not the layout target: during
     // position animations (column swaps, drag drops) the node lags the target,
@@ -511,6 +529,9 @@ namespace umbriel {
 
   void Workspace::applyVisibility() {
     for (View* view : m_views) {
+      if (view->pinned()) {
+        continue;
+      }
       view->setOnActiveWorkspace(m_active);
       // Persistent resting state: an inactive workspace keeps its nodes disabled
       // so the shared scene never renders them on any output. Active (and
@@ -531,7 +552,7 @@ namespace umbriel {
     m_inSwitchTransition = true;
     m_switchViews.clear();
     for (View* view : m_views) {
-      if (view->mapped() && (view->sceneTree()->node.enabled || !m_active)) {
+      if (!view->pinned() && view->mapped() && (view->sceneTree()->node.enabled || !m_active)) {
         m_switchViews.push_back(view);
       }
     }
@@ -554,7 +575,7 @@ namespace umbriel {
       wlr_scene_node_set_position(&m_fullscreenTree->node, 0, m_slideOffsetY);
     }
     for (View* view : m_views) {
-      if (view->mapped()) {
+      if (!view->pinned() && view->mapped()) {
         syncViewPresentation(view);
       }
     }

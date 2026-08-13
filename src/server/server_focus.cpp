@@ -37,11 +37,11 @@ namespace umbriel {
     }
 
     if (Workspace* workspace = view->workspace()) {
-      if (!workspace->active()) {
+      if (!view->pinned() && !workspace->active()) {
         workspace->group()->activate(workspace);
       }
     }
-    if (!view->onActiveWorkspace()) {
+    if (!view->onActiveWorkspace() && !view->pinned()) {
       return;
     }
     if (m_scratchpadManager != nullptr) {
@@ -67,7 +67,7 @@ namespace umbriel {
       deactivateViews(nullptr);
     }
     Workspace* workspace = view->workspace();
-    if (workspace != nullptr) {
+    if (workspace != nullptr && (!view->pinned() || workspace->active())) {
       workspace->setFocusedView(view);
     }
     if (overviewActive) {
@@ -373,6 +373,16 @@ namespace umbriel {
       }
       if (Workspace* workspace = activeWorkspace()) {
         workspace->toggleFocusedFloating();
+      }
+      return true;
+    case KeybindAction::TogglePinned:
+      if (m_scratchpadManager != nullptr && m_scratchpadManager->hasFocus(outputFromWlr(preferredOutput()))) {
+        return true;
+      }
+      if (Workspace* workspace = activeWorkspace()) {
+        if (View* view = workspace->focusedView()) {
+          view->togglePinned();
+        }
       }
       return true;
     case KeybindAction::WindowFocusNext:

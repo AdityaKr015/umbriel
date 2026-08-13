@@ -58,6 +58,11 @@ workspace.
 `window-toggle-floating` remembers the window's floating size and position.
 The first float lands slightly down-right of the tile, clamped on-screen.
 
+`window-toggle-pinned` makes the focused window floating and keeps it above
+fullscreen windows on its output. Pinned windows remain visible when switching
+workspaces; pinning a fullscreen window is ignored, and fullscreening a pinned
+window removes its pinned state.
+
 ### Overview actions
 
 `overview-toggle`, `overview-open`, `overview-close`.

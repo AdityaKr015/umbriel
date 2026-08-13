@@ -49,7 +49,7 @@ namespace umbriel {
       if (columnCount == 0) {
         hintX = 0;
       } else if (clampedGap <= 0) {
-        hintX = 0;
+        hintX = layout.columnX(0, viewportWidth) - gap - kColumnHintWidth;
       } else if (clampedGap >= columnCount) {
         hintX =
             layout.columnX(columnCount - 1, viewportWidth) + layout.columnWidth(columnCount - 1, viewportWidth) + gap;

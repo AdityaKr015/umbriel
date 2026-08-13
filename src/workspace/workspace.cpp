@@ -291,78 +291,59 @@ namespace umbriel {
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
 
-    if (view->pinned()) {
-      const wlr_box& geometry = view->toplevel()->base->geometry;
-      const wlr_box target{view->sceneTree()->node.x, view->sceneTree()->node.y, geometry.width, geometry.height};
-      const int border = config().appearance.totalBorderWidth();
-      const wlr_box decorated{
-          target.x - border, target.y - border, target.width + 2 * border, target.height + 2 * border
-      };
-      wlr_box intersection{};
-      const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
-      view->setNodeEnabled(visible);
-      view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
-      return;
-    }
-
-    if (!m_active && !m_inSwitchTransition) {
-      return;
-    }
-
     // Clip against the node's CURRENT position, not the layout target: during
     // position animations (column swaps, drag drops) the node lags the target,
     // and clips computed at the target land displaced on screen (cut-off
     // borders that reappear as the window settles).
     const wlr_scene_node& node = view->sceneTree()->node;
+    const int border = config().appearance.totalBorderWidth();
+    const auto grow = [border](const wlr_box& box, int width, int height) {
+      return wlr_box{box.x - border, box.y - border, width + 2 * border, height + 2 * border};
+    };
 
-    if (view->toplevel()->scheduled.fullscreen) {
-      const int col = m_layout->columnOf(view);
-      if (col < 0) {
-        if (m_active) {
-          view->setNodeEnabled(true);
-          view->applyFullscreenLayout();
-        } else {
-          view->setNodeEnabled(false);
-        }
+    // Each case only decides two boxes: the region the view occupies, and the
+    // region its decorations occupy. Everything after is common.
+    wlr_box target{};
+    wlr_box decorated{};
+
+    if (view->pinned()) {
+      // Pinned views sit outside the workspace, so no slide offset applies, and
+      // they are sized from committed geometry rather than the presented size.
+      const wlr_box& geometry = view->toplevel()->base->geometry;
+      target = {node.x, node.y, geometry.width, geometry.height};
+      decorated = grow(target, target.width, target.height);
+    } else {
+      if (!m_active && !m_inSwitchTransition) {
         return;
       }
-      const wlr_box clipTarget{node.x, node.y + m_slideOffsetY, outputBox.width, outputBox.height};
-      wlr_box intersection{};
-      const bool visible = wlr_box_intersection(&intersection, &clipTarget, &outputBox);
-      view->setNodeEnabled(visible);
-      view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
-      return;
+
+      if (view->toplevel()->scheduled.fullscreen) {
+        if (m_layout->columnOf(view) < 0) {
+          if (m_active) {
+            view->setNodeEnabled(true);
+            view->applyFullscreenLayout();
+          } else {
+            view->setNodeEnabled(false);
+          }
+          return;
+        }
+        // Fullscreen covers the output and draws no decorations.
+        target = {node.x, node.y + m_slideOffsetY, outputBox.width, outputBox.height};
+        decorated = target;
+      } else {
+        // Floating views follow committed geometry; tiled ones follow the box
+        // the layout assigned them.
+        const wlr_box sized =
+            m_layout->columnOf(view) < 0 ? view->toplevel()->base->geometry : m_layout->targetBox(view);
+        target = {node.x, node.y + m_slideOffsetY, sized.width, sized.height};
+        decorated = grow(target, view->presentedWidth(target), view->presentedHeight(target));
+      }
     }
 
-    if (m_layout->columnOf(view) < 0) {
-      const wlr_box& geometry = view->toplevel()->base->geometry;
-      wlr_box target{
-          .x = view->sceneTree()->node.x,
-          .y = view->sceneTree()->node.y + m_slideOffsetY,
-          .width = geometry.width,
-          .height = geometry.height,
-      };
-      const int presentW = view->presentedWidth(target);
-      const int presentH = view->presentedHeight(target);
-      const int border = config().appearance.totalBorderWidth();
-      const wlr_box decorated{target.x - border, target.y - border, presentW + 2 * border, presentH + 2 * border};
-      wlr_box intersection{};
-      const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
-      view->setNodeEnabled(visible);
-      view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
-      return;
-    }
-
-    const wlr_box target = m_layout->targetBox(view);
-    const int border = config().appearance.totalBorderWidth();
-    const wlr_box clipTarget{node.x, node.y + m_slideOffsetY, target.width, target.height};
-    const int presentW = view->presentedWidth(clipTarget);
-    const int presentH = view->presentedHeight(clipTarget);
-    const wlr_box decorated{clipTarget.x - border, clipTarget.y - border, presentW + 2 * border, presentH + 2 * border};
     wlr_box intersection{};
     const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
     view->setNodeEnabled(visible);
-    view->setOutputClip(visible ? &intersection : nullptr, clipTarget, outputBox);
+    view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
   }
 
   void Workspace::applyPositions(bool animate) {

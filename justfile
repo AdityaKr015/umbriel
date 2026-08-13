@@ -77,7 +77,24 @@ _clang_tidy m=mode *args:
     src_root="$(realpath src)"
     run-clang-tidy -quiet -use-color -p "build-{{m}}" -j "$(nproc)" -header-filter='\.\./src/.*' {{args}} "^${src_root}/.*"
 
-lint m=mode: (_ensure-configured m)
+# Fail on any compiler warning emitted while building. clang-tidy does not
+# surface these: it reports its own check names, not the compiler's diagnostics.
+# Files that did not need recompiling are not re-checked, so `just rebuild`
+# first for a full pass.
+_warnings m=mode: (_ensure-configured m)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! output=$(ninja -C build-{{m}} 2>&1); then
+        printf '%s\n' "$output"
+        exit 1
+    fi
+    if printf '%s\n' "$output" | grep -q 'warning:'; then
+        printf '%s\n' "$output" | grep -A8 'warning:'
+        echo "error: compiler warnings are not allowed" >&2
+        exit 1
+    fi
+
+lint m=mode: (_ensure-configured m) (_warnings m)
     just _clang_tidy {{m}} '-warnings-as-errors=*'
 
 clean m=mode:

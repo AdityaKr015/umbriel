@@ -237,19 +237,8 @@ namespace umbriel {
         .startY = m_cursor->y,
     };
     grab.sourceColumn = grab.sourceWorkspace != nullptr ? grab.sourceWorkspace->layout().columnOf(view) : -1;
-    const ScrollingLayout* scrolling =
-        grab.sourceWorkspace != nullptr ? grab.sourceWorkspace->scrollingLayout() : nullptr;
-    if (scrolling != nullptr && grab.sourceColumn >= 0) {
-      const auto& columns = scrolling->columns();
-      if (grab.sourceColumn < static_cast<int>(columns.size())) {
-        const Column& column = columns[static_cast<size_t>(grab.sourceColumn)];
-        if (column.views.size() == 1) {
-          grab.sourceWidth = DropColumnWidth{
-              .fraction = column.savedWidthFrac > 0.0 ? column.savedWidthFrac : column.widthFrac,
-              .fullWidth = column.savedWidthFrac > 0.0,
-          };
-        }
-      }
+    if (grab.sourceWorkspace != nullptr) {
+      grab.sourceWidth = captureDropColumnWidth(*grab.sourceWorkspace, view);
     }
     grab.drop = {
         .workspace = grab.sourceWorkspace,
@@ -1021,12 +1010,8 @@ namespace umbriel {
     View* view = grab->view;
     Workspace* target = grab->drop.workspace != nullptr ? grab->drop.workspace : grab->sourceWorkspace;
     if (view != nullptr && view->mapped() && target != nullptr) {
-      const bool restoreSourceWidth = grab->sourceWidth.has_value()
-          && target == grab->sourceWorkspace
-          && grab->drop.row < 0
-          && std::max(0, grab->drop.column) == grab->sourceColumn;
       applyDrop(
-          *m_server, *view, *target, grab->drop, restoreSourceWidth ? &*grab->sourceWidth : nullptr,
+          *m_server, *view, *target, grab->drop, grab->sourceWidth.has_value() ? &*grab->sourceWidth : nullptr,
           /*animate=*/true
       );
     }

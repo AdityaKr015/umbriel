@@ -212,6 +212,7 @@ namespace umbriel {
     Workspace* m_dragSourceWorkspace = nullptr;
     int m_dragSourceColumn = -1;
     int m_dragSourceRow = -1;
+    std::optional<DropColumnWidth> m_dragSourceWidth;
     DropTarget m_drop{};
   };
 

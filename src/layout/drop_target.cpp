@@ -208,6 +208,25 @@ namespace umbriel {
       return {.column = nearestGap, .row = -1};
     }
   } // namespace
+  std::optional<DropColumnWidth> captureDropColumnWidth(const Workspace& source, const View* view) {
+    const ScrollingLayout* scrolling = source.scrollingLayout();
+    if (scrolling == nullptr || view == nullptr) {
+      return std::nullopt;
+    }
+    const int columnIndex = scrolling->columnOf(view);
+    const auto& columns = scrolling->columns();
+    if (columnIndex < 0 || columnIndex >= static_cast<int>(columns.size())) {
+      return std::nullopt;
+    }
+    const Column& column = columns[static_cast<size_t>(columnIndex)];
+    if (column.views.size() != 1) {
+      return std::nullopt;
+    }
+    return DropColumnWidth{
+        .fraction = column.savedWidthFrac > 0.0 ? column.savedWidthFrac : column.widthFrac,
+        .fullWidth = column.savedWidthFrac > 0.0,
+    };
+  }
 
   DropTarget computeDropTarget(Workspace& workspace, double worldX, double worldY, const View* excludedView) {
     DropTarget result{.workspace = &workspace};
@@ -283,7 +302,7 @@ namespace umbriel {
     } else {
       target.layout().insertView(&view, std::max(0, drop.column));
     }
-    if (columnWidth != nullptr) {
+    if (columnWidth != nullptr && drop.row < 0) {
       const int column = target.layout().columnOf(&view);
       target.layout().setWidthFraction(column, columnWidth->fraction);
       if (columnWidth->fullWidth) {

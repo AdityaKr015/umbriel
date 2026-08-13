@@ -853,6 +853,7 @@ namespace umbriel {
     m_pressWorkspace = nullptr;
     m_dragCard = nullptr;
     m_dragSourceWorkspace = nullptr;
+    m_dragSourceWidth.reset();
     m_drop = {};
     m_gestureOpenedHere = false;
     m_server->reconcileDynamicWorkspaces();
@@ -1206,11 +1207,13 @@ namespace umbriel {
     m_dragSourceWorkspace = view->workspace();
     m_dragSourceColumn = -1;
     m_dragSourceRow = -1;
+    m_dragSourceWidth.reset();
     m_drop = {};
 
     if (m_dragSourceWorkspace != nullptr && view->tiled()) {
       m_dragSourceColumn = m_dragSourceWorkspace->layout().columnOf(view);
       m_dragSourceRow = m_dragSourceWorkspace->layout().rowOf(view);
+      m_dragSourceWidth = captureDropColumnWidth(*m_dragSourceWorkspace, view);
       if (m_dragSourceColumn >= 0) {
         // Detach so the source row closes the gap live, exactly like a normal
         // tile drag; arrange() re-lays that output's cards through the hook.
@@ -1284,7 +1287,10 @@ namespace umbriel {
     }
 
     if (target != nullptr && view->tiled()) {
-      applyDrop(*m_server, *view, *target, targetDrop, nullptr, /*animate=*/false);
+      applyDrop(
+          *m_server, *view, *target, targetDrop, m_dragSourceWidth.has_value() ? &*m_dragSourceWidth : nullptr,
+          /*animate=*/false
+      );
     } else if (target != nullptr && dropState != nullptr) {
       // Floating: map the card origin back out of the thumbnail.
       RowMetrics metrics{};
@@ -1302,7 +1308,15 @@ namespace umbriel {
       }
     } else if (m_dragSourceWorkspace != nullptr && view->tiled() && m_dragSourceColumn >= 0) {
       // Cancelled or dropped on nothing: put the tile back where it came from.
-      if (m_dragSourceRow >= 0) {
+      if (m_dragSourceWidth.has_value()) {
+        m_dragSourceWorkspace->layout().insertView(view, m_dragSourceColumn);
+        const int column = m_dragSourceWorkspace->layout().columnOf(view);
+        m_dragSourceWorkspace->layout().setWidthFraction(column, m_dragSourceWidth->fraction);
+        if (m_dragSourceWidth->fullWidth) {
+          m_dragSourceWorkspace->layout().toggleFullWidth(column);
+        }
+        wlr_xdg_toplevel_set_maximized(view->toplevel(), m_dragSourceWidth->fullWidth);
+      } else if (m_dragSourceRow >= 0) {
         m_dragSourceWorkspace->layout().insertViewIntoColumn(view, m_dragSourceColumn, m_dragSourceRow);
       } else {
         m_dragSourceWorkspace->layout().insertView(view, m_dragSourceColumn);
@@ -1313,6 +1327,7 @@ namespace umbriel {
     m_dragSourceWorkspace = nullptr;
     m_dragSourceColumn = -1;
     m_dragSourceRow = -1;
+    m_dragSourceWidth.reset();
     // The card moved rows and scene parents; rebuilding is cheaper to reason
     // about than rebinding its surface listeners in place.
     rebuildCard(view);

@@ -246,7 +246,7 @@ namespace umbriel {
         m_scrollWorkspace = ws;
         m_viewportWidth = std::max(1, out->usableArea().width - 2 * ws->layoutConfig().edgePad);
         m_scrollStart = scrolling->scroll();
-        ws->arrange(false);
+        ws->markArrange(false);
         m_state = State::Scroll;
       } else {
         // ----- Vertical lock → Switch -----
@@ -291,7 +291,7 @@ namespace umbriel {
         target = std::min(maxScroll + (target - maxScroll) * kOverscrollCompress, maxScroll + 0.1 * m_viewportWidth);
       }
       scrolling->setScroll(target);
-      m_scrollWorkspace->arrange(false);
+      m_scrollWorkspace->markArrange(false);
       return;
     }
 
@@ -420,7 +420,7 @@ namespace umbriel {
     }
     if (cancelled) {
       scrolling->setScroll(m_scrollStart);
-      m_scrollWorkspace->arrange(true);
+      m_scrollWorkspace->markArrange(true);
     } else {
       // Snap to the column nearest the viewport center.
       const ScrollingLayout& layout = *scrolling;
@@ -456,7 +456,7 @@ namespace umbriel {
         if (focused != nullptr && layout.columnOf(focused) == best) {
           // Snap back / cancel: nearest column is already focused.
           m_scrollWorkspace->ensureFocusedVisible();
-          m_scrollWorkspace->arrange(true);
+          m_scrollWorkspace->markArrange(true);
         } else if (
             best < static_cast<int>(layout.columns().size())
             && !layout.columns()[static_cast<size_t>(best)].views.empty()
@@ -465,11 +465,11 @@ namespace umbriel {
           m_server->focusView(target, FocusReason::Directional);
         } else {
           m_scrollWorkspace->ensureFocusedVisible();
-          m_scrollWorkspace->arrange(true);
+          m_scrollWorkspace->markArrange(true);
         }
       } else {
         m_scrollWorkspace->ensureFocusedVisible();
-        m_scrollWorkspace->arrange(true);
+        m_scrollWorkspace->markArrange(true);
       }
     }
     m_scrollWorkspace = nullptr;

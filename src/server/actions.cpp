@@ -319,7 +319,7 @@ namespace umbriel {
           std::max(1, workspace->group()->output()->usableArea().width - 2 * workspace->layoutConfig().edgePad);
       const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportWidth));
       scrolling->setScroll(std::clamp(scrolling->scroll() + delta, 0.0, maxScroll));
-      workspace->arrange();
+      workspace->markArrange();
       return true;
     }
 

@@ -270,7 +270,7 @@ namespace umbriel {
         dwindle->insertView(&view, static_cast<int>(dwindle->columns().size()));
       }
       wlr_scene_node_reparent(&view.sceneTree()->node, target.viewLayer(true));
-      target.arrange(animate);
+      target.markArrange(animate);
       server.focusView(&view, FocusReason::DragDrop);
       return;
     }
@@ -292,7 +292,7 @@ namespace umbriel {
       wlr_xdg_toplevel_set_maximized(view.toplevel(), columnWidth->fullWidth);
     }
     wlr_scene_node_reparent(&view.sceneTree()->node, target.viewLayer(true));
-    target.arrange(animate);
+    target.markArrange(animate);
     server.focusView(&view, FocusReason::DragDrop);
   }
 

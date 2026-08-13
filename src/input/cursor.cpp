@@ -449,7 +449,7 @@ namespace umbriel {
       }
       if (m_mode == CursorMode::ResizeTile) {
         if (m_resizeWorkspace != nullptr) {
-          m_resizeWorkspace->arrange(false);
+          m_resizeWorkspace->markArrange(false);
         }
         resetMode();
         return;
@@ -1223,7 +1223,7 @@ namespace umbriel {
     const wlr_box usable = m_resizeWorkspace->group()->output()->usableArea();
     m_resizeGrab->applyDelta(m_cursor->x - m_resizeStartX, m_cursor->y - m_resizeStartY, usable);
     wlr_xdg_toplevel_set_maximized(m_grabbedView->toplevel(), false);
-    m_resizeWorkspace->arrange(false);
+    m_resizeWorkspace->markArrange(false);
   }
 
 } // namespace umbriel

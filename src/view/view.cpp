@@ -1379,7 +1379,7 @@ namespace umbriel {
       if (maximized) {
         m_workspace->ensureFocusedVisible();
       }
-      m_workspace->arrange(false);
+      m_workspace->markArrange(false);
       updateForeignState();
       return;
     }
@@ -1684,7 +1684,7 @@ namespace umbriel {
       if (m_workspace != nullptr) {
         m_workspace->ensureFocusedVisible();
         // arrange() sends the full-output size even when this workspace is hidden.
-        m_workspace->arrange(false);
+        m_workspace->markArrange(false);
       }
       if (!m_tiled || m_workspace == nullptr) {
         // Floating fullscreen is not part of the layout; size it directly.
@@ -1702,7 +1702,7 @@ namespace umbriel {
     if (!fullscreen) {
       // scheduled.fullscreen is already false; arrange into usable area (exclusive zones).
       if (m_tiled && m_workspace != nullptr) {
-        m_workspace->arrange(false);
+        m_workspace->markArrange(false);
       } else {
         placeInUsableArea();
       }
@@ -1753,7 +1753,7 @@ namespace umbriel {
         const int column = scrolling->columnOf(this);
         if (column >= 0) {
           scrolling->setWidthFraction(column, *rule.defaultWidth);
-          m_workspace->arrange();
+          m_workspace->markArrange();
         }
       }
 

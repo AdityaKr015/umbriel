@@ -810,7 +810,7 @@ namespace umbriel {
     for (const auto& output : m_server->outputs()) {
       if (WorkspaceGroup* group = output->workspaceGroup()) {
         if (Workspace* workspace = group->active()) {
-          workspace->arrange(false);
+          workspace->markArrange(false);
         }
       }
     }

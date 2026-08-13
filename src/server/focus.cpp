@@ -76,7 +76,7 @@ namespace umbriel {
     case FocusReason::DragDrop:
     case FocusReason::Startup:
       workspace->ensureFocusedVisible();
-      workspace->arrange(true);
+      workspace->markArrange(true);
       break;
     case FocusReason::Grab:
       // No reveal: the grab is about to move/detach the tile; revealing would

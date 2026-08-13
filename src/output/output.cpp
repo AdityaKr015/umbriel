@@ -221,7 +221,7 @@ namespace umbriel {
         "{} usable={}x{}+{}+{}", m_output->name, m_usableArea.width, m_usableArea.height, m_usableArea.x, m_usableArea.y
     );
     if (m_workspaceGroup != nullptr && m_workspaceGroup->active() != nullptr) {
-      m_workspaceGroup->active()->arrange(false);
+      m_workspaceGroup->active()->markArrange(false);
     }
   }
 
@@ -316,15 +316,21 @@ namespace umbriel {
   void Output::flushDirty() {
     // Server-wide chrome is recorded on the Server and flushed by whichever
     // output frames first; each of these is idempotent and cheap.
-    const Dirty pending = m_dirty | m_server->takeDirty();
+    Dirty pending = m_dirty | m_server->takeDirty();
     m_dirty = Dirty::None;
-    if (!any(pending)) {
-      return;
-    }
     // Order matters: exclusive zones define the usable area, the layout fills
     // it, and the chrome sits over the result.
     if (has(pending, Dirty::LayerArrange)) {
       arrangeLayers();
+      // Changing the usable area makes the layout stale, so arrangeLayers marks
+      // it — after this set was taken. Take again rather than let that wait a
+      // frame; the same holds for anything a later step records for a step
+      // further down.
+      pending |= m_dirty;
+      m_dirty = Dirty::None;
+    }
+    if (has(pending, Dirty::Layout) && m_workspaceGroup != nullptr) {
+      m_workspaceGroup->flushArrange();
     }
     if (has(pending, Dirty::Banner)) {
       m_server->relayoutBanner();

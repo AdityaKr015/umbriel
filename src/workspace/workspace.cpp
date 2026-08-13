@@ -116,7 +116,7 @@ namespace umbriel {
     wlr_ext_workspace_handle_v1_set_active(m_handle, active);
     applyVisibility();
     if (active) {
-      arrange(false);
+      markArrange(false);
     }
   }
 
@@ -206,7 +206,7 @@ namespace umbriel {
     // scroll offset survives the removal, so a survivor can stay cut off at the
     // left edge while empty space opens on the right.
     ensureFocusedVisible();
-    arrange();
+    markArrange();
     m_group->reconcileDynamic();
     return replacement;
   }
@@ -222,7 +222,7 @@ namespace umbriel {
     if (ScrollingLayout* scrolling = scrollingLayout(); initialWidth && scrolling != nullptr) {
       scrolling->setWidthFraction(scrolling->columnOf(view), *initialWidth);
     }
-    arrange(true);
+    markArrange(true);
   }
 
   void Workspace::layoutDetach(View* view, bool animate) {
@@ -234,10 +234,10 @@ namespace umbriel {
     // expressed through the offset, and like niri's fit it leaves the offset
     // alone while the strip is still longer than the viewport.
     //
-    // Deliberately not inside arrange(): a touchpad swipe overscrolls on purpose
-    // and arrange() runs on every motion of it.
+    // Deliberately not inside arrange(): a touchpad swipe overscrolls on
+    // purpose, and it arranges on every frame of the gesture.
     clampScrollToRange();
-    arrange(animate);
+    markArrange(animate);
   }
 
   void Workspace::clampScrollToRange() {
@@ -250,7 +250,31 @@ namespace umbriel {
     scrolling->setScroll(std::clamp(scrolling->scroll(), 0.0, maxScroll));
   }
 
+  void Workspace::markArrange(bool animate) {
+    // Last mark wins. The pairing that settles this is a touchpad scroll: every
+    // motion marks unanimated, and the release that snaps to the nearest column
+    // marks animated, often in the same frame as the last motion. Letting the
+    // unanimated mark win would teleport the strip at the end of every swipe.
+    // The opposite mistake -- an animated mark landing mid-drag -- costs one
+    // tween on a frame where something unrelated also changed the layout.
+    m_arrangeAnimate = animate;
+    m_arrangePending = true;
+    if (m_group != nullptr && m_group->output() != nullptr) {
+      m_group->output()->markDirty(Dirty::Layout);
+    }
+  }
+
+  void Workspace::flushArrange() {
+    if (m_arrangePending) {
+      arrange(m_arrangeAnimate);
+    }
+  }
+
   void Workspace::arrange(bool animate) {
+    // Clearing here, rather than only in flushArrange, is what makes mixing the
+    // two safe: a direct arrange() satisfies whatever was marked earlier in the
+    // frame, so the flush does not repeat it.
+    m_arrangePending = false;
     // Layout math and client configures must run even for hidden workspaces:
     // clients (games especially) change fullscreen state while another
     // workspace is active, and skipping the configure here leaves them with a
@@ -467,7 +491,7 @@ namespace umbriel {
     }
     m_layout->moveColumn(current, target);
     ensureFocusedVisible();
-    arrange();
+    markArrange();
     return true;
   }
 
@@ -476,7 +500,7 @@ namespace umbriel {
       return false;
     }
     ensureFocusedVisible();
-    arrange();
+    markArrange();
     return true;
   }
 
@@ -485,7 +509,7 @@ namespace umbriel {
       return false;
     }
     ensureFocusedVisible();
-    arrange();
+    markArrange();
     return true;
   }
 
@@ -493,7 +517,7 @@ namespace umbriel {
     if (!m_layout->moveViewVertical(m_focusedView, direction)) {
       return false;
     }
-    arrange();
+    markArrange();
     return true;
   }
 
@@ -504,7 +528,7 @@ namespace umbriel {
     }
     wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), false);
     ensureFocusedVisible();
-    arrange();
+    markArrange();
     return true;
   }
 
@@ -515,7 +539,7 @@ namespace umbriel {
     }
     wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), false);
     ensureFocusedVisible();
-    arrange();
+    markArrange();
     return true;
   }
 
@@ -527,7 +551,7 @@ namespace umbriel {
     const bool fullWidth = m_layout->toggleFullWidth(column);
     wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), fullWidth);
     ensureFocusedVisible();
-    arrange(false);
+    markArrange(false);
     return true;
   }
 
@@ -634,7 +658,7 @@ namespace umbriel {
     // scene nodes to their authoritative horizontal strip positions. Reconcile
     // after an interrupted switch so a fullscreen column cannot remain off-screen.
     if (m_active) {
-      arrange(false);
+      markArrange(false);
     }
   }
 
@@ -656,7 +680,7 @@ namespace umbriel {
     if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
       m_layout->setConfig(&m_layoutConfig);
       m_layout->setConstraints(&viewLayoutConstraints);
-      arrange(true);
+      markArrange(true);
       return;
     }
     std::vector<View*> tiledViews;
@@ -673,7 +697,7 @@ namespace umbriel {
     for (View* view : tiledViews) {
       m_layout->insertView(view, static_cast<int>(m_layout->columns().size()));
     }
-    arrange();
+    markArrange();
   }
 
   WorkspaceGroup::WorkspaceGroup(Server& server, Output& output) : m_server(&server), m_output(&output) {
@@ -832,6 +856,15 @@ namespace umbriel {
       m_server->refocus(m_output);
     }
     kLog.info("reconciled {} to {} workspaces ({} windows relocated)", outputName, m_workspaces.size(), relocatedViews);
+  }
+
+  void WorkspaceGroup::flushArrange() {
+    // Indexed, and the bound re-read every step: arrange() reaches the overview
+    // and the view animations, and a workspace list that grows or shrinks under
+    // an iterator would be a use-after-free rather than a missed arrange.
+    for (size_t index = 0; index < m_workspaces.size(); ++index) { // NOLINT(modernize-loop-convert)
+      m_workspaces[index]->flushArrange();
+    }
   }
 
   void WorkspaceGroup::reconcileDynamic() {

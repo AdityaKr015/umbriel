@@ -67,6 +67,18 @@ namespace umbriel {
     void layoutAttach(View* view, std::optional<double> initialWidth = std::nullopt);
     void layoutDetach(View* view, bool animate = false);
     void arrange(bool animate = true);
+    // Record that the layout is stale instead of rebuilding it now. The work
+    // runs once, before the next frame, however many times this is called in
+    // between: a touchpad swipe marks on every motion event, and unrelated
+    // paths reached in the same frame (a focus change, a config reload, a
+    // client's fullscreen commit) each used to arrange on their own.
+    //
+    // Prefer this to arrange(). Call arrange() directly only when the code
+    // immediately afterwards reads the arranged geometry back out of the
+    // layout -- targetBox() is the only thing arrange() produces that is not
+    // simply applied to the scene, and a stale one would be read.
+    void markArrange(bool animate = true);
+    void flushArrange();
     void syncViewPresentation(View* view);
     [[nodiscard]] View* focusAdjacent(int direction) const;
     [[nodiscard]] View* focusVertical(int direction) const;
@@ -109,6 +121,8 @@ namespace umbriel {
     LayoutMode m_layoutMode = LayoutMode::Scrolling;
     View* m_focusedView = nullptr;
     bool m_inSwitchTransition = false;
+    bool m_arrangePending = false;
+    bool m_arrangeAnimate = true;
     int m_slideOffsetY = 0;
     std::vector<View*> m_switchViews;
     wlr_scene_tree* m_tree = nullptr;
@@ -145,6 +159,10 @@ namespace umbriel {
     Workspace* createWorkspace(const char* name);
     void reconcileConfig();
     void reconcileDynamic();
+    // Every workspace, not just the active one: a client can change fullscreen
+    // state while another workspace is showing, and that workspace still owes
+    // it a configure at the right size.
+    void flushArrange();
 
     [[nodiscard]] bool slideActive() const { return m_slide.base != nullptr; }
     bool slideBegin(bool includePrev, bool includeNext);

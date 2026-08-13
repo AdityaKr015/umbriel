@@ -48,8 +48,14 @@ namespace umbriel {
     // itself: a failed reload must leave the session running on what it had.
     void beginLoad();
     void addDiagnostic(ConfigDiagnostic diagnostic);
+    // The sink the section readers append to directly.
+    [[nodiscard]] std::vector<ConfigDiagnostic>& mutableDiagnostics() { return m_diagnostics; }
     // Ignores duplicates: the same file can be included from several places.
     void addWatchPath(std::filesystem::path path);
+    // Put diagnostics back into source order. Readers emit in whatever order
+    // they run — and unknown-key reports come last, after a section has finished
+    // — so without this the list jumps around the file.
+    void sortDiagnostics();
     // Adopt a successfully parsed config and bump the generation.
     void commit(Config&& config, bool fileMissing);
     void setRootPath(std::filesystem::path path, bool explicitPath);

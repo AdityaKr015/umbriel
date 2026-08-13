@@ -128,6 +128,7 @@ virtual_pointer_client_c = custom_target(
 pure_sources = files(
   'src/config/keybind_parse.cpp',
   'src/config/value_parse.cpp',
+  'src/config/section.cpp',
   'src/layout/layout.cpp',
   'src/layout/scrolling.cpp',
   'src/layout/dwindle.cpp',
@@ -140,7 +141,7 @@ umbriel_pure = static_library(
   'umbriel-pure',
   pure_sources,
   include_directories: include_directories('src'),
-  dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep],
+  dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep, tomlplusplus_dep],
 )
 
 # What a test needs to use the pure layer: the library, the include root, and
@@ -148,7 +149,7 @@ umbriel_pure = static_library(
 umbriel_pure_dep = declare_dependency(
   link_with: umbriel_pure,
   include_directories: include_directories('src'),
-  dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep],
+  dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep, tomlplusplus_dep],
 )
 
 # The compositor itself. main.cpp is deliberately not here: everything lives in
@@ -253,6 +254,7 @@ unit_tests = [
   ['cheatsheet-rows', ['tests/cheatsheet_rows.cpp'], []],
   ['border-ring', ['tests/border_ring.cpp'], []],
   ['floating', ['tests/floating.cpp'], []],
+  ['config-section', ['tests/config_section.cpp'], []],
   # Reaches compositor code, so it takes the heavier library.
   ['config-resolve', ['tests/config_resolve.cpp'], [umbriel_core_dep]],
 ]

@@ -1,6 +1,7 @@
 #include "config/store.h"
 
 #include <algorithm>
+#include <tuple>
 #include <utility>
 
 namespace umbriel {
@@ -17,6 +18,14 @@ namespace umbriel {
     if (std::ranges::find(m_watchPaths, path) == m_watchPaths.end()) {
       m_watchPaths.push_back(std::move(path));
     }
+  }
+
+  void ConfigStore::sortDiagnostics() {
+    // Stable so two diagnostics on the same key keep the order they were found
+    // in. File-less entries (whole-config errors) sort first.
+    std::ranges::stable_sort(m_diagnostics, [](const ConfigDiagnostic& a, const ConfigDiagnostic& b) {
+      return std::tie(a.file, a.line, a.column) < std::tie(b.file, b.line, b.column);
+    });
   }
 
   void ConfigStore::commit(Config&& config, bool fileMissing) {

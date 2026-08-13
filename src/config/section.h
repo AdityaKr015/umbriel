@@ -1,0 +1,112 @@
+#pragma once
+
+#include "config/config_diag.h"
+
+#include <array>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <toml++/toml.hpp>
+#include <vector>
+
+namespace umbriel {
+
+  // Reads one table of a config file, remembering which keys it was asked for.
+  //
+  // The point of remembering is the unknown-key warning. Every section used to
+  // carry a hand-written list of its own key names beside the code that reads
+  // them, so adding a setting meant editing two places and forgetting one meant
+  // either a valid key was warned about or a typo was silently accepted. Here the
+  // list *is* the set of keys the reader asked for, so it cannot drift.
+  //
+  // The warning is emitted from the destructor, so a reader that returns early
+  // still reports. Diagnostics go to a caller-supplied vector rather than to a
+  // global, which is also what lets this be tested without a compositor.
+  class Section {
+  public:
+    Section(const toml::table& table, std::string name, std::vector<ConfigDiagnostic>& diagnostics);
+    ~Section();
+
+    Section(const Section&) = delete;
+    Section& operator=(const Section&) = delete;
+    Section(Section&&) = delete;
+    Section& operator=(Section&&) = delete;
+
+    // Numbers are clamped into range, and clamping is reported: silently
+    // accepting a value the compositor will not honour is how a user ends up
+    // believing a setting does nothing.
+    Section& integer(std::string_view key, int minimum, int maximum, int& target);
+    Section& integer(std::string_view key, int minimum, int maximum, std::optional<int>& target);
+    Section& real(std::string_view key, double minimum, double maximum, double& target);
+    Section& real(std::string_view key, double minimum, double maximum, std::optional<double>& target);
+    Section& text(std::string_view key, std::string& target);
+    Section& boolean(std::string_view key, bool& target);
+    Section& boolean(std::string_view key, std::optional<bool>& target);
+    Section& color(std::string_view key, std::array<float, 4>& target);
+
+    // Descend into a nested table, if it is there and is a table. `fn` takes a
+    // `Section&`. Taking a callback rather than returning a Section keeps this
+    // type immovable, which is what makes the destructor-based warning safe.
+    template <typename F> Section& sub(std::string_view key, F&& fn) {
+      const toml::table* nested = nestedTable(key);
+      if (nested != nullptr) {
+        Section child(*nested, qualified(key), m_diagnostics);
+        fn(child);
+      }
+      return *this;
+    }
+
+    // The raw node behind a key, for the handful of settings whose parsing does
+    // not fit the shapes above. Does not claim the key; pair it with `custom`.
+    [[nodiscard]] const toml::node* node(std::string_view key) const { return m_table.get(key); }
+
+    // Claim a key that bespoke code reads (arrays, keybind lists, rule tables) so
+    // it is not reported as unknown.
+    Section& custom(std::string_view key);
+
+    // Suppress the unknown-key report entirely, for tables whose keys are
+    // user-chosen names rather than a fixed vocabulary.
+    Section& freeform();
+
+  private:
+    [[nodiscard]] std::string qualified(std::string_view key) const;
+    [[nodiscard]] const toml::node* claim(std::string_view key);
+    [[nodiscard]] const toml::table* nestedTable(std::string_view key);
+    void warn(const toml::node& node, std::string message);
+
+    const toml::table& m_table;
+    std::string m_name;
+    std::vector<ConfigDiagnostic>& m_diagnostics;
+    std::vector<std::string> m_seen;
+    bool m_freeform = false;
+  };
+
+  // Read `name` from `table` if present. Warns and skips when the key exists but
+  // is not a table. Returns whether `fn` ran.
+  template <typename F>
+  bool
+  readSection(const toml::table& table, std::string_view name, std::vector<ConfigDiagnostic>& diagnostics, F&& fn) {
+    const toml::node* node = table.get(name);
+    if (node == nullptr) {
+      return false;
+    }
+    const toml::table* section = node->as_table();
+    if (section == nullptr) {
+      ConfigDiagnostic diag;
+      diag.severity = ConfigDiagnostic::Severity::Warning;
+      diag.message = std::string("ignoring ") + std::string(name) + " (expected table)";
+      const auto& src = node->source();
+      diag.line = src.begin.line;
+      diag.column = src.begin.column;
+      if (src.path != nullptr) {
+        diag.file = *src.path;
+      }
+      diagnostics.push_back(std::move(diag));
+      return false;
+    }
+    Section reader(*section, std::string(name), diagnostics);
+    fn(reader);
+    return true;
+  }
+
+} // namespace umbriel

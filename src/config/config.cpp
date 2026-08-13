@@ -3,6 +3,7 @@
 #include "config/config_diag.h"
 #include "config/config_merge.h"
 #include "config/keybind_parse.h"
+#include "config/section.h"
 #include "config/store.h"
 #include "config/value_parse.h"
 #include "core/log.h"
@@ -512,113 +513,46 @@ namespace umbriel {
     }
 
     void readAppearance(const toml::table& table, Config& loaded) {
-      const toml::node* node = table.get("appearance");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* section = node->as_table();
-      if (section == nullptr) {
-        warnAt(node->source(), "ignoring appearance (expected table)");
-        return;
-      }
-      warnUnknownKeys(
-          *section, "appearance",
-          {"border_width", "outer_border_width", "corner_radius", "border_focused", "border_unfocused",
-           "scratchpad_border_focused", "scratchpad_border_unfocused", "outer_border_color", "insert_hint_color",
-           "backdrop_color", "animation_ms", "blur", "shadow", "prefer_no_csd"}
-      );
-      readInteger(*section, "border_width", "appearance.border_width", 0, 100, loaded.appearance.borderWidth);
-      readInteger(
-          *section, "outer_border_width", "appearance.outer_border_width", 0, 100, loaded.appearance.outerBorderWidth
-      );
-      readInteger(*section, "corner_radius", "appearance.corner_radius", 0, 500, loaded.appearance.cornerRadius);
-      readColor(*section, "border_focused", "appearance.border_focused", loaded.appearance.borderFocused);
-      readColor(*section, "border_unfocused", "appearance.border_unfocused", loaded.appearance.borderUnfocused);
-      readColor(
-          *section, "scratchpad_border_focused", "appearance.scratchpad_border_focused",
-          loaded.appearance.scratchpadBorderFocused
-      );
-      readColor(
-          *section, "scratchpad_border_unfocused", "appearance.scratchpad_border_unfocused",
-          loaded.appearance.scratchpadBorderUnfocused
-      );
-      readColor(*section, "outer_border_color", "appearance.outer_border_color", loaded.appearance.outerBorderColor);
-      readColor(*section, "insert_hint_color", "appearance.insert_hint_color", loaded.appearance.insertHintColor);
-      readColor(*section, "backdrop_color", "appearance.backdrop_color", loaded.appearance.backdropColor);
-      readInteger(*section, "animation_ms", "appearance.animation_ms", 1, 10000, loaded.appearance.animationMs);
-      if (const toml::node* preferNoCsd = section->get("prefer_no_csd")) {
-        if (const auto value = preferNoCsd->value<bool>()) {
-          loaded.appearance.preferNoCsd = *value;
-        } else {
-          warnAt(preferNoCsd->source(), "ignoring appearance.prefer_no_csd (expected boolean)");
-        }
-      }
-
-      if (const toml::node* blurNode = section->get("blur")) {
-        if (const auto* blur = blurNode->as_table()) {
-          warnUnknownKeys(
-              *blur, "appearance.blur",
-              {"enabled", "optimized", "passes", "radius", "noise", "brightness", "contrast", "saturation"}
-          );
-          if (const toml::node* enabledNode = blur->get("enabled")) {
-            if (enabledNode->is_boolean()) {
-              loaded.appearance.blur.enabled = enabledNode->value<bool>().value();
-            } else {
-              warnAt(enabledNode->source(), "ignoring appearance.blur.enabled (expected boolean)");
-            }
-          }
-          if (const toml::node* optimizedNode = blur->get("optimized")) {
-            if (optimizedNode->is_boolean()) {
-              loaded.appearance.blur.optimized = optimizedNode->value<bool>().value();
-            } else {
-              warnAt(optimizedNode->source(), "ignoring appearance.blur.optimized (expected boolean)");
-            }
-          }
-          readInteger(*blur, "passes", "appearance.blur.passes", 0, 8, loaded.appearance.blur.passes);
-          readInteger(*blur, "radius", "appearance.blur.radius", 0, 100, loaded.appearance.blur.radius);
-          readDouble(*blur, "noise", "appearance.blur.noise", 0.0, 1.0, loaded.appearance.blur.noise);
-          readDouble(*blur, "brightness", "appearance.blur.brightness", 0.0, 2.0, loaded.appearance.blur.brightness);
-          readDouble(*blur, "contrast", "appearance.blur.contrast", 0.0, 2.0, loaded.appearance.blur.contrast);
-          readDouble(*blur, "saturation", "appearance.blur.saturation", 0.0, 2.0, loaded.appearance.blur.saturation);
-        } else {
-          warnAt(blurNode->source(), "ignoring appearance.blur (expected table)");
-        }
-      }
-
-      if (const toml::node* shadowNode = section->get("shadow")) {
-        if (const auto* shadow = shadowNode->as_table()) {
-          warnUnknownKeys(*shadow, "appearance.shadow", {"enabled", "softness", "offset_x", "offset_y", "color"});
-          if (const toml::node* enabledNode = shadow->get("enabled")) {
-            if (enabledNode->is_boolean()) {
-              loaded.appearance.shadow.enabled = enabledNode->value<bool>().value();
-            } else {
-              warnAt(enabledNode->source(), "ignoring appearance.shadow.enabled (expected boolean)");
-            }
-          }
-          readInteger(*shadow, "softness", "appearance.shadow.softness", 0, 200, loaded.appearance.shadow.softness);
-          readInteger(*shadow, "offset_x", "appearance.shadow.offset_x", -200, 200, loaded.appearance.shadow.offsetX);
-          readInteger(*shadow, "offset_y", "appearance.shadow.offset_y", -200, 200, loaded.appearance.shadow.offsetY);
-          readColor(*shadow, "color", "appearance.shadow.color", loaded.appearance.shadow.color);
-        } else {
-          warnAt(shadowNode->source(), "ignoring appearance.shadow (expected table)");
-        }
-      }
+      auto& a = loaded.appearance;
+      readSection(table, "appearance", configStore().mutableDiagnostics(), [&](Section& s) {
+        s.integer("border_width", 0, 100, a.borderWidth)
+            .integer("outer_border_width", 0, 100, a.outerBorderWidth)
+            .integer("corner_radius", 0, 500, a.cornerRadius)
+            .color("border_focused", a.borderFocused)
+            .color("border_unfocused", a.borderUnfocused)
+            .color("scratchpad_border_focused", a.scratchpadBorderFocused)
+            .color("scratchpad_border_unfocused", a.scratchpadBorderUnfocused)
+            .color("outer_border_color", a.outerBorderColor)
+            .color("insert_hint_color", a.insertHintColor)
+            .color("backdrop_color", a.backdropColor)
+            .integer("animation_ms", 1, 10000, a.animationMs)
+            .boolean("prefer_no_csd", a.preferNoCsd);
+        s.sub("blur", [&](Section& blur) {
+          blur.boolean("enabled", a.blur.enabled)
+              .boolean("optimized", a.blur.optimized)
+              .integer("passes", 0, 8, a.blur.passes)
+              .integer("radius", 0, 100, a.blur.radius)
+              .real("noise", 0.0, 1.0, a.blur.noise)
+              .real("brightness", 0.0, 2.0, a.blur.brightness)
+              .real("contrast", 0.0, 2.0, a.blur.contrast)
+              .real("saturation", 0.0, 2.0, a.blur.saturation);
+        });
+        s.sub("shadow", [&](Section& shadow) {
+          shadow.boolean("enabled", a.shadow.enabled)
+              .integer("softness", 0, 200, a.shadow.softness)
+              .integer("offset_x", -200, 200, a.shadow.offsetX)
+              .integer("offset_y", -200, 200, a.shadow.offsetY)
+              .color("color", a.shadow.color);
+        });
+      });
     }
 
     void readOverview(const toml::table& table, Config& loaded) {
-      const toml::node* node = table.get("overview");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* section = node->as_table();
-      if (section == nullptr) {
-        warnAt(node->source(), "ignoring overview (expected table)");
-        return;
-      }
-      warnUnknownKeys(*section, "overview", {"zoom", "background_tint", "workspace_background"});
-      readDouble(*section, "zoom", "overview.zoom", 0.1, 0.75, loaded.overview.zoom);
-      readColor(*section, "background_tint", "overview.background_tint", loaded.overview.backgroundTint);
-      readColor(*section, "workspace_background", "overview.workspace_background", loaded.overview.workspaceBackground);
+      readSection(table, "overview", configStore().mutableDiagnostics(), [&](Section& s) {
+        s.real("zoom", 0.1, 0.75, loaded.overview.zoom)
+            .color("background_tint", loaded.overview.backgroundTint)
+            .color("workspace_background", loaded.overview.workspaceBackground);
+      });
     }
 
     void readLayout(const toml::table& table, Config& loaded) {
@@ -803,89 +737,41 @@ namespace umbriel {
     }
 
     void readInput(const toml::table& table, Config& loaded) {
-      const toml::node* node = table.get("input");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* input = node->as_table();
-      if (input == nullptr) {
-        warnAt(node->source(), "ignoring input (expected table)");
-        return;
-      }
-      warnUnknownKeys(*input, "input", {"keyboard", "touchpad", "mouse", "cursor", "focus"});
-
-      if (const toml::node* keyboardNode = input->get("keyboard")) {
-        if (const auto* keyboard = keyboardNode->as_table()) {
-          warnUnknownKeys(*keyboard, "input.keyboard", {"layout", "variant", "repeat_rate", "repeat_delay"});
-          readString(*keyboard, "layout", "input.keyboard.layout", loaded.input.keyboard.layout);
-          readString(*keyboard, "variant", "input.keyboard.variant", loaded.input.keyboard.variant);
-          readInteger(
-              *keyboard, "repeat_rate", "input.keyboard.repeat_rate", 0, 1000, loaded.input.keyboard.repeatRate
-          );
-          readInteger(
-              *keyboard, "repeat_delay", "input.keyboard.repeat_delay", 0, 10000, loaded.input.keyboard.repeatDelay
-          );
-          validateKeyboardInput(loaded.input.keyboard, keyboardNode->source());
-        } else {
-          warnAt(keyboardNode->source(), "ignoring input.keyboard (expected table)");
+      auto& in = loaded.input;
+      readSection(table, "input", configStore().mutableDiagnostics(), [&](Section& s) {
+        s.sub("keyboard", [&](Section& k) {
+          k.text("layout", in.keyboard.layout)
+              .text("variant", in.keyboard.variant)
+              .integer("repeat_rate", 0, 1000, in.keyboard.repeatRate)
+              .integer("repeat_delay", 0, 10000, in.keyboard.repeatDelay);
+        });
+        // Cross-field check, so it runs after the whole table is read.
+        if (const toml::node* keyboardNode = table.at_path("input.keyboard").node()) {
+          validateKeyboardInput(in.keyboard, keyboardNode->source());
         }
-      }
-
-      if (const toml::node* touchpadNode = input->get("touchpad")) {
-        if (const auto* touchpad = touchpadNode->as_table()) {
-          warnUnknownKeys(*touchpad, "input.touchpad", {"tap", "natural_scroll"});
-          readBoolean(*touchpad, "tap", "input.touchpad.tap", loaded.input.touchpad.tap);
-          readBoolean(
-              *touchpad, "natural_scroll", "input.touchpad.natural_scroll", loaded.input.touchpad.naturalScroll
-          );
-        } else {
-          warnAt(touchpadNode->source(), "ignoring input.touchpad (expected table)");
-        }
-      }
-
-      if (const toml::node* mouseNode = input->get("mouse")) {
-        if (const auto* mouse = mouseNode->as_table()) {
-          warnUnknownKeys(*mouse, "input.mouse", {"natural_scroll", "scroll_wheel_step"});
-          readBoolean(*mouse, "natural_scroll", "input.mouse.natural_scroll", loaded.input.mouse.naturalScroll);
-          readInteger(
-              *mouse, "scroll_wheel_step", "input.mouse.scroll_wheel_step", 1, 1000, loaded.input.mouse.scrollWheelStep
-          );
-        } else {
-          warnAt(mouseNode->source(), "ignoring input.mouse (expected table)");
-        }
-      }
-
-      if (const toml::node* cursorNode = input->get("cursor")) {
-        if (const auto* cursor = cursorNode->as_table()) {
-          warnUnknownKeys(*cursor, "input.cursor", {"theme", "size"});
-          readString(*cursor, "theme", "input.cursor.theme", loaded.input.cursor.theme);
-          readInteger(*cursor, "size", "input.cursor.size", 1, 512, loaded.input.cursor.size);
-        } else {
-          warnAt(cursorNode->source(), "ignoring input.cursor (expected table)");
-        }
-      }
-
-      if (const toml::node* focusNode = input->get("focus")) {
-        if (const auto* focus = focusNode->as_table()) {
-          warnUnknownKeys(*focus, "input.focus", {"follows_mouse", "follows_mouse_max_scroll"});
-          if (const toml::node* followsMouse = focus->get("follows_mouse")) {
-            if (const auto value = followsMouse->value<bool>()) {
-              loaded.input.focus.followsMouse = *value;
-            } else {
-              warnAt(followsMouse->source(), "ignoring input.focus.follows_mouse (expected boolean)");
-            }
-          }
-          if (const toml::node* maxScroll = focus->get("follows_mouse_max_scroll")) {
+        s.sub("touchpad", [&](Section& t) {
+          t.boolean("tap", in.touchpad.tap).boolean("natural_scroll", in.touchpad.naturalScroll);
+        });
+        s.sub("mouse", [&](Section& m) {
+          m.boolean("natural_scroll", in.mouse.naturalScroll)
+              .integer("scroll_wheel_step", 1, 1000, in.mouse.scrollWheelStep);
+        });
+        s.sub("cursor", [&](Section& c) { c.text("theme", in.cursor.theme).integer("size", 1, 512, in.cursor.size); });
+        s.sub("focus", [&](Section& f) {
+          f.boolean("follows_mouse", in.focus.followsMouse);
+          // Kept bespoke: this one clamps silently and names its range in the
+          // message, unlike every other number. Worth unifying, but that would
+          // change what users see.
+          f.custom("follows_mouse_max_scroll");
+          if (const toml::node* maxScroll = f.node("follows_mouse_max_scroll")) {
             if (const auto value = maxScroll->value<double>(); value && !std::isnan(*value)) {
-              loaded.input.focus.followsMouseMaxScroll = std::clamp(*value, 0.0, 1.0);
+              in.focus.followsMouseMaxScroll = std::clamp(*value, 0.0, 1.0);
             } else {
               warnAt(maxScroll->source(), "ignoring input.focus.follows_mouse_max_scroll (expected number 0.0-1.0)");
             }
           }
-        } else {
-          warnAt(focusNode->source(), "ignoring input.focus (expected table)");
-        }
-      }
+        });
+      });
     }
 
     void readOutputs(const toml::table& table, Config& loaded) {
@@ -1504,12 +1390,15 @@ namespace umbriel {
         kLog.info("no config file found: {}, using defaults", m_rootPath.string());
       }
     }
+    sortDiagnostics();
     commit(std::move(loaded), rootFileMissing(m_rootPath));
   }
 
   bool ConfigStore::reload() {
     Config loaded;
-    if (!parseInto(loaded)) {
+    const bool ok = parseInto(loaded);
+    sortDiagnostics();
+    if (!ok) {
       kLog.warn("config reload failed; keeping previous configuration");
       return false;
     }

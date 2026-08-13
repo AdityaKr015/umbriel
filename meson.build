@@ -175,6 +175,8 @@ core_sources = files(
   'src/view/view.cpp',
   'src/view/decoration.cpp',
   'src/view/presentation.cpp',
+  'src/xwayland/supervisor.cpp',
+  'src/core/process.cpp',
   'src/view/view_foreign.cpp',
   'src/view/popup.cpp',
   'src/layer/layer_surface.cpp',

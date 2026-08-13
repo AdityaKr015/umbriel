@@ -5,6 +5,7 @@
 #include "config/config_watcher.h"
 #include "core/fdlimit.h"
 #include "core/log.h"
+#include "core/process.h"
 #include "input/cursor.h"
 #include "input/gestures.h"
 #include "input/keyboard.h"
@@ -22,18 +23,14 @@
 #include "wlr.h"
 #include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
+#include "xwayland/supervisor.h"
 
 #include <algorithm>
-#include <chrono>
 #include <csignal>
 #include <cstdlib>
-#include <cstring>
-#include <filesystem>
 #include <ranges>
 #include <stdexcept>
 #include <string>
-#include <sys/syscall.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 namespace umbriel {
@@ -41,48 +38,6 @@ namespace umbriel {
   namespace {
 
     constexpr Logger kLog("server");
-
-    bool executableOnPath(const char* name) {
-      if (name == nullptr || name[0] == '\0') {
-        return false;
-      }
-      // Absolute / relative path: check directly.
-      if (std::strchr(name, '/') != nullptr) {
-        return access(name, X_OK) == 0;
-      }
-      const char* pathEnv = std::getenv("PATH");
-      if (pathEnv == nullptr || pathEnv[0] == '\0') {
-        return false;
-      }
-      std::string path = pathEnv;
-      std::size_t start = 0;
-      while (start <= path.size()) {
-        const std::size_t end = path.find(':', start);
-        const std::size_t count = (end == std::string::npos ? path.size() : end) - start;
-        const std::string dir = path.substr(start, count);
-        start = end == std::string::npos ? path.size() + 1 : end + 1;
-        if (dir.empty()) {
-          continue;
-        }
-        const std::filesystem::path candidate = std::filesystem::path(dir) / name;
-        std::error_code ec;
-        if (std::filesystem::is_regular_file(candidate, ec) && access(candidate.c_str(), X_OK) == 0) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    // Undo everything the compositor did to the process that a child must not
-    // inherit. wl_event_loop_add_signal blocks SIGINT/SIGTERM process-wide, and
-    // a blocked mask survives exec, so without this every spawned application
-    // would silently ignore Ctrl+C and systemd's stop signal.
-    void resetChildSignalState() {
-      std::signal(SIGCHLD, SIG_DFL);
-      sigset_t empty;
-      sigemptyset(&empty);
-      sigprocmask(SIG_SETMASK, &empty, nullptr);
-    }
 
     void applyConfiguredEnvironment() {
       for (const auto& [name, value] : config().environment.variables) {
@@ -326,13 +281,7 @@ namespace umbriel {
     m_cursor.reset();
 
     // Tear down xwayland-satellite before destroying Wayland clients.
-    if (m_xwaylandExitSource != nullptr) {
-      wl_event_source_remove(m_xwaylandExitSource);
-    }
-    if (m_xwaylandRespawnTimer != nullptr) {
-      wl_event_source_remove(m_xwaylandRespawnTimer);
-      m_xwaylandRespawnTimer = nullptr;
-    }
+    m_xwayland.reset();
     if (m_backgroundFrameTimer != nullptr) {
       wl_event_source_remove(m_backgroundFrameTimer);
       m_backgroundFrameTimer = nullptr;
@@ -342,12 +291,6 @@ namespace umbriel {
         wl_event_source_remove(source);
         source = nullptr;
       }
-    }
-    if (m_xwaylandPidfd >= 0) {
-      close(m_xwaylandPidfd);
-    }
-    if (m_xwaylandPid > 0) {
-      kill(m_xwaylandPid, SIGTERM);
     }
     wl_display_destroy_clients(m_display);
     wlr_scene_node_destroy(&m_scene->tree.node);
@@ -413,7 +356,8 @@ namespace umbriel {
     // Start xwayland-satellite before autostart so X11 apps in autostart can
     // connect (there is still a small race against satellite's socket bind).
     if (config().general.xwayland) {
-      startXwayland();
+      m_xwayland = std::make_unique<XwaylandSupervisor>(wl_display_get_event_loop(m_display), m_socketName);
+      m_xwayland->start();
     }
 
     // Propagate session variables so D-Bus-activated services (portal backends,
@@ -507,8 +451,8 @@ namespace umbriel {
       restoreFileDescriptorLimit();
       setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");
-      if (!m_xwaylandDisplay.empty()) {
-        setenv("DISPLAY", m_xwaylandDisplay.c_str(), 1);
+      if (m_xwayland != nullptr && !m_xwayland->display().empty()) {
+        setenv("DISPLAY", m_xwayland->display().c_str(), 1);
       } else {
         // Avoid X11/XWayland fallback into the parent session.
         unsetenv("DISPLAY");
@@ -521,118 +465,6 @@ namespace umbriel {
   }
 
   void Server::updateSeatCapabilities() { m_seat->updateCapabilities(!m_keyboards.empty(), !m_touchDevices.empty()); }
-
-  void Server::startXwayland() {
-    if (!executableOnPath("xwayland-satellite")) {
-      kLog.info("xwayland: xwayland-satellite not on PATH; skipping");
-      return;
-    }
-
-    for (int n = 0; n < 32; ++n) {
-      const std::string num = std::to_string(n);
-      if (std::filesystem::exists("/tmp/.X11-unix/X" + num) || std::filesystem::exists("/tmp/.X" + num + "-lock")) {
-        continue;
-      }
-      m_xwaylandDisplay = ":" + num;
-      setenv("DISPLAY", m_xwaylandDisplay.c_str(), 1);
-      kLog.info("xwayland: using DISPLAY={}", m_xwaylandDisplay);
-      spawnXwaylandSatellite();
-      return;
-    }
-    kLog.error("no free X display in :0..:31; disabling xwayland");
-  }
-
-  void Server::spawnXwaylandSatellite() {
-    m_xwaylandSpawnTime = std::chrono::steady_clock::now();
-
-    pid_t pid = fork();
-    if (pid < 0) {
-      kLog.error("fork failed for xwayland-satellite");
-      return;
-    }
-    if (pid == 0) {
-      resetChildSignalState();
-      restoreFileDescriptorLimit();
-      setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
-      unsetenv("WAYLAND_SOCKET");
-      // Satellite provides DISPLAY — it must not consume one.
-      unsetenv("DISPLAY");
-      execlp("xwayland-satellite", "xwayland-satellite", m_xwaylandDisplay.c_str(), nullptr);
-      _exit(127);
-    }
-
-    m_xwaylandPid = pid;
-    m_xwaylandPidfd = static_cast<int>(syscall(SYS_pidfd_open, pid, 0));
-    if (m_xwaylandPidfd < 0) {
-      kLog.error("pidfd_open failed for xwayland-satellite; crash respawn disabled");
-    } else {
-      m_xwaylandExitSource = wl_event_loop_add_fd(
-          wl_display_get_event_loop(m_display), m_xwaylandPidfd, WL_EVENT_READABLE, onXwaylandPidfd, this
-      );
-    }
-    kLog.info("xwayland-satellite spawned (pid {}) on DISPLAY={}", pid, m_xwaylandDisplay);
-  }
-
-  int Server::onXwaylandPidfd(int /*fd*/, uint32_t /*mask*/, void* data) {
-    static_cast<Server*>(data)->handleXwaylandExit();
-    return 0;
-  }
-
-  void Server::handleXwaylandExit() {
-    int exitStatus = -1;
-    if (m_xwaylandPidfd >= 0) {
-      siginfo_t info{};
-      if (waitid(P_PIDFD, static_cast<id_t>(m_xwaylandPidfd), &info, WEXITED | WNOHANG) == 0
-          && info.si_code == CLD_EXITED) {
-        exitStatus = info.si_status;
-      }
-    }
-
-    // Clean up the current watch; no waitpid needed (SIGCHLD is SIG_IGN).
-    if (m_xwaylandExitSource != nullptr) {
-      wl_event_source_remove(m_xwaylandExitSource);
-      m_xwaylandExitSource = nullptr;
-    }
-    if (m_xwaylandPidfd >= 0) {
-      close(m_xwaylandPidfd);
-      m_xwaylandPidfd = -1;
-    }
-    m_xwaylandPid = -1;
-
-    if (exitStatus == 127) {
-      kLog.error("xwayland-satellite not found or failed to exec; not respawning");
-      m_xwaylandDisplay.clear();
-      unsetenv("DISPLAY");
-      return;
-    }
-
-    // Reset failure counter if the process ran for more than 60 seconds.
-    auto elapsed = std::chrono::steady_clock::now() - m_xwaylandSpawnTime;
-    if (elapsed > std::chrono::seconds(60)) {
-      m_xwaylandFailures = 0;
-    }
-    ++m_xwaylandFailures;
-
-    if (m_xwaylandFailures > 5) {
-      kLog.error(
-          "xwayland-satellite keeps exiting; giving up "
-          "(is it installed and is Xwayland >= 23.1 present?)"
-      );
-      return;
-    }
-
-    kLog.warn("xwayland-satellite exited; respawning in 1 s");
-    wl_event_loop* loop = wl_display_get_event_loop(m_display);
-    if (m_xwaylandRespawnTimer == nullptr) {
-      m_xwaylandRespawnTimer = wl_event_loop_add_timer(loop, onXwaylandRespawnTimer, this);
-    }
-    wl_event_source_timer_update(m_xwaylandRespawnTimer, 1000);
-  }
-
-  int Server::onXwaylandRespawnTimer(void* data) {
-    static_cast<Server*>(data)->spawnXwaylandSatellite();
-    return 0;
-  }
 
   void Server::reconcileDynamicWorkspaces() {
     for (const auto& output : m_outputs) {

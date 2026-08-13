@@ -94,7 +94,7 @@ namespace umbriel {
       return;
     }
     if (m_seat->pointer_state.focused_client == event->seat_client) {
-      wlr_cursor_set_surface(m_server->cursor()->wlr(), event->surface, event->hotspot_x, event->hotspot_y);
+      m_server->cursor()->setCursorSurface(event->surface, event->hotspot_x, event->hotspot_y);
     }
   }
 
@@ -114,13 +114,13 @@ namespace umbriel {
     if (name == nullptr) {
       return;
     }
-    wlr_cursor_set_xcursor(m_server->cursor()->wlr(), m_server->cursor()->xcursorManager(), name);
+    m_server->cursor()->setXcursor(name);
   }
 
   void Seat::handlePointerFocusChange(void* data) {
     auto* event = static_cast<wlr_seat_pointer_focus_change_event*>(data);
     if (event->new_surface == nullptr && !m_server->cursor()->compositorOwnsCursor()) {
-      wlr_cursor_set_xcursor(m_server->cursor()->wlr(), m_server->cursor()->xcursorManager(), "default");
+      m_server->cursor()->setXcursor("default");
     }
   }
 

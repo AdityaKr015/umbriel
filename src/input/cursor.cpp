@@ -77,8 +77,10 @@ namespace umbriel {
     m_cursor = wlr_cursor_create();
     wlr_cursor_attach_output_layout(m_cursor, m_server->outputLayout());
     const Config::Input::Cursor& configured = config().input.cursor;
+    m_xcursorTheme = configured.theme;
+    m_xcursorSize = configured.size;
     m_xcursorManager =
-        wlr_xcursor_manager_create(configured.theme.empty() ? nullptr : configured.theme.c_str(), configured.size);
+        wlr_xcursor_manager_create(m_xcursorTheme.empty() ? nullptr : m_xcursorTheme.c_str(), m_xcursorSize);
 
     m_motion.notify = onMotion;
     wl_signal_add(&m_cursor->events.motion, &m_motion);
@@ -119,23 +121,46 @@ namespace umbriel {
     wl_list_remove(&m_touchMotion.link);
     wl_list_remove(&m_touchCancel.link);
     wl_list_remove(&m_touchFrame.link);
-    wlr_xcursor_manager_destroy(m_xcursorManager);
     wlr_cursor_destroy(m_cursor);
+    wlr_xcursor_manager_destroy(m_xcursorManager);
   }
 
   void Cursor::attachInputDevice(wlr_input_device* device) { wlr_cursor_attach_input_device(m_cursor, device); }
   void Cursor::applyConfig() {
     const Config::Input::Cursor& configured = config().input.cursor;
+    if (configured.theme == m_xcursorTheme && configured.size == m_xcursorSize) {
+      return;
+    }
+
     wlr_xcursor_manager* manager =
         wlr_xcursor_manager_create(configured.theme.empty() ? nullptr : configured.theme.c_str(), configured.size);
     if (manager == nullptr) {
       return;
     }
-    wlr_xcursor_manager_destroy(m_xcursorManager);
+
+    wlr_xcursor_manager* oldManager = m_xcursorManager;
     m_xcursorManager = manager;
-    if (m_server->seat()->wlr()->pointer_state.focused_surface == nullptr) {
-      wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+    m_xcursorTheme = configured.theme;
+    m_xcursorSize = configured.size;
+
+    if (m_activeXcursorManager == oldManager) {
+      setXcursor(m_activeXcursorName.c_str());
+    } else if (m_server->seat()->wlr()->pointer_state.focused_surface == nullptr) {
+      setXcursor("default");
     }
+    wlr_xcursor_manager_destroy(oldManager);
+  }
+
+  void Cursor::setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY) {
+    wlr_cursor_set_surface(m_cursor, surface, hotspotX, hotspotY);
+    m_activeXcursorManager = nullptr;
+    m_activeXcursorName.clear();
+  }
+
+  void Cursor::setXcursor(const char* name) {
+    wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, name);
+    m_activeXcursorManager = m_xcursorManager;
+    m_activeXcursorName = name;
   }
 
   void Cursor::beginInteractive(View* view, CursorMode mode, uint32_t edges) {
@@ -740,7 +765,7 @@ namespace umbriel {
       }
       wlr_seat_pointer_clear_focus(seat);
       if (!m_compositorOwnsCursor) {
-        wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+        setXcursor("default");
       }
       return;
     }
@@ -849,7 +874,7 @@ namespace umbriel {
       wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
       wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);
     } else if (!m_compositorOwnsCursor) {
-      wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+      setXcursor("default");
       wlr_seat_pointer_clear_focus(seat);
     } else {
       wlr_seat_pointer_clear_focus(seat);
@@ -1106,7 +1131,7 @@ namespace umbriel {
     }
     m_compositorOwnsCursor = true;
     m_compositorCursorName = name;
-    wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, name);
+    setXcursor(name);
   }
 
   void Cursor::restoreClientCursor() {
@@ -1123,7 +1148,7 @@ namespace umbriel {
       wlr_seat_pointer_clear_focus(seat);
       wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
     } else {
-      wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, "default");
+      setXcursor("default");
       wlr_seat_pointer_clear_focus(seat);
     }
   }

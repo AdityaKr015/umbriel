@@ -49,6 +49,8 @@ namespace umbriel {
 
     void attachInputDevice(wlr_input_device* device);
     void applyConfig();
+    void setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY);
+    void setXcursor(const char* name);
     void beginInteractive(View* view, CursorMode mode, uint32_t edges);
     void resetMode();
     void handleNewConstraint(wlr_pointer_constraint_v1* constraint);
@@ -107,6 +109,10 @@ namespace umbriel {
     Server* m_server = nullptr;
     wlr_cursor* m_cursor = nullptr;
     wlr_xcursor_manager* m_xcursorManager = nullptr;
+    wlr_xcursor_manager* m_activeXcursorManager = nullptr;
+    std::string m_xcursorTheme;
+    std::string m_activeXcursorName;
+    int m_xcursorSize = 0;
     wlr_pointer_constraint_v1* m_activeConstraint = nullptr;
 
     CursorMode m_mode = CursorMode::Passthrough;

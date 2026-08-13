@@ -254,6 +254,9 @@ theme = ""   # empty = environment/default Xcursor theme
 size = 24    # 1-512
 ```
 
+Cursor theme and size changes apply on config reload. Output scale changes also
+reload the cursor image at the matching scale without requiring a restart.
+
 ### Focus
 
 ```toml

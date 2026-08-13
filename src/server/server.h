@@ -1,5 +1,6 @@
 #pragma once
 #include "core/animation.h"
+#include "server/focus.h"
 #include "view/registry.h"
 
 #include <array>
@@ -67,16 +68,8 @@ namespace umbriel {
   enum class WheelDirection;
   struct Keybind;
 
-  enum class FocusReason : uint8_t {
-    Directional,  // window-focus-* keybinds, focus-adjacent after close
-    PointerPress, // plain click-to-focus
-    PointerHover, // follows_mouse enter
-    Grab,         // Mod+drag / Mod+resize start
-    DragDrop,     // tile/float drag finished
-    Startup,      // map, setFloating, xdg-activation, foreign activate, refocus fallback
-  };
-
   class Cursor;
+  class FocusManager;
   class XwaylandSupervisor;
   class ConfigWatcher;
   class Gestures;
@@ -178,6 +171,7 @@ namespace umbriel {
     // being able to add to and remove from it.
     [[nodiscard]] std::span<const std::unique_ptr<Output>> outputs() const { return m_outputs; }
     [[nodiscard]] std::span<const std::unique_ptr<View>> views() const { return m_registry.all(); }
+    [[nodiscard]] ViewRegistry& registry() { return m_registry; }
     [[nodiscard]] std::span<const std::unique_ptr<LayerSurface>> layerSurfaces() const { return m_layerSurfaces; }
 
     // Runs a parsed action. Shared by the keybind path and the IPC `msg` command.
@@ -189,8 +183,12 @@ namespace umbriel {
     // workspace, and focus it. Repeated calls walk the list.
     bool focusNextWindow();
 
-    void focusView(View* view, FocusReason reason = FocusReason::Startup);
-    View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
+    // Focus lives in FocusManager; these forward so call sites that already
+    // hold a Server do not need a second reference.
+    void focusView(View* view, FocusReason reason = FocusReason::Startup) { m_focus.focusView(view, reason); }
+    View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr) {
+      return m_focus.viewAt(lx, ly, surface, sx, sy, layer);
+    }
     const Keybind* handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
     bool handleWheelBind(WheelDirection direction, uint32_t modifiers);
     bool handleMouseBind(uint32_t button, uint32_t modifiers);
@@ -211,13 +209,11 @@ namespace umbriel {
     void updateLockBlank();
     void updateBackdrop();
     void notifyIdleActivity();
-    // Prefer focusing a view on `preferred` when set (workspace switch on one output).
-    void refocus(Output* preferred = nullptr);
+    void refocus(Output* preferred = nullptr) { m_focus.refocus(preferred); }
     void reconcileDynamicWorkspaces();
-    void clearKeyboardFocus();
-    // Drop xdg activated / focus border / foreign activated on mapped views (except `except`).
-    void deactivateViews(View* except = nullptr);
-    [[nodiscard]] LayerSurface* exclusiveKeyboardLayer() const;
+    void clearKeyboardFocus() { m_focus.clearKeyboardFocus(); }
+    void deactivateViews(View* except = nullptr) { m_focus.deactivateViews(except); }
+    [[nodiscard]] LayerSurface* exclusiveKeyboardLayer() const { return m_focus.exclusiveKeyboardLayer(); }
     void animateCloseSnapshot(
         Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
     );
@@ -258,7 +254,7 @@ namespace umbriel {
     void applyConfig();
     void showConfigDiagnostics();
     void relayoutCheatsheet();
-    void clearNormalFocus();
+    void clearNormalFocus() { m_focus.clearNormalFocus(); }
     void setLockBlankEnabled(bool enabled);
     void updateIdleInhibit();
     void handleWorkspaceCommit(void* data);
@@ -407,6 +403,7 @@ namespace umbriel {
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;
     std::vector<std::unique_ptr<VirtualPointerDevice>> m_virtualPointers;
     ViewRegistry m_registry;
+    FocusManager m_focus{*this};
     std::vector<std::unique_ptr<LayerSurface>> m_layerSurfaces;
   };
 

@@ -582,19 +582,6 @@ namespace umbriel {
     }
   }
 
-  void Server::clearNormalFocus() {
-    wlr_seat* seat = m_seat->wlr();
-    wlr_seat_keyboard_notify_clear_focus(seat);
-    wlr_seat_pointer_clear_focus(seat);
-    for (const auto& entry : m_registry.all()) {
-      if (entry->mapped()) {
-        wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
-        entry->setBorderFocused(false);
-        entry->setForeignActivated(false);
-      }
-    }
-  }
-
   void Server::setLockBlankEnabled(bool enabled) {
     wlr_scene_node_set_enabled(&m_lockTree->node, enabled);
     wlr_scene_node_set_enabled(&m_lockBlank->node, enabled);

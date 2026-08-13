@@ -1,0 +1,213 @@
+#include "server/focus.h"
+
+#include "config/config.h"
+#include "input/seat.h"
+#include "layer/layer_surface.h"
+#include "output/output.h"
+#include "overview/overview.h"
+#include "scene/node.h"
+#include "server/server.h"
+#include "view/view.h"
+#include "wlr.h"
+#include "workspace/scratchpad.h"
+#include "workspace/workspace.h"
+
+namespace umbriel {
+
+  void FocusManager::focusView(View* view, FocusReason reason) {
+    if (view == nullptr || m_server.sessionLocked()) {
+      return;
+    }
+
+    // PointerHover gate: reject focus entirely when revealing would exceed the
+    // configured max scroll fraction. Must run before any side effects (MRU,
+    // seat focus) so an over-limit hover focuses nothing — preserving the
+    // current behavior where cursor.cpp skipped focusView altogether.
+    if (reason == FocusReason::PointerHover && view->tiled()) {
+      if (Workspace* workspace = view->workspace()) {
+        const auto& maxScroll = config().input.focus.followsMouseMaxScroll;
+        if (maxScroll && workspace->scrollFractionToReveal(view) > *maxScroll) {
+          return;
+        }
+      }
+    }
+
+    if (Workspace* workspace = view->workspace()) {
+      if (!view->pinned() && !workspace->active()) {
+        workspace->group()->activate(workspace);
+      }
+    }
+    if (!view->onActiveWorkspace() && !view->pinned()) {
+      return;
+    }
+    if (m_server.scratchpadManager() != nullptr) {
+      m_server.scratchpadManager()->noteFocus(view);
+    }
+
+    m_server.registry().promote(view);
+
+    // Keep workspace focus while exclusive layer-shell holds the seat; refocus applies it later.
+    // Still clear activation chrome so the previous window does not stay visually focused.
+    // Overview owns the seat the same way, but keeps the chrome so card borders
+    // track the focused window; the keyboard enter replays when it closes.
+    const bool overviewActive = m_server.overview() != nullptr && m_server.overview()->active();
+    const bool seatAvailable = exclusiveKeyboardLayer() == nullptr;
+    if (seatAvailable) {
+      view->applySeatFocus(!overviewActive);
+    } else {
+      deactivateViews(nullptr);
+    }
+    Workspace* workspace = view->workspace();
+    if (workspace != nullptr && (!view->pinned() || workspace->active())) {
+      workspace->setFocusedView(view);
+    }
+    if (overviewActive) {
+      m_server.overview()->onFocusChanged();
+    }
+
+    // Derive reveal policy from the focus reason.
+    if (workspace == nullptr || !view->tiled()) {
+      return;
+    }
+    switch (reason) {
+    case FocusReason::Directional:
+    case FocusReason::PointerPress:
+    case FocusReason::PointerHover:
+    case FocusReason::DragDrop:
+    case FocusReason::Startup:
+      workspace->ensureFocusedVisible();
+      workspace->arrange(true);
+      break;
+    case FocusReason::Grab:
+      // No reveal: the grab is about to move/detach the tile; revealing would
+      // shift computed grab offsets and cause a visual jump.
+      break;
+    }
+  }
+
+  LayerSurface* FocusManager::exclusiveKeyboardLayer() const {
+    for (const auto& entry : m_server.layerSurfaces()) {
+      if (entry->exclusiveKeyboard()) {
+        return entry.get();
+      }
+    }
+    return nullptr;
+  }
+
+  void FocusManager::refocus(Output* preferred) {
+    if (m_server.sessionLocked()) {
+      return;
+    }
+    if (LayerSurface* layer = exclusiveKeyboardLayer()) {
+      layer->focus();
+      return;
+    }
+
+    const auto focusMappedOn = [this](Output* output) -> bool {
+      if (output == nullptr || output->workspaceGroup() == nullptr) {
+        return false;
+      }
+      Workspace* workspace = output->workspaceGroup()->active();
+      if (workspace == nullptr) {
+        return false;
+      }
+      if (View* focused = workspace->focusedView()) {
+        if (focused->mapped() && focused->onActiveWorkspace()) {
+          focusView(focused);
+          return true;
+        }
+      }
+      for (const auto& entry : m_server.registry().all()) {
+        if (entry->mapped() && entry->workspace() == workspace) {
+          focusView(entry.get());
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (preferred != nullptr) {
+      if (focusMappedOn(preferred)) {
+        return;
+      }
+      // Empty workspace on this output: clear focus instead of highlighting another display.
+      clearKeyboardFocus();
+      return;
+    }
+
+    Output* underCursor = m_server.outputFromWlr(m_server.preferredOutput());
+    if (focusMappedOn(underCursor)) {
+      return;
+    }
+    // Stay on the pointer's output: never steal focus onto another display when
+    // this one has no mapped window (closing the last window on DP-1, empty WS, …).
+    clearKeyboardFocus();
+  }
+
+  void FocusManager::deactivateViews(View* except) {
+    for (const auto& entry : m_server.registry().all()) {
+      if (entry.get() == except || !entry->mapped()) {
+        continue;
+      }
+      wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
+      entry->setBorderFocused(false);
+      entry->setForeignActivated(false);
+    }
+  }
+
+  void FocusManager::clearKeyboardFocus() {
+    deactivateViews(nullptr);
+    wlr_seat_keyboard_notify_clear_focus(m_server.seat()->wlr());
+  }
+
+  void FocusManager::clearNormalFocus() {
+    // A lock takes the whole seat, so the pointer goes too. Everything else is
+    // the same teardown as clearKeyboardFocus.
+    wlr_seat_pointer_clear_focus(m_server.seat()->wlr());
+    clearKeyboardFocus();
+  }
+
+  View*
+  FocusManager::viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer) {
+    if (layer != nullptr) {
+      *layer = nullptr;
+    }
+
+    wlr_scene_node* node = wlr_scene_node_at(&m_server.scene()->tree.node, lx, ly, sx, sy);
+    if (node == nullptr || node->type != WLR_SCENE_NODE_BUFFER) {
+      return nullptr;
+    }
+
+    wlr_scene_buffer* sceneBuffer = wlr_scene_buffer_from_node(node);
+    wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(sceneBuffer);
+    if (sceneSurface == nullptr) {
+      return nullptr;
+    }
+
+    *surface = sceneSurface->surface;
+    wlr_scene_tree* tree = node->parent;
+    SceneNode* sceneNode = nullptr;
+    while (tree != nullptr && (sceneNode = sceneNodeFrom(tree->node.data)) == nullptr) {
+      tree = tree->node.parent;
+    }
+    if (sceneNode == nullptr) {
+      return nullptr;
+    }
+
+    if (sceneNode->kind == SceneNodeKind::LockSurface) {
+      return nullptr;
+    }
+    if (m_server.sessionLocked()) {
+      *surface = nullptr;
+      return nullptr;
+    }
+    if (sceneNode->kind == SceneNodeKind::LayerSurface) {
+      if (layer != nullptr) {
+        *layer = static_cast<LayerSurface*>(sceneNode);
+      }
+      return nullptr;
+    }
+    return static_cast<View*>(sceneNode);
+  }
+
+} // namespace umbriel

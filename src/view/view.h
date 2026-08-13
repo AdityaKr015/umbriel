@@ -54,6 +54,9 @@ namespace umbriel {
     // activation still update, the keyboard enter is deferred to the close.
     void applySeatFocus(bool withKeyboard = true);
     void setForeignActivated(bool activated);
+    // Focus ring only. Public alongside setForeignActivated because both are
+    // activation chrome the focus manager drives from outside.
+    void setBorderFocused(bool focused);
     void setWorkspace(Workspace* workspace, bool attachToLayout = true);
     void detachWorkspace();
     void setOnActiveWorkspace(bool active);
@@ -138,7 +141,6 @@ namespace umbriel {
     void handleCaptureSourceDestroy();
     void updateBorderGeometry();
     void updateBorderGeometry(int contentWidth, int contentHeight);
-    void setBorderFocused(bool focused);
     void applyCornerRadius();
     void reloadBackdropColor() { m_presentation.reloadBackdropColor(); }
     void updateBlur();

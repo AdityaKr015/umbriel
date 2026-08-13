@@ -85,6 +85,9 @@ namespace umbriel {
 
   private:
     void applyPositions(bool animate);
+    // Pull the scroll offset back into [0, maxScroll]. Only for removals: a
+    // touchpad swipe overscrolls on purpose.
+    void clampScrollToRange();
     WorkspaceGroup* m_group = nullptr;
     wlr_ext_workspace_handle_v1* m_handle = nullptr;
     std::string m_name;

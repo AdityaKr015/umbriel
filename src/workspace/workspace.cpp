@@ -186,6 +186,12 @@ namespace umbriel {
       }
       m_focusedView = replacement;
     }
+    // Re-anchor the strip on whatever is focused now, the way every other
+    // focus-moving operation does. niri does the same on removal: it activates
+    // an adjacent column and animates the view to fit it. Without this the
+    // scroll offset survives the removal, so a survivor can stay cut off at the
+    // left edge while empty space opens on the right.
+    ensureFocusedVisible();
     arrange();
     m_group->reconcileDynamic();
     return replacement;
@@ -207,7 +213,26 @@ namespace umbriel {
 
   void Workspace::layoutDetach(View* view, bool animate) {
     m_layout->removeView(view);
+    // The column just left the strip, so the old offset can now point past the
+    // end: a survivor stays cut off at the left edge while empty space opens on
+    // the right. niri re-anchors after a removal, activating an adjacent column
+    // and fitting the view to it. Clamping to the new range is that same idea
+    // expressed through the offset, and like niri's fit it leaves the offset
+    // alone while the strip is still longer than the viewport.
+    //
+    // Deliberately not inside arrange(): a touchpad swipe overscrolls on purpose
+    // and arrange() runs on every motion of it.
+    clampScrollToRange();
     arrange(animate);
+  }
+
+  void Workspace::clampScrollToRange() {
+    if (m_group == nullptr || m_group->output() == nullptr || m_layoutMode != LayoutMode::Scrolling) {
+      return;
+    }
+    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
+    const auto maxScroll = static_cast<double>(m_layout->maxScroll(viewportWidth));
+    m_layout->setScroll(std::clamp(m_layout->scroll(), 0.0, maxScroll));
   }
 
   void Workspace::arrange(bool animate) {

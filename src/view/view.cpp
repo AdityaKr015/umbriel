@@ -1702,30 +1702,9 @@ namespace umbriel {
       if (wantTiled) {
         wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
         const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-        struct InitialLayoutSizing {
-          int edgePad;
-          int totalGap;
-          double defaultWidthFraction;
-        };
-        const InitialLayoutSizing layoutSizing = [&] {
-          if (m_workspace != nullptr) {
-            const ResolvedLayoutConfig& layoutConfig = m_workspace->layoutConfig();
-            return InitialLayoutSizing{
-                .edgePad = layoutConfig.edgePad,
-                .totalGap = layoutConfig.totalGap,
-                .defaultWidthFraction = layoutConfig.scrolling.defaultWidthFraction,
-            };
-          }
-          const ResolvedLayoutConfig layoutConfig = resolveGlobalLayout();
-          return InitialLayoutSizing{
-              .edgePad = layoutConfig.edgePad,
-              .totalGap = layoutConfig.totalGap,
-              .defaultWidthFraction = layoutConfig.scrolling.defaultWidthFraction,
-          };
-        }();
-        const int viewportWidth = std::max(1, usable.width - 2 * layoutSizing.edgePad);
-        const int height = std::max(1, usable.height - 2 * layoutSizing.edgePad);
-        // Resolve the workspace this view will attach to so we can honor its layout mode.
+
+        // Resolve the workspace this view will attach to, so the layout that
+        // will actually arrange it is the one that sizes the first configure.
         Workspace* target = m_workspace;
         if (target == nullptr) {
           if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
@@ -1740,25 +1719,21 @@ namespace umbriel {
             }
           }
         }
-        const bool isDwindle = target != nullptr && target->layoutMode() == LayoutMode::Dwindle;
-        // default_width is scrolling-only; dwindle uses tree splits instead.
-        const bool useDefaultWidth = rule.defaultWidth && !isDwindle;
-        const double widthFrac = useDefaultWidth ? *rule.defaultWidth : layoutSizing.defaultWidthFraction;
-        // Match ScrollingLayout::columnWidth so the first configure equals the final arrange.
-        int width = std::max(
-            1,
-            static_cast<int>(std::lround(widthFrac * (viewportWidth + layoutSizing.totalGap) - layoutSizing.totalGap))
-        );
-        if (rule.defaultSize) {
-          width = (*rule.defaultSize)[0];
+
+        // No workspace yet (no output, or none active): fall back to a throwaway
+        // layout built from the global config, so the sizing rule stays the
+        // layout's either way.
+        const ResolvedLayoutConfig globalConfig = target != nullptr ? ResolvedLayoutConfig{} : resolveGlobalLayout();
+        std::unique_ptr<Layout> fallbackLayout;
+        if (target == nullptr) {
+          fallbackLayout = createLayout(globalConfig.mode);
+          fallbackLayout->setConfig(&globalConfig);
         }
-        // Empty dwindle: the first leaf fills the viewport. Size it here so the
-        // first buffer matches the arrange configure (Electron & co. keep the
-        // initial buffer until a redraw).
-        if (!rule.defaultSize && isDwindle && target->layout().columns().empty()) {
-          width = viewportWidth;
-        }
-        wlr_xdg_toplevel_set_size(m_toplevel, width, height);
+        const Layout& layout = target != nullptr ? target->layout() : *fallbackLayout;
+
+        const Layout::InitialSize initial = layout.initialSize(usable, rule.defaultWidth);
+        const int width = rule.defaultSize ? (*rule.defaultSize)[0] : initial.width;
+        wlr_xdg_toplevel_set_size(m_toplevel, width, initial.height);
       } else {
         wlr_xdg_toplevel_set_tiled(m_toplevel, 0);
         const XdgSizeHints hints = xdgSizeHints(m_toplevel);
@@ -2315,12 +2290,18 @@ namespace umbriel {
       }
     }
 
-    // Dynamic effects are always safe to update.
-    applyDynamicRules();
+    // Dynamic effects are always safe to update. Reuse the resolution above
+    // rather than running every rule regex a second time.
+    applyDynamicRules(&rule);
   }
 
-  void View::applyDynamicRules() {
-    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
+  void View::applyDynamicRules(const ResolvedWindowRule* resolved) {
+    ResolvedWindowRule owned;
+    if (resolved == nullptr) {
+      owned = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
+      resolved = &owned;
+    }
+    const ResolvedWindowRule& rule = *resolved;
     m_blurOptions = SurfaceBlurOptions{
         .ignoreAlpha = static_cast<float>(rule.blurIgnoreAlpha.value_or(0.0)),
         .enabled = rule.blur.value_or(false),

@@ -5,10 +5,12 @@
 // clang-format off
 // See keybind_parse.cpp: <cmath> must precede the wayland chain.
 #include <cmath>
+#include <optional>
 #include <wlr/util/box.h>
 // clang-format on
 
 using umbriel::Column;
+using umbriel::Layout;
 using umbriel::LayoutConstraints;
 using umbriel::ResolvedLayoutConfig;
 using umbriel::ScrollingLayout;
@@ -304,6 +306,41 @@ UMBRIEL_TEST(unsetConstraintsMeanUnconstrained) {
   // No setConstraints call at all: the layout must still produce sane geometry.
   CHECK_EQ(fixture.layout.columnWidth(0, kViewport), 624);
   CHECK(!fixture.layout.isFullWidth(0));
+}
+
+// ---- initial sizing ----
+
+UMBRIEL_TEST(initialSizeMatchesWhatArrangeWillAssign) {
+  // The invariant: the size a view is configured with before it joins the
+  // layout must equal the size the layout gives it once it has. Any drift and
+  // the client's first buffer is wrong and the window resizes on first paint.
+  Fixture fixture;
+  const Layout::InitialSize initial = fixture.layout.initialSize(kUsable, std::nullopt);
+
+  fixture.addColumns(1);
+  fixture.layout.arrange(kUsable);
+  const wlr_box arranged = fixture.layout.targetBox(stub(0));
+
+  CHECK_EQ(initial.width, arranged.width);
+  CHECK_EQ(initial.height, arranged.height);
+}
+
+UMBRIEL_TEST(initialSizeHonoursARuleWidthFraction) {
+  Fixture fixture;
+  const Layout::InitialSize initial = fixture.layout.initialSize(kUsable, 1.0 / 3);
+
+  fixture.addColumns(1);
+  CHECK(fixture.layout.setWidthFraction(0, 1.0 / 3));
+  fixture.layout.arrange(kUsable);
+
+  CHECK_EQ(initial.width, fixture.layout.targetBox(stub(0)).width);
+  CHECK(initial.width < fixture.layout.initialSize(kUsable, std::nullopt).width);
+}
+
+UMBRIEL_TEST(initialSizeUsesTheDefaultFractionWhenNoRuleApplies) {
+  Fixture fixture;
+  CHECK_EQ(fixture.layout.initialSize(kUsable, std::nullopt).width, 624);
+  CHECK_EQ(fixture.layout.initialSize(kUsable, std::nullopt).height, 700);
 }
 
 // ---- scrolling ----

@@ -37,6 +37,8 @@ namespace umbriel {
     [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportWidth) const override;
     void arrange(const wlr_box& usable) override;
     [[nodiscard]] wlr_box targetBox(const View* view) const override;
+    [[nodiscard]] InitialSize
+    initialSize(const wlr_box& usable, std::optional<double> ruleWidthFraction) const override;
 
     bool cycleWidth(int columnIndex) override;
     bool toggleFullWidth(int columnIndex) override;

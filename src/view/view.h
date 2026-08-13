@@ -24,6 +24,7 @@ namespace umbriel {
 
   class Server;
   class Workspace;
+  struct ResolvedWindowRule;
 
   class View : public SceneNode {
   public:
@@ -191,7 +192,11 @@ namespace umbriel {
     void enterForeignOutput();
     void leaveForeignOutput();
     void applyWindowRules(bool allowDisruptive);
-    void applyDynamicRules();
+    // `resolved` lets a caller that already resolved the rules pass them in.
+    // Rule resolution runs every regex in the config, and applyWindowRules is
+    // reached on focus changes and on every title change, so resolving twice per
+    // pass is work a terminal that retitles per command pays repeatedly.
+    void applyDynamicRules(const ResolvedWindowRule* resolved = nullptr);
 
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;

@@ -402,6 +402,13 @@ namespace umbriel {
     }
   }
 
+  Layout::InitialSize
+  ScrollingLayout::initialSize(const wlr_box& usable, std::optional<double> ruleWidthFraction) const {
+    const wlr_box content = contentArea(usable);
+    const double fraction = ruleWidthFraction.value_or(m_config->scrolling.defaultWidthFraction);
+    return {.width = fractionalWidth(content.width, fraction), .height = content.height};
+  }
+
   wlr_box ScrollingLayout::targetBox(const View* view) const {
     const auto it = std::ranges::find_if(m_targets, [view](const Target& target) { return target.view == view; });
     if (it == m_targets.end()) {

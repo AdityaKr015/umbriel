@@ -431,6 +431,21 @@ namespace umbriel {
     rebuildFlatColumns();
   }
 
+  Layout::InitialSize
+  DwindleLayout::initialSize(const wlr_box& usable, std::optional<double> /*ruleWidthFraction*/) const {
+    const wlr_box content = contentArea(usable);
+    // A window rule's default_width is a viewport fraction, which a splitting
+    // layout has no use for. The first leaf owns the whole area; any later one
+    // lands in a split of the target leaf, and half is the closest guess before
+    // the target is known.
+    if (m_flatColumns.empty()) {
+      return {.width = content.width, .height = content.height};
+    }
+    return {
+        .width = fractionalWidth(content.width, m_config->scrolling.defaultWidthFraction), .height = content.height
+    };
+  }
+
   wlr_box DwindleLayout::targetBox(const View* view) const {
     const auto it = std::ranges::find_if(m_targets, [view](const Target& t) { return t.view == view; });
     if (it == m_targets.end()) {

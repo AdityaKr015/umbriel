@@ -188,8 +188,18 @@ unit_tests = [
   ],
   # Layout geometry links against layout/ alone: no view/, no server/, no config
   # loading. That isolation is the point: geometry stays testable in isolation.
-  ['scrolling-layout', ['tests/scrolling_layout.cpp', 'src/layout/scrolling.cpp'], [wlroots_dep]],
-  ['dwindle-layout', ['tests/dwindle_layout.cpp', 'src/layout/dwindle.cpp'], [wlroots_dep]],
+  # Both layouts come along because layout.cpp holds the shared geometry helpers
+  # and createLayout, which names each concrete layout.
+  [
+    'scrolling-layout',
+    ['tests/scrolling_layout.cpp', 'src/layout/scrolling.cpp', 'src/layout/dwindle.cpp', 'src/layout/layout.cpp'],
+    [wlroots_dep],
+  ],
+  [
+    'dwindle-layout',
+    ['tests/dwindle_layout.cpp', 'src/layout/dwindle.cpp', 'src/layout/scrolling.cpp', 'src/layout/layout.cpp'],
+    [wlroots_dep],
+  ],
 ]
 
 foreach unit_test : unit_tests

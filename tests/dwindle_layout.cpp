@@ -5,6 +5,7 @@
 // clang-format off
 // See keybind_parse.cpp: <cmath> must precede the wayland chain.
 #include <cmath>
+#include <optional>
 extern "C" {
 #include <wlr/util/box.h>
 #include <wlr/util/edges.h>
@@ -12,6 +13,7 @@ extern "C" {
 // clang-format on
 
 using umbriel::DwindleLayout;
+using umbriel::Layout;
 using umbriel::LayoutConstraints;
 using umbriel::ResolvedLayoutConfig;
 using umbriel::View;
@@ -250,6 +252,38 @@ UMBRIEL_TEST(arrangeOnAnEmptyTreeIsHarmless) {
   Fixture fixture;
   fixture.layout.arrange(kUsable);
   CHECK_EQ(fixture.layout.columns().size(), size_t{0});
+}
+
+// ---- initial sizing ----
+
+UMBRIEL_TEST(initialSizeFillsTheAreaForTheFirstLeaf) {
+  Fixture fixture;
+  const Layout::InitialSize initial = fixture.layout.initialSize(kUsable, std::nullopt);
+
+  fixture.addLeaves(1);
+  fixture.layout.arrange(kUsable);
+  const wlr_box arranged = fixture.layout.targetBox(stub(0));
+
+  // The first leaf owns the whole content area, so the first configure must
+  // say so too.
+  CHECK_EQ(initial.width, arranged.width);
+  CHECK_EQ(initial.height, arranged.height);
+}
+
+UMBRIEL_TEST(initialSizeShrinksOnceTheTreeIsPopulated) {
+  Fixture fixture;
+  const Layout::InitialSize empty = fixture.layout.initialSize(kUsable, std::nullopt);
+  fixture.addLeaves(1);
+  const Layout::InitialSize populated = fixture.layout.initialSize(kUsable, std::nullopt);
+  CHECK(populated.width < empty.width);
+}
+
+UMBRIEL_TEST(initialSizeIgnoresARuleWidthFraction) {
+  // default_width is a viewport fraction, which means nothing to a splitting
+  // layout; it must not change the answer.
+  Fixture fixture;
+  fixture.addLeaves(1);
+  CHECK_EQ(fixture.layout.initialSize(kUsable, 1.0 / 3).width, fixture.layout.initialSize(kUsable, std::nullopt).width);
 }
 
 // ---- hit testing ----

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 struct wlr_box;
@@ -100,6 +101,20 @@ namespace umbriel {
 
     [[nodiscard]] virtual wlr_box targetBox(const View* view) const = 0;
 
+    struct InitialSize {
+      int width = 0;
+      int height = 0;
+    };
+
+    // Size for the very first configure, before the view has joined the layout.
+    // It must agree with what arrange() will later assign, or the client's first
+    // buffer is the wrong size and the window visibly resizes on its first paint
+    // (Electron and friends keep that buffer until they redraw).
+    // `ruleWidthFraction` is a window rule's default_width, which is a viewport
+    // fraction and so means nothing to a splitting layout.
+    [[nodiscard]] virtual InitialSize
+    initialSize(const wlr_box& usable, std::optional<double> ruleWidthFraction) const = 0;
+
     [[nodiscard]] virtual View* focusVerticalLeaf(const View* /*view*/, int /*direction*/) const { return nullptr; }
 
     virtual bool cycleWidth(int columnIndex) = 0;
@@ -153,6 +168,14 @@ namespace umbriel {
     [[nodiscard]] virtual double bottomGapWeight(int) const { return 0.0; }
 
   protected:
+    // The usable area minus edge padding on both axes: the box the layout has
+    // to fill.
+    [[nodiscard]] wlr_box contentArea(const wlr_box& usable) const;
+    // Gap-aware width of a column occupying `fraction` of the viewport. Solving
+    // sum(w) + (N-1)g = V with w = p*(V+g) - g makes N columns whose fractions
+    // sum to 1 tile the viewport exactly.
+    [[nodiscard]] int fractionalWidth(int viewportWidth, double fraction) const;
+
     const ResolvedLayoutConfig* m_config = nullptr;
     LayoutConstraintsFn m_constraints = nullptr;
   };

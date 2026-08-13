@@ -1,0 +1,9 @@
+[output.DP-1]
+mode = "3840x2160@60"
+scale = 99                  # clamp
+positon = "0,0"             # typo
+workspaces = 999            # error: out of range
+
+[[workspace]]
+name = "code"
+outupt = "DP-1"             # typo

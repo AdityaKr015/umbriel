@@ -1,0 +1,7 @@
+[[layer_rule]]
+blur = 1                       # int, not bool
+blur_ignore_alpha = 5.0        # clamp
+blur_optimised = true          # typo
+[layer_rule.match]
+namespace = "waybar"
+namspace = "x"                 # typo

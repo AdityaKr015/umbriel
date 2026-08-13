@@ -64,8 +64,11 @@ namespace umbriel {
       return *this;
     }
 
-    // The raw node behind a key, for the handful of settings whose parsing does
-    // not fit the shapes above. Does not claim the key; pair it with `custom`.
+    // Claim a key and hand back its raw node, for parsing that does not fit the
+    // shapes above. Preferred over `node` + `custom`: fetching is what marks the
+    // key known, so the two cannot come apart.
+    [[nodiscard]] const toml::node* take(std::string_view key) { return claim(key); }
+    // The raw node without claiming, when the key is claimed elsewhere.
     [[nodiscard]] const toml::node* node(std::string_view key) const { return m_table.get(key); }
     // The table itself, for bespoke readers that predate this class.
     [[nodiscard]] const toml::table& table() const { return m_table; }
@@ -80,7 +83,7 @@ namespace umbriel {
 
   private:
     [[nodiscard]] std::string qualified(std::string_view key) const;
-    [[nodiscard]] const toml::node* claim(std::string_view key);
+    const toml::node* claim(std::string_view key);
     [[nodiscard]] const toml::table* nestedTable(std::string_view key);
     void warn(const toml::node& node, std::string message);
 

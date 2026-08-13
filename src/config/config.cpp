@@ -82,16 +82,6 @@ namespace umbriel {
     bool knownKey(std::string_view key, std::initializer_list<std::string_view> known) {
       return std::ranges::find(known, key) != known.end();
     }
-    void warnUnknownKeys(
-        const toml::table& section, std::string_view sectionName, std::initializer_list<std::string_view> known
-    ) {
-      for (const auto& [key, value] : section) {
-        (void)value;
-        if (!knownKey(key.str(), known)) {
-          warnAt(key.source(), "unknown key {}.{}", sectionName, key.str());
-        }
-      }
-    }
 
     void readDouble(
         const toml::table& section, std::string_view name, std::string_view fullName, double minimum, double maximum,
@@ -252,9 +242,12 @@ namespace umbriel {
 
     WorkspaceConfig parseWorkspaceEntry(const toml::table& section, std::string_view context) {
       WorkspaceConfig ws;
-      warnUnknownKeys(section, context, {"name", "output", "index", "layout"});
+      Section keys(section, std::string(context), configStore().mutableDiagnostics());
+      // `layout` is read by readWorkspaceLayoutOverrides below, which takes the
+      // raw table rather than this reader.
+      keys.custom("layout");
 
-      if (const toml::node* nameNode = section.get("name")) {
+      if (const toml::node* nameNode = keys.take("name")) {
         if (const auto value = nameNode->value<std::string>()) {
           if (value->empty()) {
             errorAt(nameNode->source(), "{}.name must not be empty", context);
@@ -265,7 +258,7 @@ namespace umbriel {
           errorAt(nameNode->source(), "{}.name must be a string", context);
         }
       }
-      if (const toml::node* outputNode = section.get("output")) {
+      if (const toml::node* outputNode = keys.take("output")) {
         if (const auto value = outputNode->value<std::string>()) {
           if (value->empty()) {
             errorAt(outputNode->source(), "{}.output must not be empty", context);
@@ -276,7 +269,7 @@ namespace umbriel {
           errorAt(outputNode->source(), "{}.output must be a string", context);
         }
       }
-      if (const toml::node* indexNode = section.get("index")) {
+      if (const toml::node* indexNode = keys.take("index")) {
         const auto value = indexNode->value<std::int64_t>();
         if (!value || *value < 1 || *value > static_cast<std::int64_t>(kMaxWorkspaces)) {
           errorAt(indexNode->source(), "{}.index must be an integer from 1 to {}", context, kMaxWorkspaces);
@@ -566,9 +559,7 @@ namespace umbriel {
           warnAt(entry.source(), "ignoring output.{} (expected table)", name);
           continue;
         }
-        warnUnknownKeys(
-            *section, std::string("output.") + name, {"mode", "position", "scale", "transform", "workspaces"}
-        );
+        Section keys(*section, "output." + name, configStore().mutableDiagnostics());
 
         if (std::ranges::any_of(loaded.outputs, [&](const OutputRule& rule) { return rule.name == name; })) {
           warnAt(key.source(), "duplicate output section '{}'", name);
@@ -576,7 +567,7 @@ namespace umbriel {
         }
         OutputRule rule;
         rule.name = name;
-        if (const toml::node* workspacesNode = section->get("workspaces")) {
+        if (const toml::node* workspacesNode = keys.take("workspaces")) {
           if (const auto count = workspacesNode->value<std::int64_t>()) {
             if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {
               errorAt(
@@ -626,7 +617,7 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* modeNode = section->get("mode")) {
+        if (const toml::node* modeNode = keys.take("mode")) {
           const auto value = modeNode->value<std::string>();
           OutputMode mode;
           if (!value || !parseOutputMode(*value, mode)) {
@@ -638,7 +629,7 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* positionNode = section->get("position")) {
+        if (const toml::node* positionNode = keys.take("position")) {
           const auto* position = positionNode->as_array();
           bool valid = position != nullptr && position->size() == 2;
           std::array<int, 2> parsed{};
@@ -661,7 +652,7 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* scaleNode = section->get("scale")) {
+        if (const toml::node* scaleNode = keys.take("scale")) {
           const auto value = scaleNode->value<double>();
           if (!value || std::isnan(*value)) {
             warnAt(scaleNode->source(), "ignoring output.{}.scale (expected number)", name);
@@ -672,7 +663,7 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* transformNode = section->get("transform")) {
+        if (const toml::node* transformNode = keys.take("transform")) {
           const auto value = transformNode->value<std::string>();
           static constexpr std::pair<std::string_view, int> transforms[] = {
               {"normal", 0},  {"90", 1},         {"180", 2},         {"270", 3},
@@ -723,8 +714,11 @@ namespace umbriel {
         bool repeatBind = true;
 
         if (const auto* tbl = entry.as_table()) {
-          warnUnknownKeys(*tbl, "keybinds." + chord, {"action", "repeat"});
-          const toml::node* actionNode = tbl->get("action");
+          Section bind(*tbl, "keybinds." + chord, configStore().mutableDiagnostics());
+          // Read `repeat` before validating the action: an entry rejected for a
+          // bad action must not also be told its `repeat` key is unknown.
+          bind.boolean("repeat", repeatBind);
+          const toml::node* actionNode = bind.take("action");
           if (actionNode == nullptr) {
             warnAt(entry.source(), "ignoring keybind '{}' (table needs an 'action' string)", chord);
             continue;
@@ -735,14 +729,6 @@ namespace umbriel {
             continue;
           }
           actionStr = *actionVal;
-          if (const toml::node* repeatNode = tbl->get("repeat")) {
-            const auto repeatVal = repeatNode->value<bool>();
-            if (repeatVal) {
-              repeatBind = *repeatVal;
-            } else {
-              warnAt(repeatNode->source(), "ignoring keybinds.{}.repeat (expected boolean)", chord);
-            }
-          }
         } else {
           const auto value = entry.value<std::string>();
           if (!value) {
@@ -794,19 +780,14 @@ namespace umbriel {
           warnAt(entry.source(), "ignoring window_rule entry (expected table)");
           continue;
         }
-        warnUnknownKeys(
-            *section, "window_rule",
-            {"match", "default_output", "default_floating", "default_size", "default_width", "default_workspace",
-             "default_fullscreen", "default_maximize", "opacity", "blur", "blur_popups", "blur_ignore_alpha",
-             "blur_optimized"}
-        );
+        Section keys(*section, "window_rule", configStore().mutableDiagnostics());
 
         WindowRule rule;
 
-        if (const toml::node* matchNode = section->get("match")) {
+        if (const toml::node* matchNode = keys.take("match")) {
           if (const auto* match = matchNode->as_table()) {
-            warnUnknownKeys(*match, "window_rule.match", {"app_id", "title", "is_focused"});
-            if (const toml::node* appIdNode = match->get("app_id")) {
+            Section matchKeys(*match, "window_rule.match", configStore().mutableDiagnostics());
+            if (const toml::node* appIdNode = matchKeys.take("app_id")) {
               if (const auto value = appIdNode->value<std::string>()) {
                 rule.appIdPattern = *value;
                 try {
@@ -819,7 +800,7 @@ namespace umbriel {
                 warnAt(appIdNode->source(), "ignoring window_rule.match.app_id (expected string)");
               }
             }
-            if (const toml::node* titleNode = match->get("title")) {
+            if (const toml::node* titleNode = matchKeys.take("title")) {
               if (const auto value = titleNode->value<std::string>()) {
                 rule.titlePattern = *value;
                 try {
@@ -832,7 +813,7 @@ namespace umbriel {
                 warnAt(titleNode->source(), "ignoring window_rule.match.title (expected string)");
               }
             }
-            if (const toml::node* focusedNode = match->get("is_focused")) {
+            if (const toml::node* focusedNode = matchKeys.take("is_focused")) {
               if (focusedNode->is_boolean()) {
                 rule.matchFocused = focusedNode->value<bool>();
               } else {
@@ -844,7 +825,15 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* n = section->get("default_output")) {
+        keys.boolean("default_floating", rule.defaultFloating)
+            .boolean("default_fullscreen", rule.defaultFullscreen)
+            .boolean("default_maximize", rule.defaultMaximize)
+            .boolean("blur", rule.blur)
+            .boolean("blur_popups", rule.blurPopups)
+            .boolean("blur_optimized", rule.blurOptimized)
+            .real("opacity", 0.0, 1.0, rule.opacity)
+            .real("blur_ignore_alpha", 0.0, 1.0, rule.blurIgnoreAlpha);
+        if (const toml::node* n = keys.take("default_output")) {
           if (const auto value = n->value<std::string>()) {
             rule.defaultOutput = *value;
           } else {
@@ -852,15 +841,7 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* n = section->get("default_floating")) {
-          if (n->is_boolean()) {
-            rule.defaultFloating = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring window_rule.default_floating (expected boolean)");
-          }
-        }
-
-        if (const toml::node* n = section->get("default_size")) {
+        if (const toml::node* n = keys.take("default_size")) {
           const auto* arr = n->as_array();
           bool valid = arr != nullptr && arr->size() == 2;
           std::array<int, 2> parsed{};
@@ -881,7 +862,7 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* n = section->get("default_width")) {
+        if (const toml::node* n = keys.take("default_width")) {
           const auto value = n->value<double>();
           if (!value || std::isnan(*value)) {
             warnAt(n->source(), "ignoring window_rule.default_width (expected number 0.1-1.0)");
@@ -894,78 +875,12 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* n = section->get("default_workspace")) {
+        if (const toml::node* n = keys.take("default_workspace")) {
           const auto value = n->value<std::int64_t>();
           if (!value || *value < 1 || *value > static_cast<std::int64_t>(kMaxWorkspaces)) {
             warnAt(n->source(), "ignoring window_rule.default_workspace (expected integer 1-{})", kMaxWorkspaces);
           } else {
             rule.defaultWorkspace = static_cast<int>(*value);
-          }
-        }
-
-        if (const toml::node* n = section->get("default_fullscreen")) {
-          if (n->is_boolean()) {
-            rule.defaultFullscreen = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring window_rule.default_fullscreen (expected boolean)");
-          }
-        }
-
-        if (const toml::node* n = section->get("default_maximize")) {
-          if (n->is_boolean()) {
-            rule.defaultMaximize = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring window_rule.default_maximize (expected boolean)");
-          }
-        }
-
-        if (const toml::node* n = section->get("opacity")) {
-          const auto value = n->value<double>();
-          if (!value || std::isnan(*value)) {
-            warnAt(n->source(), "ignoring window_rule.opacity (expected number 0.0-1.0)");
-          } else {
-            const double used = std::clamp(*value, 0.0, 1.0);
-            if (used != *value) {
-              warnAt(n->source(), "window_rule.opacity = {} out of range, clamped to {}", *value, used);
-            }
-            rule.opacity = used;
-          }
-        }
-
-        if (const toml::node* n = section->get("blur")) {
-          if (n->is_boolean()) {
-            rule.blur = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring window_rule.blur (expected boolean)");
-          }
-        }
-
-        if (const toml::node* n = section->get("blur_popups")) {
-          if (n->is_boolean()) {
-            rule.blurPopups = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring window_rule.blur_popups (expected boolean)");
-          }
-        }
-
-        if (const toml::node* n = section->get("blur_ignore_alpha")) {
-          const auto value = n->value<double>();
-          if (!value || std::isnan(*value)) {
-            warnAt(n->source(), "ignoring window_rule.blur_ignore_alpha (expected number 0.0-1.0)");
-          } else {
-            const double used = std::clamp(*value, 0.0, 1.0);
-            if (used != *value) {
-              warnAt(n->source(), "window_rule.blur_ignore_alpha = {} out of range, clamped to {}", *value, used);
-            }
-            rule.blurIgnoreAlpha = used;
-          }
-        }
-
-        if (const toml::node* n = section->get("blur_optimized")) {
-          if (n->is_boolean()) {
-            rule.blurOptimized = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring window_rule.blur_optimized (expected boolean)");
           }
         }
 
@@ -990,16 +905,14 @@ namespace umbriel {
           warnAt(entry.source(), "ignoring layer_rule entry (expected table)");
           continue;
         }
-        warnUnknownKeys(
-            *section, "layer_rule", {"match", "blur", "blur_popups", "blur_ignore_alpha", "blur_optimized"}
-        );
+        Section keys(*section, "layer_rule", configStore().mutableDiagnostics());
 
         LayerRule rule;
 
-        if (const toml::node* matchNode = section->get("match")) {
+        if (const toml::node* matchNode = keys.take("match")) {
           if (const auto* match = matchNode->as_table()) {
-            warnUnknownKeys(*match, "layer_rule.match", {"namespace"});
-            if (const toml::node* namespaceNode = match->get("namespace")) {
+            Section matchKeys(*match, "layer_rule.match", configStore().mutableDiagnostics());
+            if (const toml::node* namespaceNode = matchKeys.take("namespace")) {
               if (const auto value = namespaceNode->value<std::string>()) {
                 rule.namespacePattern = *value;
                 try {
@@ -1017,42 +930,10 @@ namespace umbriel {
           }
         }
 
-        if (const toml::node* n = section->get("blur")) {
-          if (n->is_boolean()) {
-            rule.blur = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring layer_rule.blur (expected boolean)");
-          }
-        }
-
-        if (const toml::node* n = section->get("blur_popups")) {
-          if (n->is_boolean()) {
-            rule.blurPopups = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring layer_rule.blur_popups (expected boolean)");
-          }
-        }
-
-        if (const toml::node* n = section->get("blur_ignore_alpha")) {
-          const auto value = n->value<double>();
-          if (!value || std::isnan(*value)) {
-            warnAt(n->source(), "ignoring layer_rule.blur_ignore_alpha (expected number 0.0-1.0)");
-          } else {
-            const double used = std::clamp(*value, 0.0, 1.0);
-            if (used != *value) {
-              warnAt(n->source(), "layer_rule.blur_ignore_alpha = {} out of range, clamped to {}", *value, used);
-            }
-            rule.ignoreAlpha = used;
-          }
-        }
-
-        if (const toml::node* n = section->get("blur_optimized")) {
-          if (n->is_boolean()) {
-            rule.optimized = n->value<bool>();
-          } else {
-            warnAt(n->source(), "ignoring layer_rule.blur_optimized (expected boolean)");
-          }
-        }
+        keys.boolean("blur", rule.blur)
+            .boolean("blur_popups", rule.blurPopups)
+            .real("blur_ignore_alpha", 0.0, 1.0, rule.ignoreAlpha)
+            .boolean("blur_optimized", rule.optimized);
 
         loaded.layerRules.push_back(std::move(rule));
       }

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "config/config_diag.h"
+#include "config/keybind_parse.h"
+#include "config/value_parse.h"
 #include "layout/layout.h"
 
 #include <array>
@@ -8,75 +10,12 @@
 #include <filesystem>
 #include <optional>
 #include <regex>
-#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 namespace umbriel {
-  enum class WheelDirection {
-    None,
-    Up,
-    Down,
-    Left,
-    Right,
-  };
-
-  enum class KeybindAction {
-    None,
-    Spawn,
-    WindowClose,
-    SessionQuit,
-    WindowFocusLeft,
-    WindowFocusRight,
-    WindowFocusUp,
-    WindowFocusDown,
-    ColumnMoveLeft,
-    ColumnMoveRight,
-    WindowMoveUp,
-    WindowMoveDown,
-    WindowConsumeLeft,
-    WindowExpelRight,
-    WindowCycleWidth,
-    WindowSetWidth,
-    ToggleMaximize,
-    ToggleFullscreen,
-    ToggleFloating,
-    TogglePinned,
-    WindowFocusNext,
-    WorkspaceSwitch,
-    WindowMoveToWorkspace,
-    ConfigReload,
-    LayoutScrollLeft,
-    LayoutScrollRight,
-    OverviewToggle,
-    OverviewOpen,
-    OverviewClose,
-    CheatsheetToggle,
-    CheatsheetOpen,
-    CheatsheetClose,
-    WindowMoveToScratchpad,
-    ScratchpadToggle,
-    WindowRestoreFromScratchpad,
-    ScratchpadFocusNext,
-    Submap,
-  };
-
-  struct Keybind {
-    std::string submap;
-    uint32_t modifiers = 0;
-    bool useMod = false;
-    uint32_t keysym = 0;
-    WheelDirection wheel = WheelDirection::None;
-    uint32_t mouseButton = 0; // evdev BTN_* code, 0 = not a mouse bind
-    KeybindAction action = KeybindAction::None;
-    std::string spawnCommand;
-    std::string workspaceName;
-    std::string workspaceOutput;
-    double widthFraction = 0.0;
-    bool repeat = true;
-    std::string scratchpadOutput;
-  };
 
   // Per-workspace layout overrides (all optional → inherit Config::Layout).
   struct WorkspaceLayoutOverrides {
@@ -122,12 +61,6 @@ namespace umbriel {
     bool dynamic = false;
     std::vector<ResolvedWorkspace> workspaces;
   };
-  struct OutputMode {
-    int width = 0;
-    int height = 0;
-    int refreshMHz = 0;
-  };
-
   struct OutputRule {
     std::string name;
     std::optional<OutputMode> mode;
@@ -317,16 +250,4 @@ namespace umbriel {
   [[nodiscard]] ResolvedLayoutConfig
   resolveWorkspaceLayout(const char* outputName, std::string_view name, size_t index);
   [[nodiscard]] ResolvedWorkspaceSet resolveWorkspacesForOutput(const char* outputName);
-
-  enum class ActionArgKind : uint8_t { None, Command, WidthFraction, Workspace, OptionalOutput };
-
-  struct ActionSpec {
-    std::string_view name;  // e.g. "spawn", "workspace-switch", "window-close"
-    std::string_view param; // "" for simple, "<cmd>" / "<workspace>[/<output>]" for parameterized
-    KeybindAction action;
-    ActionArgKind argKind = ActionArgKind::None;
-  };
-
-  bool parseAction(std::string_view value, Keybind& output);
-  std::span<const ActionSpec> actionSpecs();
 } // namespace umbriel

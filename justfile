@@ -61,6 +61,12 @@ run m=mode: (build m)
     fi
     ./build-{{m}}/umbriel -s "$TERMINAL"
 
+test m=mode: (_ensure-configured m)
+    meson test -C build-{{m}} --print-errorlogs
+
+verify m=mode filter="": (build m)
+    bash tests/harness/verify.sh ./build-{{m}}/umbriel "{{filter}}"
+
 format:
     find src tests \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 clang-format -i
     find src tests \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 grep -ZlP '\s+$' | xargs -0 -r sed -i 's/[[:space:]]*$//'

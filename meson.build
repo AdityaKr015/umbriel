@@ -113,6 +113,8 @@ sources = files(
   'src/core/fdlimit.cpp',
   'src/core/log.cpp',
   'src/config/config.cpp',
+  'src/config/keybind_parse.cpp',
+  'src/config/value_parse.cpp',
   'src/config/config_merge.cpp',
   'src/config/config_watcher.cpp',
   'src/layout/drop_target.cpp',
@@ -170,13 +172,29 @@ umbriel = executable(
   install: true,
 )
 
-output_clip_test = executable(
-  'output-clip-test',
-  'tests/output_clip.cpp',
-  include_directories: include_directories('src'),
-  dependencies: wlroots_dep,
-)
-test('output clip', output_clip_test)
+# Unit tests. Meson has no source globbing by design, so each case is one entry:
+#   [name, [sources], [dependencies]]
+# Keep the dependency list minimal per test; a test that needs wlroots cannot run
+# anywhere a test over pure logic can.
+unit_tests = [
+  ['output-clip', ['tests/output_clip.cpp'], [wlroots_dep]],
+  ['value-parse', ['tests/value_parse.cpp', 'src/config/value_parse.cpp'], []],
+  [
+    'keybind-parse',
+    ['tests/keybind_parse.cpp', 'src/config/keybind_parse.cpp'],
+    [wlroots_dep, xkbcommon_dep, scenefx_dep],
+  ],
+]
+
+foreach unit_test : unit_tests
+  test_exe = executable(
+    unit_test[0] + '-test',
+    unit_test[1],
+    include_directories: include_directories('src', 'tests'),
+    dependencies: unit_test[2],
+  )
+  test(unit_test[0], test_exe)
+endforeach
 
 install_data(
   'data/umbriel.desktop',

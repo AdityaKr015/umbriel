@@ -22,14 +22,7 @@
 #endif
 
 namespace {
-  umbriel::Server* g_server = nullptr;
   constexpr Logger kLog("main");
-
-  void onSignal(int /*signal*/) {
-    if (g_server != nullptr) {
-      g_server->stop();
-    }
-  }
 
   int validateConfig(int argc, char** argv) {
     const char* configPath = nullptr;
@@ -243,10 +236,10 @@ int main(int argc, char** argv) {
     kLog.info("starting umbriel");
     umbriel::loadConfig(configPath);
     umbriel::Server server;
-    g_server = &server;
 
-    std::signal(SIGINT, onSignal);
-    std::signal(SIGTERM, onSignal);
+    // SIGINT and SIGTERM are handled on the event loop by the server itself.
+    // SIG_IGN for SIGCHLD reaps spawned children without a handler; every fork
+    // in Server restores the default before exec.
     std::signal(SIGCHLD, SIG_IGN);
 
     if (!server.start(startupCmd)) {
@@ -255,7 +248,6 @@ int main(int argc, char** argv) {
     }
 
     server.run();
-    g_server = nullptr;
     kLog.info("shutting down");
     return EXIT_SUCCESS;
   } catch (const std::exception& ex) {

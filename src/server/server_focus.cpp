@@ -187,14 +187,14 @@ namespace umbriel {
 
     *surface = sceneSurface->surface;
     wlr_scene_tree* tree = node->parent;
-    while (tree != nullptr && tree->node.data == nullptr) {
+    SceneNode* sceneNode = nullptr;
+    while (tree != nullptr && (sceneNode = sceneNodeFrom(tree->node.data)) == nullptr) {
       tree = tree->node.parent;
     }
-    if (tree == nullptr) {
+    if (sceneNode == nullptr) {
       return nullptr;
     }
 
-    auto* sceneNode = static_cast<SceneNode*>(tree->node.data);
     if (sceneNode->kind == SceneNodeKind::LockSurface) {
       return nullptr;
     }

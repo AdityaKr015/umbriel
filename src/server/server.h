@@ -237,6 +237,7 @@ namespace umbriel {
     static void onToplevelCaptureRequest(wl_listener* listener, void* data);
     static void onRendererLost(wl_listener* listener, void* data);
     static int onBackgroundFrameTimer(void* data);
+    static int onTerminateSignal(int signal, void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -371,6 +372,9 @@ namespace umbriel {
     wl_event_source* m_xwaylandExitSource = nullptr;
     wl_event_source* m_xwaylandRespawnTimer = nullptr;
     wl_event_source* m_backgroundFrameTimer = nullptr;
+    // SIGINT / SIGTERM, delivered on the event loop rather than in a signal
+    // handler, so shutdown runs ordinary code instead of async-signal-safe code.
+    wl_event_source* m_signalSources[2]{};
     int m_xwaylandFailures = 0;
     std::chrono::steady_clock::time_point m_xwaylandSpawnTime;
 

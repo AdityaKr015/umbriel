@@ -73,6 +73,17 @@ namespace umbriel {
       return false;
     }
 
+    // Undo everything the compositor did to the process that a child must not
+    // inherit. wl_event_loop_add_signal blocks SIGINT/SIGTERM process-wide, and
+    // a blocked mask survives exec, so without this every spawned application
+    // would silently ignore Ctrl+C and systemd's stop signal.
+    void resetChildSignalState() {
+      std::signal(SIGCHLD, SIG_DFL);
+      sigset_t empty;
+      sigemptyset(&empty);
+      sigprocmask(SIG_SETMASK, &empty, nullptr);
+    }
+
     void applyConfiguredEnvironment() {
       for (const auto& [name, value] : config().environment.variables) {
         if (name.empty()) {
@@ -328,6 +339,12 @@ namespace umbriel {
       wl_event_source_remove(m_backgroundFrameTimer);
       m_backgroundFrameTimer = nullptr;
     }
+    for (wl_event_source*& source : m_signalSources) {
+      if (source != nullptr) {
+        wl_event_source_remove(source);
+        source = nullptr;
+      }
+    }
     if (m_xwaylandPidfd >= 0) {
       close(m_xwaylandPidfd);
     }
@@ -354,6 +371,14 @@ namespace umbriel {
       wlr_log(WLR_ERROR, "failed to start backend");
       return false;
     }
+
+    // These are delivered through the event loop, not a signal handler, so the
+    // shutdown path is ordinary code. Note the side effect: wl_event_loop_add_signal
+    // blocks the signal process-wide, and a blocked mask survives fork and exec,
+    // so every fork below must clear it before handing off to a child.
+    wl_event_loop* loop = wl_display_get_event_loop(m_display);
+    m_signalSources[0] = wl_event_loop_add_signal(loop, SIGINT, onTerminateSignal, this);
+    m_signalSources[1] = wl_event_loop_add_signal(loop, SIGTERM, onTerminateSignal, this);
 
     // Point new clients at us. Drop WAYLAND_SOCKET so children do not keep the
     // parent compositor connection (libwayland prefers it over WAYLAND_DISPLAY).
@@ -436,6 +461,12 @@ namespace umbriel {
     }
   }
 
+  int Server::onTerminateSignal(int signal, void* data) {
+    kLog.info("received signal {}, shutting down", signal);
+    static_cast<Server*>(data)->stop();
+    return 0;
+  }
+
   void Server::run() { wl_display_run(m_display); }
 
   void Server::stop() { wl_display_terminate(m_display); }
@@ -474,7 +505,7 @@ namespace umbriel {
       return;
     }
     if (pid == 0) {
-      std::signal(SIGCHLD, SIG_DFL);
+      resetChildSignalState();
       restoreFileDescriptorLimit();
       setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");
@@ -522,7 +553,7 @@ namespace umbriel {
       return;
     }
     if (pid == 0) {
-      std::signal(SIGCHLD, SIG_DFL);
+      resetChildSignalState();
       restoreFileDescriptorLimit();
       setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");

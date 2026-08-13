@@ -15,11 +15,11 @@ namespace umbriel {
       while (walk != nullptr) {
         if (wlr_xdg_toplevel* toplevel = wlr_xdg_toplevel_try_from_wlr_surface(walk)) {
           auto* tree = static_cast<wlr_scene_tree*>(toplevel->base->data);
-          if (tree == nullptr || tree->node.data == nullptr) {
+          if (tree == nullptr) {
             return nullptr;
           }
-          auto* node = static_cast<SceneNode*>(tree->node.data);
-          if (node->kind != SceneNodeKind::View) {
+          SceneNode* node = sceneNodeFrom(tree->node.data);
+          if (node == nullptr || node->kind != SceneNodeKind::View) {
             return nullptr;
           }
           return static_cast<View*>(node);

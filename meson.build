@@ -179,6 +179,7 @@ umbriel = executable(
 unit_tests = [
   ['output-clip', ['tests/output_clip.cpp'], [wlroots_dep]],
   ['value-parse', ['tests/value_parse.cpp', 'src/config/value_parse.cpp'], []],
+  ['scene-node', ['tests/scene_node.cpp'], []],
   [
     'keybind-parse',
     ['tests/keybind_parse.cpp', 'src/config/keybind_parse.cpp'],

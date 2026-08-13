@@ -160,11 +160,8 @@ namespace umbriel {
   void Output::arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive) {
     wlr_scene_node* node = nullptr;
     wl_list_for_each(node, &tree->children, link) {
-      if (node->data == nullptr) {
-        continue;
-      }
-      auto* sceneNode = static_cast<SceneNode*>(node->data);
-      if (sceneNode->kind != SceneNodeKind::LayerSurface) {
+      SceneNode* sceneNode = sceneNodeFrom(node->data);
+      if (sceneNode == nullptr || sceneNode->kind != SceneNodeKind::LayerSurface) {
         continue;
       }
       auto* layerSurface = static_cast<LayerSurface*>(sceneNode);

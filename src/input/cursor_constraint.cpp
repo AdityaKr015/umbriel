@@ -66,11 +66,11 @@ namespace umbriel {
       return false;
     }
     auto* tree = static_cast<wlr_scene_tree*>(xdg->data);
-    if (tree->node.data == nullptr) {
+    if (tree == nullptr) {
       return false;
     }
-    auto* node = static_cast<SceneNode*>(tree->node.data);
-    if (node->kind != SceneNodeKind::View) {
+    SceneNode* node = sceneNodeFrom(tree->node.data);
+    if (node == nullptr || node->kind != SceneNodeKind::View) {
       return false;
     }
     auto* view = static_cast<View*>(node);

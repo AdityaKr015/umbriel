@@ -54,7 +54,7 @@ namespace umbriel {
 
   nlohmann::json IpcCommands::windows(Server& server, std::string_view /*arg*/) {
     nlohmann::json windows = nlohmann::json::array();
-    for (const auto& v : server.m_views) {
+    for (const auto& v : server.views()) {
       if (!v->mapped()) {
         continue;
       }
@@ -73,7 +73,7 @@ namespace umbriel {
 
   nlohmann::json IpcCommands::layers(Server& server, std::string_view /*arg*/) {
     nlohmann::json layers = nlohmann::json::array();
-    for (const auto& l : server.m_layerSurfaces) {
+    for (const auto& l : server.layerSurfaces()) {
       auto* s = l->layerSurface();
       nlohmann::json entry;
       entry["layer"] = layerName(s->current.layer);

@@ -6,6 +6,7 @@
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
 #include "scene/node.h"
+#include "server/actions.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -241,316 +242,31 @@ namespace umbriel {
     if (error != nullptr) {
       error->clear();
     }
-    auto activeWorkspace = [this]() -> Workspace* {
-      Output* output = outputFromWlr(preferredOutput());
-      if (output == nullptr || output->workspaceGroup() == nullptr) {
-        return nullptr;
-      }
-      return output->workspaceGroup()->active();
-    };
-    auto scratchpadOutput = [this, &bind, error]() -> Output* {
-      if (bind.scratchpadOutput.empty()) {
-        return outputFromWlr(preferredOutput());
-      }
-
-      Output* output = outputFromName(bind.scratchpadOutput);
-      if (output == nullptr) {
-        if (error != nullptr) {
-          *error = "unknown output: " + bind.scratchpadOutput;
-        }
-      }
-      return output;
-    };
-
-    switch (bind.action) {
-    case KeybindAction::None:
+    if (bind.action == KeybindAction::None) {
       return false;
-    case KeybindAction::Spawn:
-      spawn(bind.spawnCommand.c_str());
-      return true;
-    case KeybindAction::WindowClose:
-      if (m_scratchpadManager != nullptr) {
-        if (Output* output = outputFromWlr(preferredOutput())) {
-          if (View* view = m_scratchpadManager->focused(output)) {
-            wlr_xdg_toplevel_send_close(view->toplevel());
-            return true;
-          }
-        }
-      }
-      if (Workspace* workspace = activeWorkspace()) {
-        if (View* view = workspace->focusedView()) {
-          wlr_xdg_toplevel_send_close(view->toplevel());
-        }
-      }
-      return true;
-    case KeybindAction::SessionQuit:
-      stop();
-      return true;
-    case KeybindAction::ConfigReload:
-      handleConfigReload();
-      return true;
-    case KeybindAction::WindowFocusLeft:
-      if (Workspace* workspace = activeWorkspace()) {
-        if (View* target = workspace->focusAdjacent(-1)) {
-          focusView(target, FocusReason::Directional);
-        }
-      }
-      return true;
-    case KeybindAction::WindowFocusRight:
-      if (Workspace* workspace = activeWorkspace()) {
-        if (View* target = workspace->focusAdjacent(1)) {
-          focusView(target, FocusReason::Directional);
-        }
-      }
-      return true;
-    case KeybindAction::WindowFocusUp:
-      if (Workspace* workspace = activeWorkspace()) {
-        if (View* target = workspace->focusVertical(-1)) {
-          focusView(target, FocusReason::Directional);
-        }
-      }
-      return true;
-    case KeybindAction::WindowFocusDown:
-      if (Workspace* workspace = activeWorkspace()) {
-        if (View* target = workspace->focusVertical(1)) {
-          focusView(target, FocusReason::Directional);
-        }
-      }
-      return true;
-    case KeybindAction::ColumnMoveLeft:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->moveFocusedColumn(-1);
-      }
-      return true;
-    case KeybindAction::ColumnMoveRight:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->moveFocusedColumn(1);
-      }
-      return true;
-    case KeybindAction::WindowMoveUp:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->moveFocusedVertical(-1);
-      }
-      return true;
-    case KeybindAction::WindowMoveDown:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->moveFocusedVertical(1);
-      }
-      return true;
-    case KeybindAction::WindowConsumeLeft:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->consumeFocusedLeft();
-      }
-      return true;
-    case KeybindAction::WindowExpelRight:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->expelFocusedRight();
-      }
-      return true;
-    case KeybindAction::WindowCycleWidth:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->cycleFocusedWidth();
-      }
-      return true;
-    case KeybindAction::WindowSetWidth:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->setFocusedWidth(bind.widthFraction);
-      }
-      return true;
-    case KeybindAction::ToggleMaximize:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->toggleFocusedFullWidth();
-      }
-      return true;
-    case KeybindAction::ToggleFullscreen:
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->toggleFocusedFullscreen();
-      }
-      return true;
-    case KeybindAction::ToggleFloating:
-      if (m_scratchpadManager != nullptr && m_scratchpadManager->hasFocus(outputFromWlr(preferredOutput()))) {
-        return true;
-      }
-      if (Workspace* workspace = activeWorkspace()) {
-        workspace->toggleFocusedFloating();
-      }
-      return true;
-    case KeybindAction::TogglePinned:
-      if (m_scratchpadManager != nullptr && m_scratchpadManager->hasFocus(outputFromWlr(preferredOutput()))) {
-        return true;
-      }
-      if (Workspace* workspace = activeWorkspace()) {
-        if (View* view = workspace->focusedView()) {
-          view->togglePinned();
-        }
-      }
-      return true;
-    case KeybindAction::WindowFocusNext:
-      if (m_views.size() >= 2) {
-        for (size_t n = 0; n < m_views.size(); ++n) {
-          auto current = std::move(m_views.front());
-          m_views.erase(m_views.begin());
-          m_views.push_back(std::move(current));
-          if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
-            focusView(m_views.front().get(), FocusReason::Directional);
-            break;
-          }
-        }
-      }
-      return true;
-    case KeybindAction::WorkspaceSwitch:
-    case KeybindAction::WindowMoveToWorkspace: {
-      const auto reject = [error](std::string message) {
-        if (error != nullptr) {
-          *error = std::move(message);
-        }
-        return true;
-      };
-
-      Workspace* target = nullptr;
-      if (!bind.workspaceOutput.empty()) {
-        Output* output = outputFromName(bind.workspaceOutput);
-        if (output == nullptr) {
-          return reject("unknown output: " + bind.workspaceOutput);
-        }
-        WorkspaceGroup* group = output->workspaceGroup();
-        if (group == nullptr) {
-          return reject("output has no workspace group: " + bind.workspaceOutput);
-        }
-        target = group->workspaceForSelector(bind.workspaceName);
-        if (target == nullptr) {
-          return reject("unknown workspace on output " + bind.workspaceOutput + ": " + bind.workspaceName);
-        }
-      } else {
-        Output* preferred = outputFromWlr(preferredOutput());
-        WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
-        // Dynamic numbered workspaces belong to their output. Resolve this
-        // first so an existing number elsewhere cannot steal a local request.
-        const bool numericSelector = !bind.workspaceName.empty()
-            && std::ranges::all_of(bind.workspaceName, [](char value) { return value >= '0' && value <= '9'; });
-        if (preferredGroup != nullptr && preferredGroup->dynamic() && numericSelector) {
-          target = preferredGroup->workspaceForSelector(bind.workspaceName);
-        }
-        if (target == nullptr) {
-          bool ambiguous = false;
-          for (const auto& output : m_outputs) {
-            WorkspaceGroup* group = output->workspaceGroup();
-            Workspace* match = group != nullptr ? group->workspaceNamed(bind.workspaceName) : nullptr;
-            if (match == nullptr) {
-              continue;
-            }
-            if (target != nullptr) {
-              ambiguous = true;
-            } else {
-              target = match;
-            }
-          }
-          if (target == nullptr) {
-            target = preferredGroup != nullptr ? preferredGroup->workspaceForSelector(bind.workspaceName) : nullptr;
-            if (target == nullptr) {
-              return reject("unknown workspace: " + bind.workspaceName);
-            }
-          }
-          if (ambiguous) {
-            Workspace* preferredMatch =
-                preferredGroup != nullptr ? preferredGroup->workspaceNamed(bind.workspaceName) : nullptr;
-            if (preferredMatch == nullptr) {
-              return reject(
-                  "ambiguous workspace: " + bind.workspaceName + " (qualify it as " + bind.workspaceName + "/<output>)"
-              );
-            }
-            target = preferredMatch;
-          }
-        }
-      }
-
-      WorkspaceGroup* group = target->group();
-      if (bind.action == KeybindAction::WindowMoveToWorkspace) {
-        for (const auto& entry : m_views) {
-          if (entry->mapped() && entry->onActiveWorkspace()) {
-            entry->setWorkspace(target);
-            group->activate(target);
-            focusView(entry.get(), FocusReason::Directional);
-            return true;
-          }
-        }
-      }
-      group->select(target);
-      return true;
     }
-    case KeybindAction::LayoutScrollLeft:
-    case KeybindAction::LayoutScrollRight:
-      if (Workspace* workspace = activeWorkspace()) {
-        if (workspace->layoutMode() == LayoutMode::Scrolling && workspace->group()->output() != nullptr) {
-          const auto step = static_cast<double>(config().input.mouse.scrollWheelStep);
-          const double delta = bind.action == KeybindAction::LayoutScrollLeft ? -step : step;
-          // Clamp to the real scroll range: overscroll here would park the strip
-          // past an edge and seed sub-pixel scroll residue.
-          const int viewportWidth =
-              std::max(1, workspace->group()->output()->usableArea().width - 2 * workspace->layoutConfig().edgePad);
-          const auto maxScroll = static_cast<double>(workspace->layout().maxScroll(viewportWidth));
-          workspace->layout().setScroll(std::clamp(workspace->layout().scroll() + delta, 0.0, maxScroll));
-          workspace->arrange();
-        }
-      }
-      return true;
-    case KeybindAction::OverviewToggle:
-      m_overview->toggle();
-      return true;
-    case KeybindAction::OverviewOpen:
-      m_overview->open();
-      return true;
-    case KeybindAction::OverviewClose:
-      m_overview->close();
-      return true;
-    case KeybindAction::CheatsheetToggle:
-      if (m_cheatsheet != nullptr) {
-        m_cheatsheet->toggle();
-      }
-      return true;
-    case KeybindAction::CheatsheetOpen:
-      if (m_cheatsheet != nullptr) {
-        m_cheatsheet->show();
-      }
-      return true;
-    case KeybindAction::CheatsheetClose:
-      if (m_cheatsheet != nullptr) {
-        m_cheatsheet->hide();
-      }
-      return true;
-    case KeybindAction::WindowMoveToScratchpad:
-      if (Output* output = scratchpadOutput()) {
-        Workspace* workspace = activeWorkspace();
-        return m_scratchpadManager != nullptr
-            && workspace != nullptr
-            && m_scratchpadManager->moveToScratchpad(workspace->focusedView(), output);
+    const ActionHandlerFn handler = actionHandlerFor(bind.action);
+    if (handler == nullptr) {
+      if (error != nullptr) {
+        *error = "action has no handler";
       }
       return false;
-    case KeybindAction::ScratchpadToggle:
-      if (Output* output = scratchpadOutput()) {
-        return m_scratchpadManager != nullptr && m_scratchpadManager->toggle(output);
-      }
+    }
+    return handler(*this, bind, error);
+  }
+
+  bool Server::focusNextWindow() {
+    if (m_views.size() < 2) {
       return false;
-    case KeybindAction::WindowRestoreFromScratchpad:
-      if (Output* output = scratchpadOutput()) {
-        return m_scratchpadManager != nullptr && m_scratchpadManager->restoreFocused(output);
+    }
+    for (size_t n = 0; n < m_views.size(); ++n) {
+      auto current = std::move(m_views.front());
+      m_views.erase(m_views.begin());
+      m_views.push_back(std::move(current));
+      if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
+        focusView(m_views.front().get(), FocusReason::Directional);
+        return true;
       }
-      return false;
-    case KeybindAction::ScratchpadFocusNext:
-      if (Output* output = scratchpadOutput()) {
-        return m_scratchpadManager != nullptr && m_scratchpadManager->focusNext(output);
-      }
-      return false;
-    case KeybindAction::Submap:
-      if (bind.spawnCommand == "reset" || bind.spawnCommand == "disable") {
-        if (m_activeSubmaps.empty()) {
-          return false;
-        }
-        popSubmap();
-      } else {
-        pushSubmap(bind.spawnCommand);
-      }
-      return true;
     }
     return false;
   }

@@ -623,7 +623,7 @@ namespace umbriel {
 
   void Overview::buildState() {
     m_tree = m_server->overviewTree();
-    for (const auto& output : m_server->m_outputs) {
+    for (const auto& output : m_server->outputs()) {
       WorkspaceGroup* group = output->workspaceGroup();
       if (group == nullptr || group->workspaceCount() == 0) {
         continue;
@@ -661,7 +661,7 @@ namespace umbriel {
       return false;
     }
     m_server->cursor()->resetMode();
-    for (const auto& output : m_server->m_outputs) {
+    for (const auto& output : m_server->outputs()) {
       WorkspaceGroup* group = output->workspaceGroup();
       if (group == nullptr) {
         continue;
@@ -808,7 +808,7 @@ namespace umbriel {
     teardown();
     // Real trees are visible again: settle each active workspace so window
     // positions match where the cards landed.
-    for (const auto& output : m_server->m_outputs) {
+    for (const auto& output : m_server->outputs()) {
       if (WorkspaceGroup* group = output->workspaceGroup()) {
         if (Workspace* workspace = group->active()) {
           workspace->arrange(false);

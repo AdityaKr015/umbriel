@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <sys/types.h>
 #include <utility>
@@ -91,7 +92,6 @@ namespace umbriel {
   class ConfigBanner;
   class Cheatsheet;
   class Ipc;
-  struct IpcCommands;
 
   class Server {
   public:
@@ -149,6 +149,9 @@ namespace umbriel {
       static const std::string empty;
       return m_activeSubmaps.empty() ? empty : m_activeSubmaps.back();
     }
+    // Distinct from activeSubmap(): the stack can hold an entry whose name is
+    // empty, and the submap-reset action keys off depth, not the name.
+    [[nodiscard]] bool inSubmap() const { return !m_activeSubmaps.empty(); }
     void pushSubmap(const std::string& name);
     void popSubmap();
     [[nodiscard]] wlr_foreign_toplevel_manager_v1* foreignToplevelManager() const { return m_foreignToplevelManager; }
@@ -162,6 +165,22 @@ namespace umbriel {
     [[nodiscard]] Gestures* gestures() const { return m_gestures.get(); }
     [[nodiscard]] bool nested() const { return m_nested; }
     [[nodiscard]] uint32_t modKey() const;
+
+    // Read-only iteration over the registries. These replace the friend list:
+    // callers can walk the registry without reaching into Server's internals or
+    // being able to add to and remove from it.
+    [[nodiscard]] std::span<const std::unique_ptr<Output>> outputs() const { return m_outputs; }
+    [[nodiscard]] std::span<const std::unique_ptr<View>> views() const { return m_views; }
+    [[nodiscard]] std::span<const std::unique_ptr<LayerSurface>> layerSurfaces() const { return m_layerSurfaces; }
+
+    // Runs a parsed action. Shared by the keybind path and the IPC `msg` command.
+    bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);
+    void relayoutBanner();
+    void spawn(const char* command);
+    void handleConfigReload();
+    // Rotate the view registry until the front is a mapped view on the active
+    // workspace, and focus it. Repeated calls walk the list.
+    bool focusNextWindow();
 
     void focusView(View* view, FocusReason reason = FocusReason::Startup);
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr);
@@ -197,18 +216,6 @@ namespace umbriel {
     );
 
   private:
-    friend class Output;
-    friend class Keyboard;
-    friend class Cursor;
-    friend class View;
-    friend class Seat;
-    friend class LayerSurface;
-    friend class SessionLock;
-    friend class LockSurface;
-    friend class Ipc;
-    friend struct IpcCommands;
-    friend class Overview;
-
     static void onNewOutput(wl_listener* listener, void* data);
     static void onNewInput(wl_listener* listener, void* data);
     static void onNewXdgToplevel(wl_listener* listener, void* data);
@@ -244,14 +251,10 @@ namespace umbriel {
     void addPointer(wlr_input_device* device);
     void addTouch(wlr_input_device* device);
     void updateSeatCapabilities();
-    void spawn(const char* command);
     void beginSessionLock(wlr_session_lock_v1* lock);
     void recreateRenderer();
     void applyConfig();
-    void handleConfigReload();
-    bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);
     void showConfigDiagnostics();
-    void relayoutBanner();
     void relayoutCheatsheet();
     void clearNormalFocus();
     void setLockBlankEnabled(bool enabled);

@@ -124,6 +124,7 @@ sources = files(
   'src/server/server.cpp',
   'src/server/server_events.cpp',
   'src/server/server_focus.cpp',
+  'src/server/actions.cpp',
   'src/output/output.cpp',
   'src/input/seat.cpp',
   'src/input/keyboard.cpp',

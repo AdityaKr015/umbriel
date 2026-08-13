@@ -18,16 +18,24 @@ namespace umbriel {
     // Layer-shell surfaces set exclusive zones, which is what defines the usable
     // area. Everything below depends on the result, so this runs first.
     LayerArrange = 1U << 0,
-    // Tiles within the usable area.
-    Layout = 1U << 1,
     // Chrome that sits over the layout: the config-error banner, the desktop
     // backdrop, the keybind cheatsheet.
-    Banner = 1U << 2,
-    Backdrop = 1U << 3,
-    Cheatsheet = 1U << 4,
+    Banner = 1U << 1,
+    Backdrop = 1U << 2,
+    Cheatsheet = 1U << 3,
   };
 
-  // Deliberately not here: the session-lock blanking rect. Everything above can
+  // Not here yet: the tile layout. `Workspace::arrange` calls are still direct,
+  // because deferring them is a behavioural change rather than a move. It runs
+  // for hidden workspaces too (a client can change fullscreen state while
+  // another workspace is active, and skipping the configure leaves it the wrong
+  // size), so the bit would have to live on Workspace and the flush would have to
+  // walk the whole group. It takes an `animate` flag that gestures and
+  // animations set differently, so coalescing two marks in one frame needs a
+  // rule. And some callers read the arranged result immediately — removeView
+  // arranges, then reconciles, then hands back a view for the caller to focus.
+  //
+  // Deliberately not here at all: the session-lock blanking rect. Everything above can
   // be a frame late without consequence; that cannot. It covers the desktop while
   // the session is locked, so deferring it past a mode or output change would
   // show a sliver of what the lock exists to hide. It stays an immediate call.

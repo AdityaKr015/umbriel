@@ -18,6 +18,7 @@
 
 namespace {
 
+  using umbriel::balancedColumnHeight;
   using umbriel::CheatsheetRow;
   using umbriel::Group;
   using umbriel::groupForAction;
@@ -32,6 +33,11 @@ namespace {
   constexpr int kBodyFooterGap = 12;
   constexpr int kColumnMaxWidth = 600;
   constexpr int kMaxColumns = 4;
+  // Body font sizes, largest first. Dropping a point costs legibility on every
+  // line, so it is a last resort: only reached once every column count has been
+  // tried and the panel still does not fit. 9 is the floor because below it the
+  // chord pills stop being readable at arm's length, which is the whole job.
+  constexpr int kFontSizes[] = {11, 10, 9};
   constexpr float kPanelColor[] = {0.078F, 0.078F, 0.098F, 0.94F};
 
   // --- Chord reconstruction helpers ---
@@ -224,74 +230,80 @@ namespace {
   }
 
   // Pack the lines into `numCols` columns of markup, breaking only between groups.
-  std::vector<std::string> layoutColumns(const std::vector<DisplayLine>& allLines, int numCols) {
-    const int lineCount = static_cast<int>(allLines.size());
-    const int linesPerCol = (lineCount + numCols - 1) / numCols;
-    std::vector<std::string> columns;
+  // A run of lines that has to stay together: one group, plus the blank spacer
+  // that precedes it. A group broken across a column break reads as two
+  // unrelated fragments, so these are the atoms and the only freedom in the
+  // layout is where the breaks between them go.
+  struct Block {
+    int begin = 0;
+    int size = 0;
+  };
 
-    // Collect group boundary indices (first line of each group).
-    std::vector<int> groupStarts;
-    if (lineCount > 0) {
-      groupStarts.push_back(0);
-      for (int i = 1; i < lineCount; ++i) {
-        if (allLines[static_cast<size_t>(i)].group != allLines[static_cast<size_t>(i - 1)].group) {
-          groupStarts.push_back(i);
-        }
+  std::vector<Block> groupBlocks(const std::vector<DisplayLine>& lines) {
+    std::vector<Block> blocks;
+    for (int i = 0; i < static_cast<int>(lines.size()); ++i) {
+      const auto index = static_cast<size_t>(i);
+      if (blocks.empty() || lines[index].group != lines[index - 1].group) {
+        blocks.push_back({.begin = i, .size = 0});
       }
+      ++blocks.back().size;
     }
+    return blocks;
+  }
 
-    int pos = 0;
-    for (int col = 0; col < numCols && pos < lineCount; ++col) {
-      std::string markup;
-      int colEnd = std::min(pos + linesPerCol, lineCount);
+  std::vector<std::string> layoutColumns(const std::vector<DisplayLine>& allLines, int numCols) {
+    const std::vector<Block> blocks = groupBlocks(allLines);
+    if (blocks.empty()) {
+      return {};
+    }
+    std::vector<int> blockSizes;
+    blockSizes.reserve(blocks.size());
+    for (const Block& block : blocks) {
+      blockSizes.push_back(block.size);
+    }
+    const int limit = balancedColumnHeight(blockSizes, numCols);
 
-      // Snap colEnd back to the nearest group boundary so no group is split.
-      if (colEnd < lineCount) {
-        // Find the largest group start <= colEnd.
-        auto it = std::ranges::upper_bound(groupStarts, colEnd);
-        if (it != groupStarts.begin()) {
-          --it;
-          // Only pull back if it doesn't collapse the column to nothing.
-          if (*it > pos) {
-            colEnd = *it;
-          }
-        }
+    std::vector<std::string> columns;
+    std::string markup;
+    int used = 0;
+    for (const Block& block : blocks) {
+      if (used > 0 && used + block.size > limit) {
+        columns.push_back(std::move(markup));
+        markup.clear();
+        used = 0;
       }
-
-      for (int i = pos; i < colEnd; ++i) {
-        if (i > pos) {
+      for (int i = block.begin; i < block.begin + block.size; ++i) {
+        const std::string& text = allLines[static_cast<size_t>(i)].text;
+        // The spacer before a group is there to separate it from the group
+        // above. At the top of a column there is nothing above, and keeping it
+        // would indent that column's first heading below its neighbours'.
+        if (markup.empty() && text.empty()) {
+          continue;
+        }
+        if (!markup.empty()) {
           markup += '\n';
         }
-        markup += allLines[static_cast<size_t>(i)].text;
+        markup += text;
       }
-      if (!markup.empty()) {
-        columns.push_back(std::move(markup));
-      }
-      pos = colEnd;
+      used += block.size;
     }
-
-    // Remaining lines go into the last column.
-    if (pos < lineCount && !columns.empty()) {
-      auto& last = columns.back();
-      for (int i = pos; i < lineCount; ++i) {
-        last += '\n';
-        last += allLines[static_cast<size_t>(i)].text;
-      }
+    if (!markup.empty()) {
+      columns.push_back(std::move(markup));
     }
-
     return columns;
   }
 
   // Lay the columns out and rasterise each, returning the buffers and the tallest.
   std::pair<std::vector<umbriel::TextBufferResult>, int>
-  renderColumns(const std::vector<DisplayLine>& allLines, int cols, double scale) {
+  renderColumns(const std::vector<DisplayLine>& allLines, int cols, double scale, int fontSize) {
     auto colMarkups = layoutColumns(allLines, cols);
+    const std::string font = std::format("monospace {}", fontSize);
     std::vector<TextBufferResult> buffers;
     int maxH = 0;
     for (auto& markup : colMarkups) {
       TextBufferResult buf = renderTextBuffer({
           .markup = std::move(markup),
-          .font = "monospace 11",
+          .font = font,
           .maxWidth = kColumnMaxWidth,
           .padding = 0,
           .scale = scale,
@@ -345,23 +357,69 @@ namespace {
     int totalHeight = 0;
   };
 
-  // Rasterise the body at `cols` columns; if the resulting panel would overflow
-  // `maxHeight`, widen by one column and try again. Buffers from a rejected
-  // attempt are dropped rather than leaked into the scene.
+  void dropBuffers(std::vector<umbriel::TextBufferResult>& buffers) {
+    for (auto& buf : buffers) {
+      if (buf.buffer != nullptr) {
+        wlr_buffer_drop(buf.buffer);
+        buf.buffer = nullptr;
+      }
+    }
+  }
+
+  // Rasterise the body, adding columns until the panel fits.
+  //
+  // The two bounds pull opposite ways: another column is always shorter and
+  // always wider. The height bound is what makes the loop advance, the width
+  // bound is what stops it, and the answer is the narrowest arrangement that
+  // clears both. Shrinking the font is the outer, later lever, because it costs
+  // legibility everywhere while a column costs only width. Buffers from a
+  // rejected attempt are dropped rather than leaked.
+  //
+  // Checking width at all is the point. This used to bound height only, and its
+  // remedy for an overflowing panel was to add a column -- which is the very
+  // thing that makes it too wide. On a 1080p screen at scale 1.25 that walked
+  // out to four columns and 1862 logical pixels across an output 1536 wide, and
+  // the panel was then centred to a negative x, putting the first column off
+  // the left edge.
+  //
+  // A loop rather than the single retry this replaces, which gave up after one
+  // widening and returned the overflowing result anyway. It starts at one
+  // column instead of guessing from a lines-per-column constant that knew
+  // nothing about the output: the guess cost a rasterisation when it was wrong
+  // in either direction, and being wrong low was silently unrecoverable.
+  int bodyWidth(const std::vector<umbriel::TextBufferResult>& columns) {
+    int width = 0;
+    for (size_t i = 0; i < columns.size(); ++i) {
+      width += columns[i].logicalWidth;
+      if (i + 1 < columns.size()) {
+        width += kColumnGap;
+      }
+    }
+    return width;
+  }
+
   FittedBody
-  fitBody(const std::vector<DisplayLine>& allLines, int cols, double scale, int chromeHeight, int maxHeight) {
-    auto [buffers, maxColH] = renderColumns(allLines, cols, scale);
-    int totalH = chromeHeight + maxColH;
-    if (totalH > maxHeight && cols < kMaxColumns) {
-      for (auto& buf : buffers) {
-        if (buf.buffer != nullptr) {
-          wlr_buffer_drop(buf.buffer);
+  fitBody(const std::vector<DisplayLine>& allLines, double scale, int chromeHeight, int maxHeight, int maxBodyWidth) {
+    FittedBody best;
+    for (const int fontSize : kFontSizes) {
+      for (int cols = 1; cols <= kMaxColumns; ++cols) {
+        auto [buffers, maxColH] = renderColumns(allLines, cols, scale, fontSize);
+        // Past the width bound, and every further column is wider still. The
+        // only thing left to try is a smaller font.
+        if (!best.columns.empty() && bodyWidth(buffers) > maxBodyWidth) {
+          dropBuffers(buffers);
+          break;
+        }
+        dropBuffers(best.columns);
+        best = {.columns = std::move(buffers), .maxColumnHeight = maxColH, .totalHeight = chromeHeight + maxColH};
+        if (best.totalHeight <= maxHeight) {
+          return best;
         }
       }
-      std::tie(buffers, maxColH) = renderColumns(allLines, std::min(cols + 1, kMaxColumns), scale);
-      totalH = chromeHeight + maxColH;
     }
-    return {.columns = std::move(buffers), .maxColumnHeight = maxColH, .totalHeight = totalH};
+    // Nothing fit. `best` is the last thing tried: the smallest font at the
+    // widest column count the output allows, which is the shortest of them.
+    return best;
   }
 
 } // namespace
@@ -450,9 +508,6 @@ namespace umbriel {
 
     // --- Step 4: Column layout ---
 
-    int lineCount = static_cast<int>(allLines.size());
-    int numCols = std::clamp((lineCount + 17) / 18, 1, 3);
-
     // --- Step 5: Header/footer buffers ---
     Chrome chrome = renderChrome(configFileMissing(), m_server.nested(), scale);
     TextBufferResult& titleBuf = chrome.title;
@@ -462,7 +517,10 @@ namespace umbriel {
     const int chromeHeight =
         titleBuf.logicalHeight + kTitleBodyGap + kBodyFooterGap + footerBuf.logicalHeight + 2 * kPad;
     const int maxPanelHeight = haveOutput ? outputBox.height - 120 : std::numeric_limits<int>::max();
-    FittedBody body = fitBody(allLines, numCols, scale, chromeHeight, maxPanelHeight);
+    // The body gets the output less the panel's own padding: what has to fit on
+    // screen is the panel, not the text inside it.
+    const int maxBodyWidth = haveOutput ? outputBox.width - 2 * kPad : std::numeric_limits<int>::max();
+    FittedBody body = fitBody(allLines, scale, chromeHeight, maxPanelHeight, maxBodyWidth);
     auto& colBufs = body.columns;
 
     // --- Step 6: Panel assembly ---
@@ -517,8 +575,13 @@ namespace umbriel {
 
     // Position: centered on preferred output.
     if (haveOutput) {
-      int x = outputBox.x + (outputBox.width - panelW) / 2;
-      int y = outputBox.y + (outputBox.height - panelH) / 2;
+      // Clamped, not just centred. A panel taller or wider than the output
+      // centres to a negative offset, which pushes the title off the top edge
+      // and the footer off the bottom with no way to reach either. Pinning the
+      // top-left corner instead keeps the beginning of the list readable, which
+      // is the part worth keeping when something has to be lost.
+      const int x = outputBox.x + std::max(0, (outputBox.width - panelW) / 2);
+      const int y = outputBox.y + std::max(0, (outputBox.height - panelH) / 2);
       wlr_scene_node_set_position(&m_tree->node, x, y);
     } else {
       wlr_scene_node_set_position(&m_tree->node, 24, 24);

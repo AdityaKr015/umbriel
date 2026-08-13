@@ -222,7 +222,7 @@ namespace {
     case Group::Focus:
       return "Focus";
     case Group::MoveSize:
-      return "Move &amp; size";
+      return "Move & size";
     case Group::Windows:
       return "Windows";
     case Group::Workspaces:
@@ -306,6 +306,38 @@ namespace {
 } // namespace
 
 namespace umbriel {
+
+  int columnsNeededFor(std::span<const int> blockSizes, int limit) {
+    int columns = 1;
+    int used = 0;
+    for (const int size : blockSizes) {
+      if (used > 0 && used + size > limit) {
+        ++columns;
+        used = 0;
+      }
+      used += size;
+    }
+    return columns;
+  }
+
+  int balancedColumnHeight(std::span<const int> blockSizes, int numCols) {
+    int low = 0;
+    int high = 0;
+    for (const int size : blockSizes) {
+      low = std::max(low, size);
+      high += size;
+    }
+    const int columns = std::max(1, numCols);
+    while (low < high) {
+      const int mid = low + (high - low) / 2;
+      if (columnsNeededFor(blockSizes, mid) <= columns) {
+        high = mid;
+      } else {
+        low = mid + 1;
+      }
+    }
+    return low;
+  }
 
   const char* groupTitle(Group group) { return groupTitleImpl(group); }
 

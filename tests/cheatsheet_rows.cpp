@@ -183,6 +183,22 @@ UMBRIEL_TEST(submapBindsCarryTheirSubmap) {
   CHECK(haveSubmap);
 }
 
+UMBRIEL_TEST(groupTitlesArePlainTextNotMarkup) {
+  // This layer is content; escaping belongs to whatever draws it. A title
+  // carrying its own entities gets escaped a second time and the reader sees
+  // the entity: "Move &amp; size" was rendered exactly like that.
+  for (int i = 0; i < 32; ++i) {
+    const char* title = umbriel::groupTitle(static_cast<umbriel::Group>(i));
+    if (title == nullptr) {
+      continue;
+    }
+    const std::string_view text(title);
+    CHECK(!text.contains("&amp;"));
+    CHECK(!text.contains('<'));
+    CHECK(!text.contains('>'));
+  }
+}
+
 UMBRIEL_TEST(everyActionMapsToAGroupWithATitle) {
   // groupForAction has no default arm to fall through to, so a new action that
   // is never grouped would show up here.
@@ -192,6 +208,65 @@ UMBRIEL_TEST(everyActionMapsToAGroupWithATitle) {
     CHECK(title != nullptr);
     CHECK(title != nullptr && title[0] != '\0');
   }
+}
+
+// ---- column packing ----
+//
+// Groups are indivisible, so the panel is as tall as the tallest column and the
+// only lever is where the breaks fall. These pin that the split is the best one
+// available rather than a plausible one.
+
+UMBRIEL_TEST(oneColumnHoldsEverything) {
+  const std::vector<int> blocks{4, 9, 2};
+  CHECK_EQ(umbriel::balancedColumnHeight(blocks, 1), 15);
+}
+
+UMBRIEL_TEST(anEvenSplitIsFound) {
+  const std::vector<int> blocks{5, 5, 5, 5};
+  CHECK_EQ(umbriel::balancedColumnHeight(blocks, 2), 10);
+}
+
+UMBRIEL_TEST(noColumnIsShorterThanItsLargestGroup) {
+  // 20 cannot be split, so no number of columns gets the tallest below it.
+  const std::vector<int> blocks{2, 20, 2};
+  CHECK_EQ(umbriel::balancedColumnHeight(blocks, 3), 20);
+  CHECK_EQ(umbriel::balancedColumnHeight(blocks, 99), 20);
+}
+
+UMBRIEL_TEST(aShortGroupLetsItsNeighbourShareTheColumn) {
+  // The naive lineCount/numCols target is 22/2 = 11, and snapping back to a
+  // group boundary would cut the first column at 10 and leave 12 in the second.
+  // Packing 10 + 2 together is better, and is what this must find.
+  const std::vector<int> blocks{10, 2, 10};
+  CHECK_EQ(umbriel::balancedColumnHeight(blocks, 2), 12);
+}
+
+UMBRIEL_TEST(moreColumnsAreNeverTaller) {
+  const std::vector<int> blocks{3, 7, 2, 8, 4, 6, 1};
+  int previous = umbriel::balancedColumnHeight(blocks, 1);
+  for (int columns = 2; columns <= 8; ++columns) {
+    const int height = umbriel::balancedColumnHeight(blocks, columns);
+    CHECK(height <= previous);
+    previous = height;
+  }
+}
+
+UMBRIEL_TEST(theAnswerIsActuallyAchievable) {
+  // A height nobody can pack into is not an answer: the optimum must be
+  // reachable, and one line less must not be.
+  const std::vector<int> blocks{3, 7, 2, 8, 4, 6, 1};
+  const int height = umbriel::balancedColumnHeight(blocks, 3);
+  CHECK(umbriel::columnsNeededFor(blocks, height) <= 3);
+  CHECK(umbriel::columnsNeededFor(blocks, height - 1) > 3);
+}
+
+UMBRIEL_TEST(degenerateInputsAreSafe) {
+  const std::vector<int> empty;
+  CHECK_EQ(umbriel::balancedColumnHeight(empty, 3), 0);
+  const std::vector<int> blocks{5, 5};
+  // Nonsense column counts fall back to one column rather than dividing by it.
+  CHECK_EQ(umbriel::balancedColumnHeight(blocks, 0), 10);
+  CHECK_EQ(umbriel::balancedColumnHeight(blocks, -3), 10);
 }
 
 int main() { return RUN_TESTS(); }

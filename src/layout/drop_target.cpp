@@ -22,6 +22,7 @@ namespace umbriel {
     constexpr int kColumnHintWidth = 300;
     constexpr int kRowHintEdgeHeight = 150;
     constexpr int kRowHintMidHeight = 300;
+    constexpr int kScrollingEdgeDropWidth = 32;
 
     struct ScrollingTarget {
       int column = 0;
@@ -161,6 +162,9 @@ namespace umbriel {
       }
       return result;
     }
+    bool atScrollingRightEdge(const wlr_box& usable, double worldX) {
+      return worldX >= static_cast<double>(usable.x + usable.width - kScrollingEdgeDropWidth);
+    }
 
     ScrollingTarget computeScrollingTarget(
         const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, double scroll, double worldX,
@@ -170,6 +174,13 @@ namespace umbriel {
       const int totalGap = workspace.layoutConfig().totalGap;
       const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
       const int columnCount = static_cast<int>(layout.columns().size());
+      // The strip may extend far beyond the viewport, making its final
+      // layout-space gap unreachable. Reserve the output's extreme right edge
+      // as a stable append target regardless of the current scroll offset.
+      if (columnCount > 0 && layout.maxScroll(viewportWidth) > 0 && atScrollingRightEdge(usable, worldX)) {
+        return {.column = columnCount, .row = -1};
+      }
+
       const double layoutX = worldX - usable.x - edgePad + scroll;
 
       for (int columnIndex = 0; columnIndex < columnCount; ++columnIndex) {
@@ -254,8 +265,18 @@ namespace umbriel {
       const ScrollingTarget target = computeScrollingTarget(workspace, layout, usable, scroll, worldX, worldY);
       result.column = target.column;
       result.row = target.row;
-      result.hintBox = target.row >= 0 ? stackHintBox(workspace, layout, usable, target.column, target.row, scroll)
-                                       : columnHintBox(workspace, layout, usable, target.column, scroll);
+      if (target.row >= 0) {
+        result.hintBox = stackHintBox(workspace, layout, usable, target.column, target.row, scroll);
+      } else if (target.column == static_cast<int>(layout.columns().size()) && atScrollingRightEdge(usable, worldX)) {
+        result.hintBox = {
+            .x = usable.x + usable.width - kColumnHintWidth,
+            .y = usable.y + workspace.layoutConfig().edgePad,
+            .width = kColumnHintWidth,
+            .height = std::max(1, usable.height - 2 * workspace.layoutConfig().edgePad),
+        };
+      } else {
+        result.hintBox = columnHintBox(workspace, layout, usable, target.column, scroll);
+      }
     } else {
       result.column = static_cast<int>(workspace.layout().columns().size());
     }

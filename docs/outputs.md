@@ -54,6 +54,10 @@ scale = 1.0
 workspaces = ["CHAT", "STATS"]
 ```
 
+Tiled windows are clipped to the logical bounds of their owning output.
+Partially visible scrolling columns do not render onto adjacent outputs,
+including when either output uses fractional scaling.
+
 ## Machine-specific overrides
 
 A common pattern is to keep output configuration in a separate per-machine

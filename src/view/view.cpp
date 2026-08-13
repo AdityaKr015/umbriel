@@ -9,6 +9,7 @@
 #include "overview/overview.h"
 #include "scene/color.h"
 #include "server/server.h"
+#include "view/output_clip.h"
 #include "view/xdg_size.h"
 // clang-format off
 #include <algorithm>
@@ -1428,20 +1429,8 @@ namespace umbriel {
     const bool contentOnOutput = wlr_box_intersection(&contentVisible, &content, &outputBox);
     const bool decoratedFullyVisible = wlr_box_equal(&decoratedVisible, &decorated);
     if (contentOnOutput) {
-      wlr_box surfaceClip{
-          .x = geometry.x + contentVisible.x - content.x - m_fullscreenOffsetX,
-          .y = geometry.y + contentVisible.y - content.y - m_fullscreenOffsetY,
-          .width = contentVisible.width,
-          .height = contentVisible.height,
-      };
-      // SceneFX is happier with even clip edges near output boundaries.
-      if ((surfaceClip.x & 1) != 0) {
-        --surfaceClip.x;
-        ++surfaceClip.width;
-      }
-      if ((surfaceClip.width & 1) != 0) {
-        ++surfaceClip.width;
-      }
+      const wlr_box surfaceClip =
+          surfaceClipForOutput(geometry, content, contentVisible, m_fullscreenOffsetX, m_fullscreenOffsetY);
       // Crop the toplevel surface to the visible tile; popup children are unclipped in
       // setSurfaceTreeClip so context menus can extend past the window edge.
       setSurfaceTreeClip(&surfaceClip);

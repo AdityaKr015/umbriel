@@ -170,6 +170,14 @@ umbriel = executable(
   install: true,
 )
 
+output_clip_test = executable(
+  'output-clip-test',
+  'tests/output_clip.cpp',
+  include_directories: include_directories('src'),
+  dependencies: wlroots_dep,
+)
+test('output clip', output_clip_test)
+
 install_data(
   'data/umbriel.desktop',
   install_dir: get_option('datadir') / 'wayland-sessions',

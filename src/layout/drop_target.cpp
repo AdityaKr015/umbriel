@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "layout/dwindle.h"
 #include "layout/layout.h"
+#include "layout/scrolling.h"
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -34,7 +35,9 @@ namespace umbriel {
       wlr_box hint{};
     };
 
-    wlr_box columnHintBox(const Workspace& workspace, const wlr_box& usable, int gapIndex, double scroll) {
+    wlr_box columnHintBox(
+        const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, int gapIndex, double scroll
+    ) {
       const int edgePad = workspace.layoutConfig().edgePad;
       const int gap = workspace.layoutConfig().totalGap;
       const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
@@ -47,11 +50,10 @@ namespace umbriel {
       } else if (clampedGap <= 0) {
         hintX = 0;
       } else if (clampedGap >= columnCount) {
-        hintX = workspace.layout().columnX(columnCount - 1, viewportWidth)
-            + workspace.layout().columnWidth(columnCount - 1, viewportWidth)
-            + gap;
+        hintX =
+            layout.columnX(columnCount - 1, viewportWidth) + layout.columnWidth(columnCount - 1, viewportWidth) + gap;
       } else {
-        hintX = workspace.layout().columnX(clampedGap, viewportWidth) - gap / 2 - kColumnHintWidth / 2;
+        hintX = layout.columnX(clampedGap, viewportWidth) - gap / 2 - kColumnHintWidth / 2;
       }
 
       return {
@@ -62,8 +64,10 @@ namespace umbriel {
       };
     }
 
-    wlr_box
-    stackHintBox(const Workspace& workspace, const wlr_box& usable, int columnIndex, int rowIndex, double scroll) {
+    wlr_box stackHintBox(
+        const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, int columnIndex, int rowIndex,
+        double scroll
+    ) {
       if (columnIndex < 0 || columnIndex >= static_cast<int>(workspace.layout().columns().size())) {
         return {};
       }
@@ -89,12 +93,9 @@ namespace umbriel {
       }
 
       return {
-          .x = usable.x
-              + edgePad
-              + workspace.layout().columnX(columnIndex, viewportWidth)
-              - static_cast<int>(std::lround(scroll)),
+          .x = usable.x + edgePad + layout.columnX(columnIndex, viewportWidth) - static_cast<int>(std::lround(scroll)),
           .y = hintY,
-          .width = workspace.layout().columnWidth(columnIndex, viewportWidth),
+          .width = layout.columnWidth(columnIndex, viewportWidth),
           .height = hintHeight,
       };
     }
@@ -162,9 +163,9 @@ namespace umbriel {
     }
 
     ScrollingTarget computeScrollingTarget(
-        const Workspace& workspace, const wlr_box& usable, double scroll, double worldX, double worldY
+        const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, double scroll, double worldX,
+        double worldY
     ) {
-      const Layout& layout = workspace.layout();
       const int edgePad = workspace.layoutConfig().edgePad;
       const int totalGap = workspace.layoutConfig().totalGap;
       const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
@@ -208,8 +209,7 @@ namespace umbriel {
     }
   } // namespace
 
-  DropTarget
-  computeDropTarget(Workspace& workspace, double scroll, double worldX, double worldY, const View* excludedView) {
+  DropTarget computeDropTarget(Workspace& workspace, double worldX, double worldY, const View* excludedView) {
     DropTarget result{.workspace = &workspace};
     if (workspace.group() == nullptr || workspace.group()->output() == nullptr) {
       return result;
@@ -219,25 +219,24 @@ namespace umbriel {
       return result;
     }
 
-    if (workspace.layoutMode() == LayoutMode::Dwindle) {
-      auto* dwindle = dynamic_cast<DwindleLayout*>(&workspace.layout());
-      if (dwindle != nullptr) {
-        const DwindleTarget target = computeDwindleTarget(*dwindle, worldX, worldY, excludedView);
-        result.column = target.leaf >= 0 ? target.leaf : static_cast<int>(workspace.layout().columns().size());
-        result.view = target.view;
-        result.edge = target.edge;
-        if (target.view != nullptr && target.edge != 0) {
-          result.hintBox = target.hint;
-        }
-      } else {
-        result.column = static_cast<int>(workspace.layout().columns().size());
+    // Layout mode is a genuine policy fork here, not a capability check: the two
+    // layouts want different drop targets and different hint shapes.
+    if (DwindleLayout* dwindle = workspace.dwindleLayout()) {
+      const DwindleTarget target = computeDwindleTarget(*dwindle, worldX, worldY, excludedView);
+      result.column = target.leaf >= 0 ? target.leaf : static_cast<int>(workspace.layout().columns().size());
+      result.view = target.view;
+      result.edge = target.edge;
+      if (target.view != nullptr && target.edge != 0) {
+        result.hintBox = target.hint;
       }
-    } else if (workspace.layoutMode() == LayoutMode::Scrolling) {
-      const ScrollingTarget target = computeScrollingTarget(workspace, usable, scroll, worldX, worldY);
+    } else if (const ScrollingLayout* scrolling = workspace.scrollingLayout()) {
+      const ScrollingLayout& layout = *scrolling;
+      const double scroll = layout.scroll();
+      const ScrollingTarget target = computeScrollingTarget(workspace, layout, usable, scroll, worldX, worldY);
       result.column = target.column;
       result.row = target.row;
-      result.hintBox = target.row >= 0 ? stackHintBox(workspace, usable, target.column, target.row, scroll)
-                                       : columnHintBox(workspace, usable, target.column, scroll);
+      result.hintBox = target.row >= 0 ? stackHintBox(workspace, layout, usable, target.column, target.row, scroll)
+                                       : columnHintBox(workspace, layout, usable, target.column, scroll);
     } else {
       result.column = static_cast<int>(workspace.layout().columns().size());
     }
@@ -253,27 +252,27 @@ namespace umbriel {
     if (server.scratchpadManager() != nullptr && server.scratchpadManager()->contains(&view)) {
       return;
     }
-    if (target.layoutMode() == LayoutMode::Dwindle) {
-      if (auto* dwindle = dynamic_cast<DwindleLayout*>(&target.layout())) {
-        const bool splitDrop =
-            drop.view != nullptr && drop.view != &view && drop.edge != 0 && dwindle->columnOf(drop.view) >= 0;
-        if (view.workspace() != &target) {
-          // Auto-attach would split the focused leaf and send a stale configure
-          // before the explicit placement below.
-          view.setWorkspace(&target, /*attachToLayout=*/false);
-        } else {
-          dwindle->removeView(&view);
-        }
-        if (splitDrop) {
-          dwindle->insertViewSplitOnView(&view, drop.view, drop.edge);
-        } else {
-          dwindle->insertView(&view, static_cast<int>(dwindle->columns().size()));
-        }
-        wlr_scene_node_reparent(&view.sceneTree()->node, target.viewLayer(true));
-        target.arrange(animate);
-        server.focusView(&view, FocusReason::DragDrop);
-        return;
+    // Policy fork again: a dwindle drop splits a leaf, a scrolling drop inserts
+    // a column.
+    if (DwindleLayout* dwindle = target.dwindleLayout()) {
+      const bool splitDrop =
+          drop.view != nullptr && drop.view != &view && drop.edge != 0 && dwindle->columnOf(drop.view) >= 0;
+      if (view.workspace() != &target) {
+        // Auto-attach would split the focused leaf and send a stale configure
+        // before the explicit placement below.
+        view.setWorkspace(&target, /*attachToLayout=*/false);
+      } else {
+        dwindle->removeView(&view);
       }
+      if (splitDrop) {
+        dwindle->insertViewSplitOnView(&view, drop.view, drop.edge);
+      } else {
+        dwindle->insertView(&view, static_cast<int>(dwindle->columns().size()));
+      }
+      wlr_scene_node_reparent(&view.sceneTree()->node, target.viewLayer(true));
+      target.arrange(animate);
+      server.focusView(&view, FocusReason::DragDrop);
+      return;
     }
 
     if (view.workspace() != &target) {

@@ -17,11 +17,11 @@ namespace umbriel {
     [[nodiscard]] const std::vector<Column>& columns() const override { return m_columns; }
     [[nodiscard]] int columnOf(const View* view) const override;
     [[nodiscard]] int rowOf(const View* view) const override;
-    [[nodiscard]] double scroll() const override { return m_scroll; }
-    [[nodiscard]] int columnX(int columnIndex, int viewportWidth) const override;
-    [[nodiscard]] int columnWidth(int columnIndex, int viewportWidth) const override;
+    [[nodiscard]] double scroll() const { return m_scroll; }
+    [[nodiscard]] int columnX(int columnIndex, int viewportWidth) const;
+    [[nodiscard]] int columnWidth(int columnIndex, int viewportWidth) const;
     [[nodiscard]] bool isFullWidth(int columnIndex) const override;
-    [[nodiscard]] int maxScroll(int viewportWidth) const override {
+    [[nodiscard]] int maxScroll(int viewportWidth) const {
       return std::max(0, totalWidth(viewportWidth) - viewportWidth);
     }
 
@@ -32,9 +32,9 @@ namespace umbriel {
     bool moveViewVertical(View* view, int direction) override;
     void removeView(View* view) override;
     void moveColumn(int from, int to) override;
-    void setScroll(double scroll) override;
-    void ensureVisible(int columnIndex, int viewportWidth) override;
-    [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportWidth) const override;
+    void setScroll(double scroll);
+    void ensureVisible(int columnIndex, int viewportWidth);
+    [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportWidth) const;
     void arrange(const wlr_box& usable) override;
     [[nodiscard]] wlr_box targetBox(const View* view) const override;
     [[nodiscard]] InitialSize
@@ -50,13 +50,13 @@ namespace umbriel {
     [[nodiscard]] uint32_t sanitizeResizeEdges(const View* view, uint32_t edges) const override;
     std::unique_ptr<ResizeGrab> beginResize(View* view, uint32_t edges, const wlr_box& usable) override;
 
-    bool setRowBoundary(int columnIndex, int upperRow, double upperWeight, double lowerWeight) override;
-    bool setHeightWeight(int columnIndex, int row, double weight) override;
-    bool setTopGapWeight(int columnIndex, double weight) override;
-    bool setBottomGapWeight(int columnIndex, double weight) override;
-    [[nodiscard]] double heightWeight(int columnIndex, int row) const override;
-    [[nodiscard]] double topGapWeight(int columnIndex) const override;
-    [[nodiscard]] double bottomGapWeight(int columnIndex) const override;
+    bool setRowBoundary(int columnIndex, int upperRow, double upperWeight, double lowerWeight);
+    bool setHeightWeight(int columnIndex, int row, double weight);
+    bool setTopGapWeight(int columnIndex, double weight);
+    bool setBottomGapWeight(int columnIndex, double weight);
+    [[nodiscard]] double heightWeight(int columnIndex, int row) const;
+    [[nodiscard]] double topGapWeight(int columnIndex) const;
+    [[nodiscard]] double bottomGapWeight(int columnIndex) const;
 
   private:
     struct Target {

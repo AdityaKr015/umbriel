@@ -361,24 +361,10 @@ UMBRIEL_TEST(resizeBoundaryRejectsAScreenFacingEdge) {
   CHECK(!fixture.layout.setResizeBoundary(stub(0), WLR_EDGE_LEFT, 0.75));
 }
 
-// ---- scrolling-only API stays inert ----
-
-UMBRIEL_TEST(scrollingOnlyOperationsAreInert) {
-  // Dwindle inherits the scrolling-specific parts of the Layout interface and
-  // answers them with defaults. Pinning that here so the behavior is visible:
-  // the interface is wider than any single layout implements.
-  Fixture fixture;
-  fixture.addLeaves(2);
-
-  CHECK_EQ(fixture.layout.scroll(), 0.0);
-  fixture.layout.setScroll(500);
-  CHECK_EQ(fixture.layout.scroll(), 0.0);
-  CHECK_EQ(fixture.layout.maxScroll(1260), 0);
-  CHECK_EQ(fixture.layout.columnX(0, 1260), 0);
-  CHECK_EQ(fixture.layout.columnWidth(0, 1260), 0);
-  CHECK(!fixture.layout.isFullWidth(0));
-  CHECK(!fixture.layout.setRowBoundary(0, 0, 0.5, 0.5));
-  CHECK(!fixture.layout.setHeightWeight(0, 0, 2.0));
-}
+// The scrolling-only API is no longer reachable from a DwindleLayout at all:
+// scroll offsets, column positions, and row weights moved onto ScrollingLayout,
+// so the question a previous test asked here ("does dwindle answer 0?") cannot
+// be compiled any more. That is the point. Callers reach those through
+// Workspace::scrollingLayout(), which is null for a dwindle workspace.
 
 int main() { return RUN_TESTS(); }

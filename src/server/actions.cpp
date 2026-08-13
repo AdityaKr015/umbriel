@@ -1,6 +1,7 @@
 #include "server/actions.h"
 
 #include "config/config.h"
+#include "layout/scrolling.h"
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
@@ -306,9 +307,8 @@ namespace umbriel {
 
     template <int Sign> bool actionLayoutScroll(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       Workspace* workspace = activeWorkspace(server);
-      if (workspace == nullptr
-          || workspace->layoutMode() != LayoutMode::Scrolling
-          || workspace->group()->output() == nullptr) {
+      ScrollingLayout* scrolling = workspace != nullptr ? workspace->scrollingLayout() : nullptr;
+      if (scrolling == nullptr || workspace->group()->output() == nullptr) {
         return true;
       }
       const auto step = static_cast<double>(config().input.mouse.scrollWheelStep);
@@ -317,8 +317,8 @@ namespace umbriel {
       // past an edge and seed sub-pixel scroll residue.
       const int viewportWidth =
           std::max(1, workspace->group()->output()->usableArea().width - 2 * workspace->layoutConfig().edgePad);
-      const auto maxScroll = static_cast<double>(workspace->layout().maxScroll(viewportWidth));
-      workspace->layout().setScroll(std::clamp(workspace->layout().scroll() + delta, 0.0, maxScroll));
+      const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportWidth));
+      scrolling->setScroll(std::clamp(scrolling->scroll() + delta, 0.0, maxScroll));
       workspace->arrange();
       return true;
     }

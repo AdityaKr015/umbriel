@@ -36,7 +36,7 @@ namespace umbriel {
   // `worldX`/`worldY` are layout coordinates in that same frame. Derives the
   // usable area from workspace.group()->output() internally.
   [[nodiscard]] DropTarget
-  computeDropTarget(Workspace& workspace, double scroll, double worldX, double worldY, const View* excludedView);
+  computeDropTarget(Workspace& workspace, double worldX, double worldY, const View* excludedView);
 
   // Inserts `view` at `drop` in `target` and focuses it. `columnWidth` restores
   // a detached scrolling column before the target is arranged.

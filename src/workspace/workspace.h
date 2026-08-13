@@ -16,7 +16,9 @@ struct wlr_scene_tree;
 
 namespace umbriel {
 
+  class DwindleLayout;
   class Output;
+  class ScrollingLayout;
   class Server;
   class View;
   class WorkspaceGroup;
@@ -39,6 +41,13 @@ namespace umbriel {
     [[nodiscard]] bool active() const { return m_active; }
     [[nodiscard]] Layout& layout() { return *m_layout; }
     [[nodiscard]] const Layout& layout() const { return *m_layout; }
+    // The one place a layout is downcast. Null unless this workspace is
+    // scrolling, so callers that need scroll offsets, column positions, or row
+    // weights ask for the layout that has them instead of asking every layout a
+    // question only this one can answer.
+    [[nodiscard]] ScrollingLayout* scrollingLayout();
+    [[nodiscard]] const ScrollingLayout* scrollingLayout() const;
+    [[nodiscard]] DwindleLayout* dwindleLayout();
     [[nodiscard]] const ResolvedLayoutConfig& layoutConfig() const { return m_layoutConfig; }
     [[nodiscard]] LayoutMode layoutMode() const { return m_layoutMode; }
     [[nodiscard]] View* focusedView() const { return m_focusedView; }

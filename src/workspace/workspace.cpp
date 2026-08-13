@@ -3,6 +3,8 @@
 #include "config/config.h"
 #include "core/log.h"
 #include "input/cursor.h"
+#include "layout/dwindle.h"
+#include "layout/scrolling.h"
 #include "output/output.h"
 #include "overview/overview.h"
 #include "server/server.h"
@@ -92,6 +94,18 @@ namespace umbriel {
       wlr_ext_workspace_handle_v1_destroy(m_handle);
       m_handle = nullptr;
     }
+  }
+
+  ScrollingLayout* Workspace::scrollingLayout() {
+    return m_layoutMode == LayoutMode::Scrolling ? static_cast<ScrollingLayout*>(m_layout.get()) : nullptr;
+  }
+
+  DwindleLayout* Workspace::dwindleLayout() {
+    return m_layoutMode == LayoutMode::Dwindle ? static_cast<DwindleLayout*>(m_layout.get()) : nullptr;
+  }
+
+  const ScrollingLayout* Workspace::scrollingLayout() const {
+    return m_layoutMode == LayoutMode::Scrolling ? static_cast<const ScrollingLayout*>(m_layout.get()) : nullptr;
   }
 
   void Workspace::setActive(bool active) {
@@ -205,8 +219,8 @@ namespace umbriel {
     const int index = focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout->columns().size());
     m_layout->insertView(view, index);
     // default_width is a viewport fraction: scrolling only. Dwindle ignores it.
-    if (initialWidth && m_layoutMode == LayoutMode::Scrolling) {
-      m_layout->setWidthFraction(m_layout->columnOf(view), *initialWidth);
+    if (ScrollingLayout* scrolling = scrollingLayout(); initialWidth && scrolling != nullptr) {
+      scrolling->setWidthFraction(scrolling->columnOf(view), *initialWidth);
     }
     arrange(true);
   }
@@ -227,12 +241,13 @@ namespace umbriel {
   }
 
   void Workspace::clampScrollToRange() {
-    if (m_group == nullptr || m_group->output() == nullptr || m_layoutMode != LayoutMode::Scrolling) {
+    ScrollingLayout* scrolling = scrollingLayout();
+    if (scrolling == nullptr || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
     const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
-    const auto maxScroll = static_cast<double>(m_layout->maxScroll(viewportWidth));
-    m_layout->setScroll(std::clamp(m_layout->scroll(), 0.0, maxScroll));
+    const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportWidth));
+    scrolling->setScroll(std::clamp(scrolling->scroll(), 0.0, maxScroll));
   }
 
   void Workspace::arrange(bool animate) {
@@ -390,9 +405,10 @@ namespace umbriel {
         const int col = m_layout->columnOf(view);
         if (col >= 0) {
           wlr_box target = outputBox; // fullscreen fills the whole output, not the dwindle tile box
-          if (m_layoutMode == LayoutMode::Scrolling) {
-            target.x =
-                outputBox.x + m_layout->columnX(col, viewportWidth) - static_cast<int>(std::lround(m_layout->scroll()));
+          if (const ScrollingLayout* scrolling = scrollingLayout()) {
+            target.x = outputBox.x
+                + scrolling->columnX(col, viewportWidth)
+                - static_cast<int>(std::lround(scrolling->scroll()));
           }
           if (animate) {
             view->animateTo(target.x, target.y);
@@ -532,21 +548,23 @@ namespace umbriel {
   }
 
   void Workspace::ensureFocusedVisible() {
-    if (m_group == nullptr || m_group->output() == nullptr || m_layoutMode != LayoutMode::Scrolling) {
+    ScrollingLayout* scrolling = scrollingLayout();
+    if (scrolling == nullptr || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
-    const int column = m_layout->columnOf(m_focusedView);
+    const int column = scrolling->columnOf(m_focusedView);
     const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
-    m_layout->ensureVisible(column, viewportWidth);
+    scrolling->ensureVisible(column, viewportWidth);
   }
 
   double Workspace::scrollFractionToReveal(const View* view) const {
-    if (m_group == nullptr || m_group->output() == nullptr || m_layoutMode != LayoutMode::Scrolling) {
+    const ScrollingLayout* scrolling = scrollingLayout();
+    if (scrolling == nullptr || m_group == nullptr || m_group->output() == nullptr) {
       return 0.0;
     }
-    const int column = m_layout->columnOf(view);
+    const int column = scrolling->columnOf(view);
     const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
-    return m_layout->scrollAmountToEnsureVisible(column, viewportWidth);
+    return scrolling->scrollAmountToEnsureVisible(column, viewportWidth);
   }
 
   void Workspace::applyVisibility() {

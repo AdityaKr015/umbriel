@@ -142,30 +142,15 @@ namespace umbriel {
       return nullptr;
     }
 
-    // ---- Scrolling-specific (default no-ops for non-scrolling layouts) ----
+    // Both layouts present their contents as columns: scrolling owns them
+    // directly, dwindle flattens its tree into them.
+    [[nodiscard]] virtual const std::vector<Column>& columns() const = 0;
+    // Whether a column occupies the full viewport, however each layout gets there.
+    [[nodiscard]] virtual bool isFullWidth(int columnIndex) const = 0;
 
-    [[nodiscard]] virtual const std::vector<Column>& columns() const {
-      static const std::vector<Column> empty;
-      return empty;
-    }
-
-    [[nodiscard]] virtual double scroll() const { return 0; }
-    virtual void setScroll(double) {}
-    [[nodiscard]] virtual int maxScroll(int) const { return 0; }
-    virtual void ensureVisible(int, int) {}
-    [[nodiscard]] virtual double scrollAmountToEnsureVisible(int, int) const { return 0; }
-
-    [[nodiscard]] virtual bool isFullWidth(int) const { return false; }
-    [[nodiscard]] virtual int columnX(int, int) const { return 0; }
-    [[nodiscard]] virtual int columnWidth(int, int) const { return 0; }
-
-    virtual bool setRowBoundary(int, int, double, double) { return false; }
-    virtual bool setHeightWeight(int, int, double) { return false; }
-    virtual bool setTopGapWeight(int, double) { return false; }
-    virtual bool setBottomGapWeight(int, double) { return false; }
-    [[nodiscard]] virtual double heightWeight(int, int) const { return 1.0; }
-    [[nodiscard]] virtual double topGapWeight(int) const { return 0.0; }
-    [[nodiscard]] virtual double bottomGapWeight(int) const { return 0.0; }
+    // Anything only one layout can answer lives on that layout. Reach it through
+    // the single downcast seam, Workspace::scrollingLayout(), rather than by
+    // asking every layout a question most of them have no answer to.
 
   protected:
     // The usable area minus edge padding on both axes: the box the layout has

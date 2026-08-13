@@ -1250,7 +1250,7 @@ namespace umbriel {
     const double worldY = metrics.outputBox.y + (ly - rowTop(metrics, state->rowScroll, row)) / metrics.zoom;
 
     if (card->view->tiled()) {
-      m_drop = computeDropTarget(*workspace, workspace->layout().scroll(), worldX, worldY, card->view);
+      m_drop = computeDropTarget(*workspace, worldX, worldY, card->view);
     } else {
       m_drop = {
           .workspace = workspace,

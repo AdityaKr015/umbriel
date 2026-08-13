@@ -1687,7 +1687,7 @@ namespace umbriel {
     m_mapped = false;
     m_positioned = false;
     if (m_workspace != nullptr) {
-      m_workspace->layoutDetach(this, m_workspace->layoutMode() == LayoutMode::Scrolling);
+      m_workspace->layoutDetach(this, m_workspace->scrollingLayout() != nullptr);
     }
     leaveForeignOutput();
     setForeignActivated(false);
@@ -2266,13 +2266,11 @@ namespace umbriel {
       }
 
       // Column width.
-      if (rule.defaultWidth
-          && m_tiled
-          && m_workspace != nullptr
-          && m_workspace->layoutMode() == LayoutMode::Scrolling) {
-        const int column = m_workspace->layout().columnOf(this);
+      ScrollingLayout* scrolling = m_workspace != nullptr ? m_workspace->scrollingLayout() : nullptr;
+      if (rule.defaultWidth && m_tiled && scrolling != nullptr) {
+        const int column = scrolling->columnOf(this);
         if (column >= 0) {
-          m_workspace->layout().setWidthFraction(column, *rule.defaultWidth);
+          scrolling->setWidthFraction(column, *rule.defaultWidth);
           m_workspace->arrange();
         }
       }

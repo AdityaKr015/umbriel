@@ -4,6 +4,7 @@
 #include "input/seat.h"
 #include "layer/surface.h"
 #include "layout/drop_target.h"
+#include "layout/scrolling.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
@@ -224,10 +225,10 @@ namespace umbriel {
         m_dragSourceWorkspace = view->workspace();
         m_dragSourceColumn = m_dragSourceWorkspace != nullptr ? m_dragSourceWorkspace->layout().columnOf(view) : -1;
         m_hasDragSourceWidth = false;
-        if (m_dragSourceWorkspace != nullptr
-            && m_dragSourceWorkspace->layoutMode() == LayoutMode::Scrolling
-            && m_dragSourceColumn >= 0) {
-          const auto& columns = m_dragSourceWorkspace->layout().columns();
+        const ScrollingLayout* dragSourceScrolling =
+            m_dragSourceWorkspace != nullptr ? m_dragSourceWorkspace->scrollingLayout() : nullptr;
+        if (dragSourceScrolling != nullptr && m_dragSourceColumn >= 0) {
+          const auto& columns = dragSourceScrolling->columns();
           if (m_dragSourceColumn < static_cast<int>(columns.size())) {
             const Column& column = columns[static_cast<size_t>(m_dragSourceColumn)];
             if (column.views.size() == 1) {
@@ -939,7 +940,7 @@ namespace umbriel {
     }
 
     Workspace* workspace = output->workspaceGroup()->active();
-    m_drop = computeDropTarget(*workspace, workspace->layout().scroll(), m_cursor->x, m_cursor->y, m_grabbedView);
+    m_drop = computeDropTarget(*workspace, m_cursor->x, m_cursor->y, m_grabbedView);
     if (m_drop.hintBox.width > 0 && m_drop.hintBox.height > 0) {
       m_server->insertHint().show(output, m_drop.hintBox, config().appearance.cornerRadius);
     } else {

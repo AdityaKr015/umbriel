@@ -4,6 +4,7 @@
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "layout/scrolling.h"
 #include "output/output.h"
 #include "overview/overview.h"
 #include "server/server.h"
@@ -237,13 +238,14 @@ namespace umbriel {
       if (std::abs(m_accumX) > std::abs(m_accumY)) {
         // ----- Horizontal lock → Scroll -----
         Workspace* ws = out->workspaceGroup()->active();
-        if (ws == nullptr || ws->layout().columns().empty() || ws->layoutMode() != LayoutMode::Scrolling) {
+        ScrollingLayout* scrolling = ws != nullptr ? ws->scrollingLayout() : nullptr;
+        if (scrolling == nullptr || scrolling->columns().empty()) {
           m_state = State::Idle;
           return;
         }
         m_scrollWorkspace = ws;
         m_viewportWidth = std::max(1, out->usableArea().width - 2 * ws->layoutConfig().edgePad);
-        m_scrollStart = ws->layout().scroll();
+        m_scrollStart = scrolling->scroll();
         ws->arrange(false);
         m_state = State::Scroll;
       } else {
@@ -276,14 +278,19 @@ namespace umbriel {
       m_accumX += event->dx;
       // Natural: fingers left → content moves left → scroll increases.
       double target = m_scrollStart - m_accumX * kScrollFactor;
-      const auto maxScroll = static_cast<double>(m_scrollWorkspace->layout().maxScroll(m_viewportWidth));
+      ScrollingLayout* scrolling = m_scrollWorkspace->scrollingLayout();
+      if (scrolling == nullptr) {
+        m_state = State::Idle;
+        return;
+      }
+      const auto maxScroll = static_cast<double>(scrolling->maxScroll(m_viewportWidth));
       if (target < 0) {
         target = std::max(target * kOverscrollCompress, -0.1 * m_viewportWidth);
       }
       if (target > maxScroll) {
         target = std::min(maxScroll + (target - maxScroll) * kOverscrollCompress, maxScroll + 0.1 * m_viewportWidth);
       }
-      m_scrollWorkspace->layout().setScroll(target);
+      scrolling->setScroll(target);
       m_scrollWorkspace->arrange(false);
       return;
     }
@@ -405,12 +412,18 @@ namespace umbriel {
       m_state = State::Idle;
       return;
     }
+    ScrollingLayout* scrolling = m_scrollWorkspace->scrollingLayout();
+    if (scrolling == nullptr) {
+      m_state = State::Idle;
+      m_scrollWorkspace = nullptr;
+      return;
+    }
     if (cancelled) {
-      m_scrollWorkspace->layout().setScroll(m_scrollStart);
+      scrolling->setScroll(m_scrollStart);
       m_scrollWorkspace->arrange(true);
     } else {
       // Snap to the column nearest the viewport center.
-      const auto& layout = m_scrollWorkspace->layout();
+      const ScrollingLayout& layout = *scrolling;
       const auto maxScroll = static_cast<double>(layout.maxScroll(m_viewportWidth));
       const double rawScroll = layout.scroll();
       const double currentScroll = std::clamp(rawScroll, 0.0, maxScroll);

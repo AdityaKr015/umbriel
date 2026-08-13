@@ -133,6 +133,7 @@ pure_sources = files(
   'src/layout/dwindle.cpp',
   'src/scene/cheatsheet_rows.cpp',
   'src/view/border_ring.cpp',
+  'src/view/floating.cpp',
 )
 
 umbriel_pure = static_library(
@@ -245,6 +246,7 @@ unit_tests = [
   ['dwindle-layout', ['tests/dwindle_layout.cpp'], []],
   ['cheatsheet-rows', ['tests/cheatsheet_rows.cpp'], []],
   ['border-ring', ['tests/border_ring.cpp'], []],
+  ['floating', ['tests/floating.cpp'], []],
   # Reaches compositor code, so it takes the heavier library.
   ['config-resolve', ['tests/config_resolve.cpp'], [umbriel_core_dep]],
 ]

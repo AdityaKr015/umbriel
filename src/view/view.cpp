@@ -601,13 +601,10 @@ namespace umbriel {
       return;
     }
 
-    const int visibleX = std::clamp(geo.width / 4, 10, 75);
-    const int visibleY = std::clamp(geo.height / 4, 10, 75);
-    const int x = std::clamp(m_sceneTree->node.x, usable.x + visibleX - geo.width, usable.x + usable.width - visibleX);
-    const int y =
-        std::clamp(m_sceneTree->node.y, usable.y + visibleY - geo.height, usable.y + usable.height - visibleY);
-    if (x != m_sceneTree->node.x || y != m_sceneTree->node.y) {
-      setPosition(x, y);
+    const FloatingPoint clamped =
+        clampFloatingOrigin({.x = m_sceneTree->node.x, .y = m_sceneTree->node.y}, geo, usable);
+    if (clamped.x != m_sceneTree->node.x || clamped.y != m_sceneTree->node.y) {
+      setPosition(clamped.x, clamped.y);
     }
   }
 
@@ -619,13 +616,11 @@ namespace umbriel {
 
     // Floats keep their own size; only center within the usable area.
     const wlr_box& geo = m_toplevel->base->geometry;
-    const int width = geo.width > 0 ? geo.width : usable.width;
-    const int height = geo.height > 0 ? geo.height : usable.height;
-    const int x = usable.x + (usable.width - width) / 2;
-    const int y = usable.y + (usable.height - height) / 2;
+    const FloatingPoint origin =
+        centeredOrigin(usable, geo.width > 0 ? geo.width : usable.width, geo.height > 0 ? geo.height : usable.height);
     m_positioned = true;
-    wlr_scene_node_set_position(&m_sceneTree->node, x, y);
-    m_decoration.setShadowPosition(x, y);
+    wlr_scene_node_set_position(&m_sceneTree->node, origin.x, origin.y);
+    m_decoration.setShadowPosition(origin.x, origin.y);
   }
 
   bool View::decorated() const { return m_decoration.bordersVisible(); }
@@ -867,18 +862,14 @@ namespace umbriel {
   }
 
   void View::requestFloatingSize(int width, int height) {
-    m_floatingSizeRequestSerial = wlr_xdg_toplevel_set_size(m_toplevel, width, height);
+    m_floating.recordSizeRequest(wlr_xdg_toplevel_set_size(m_toplevel, width, height));
   }
   void View::beginFloatingResize(uint32_t edges) {
     const wlr_box& geo = m_toplevel->base->geometry;
-    m_floatingResizeAnchor = {
-        .x = m_sceneTree->node.x + geo.x,
-        .y = m_sceneTree->node.y + geo.y,
-        .width = geo.width,
-        .height = geo.height,
-    };
-    m_floatingResizeEdges = edges;
-    m_floatingResizeActive = true;
+    m_floating.beginResize(
+        {.x = m_sceneTree->node.x + geo.x, .y = m_sceneTree->node.y + geo.y, .width = geo.width, .height = geo.height},
+        edges
+    );
     syncFloatingResizePosition();
   }
 
@@ -887,23 +878,15 @@ namespace umbriel {
     requestFloatingSize(width, height);
   }
 
-  void View::finishFloatingResize() {
-    m_floatingResizeActive = false;
-    if (!m_floatingSizeRequestSerial) {
-      m_floatingResizeAnchor.reset();
-      m_floatingResizeEdges = 0;
-    }
-  }
+  void View::finishFloatingResize() { m_floating.endResize(); }
 
   void View::syncFloatingResizePosition() {
-    if (!m_floatingResizeAnchor) {
+    if (!m_floating.anchor()) {
       return;
     }
-    const wlr_box& anchor = *m_floatingResizeAnchor;
     const wlr_box& geo = m_toplevel->base->geometry;
-    const int contentX = (m_floatingResizeEdges & WLR_EDGE_LEFT) != 0 ? anchor.x + anchor.width - geo.width : anchor.x;
-    const int contentY = (m_floatingResizeEdges & WLR_EDGE_TOP) != 0 ? anchor.y + anchor.height - geo.height : anchor.y;
-    setPosition(contentX - geo.x, contentY - geo.y);
+    const FloatingPoint content = anchoredContentOrigin(*m_floating.anchor(), m_floating.edges(), geo);
+    setPosition(content.x - geo.x, content.y - geo.y);
   }
 
   void View::adoptFloatingClientSize() {
@@ -911,17 +894,8 @@ namespace umbriel {
       return;
     }
     wlr_xdg_surface* base = m_toplevel->base;
-    if (m_floatingSizeRequestSerial) {
-      const uint32_t committedSerial = base->current.configure_serial;
-      const uint32_t requestedSerial = *m_floatingSizeRequestSerial;
-      if (static_cast<int32_t>(committedSerial - requestedSerial) < 0) {
-        return;
-      }
-      m_floatingSizeRequestSerial.reset();
-      if (!m_floatingResizeActive) {
-        m_floatingResizeAnchor.reset();
-        m_floatingResizeEdges = 0;
-      }
+    if (!m_floating.retireSizeRequestIfSettled(base->current.configure_serial)) {
+      return;
     }
     const wlr_box& geo = base->geometry;
     if (geo.width <= 0 || geo.height <= 0) {
@@ -1224,7 +1198,7 @@ namespace umbriel {
     m_initialRulesSettled = false;
     m_ruleOpacity = 1.0F;
     m_hasMaximizeRestoreBox = false;
-    m_floatingSizeRequestSerial.reset();
+    m_floating.clearSizeRequest();
   }
 
   void View::handleCommit() {
@@ -1408,7 +1382,7 @@ namespace umbriel {
 
     const bool wasMaximized = m_toplevel->scheduled.maximized;
     if (maximized && !wasMaximized) {
-      m_floatingSizeRequestSerial.reset();
+      m_floating.clearSizeRequest();
       const wlr_box& geometry = m_toplevel->base->geometry;
       m_maximizeRestoreBox = {
           .x = m_sceneTree->node.x,
@@ -1568,9 +1542,9 @@ namespace umbriel {
     if (floating) {
       int keepWidth = 0;
       int keepHeight = 0;
-      if (m_floatingSize) {
-        keepWidth = (*m_floatingSize)[0];
-        keepHeight = (*m_floatingSize)[1];
+      if (m_floating.size()) {
+        keepWidth = (*m_floating.size())[0];
+        keepHeight = (*m_floating.size())[1];
       } else {
         // First-time floats prefer the last acked or scheduled configure size,
         // then fall back to the layout target and committed geometry.
@@ -1620,9 +1594,9 @@ namespace umbriel {
       const wlr_box usable = floatingUsableArea();
       int floatX = keepX + 50;
       int floatY = keepY + 50;
-      if (m_floatingPosFrac && usable.width > 0 && usable.height > 0) {
-        floatX = usable.x + static_cast<int>(std::lround((*m_floatingPosFrac)[0] * usable.width));
-        floatY = usable.y + static_cast<int>(std::lround((*m_floatingPosFrac)[1] * usable.height));
+      if (const auto restored = m_floating.restoredOrigin(usable)) {
+        floatX = restored->x;
+        floatY = restored->y;
       }
       if (usable.width > 0 && usable.height > 0 && keepWidth > 0 && keepHeight > 0) {
         const int decoration = config().appearance.totalBorderWidth();
@@ -1632,10 +1606,7 @@ namespace umbriel {
         const int maxY = usable.y + usable.height - decoration - keepHeight;
         floatX = std::clamp(floatX, minX, std::max(minX, maxX));
         floatY = std::clamp(floatY, minY, std::max(minY, maxY));
-        m_floatingPosFrac = {{
-            static_cast<double>(floatX - usable.x) / usable.width,
-            static_cast<double>(floatY - usable.y) / usable.height,
-        }};
+        m_floating.rememberPositionFraction({.x = floatX, .y = floatY}, usable);
       }
       animateTo(floatX, floatY);
       syncFloatingSurfaceClip();
@@ -1649,16 +1620,11 @@ namespace umbriel {
     const wlr_box usable = floatingUsableArea();
     const wlr_box& geo = m_toplevel->base->geometry;
     if (geo.width > 0 && geo.height > 0) {
-      m_floatingSize = {{geo.width, geo.height}};
+      m_floating.rememberSize(geo.width, geo.height);
     }
-    if (usable.width > 0 && usable.height > 0) {
-      m_floatingPosFrac = {{
-          static_cast<double>(m_sceneTree->node.x - usable.x) / usable.width,
-          static_cast<double>(m_sceneTree->node.y - usable.y) / usable.height,
-      }};
-    }
+    m_floating.rememberPositionFraction({.x = m_sceneTree->node.x, .y = m_sceneTree->node.y}, usable);
 
-    m_floatingSizeRequestSerial.reset();
+    m_floating.clearSizeRequest();
     m_tiled = true;
     if (m_workspace != nullptr) {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(m_tiled));
@@ -1701,7 +1667,7 @@ namespace umbriel {
           setOnActiveWorkspace(m_workspace->active());
         }
       }
-      m_floatingSizeRequestSerial.reset();
+      m_floating.clearSizeRequest();
     }
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     updateFullscreenPresentation(0, 0);

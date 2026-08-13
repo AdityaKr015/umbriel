@@ -2,6 +2,7 @@
 #include "core/animation.h"
 #include "scene/node.h"
 #include "view/decoration.h"
+#include "view/floating.h"
 #include "view/presentation.h"
 
 #include <array>
@@ -237,17 +238,7 @@ namespace umbriel {
     float m_ruleOpacity = 1.0F;
     bool m_hasMaximizeRestoreBox = false;
     wlr_box m_maximizeRestoreBox{};
-    // Floating geometry memory survives tiled-to-floating round trips.
-    std::optional<std::array<int, 2>> m_floatingSize;
-    std::optional<std::array<double, 2>> m_floatingPosFrac;
-    // Latest compositor-owned floating size request. Client geometry becomes
-    // authoritative after committing this configure serial.
-    std::optional<uint32_t> m_floatingSizeRequestSerial;
-    // Content box at interactive-resize start. Left/top resizes keep the
-    // opposite edge fixed while client geometry catches up asynchronously.
-    std::optional<wlr_box> m_floatingResizeAnchor;
-    uint32_t m_floatingResizeEdges = 0;
-    bool m_floatingResizeActive = false;
+    FloatingGeometry m_floating;
 
     wl_listener m_map{};
     wl_listener m_unmap{};

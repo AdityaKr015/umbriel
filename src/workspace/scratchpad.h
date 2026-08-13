@@ -34,6 +34,7 @@ namespace umbriel {
       std::string returnOutput;
       std::string returnWorkspace;
       bool returnTiled = false;
+      bool lastFocused = false;
     };
 
     void setVisible(Output* output, bool visible);

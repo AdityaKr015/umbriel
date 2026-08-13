@@ -141,12 +141,11 @@ namespace umbriel {
     if (std::ranges::find(m_visibleOutputs, output) == m_visibleOutputs.end()) {
       return nullptr;
     }
-    if (m_focusedView != nullptr) {
-      const auto entry =
-          std::ranges::find_if(m_entries, [this](const Entry& item) { return item.view == m_focusedView; });
-      if (entry != m_entries.end() && entry->output == output) {
-        return m_focusedView;
-      }
+    const auto remembered = std::ranges::find_if(m_entries, [output](const Entry& entry) {
+      return entry.output == output && entry.lastFocused;
+    });
+    if (remembered != m_entries.end()) {
+      return remembered->view;
     }
     for (const Entry& entry : m_entries) {
       if (entry.output == output) {
@@ -165,7 +164,20 @@ namespace umbriel {
     });
   }
 
-  void ScratchpadManager::noteFocus(View* view) { m_focusedView = contains(view) ? view : nullptr; }
+  void ScratchpadManager::noteFocus(View* view) {
+    m_focusedView = nullptr;
+    const auto focused = std::ranges::find_if(m_entries, [view](const Entry& entry) { return entry.view == view; });
+    if (focused == m_entries.end()) {
+      return;
+    }
+
+    m_focusedView = view;
+    for (Entry& entry : m_entries) {
+      if (entry.output == focused->output) {
+        entry.lastFocused = entry.view == view;
+      }
+    }
+  }
 
   void ScratchpadManager::finishMove(View* view, Output* output) {
     const auto it = std::ranges::find_if(m_entries, [view](const Entry& entry) { return entry.view == view; });
@@ -177,6 +189,13 @@ namespace umbriel {
       it->output = output;
       if (std::ranges::find(m_visibleOutputs, output) == m_visibleOutputs.end()) {
         m_visibleOutputs.push_back(output);
+      }
+    }
+    if (previous != it->output && it->lastFocused) {
+      for (Entry& entry : m_entries) {
+        if (&entry != &*it && entry.output == it->output) {
+          entry.lastFocused = false;
+        }
       }
     }
     if (previous != it->output
@@ -259,6 +278,19 @@ namespace umbriel {
   }
 
   void ScratchpadManager::moveOutput(Output* from, Output* to) {
+    if (from == to) {
+      return;
+    }
+    const bool movedRemembered = std::ranges::any_of(m_entries, [from](const Entry& entry) {
+      return entry.output == from && entry.lastFocused;
+    });
+    if (movedRemembered && to != nullptr) {
+      for (Entry& entry : m_entries) {
+        if (entry.output == to) {
+          entry.lastFocused = false;
+        }
+      }
+    }
     const bool wasVisible = std::ranges::find(m_visibleOutputs, from) != m_visibleOutputs.end();
     if (wasVisible) {
       setVisible(from, false);

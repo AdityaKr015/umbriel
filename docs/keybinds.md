@@ -70,6 +70,8 @@ The first float lands slightly down-right of the tile, clamped on-screen.
 output's scratchpad. `scratchpad-toggle` shows or hides that output's pool.
 `window-restore-from-scratchpad` returns its focused window to its saved
 workspace, and `scratchpad-focus-next` cycles visible scratchpad windows.
+When a pool is shown again, focus returns to the scratchpad window that was
+focused when the pool was hidden.
 Append `:<output>` to any of these actions to target its per-output pool from
 anywhere, for example `scratchpad-toggle:DP-1` or
 `window-move-to-scratchpad:DP-1`.

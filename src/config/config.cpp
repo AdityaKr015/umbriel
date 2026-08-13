@@ -33,6 +33,9 @@ namespace umbriel {
 
     constexpr Logger kLog("config");
 
+    // Well past any real layout: a value this large already means "no limit".
+    constexpr double kMaxFollowsMouseScroll = 100.0;
+
     void emitDiag(ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
       ConfigDiagnostic diag;
       diag.severity = severity;
@@ -725,18 +728,13 @@ namespace umbriel {
         });
         s.sub("cursor", [&](Section& c) { c.text("theme", in.cursor.theme).integer("size", 1, 512, in.cursor.size); });
         s.sub("focus", [&](Section& f) {
-          f.boolean("follows_mouse", in.focus.followsMouse);
-          // Kept bespoke: this one clamps silently and names its range in the
-          // message, unlike every other number. Worth unifying, but that would
-          // change what users see.
-          f.custom("follows_mouse_max_scroll");
-          if (const toml::node* maxScroll = f.node("follows_mouse_max_scroll")) {
-            if (const auto value = maxScroll->value<double>(); value && !std::isnan(*value)) {
-              in.focus.followsMouseMaxScroll = std::clamp(*value, 0.0, 1.0);
-            } else {
-              warnAt(maxScroll->source(), "ignoring input.focus.follows_mouse_max_scroll (expected number 0.0-1.0)");
-            }
-          }
+          // The limit is measured in viewport widths and the quantity it is
+          // compared against is unbounded: revealing a column three screens away
+          // is 3.0. The upper bound here is a nonsense-catcher, not a ceiling.
+          // Below zero would refuse focus even for a window already fully
+          // visible, which disables hover focus rather than limiting it.
+          f.boolean("follows_mouse", in.focus.followsMouse)
+              .real("follows_mouse_max_scroll", 0.0, kMaxFollowsMouseScroll, in.focus.followsMouseMaxScroll);
         });
       });
     }

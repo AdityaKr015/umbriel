@@ -263,10 +263,14 @@ reload the cursor image at the matching scale without requiring a restart.
 ```toml
 [input.focus]
 follows_mouse = false
-follows_mouse_max_scroll = 0.0  # optional, 0.0-1.0
+follows_mouse_max_scroll = 0.5  # optional, measured in viewport widths
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `follows_mouse` | bool | `false` | Focus the window under the pointer (sloppy focus). Only fires when the pointer enters a different window, then scrolls it on-screen. |
-| `follows_mouse_max_scroll` | float | (no limit) | Refuse focus when bring-into-view would scroll more than this fraction of the viewport. `0.0` means never scroll. Omit for no limit. |
+| `follows_mouse_max_scroll` | float | (no limit) | Refuse focus when bringing the window into view would scroll further than this. Measured in viewport widths, so `1.0` is one full screen and values above that are meaningful — revealing a column three screens away is `3.0`. `0.0` allows focus only for windows already fully visible. Omit for no limit. |
+
+Values are clamped to `0.0`–`100.0`, and a clamp is reported. A negative limit
+would refuse focus even for a window needing no scroll at all, which switches
+hover focus off rather than limiting it.

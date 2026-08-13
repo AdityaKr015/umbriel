@@ -75,6 +75,7 @@ fi
 export UMBRIEL=$BINARY
 export UMBRIEL_RUNTIME_DIR=$RUNTIME_DIR
 export UMBRIEL_LOG=$LOG
+export UMBRIEL_CONFIG=$CONFIG
 
 failed=0
 ran=0

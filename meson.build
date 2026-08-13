@@ -255,6 +255,8 @@ unit_tests = [
   ['border-ring', ['tests/border_ring.cpp'], []],
   ['floating', ['tests/floating.cpp'], []],
   ['config-section', ['tests/config_section.cpp'], []],
+  # ConfigChange lives with the loader in the core library.
+  ['config-change', ['tests/config_change.cpp'], [umbriel_core_dep]],
   # Reaches compositor code, so it takes the heavier library.
   ['config-resolve', ['tests/config_resolve.cpp'], [umbriel_core_dep]],
 ]

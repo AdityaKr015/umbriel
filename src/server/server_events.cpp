@@ -1,5 +1,6 @@
 #include "config/config.h"
 #include "config/config_watcher.h"
+#include "config/store.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/gestures.h"
@@ -157,55 +158,79 @@ namespace umbriel {
     }
   } // namespace
   void Server::applyConfig() {
-    const Config::Appearance::Blur& blur = config().appearance.blur;
-    wlr_scene_set_blur_data(
-        m_scene, blur.passes, blur.radius, static_cast<float>(blur.noise), static_cast<float>(blur.brightness),
-        static_cast<float>(blur.contrast), static_cast<float>(blur.saturation)
-    );
-    for (const auto& keyboard : m_keyboards) {
-      keyboard->applyConfig();
+    const ConfigChange& changed = configStore().lastChange();
+    if (!changed.any()) {
+      return;
     }
-    for (const auto& pointer : m_pointers) {
-      applyPointerConfig(pointer->device);
+
+    if (changed.appearance) {
+      const Config::Appearance::Blur& blur = config().appearance.blur;
+      wlr_scene_set_blur_data(
+          m_scene, blur.passes, blur.radius, static_cast<float>(blur.noise), static_cast<float>(blur.brightness),
+          static_cast<float>(blur.contrast), static_cast<float>(blur.saturation)
+      );
     }
-    m_cursor->applyConfig();
-    for (const auto& output : m_outputs) {
-      output->applyConfig();
-      if (WorkspaceGroup* group = output->workspaceGroup()) {
-        group->reconcileConfig();
+    if (changed.input) {
+      for (const auto& keyboard : m_keyboards) {
+        keyboard->applyConfig();
       }
-    }
-    for (const auto& view : m_registry.all()) {
-      if (!view->mapped()) {
-        continue;
+      for (const auto& pointer : m_pointers) {
+        applyPointerConfig(pointer->device);
       }
-      view->setBorderFocused(false);
-      view->updateBorderGeometry();
-      view->applyCornerRadius();
-      view->applyDynamicRules();
-      view->updateShadow();
-      view->reloadBackdropColor();
+      m_cursor->applyConfig();
     }
-    for (const auto& layer : m_layerSurfaces) {
-      if (layer->mapped()) {
-        layer->applyConfig();
-      }
-    }
-    applyKdeDecorationDefault(m_serverDecorationManager);
-    if (m_xdgDecorationManager != nullptr) {
-      wlr_xdg_toplevel_decoration_v1* decoration = nullptr;
-      wl_list_for_each(decoration, &m_xdgDecorationManager->decorations, link) {
-        if (auto* watch = static_cast<XdgDecorationWatch*>(decoration->data)) {
-          applyXdgDecorationMode(watch);
+    // Outputs also own their workspace inventory, so a [[workspace]] change has
+    // to reach them even when no [output] block moved.
+    if (changed.outputs || changed.workspaceRules || changed.layout) {
+      for (const auto& output : m_outputs) {
+        output->applyConfig();
+        if (WorkspaceGroup* group = output->workspaceGroup()) {
+          group->reconcileConfig();
         }
       }
     }
-    refocus();
-    updateBackdrop();
-    if (m_sessionLocked) {
-      updateLockBlank();
+    // Window rules feed opacity, blur, and floating state; appearance feeds the
+    // borders and shadow. Either one makes a view's chrome stale.
+    if (changed.appearance || changed.windowRules) {
+      for (const auto& view : m_registry.all()) {
+        if (!view->mapped()) {
+          continue;
+        }
+        view->setBorderFocused(false);
+        view->updateBorderGeometry();
+        view->applyCornerRadius();
+        view->applyDynamicRules();
+        view->updateShadow();
+        view->reloadBackdropColor();
+      }
     }
-    updateOutputManagerConfig();
+    if (changed.appearance || changed.layerRules) {
+      for (const auto& layer : m_layerSurfaces) {
+        if (layer->mapped()) {
+          layer->applyConfig();
+        }
+      }
+    }
+    if (changed.appearance) {
+      applyKdeDecorationDefault(m_serverDecorationManager);
+      if (m_xdgDecorationManager != nullptr) {
+        wlr_xdg_toplevel_decoration_v1* decoration = nullptr;
+        wl_list_for_each(decoration, &m_xdgDecorationManager->decorations, link) {
+          if (auto* watch = static_cast<XdgDecorationWatch*>(decoration->data)) {
+            applyXdgDecorationMode(watch);
+          }
+        }
+      }
+      // The chrome loop above cleared every focus ring; put it back.
+      refocus();
+      updateBackdrop();
+      if (m_sessionLocked) {
+        updateLockBlank();
+      }
+    }
+    if (changed.outputs || changed.workspaceRules) {
+      updateOutputManagerConfig();
+    }
   }
 
   void Server::handleConfigReload() {
@@ -213,7 +238,8 @@ namespace umbriel {
     m_overview->forceClose();
     if (reloadConfig()) {
       applyConfig();
-      kLog.info("config reloaded");
+      const std::string changed = configStore().lastChange().summary();
+      kLog.info("config reloaded ({})", changed.empty() ? "no changes" : changed);
     }
     showConfigDiagnostics();
     relayoutCheatsheet();

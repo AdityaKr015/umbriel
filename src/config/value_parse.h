@@ -11,6 +11,8 @@ namespace umbriel {
     int width = 0;
     int height = 0;
     int refreshMHz = 0;
+
+    bool operator==(const OutputMode&) const = default;
   };
 
   // "#RRGGBB" or "#RRGGBBAA". Alpha defaults to opaque. Components are

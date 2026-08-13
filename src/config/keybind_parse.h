@@ -66,19 +66,24 @@ namespace umbriel {
   // longer shares storage with the spawn command.
   struct SpawnArg {
     std::string command;
+    bool operator==(const SpawnArg&) const = default;
   };
   struct SubmapArg {
     std::string name;
+    bool operator==(const SubmapArg&) const = default;
   };
   struct WidthArg {
     double fraction = 0.0;
+    bool operator==(const WidthArg&) const = default;
   };
   struct WorkspaceArg {
     std::string name;
     std::string output; // empty = resolve against the focused output
+    bool operator==(const WorkspaceArg&) const = default;
   };
   struct OutputArg {
     std::string output; // empty = the focused output
+    bool operator==(const OutputArg&) const = default;
   };
 
   using KeybindPayload = std::variant<std::monostate, SpawnArg, SubmapArg, WidthArg, WorkspaceArg, OutputArg>;
@@ -96,6 +101,8 @@ namespace umbriel {
     // What it does.
     KeybindAction action = KeybindAction::None;
     KeybindPayload payload;
+
+    bool operator==(const Keybind&) const = default;
   };
 
   // Null unless the bind carries that payload alternative.

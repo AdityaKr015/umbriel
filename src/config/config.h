@@ -25,7 +25,10 @@ namespace umbriel {
     struct Scrolling {
       std::optional<double> defaultWidthFraction;
       std::optional<bool> alwaysCenterSingleColumn;
+      bool operator==(const Scrolling&) const = default;
     } scrolling;
+
+    bool operator==(const WorkspaceLayoutOverrides&) const = default;
   };
 
   // Layout rule parsed from a [[workspace]] entry. Exactly one selector is set.
@@ -34,6 +37,7 @@ namespace umbriel {
     std::string output;       // optional output selector
     std::optional<int> index; // optional 1-based position selector
     WorkspaceLayoutOverrides layout;
+    bool operator==(const WorkspaceConfig&) const = default;
   };
 
   // Fully resolved layout config — no optionals. Owned by each Workspace.
@@ -56,10 +60,12 @@ namespace umbriel {
   struct ResolvedWorkspace {
     std::string name;
     ResolvedLayoutConfig layout;
+    bool operator==(const ResolvedWorkspace&) const = default;
   };
   struct ResolvedWorkspaceSet {
     bool dynamic = false;
     std::vector<ResolvedWorkspace> workspaces;
+    bool operator==(const ResolvedWorkspaceSet&) const = default;
   };
   struct OutputRule {
     std::string name;
@@ -69,6 +75,7 @@ namespace umbriel {
     std::optional<int> transform;
     // Explicit workspace inventory. Omitted means dynamic workspaces.
     std::optional<std::vector<std::string>> workspaces;
+    bool operator==(const OutputRule&) const = default;
   };
 
   struct WindowRule {
@@ -89,6 +96,26 @@ namespace umbriel {
     std::optional<bool> blurPopups;
     std::optional<double> blurIgnoreAlpha;
     std::optional<bool> blurOptimized;
+
+    // The compiled regexes are derived from the patterns and are not comparable,
+    // so equality is decided by the patterns they came from.
+    [[nodiscard]] bool operator==(const WindowRule& other) const {
+      return appIdPattern == other.appIdPattern
+          && titlePattern == other.titlePattern
+          && matchFocused == other.matchFocused
+          && defaultOutput == other.defaultOutput
+          && defaultFloating == other.defaultFloating
+          && defaultSize == other.defaultSize
+          && defaultWidth == other.defaultWidth
+          && defaultWorkspace == other.defaultWorkspace
+          && defaultFullscreen == other.defaultFullscreen
+          && defaultMaximize == other.defaultMaximize
+          && opacity == other.opacity
+          && blur == other.blur
+          && blurPopups == other.blurPopups
+          && blurIgnoreAlpha == other.blurIgnoreAlpha
+          && blurOptimized == other.blurOptimized;
+    }
   };
 
   // Resolved result: merge of all matching rules (last writer wins per field).
@@ -105,6 +132,7 @@ namespace umbriel {
     std::optional<bool> blurPopups;
     std::optional<double> blurIgnoreAlpha;
     std::optional<bool> blurOptimized;
+    bool operator==(const ResolvedWindowRule&) const = default;
   };
 
   struct LayerRule {
@@ -114,6 +142,15 @@ namespace umbriel {
     std::optional<bool> blurPopups;
     std::optional<double> ignoreAlpha;
     std::optional<bool> optimized;
+
+    // See WindowRule: the regex is derived from the pattern.
+    [[nodiscard]] bool operator==(const LayerRule& other) const {
+      return namespacePattern == other.namespacePattern
+          && blur == other.blur
+          && blurPopups == other.blurPopups
+          && ignoreAlpha == other.ignoreAlpha
+          && optimized == other.optimized;
+    }
   };
 
   struct ResolvedLayerRule {
@@ -121,6 +158,7 @@ namespace umbriel {
     std::optional<bool> blurPopups;
     std::optional<double> ignoreAlpha;
     std::optional<bool> optimized;
+    bool operator==(const ResolvedLayerRule&) const = default;
   };
 
   struct Config {
@@ -145,6 +183,7 @@ namespace umbriel {
         double brightness = 0.9;
         double contrast = 0.9;
         double saturation = 1.1;
+        bool operator==(const Blur&) const = default;
       } blur;
       struct Shadow {
         bool enabled = true;
@@ -152,10 +191,12 @@ namespace umbriel {
         int offsetX = 2;
         int offsetY = 2;
         std::array<float, 4> color{0.0F, 0.0F, 0.0F, 0.55F};
+        bool operator==(const Shadow&) const = default;
       } shadow;
       bool preferNoCsd = true;
 
       [[nodiscard]] int totalBorderWidth() const { return borderWidth + outerBorderWidth; }
+      bool operator==(const Appearance&) const = default;
     } appearance;
 
     struct Overview {
@@ -165,6 +206,7 @@ namespace umbriel {
       std::array<float, 4> backgroundTint{0.0627451F, 0.0627451F, 0.0784314F, 0.1882353F};
       // Rounded background behind each workspace; alpha controls opacity.
       std::array<float, 4> workspaceBackground{0.0F, 0.0F, 0.0F, 0.2666667F};
+      bool operator==(const Overview&) const = default;
     } overview;
 
     struct Layout {
@@ -174,7 +216,9 @@ namespace umbriel {
       struct Scrolling {
         double defaultWidthFraction = 0.5;
         bool alwaysCenterSingleColumn = true;
+        bool operator==(const Scrolling&) const = default;
       } scrolling;
+      bool operator==(const Layout&) const = default;
     } layout;
 
     // Clear `layout.gap` outside decoration edges: borders are drawn outside the
@@ -185,6 +229,7 @@ namespace umbriel {
     struct Workspaces {
       // Re-selecting the active workspace jumps back to the previous one.
       bool backAndForth = false;
+      bool operator==(const Workspaces&) const = default;
     } workspaces;
 
     struct General {
@@ -193,11 +238,13 @@ namespace umbriel {
       bool xwayland = true;
       // Show the keybinds cheatsheet overlay on startup.
       bool showCheatsheet = true;
+      bool operator==(const General&) const = default;
     } general;
 
     struct Environment {
       // Ordered list of NAME=value pairs exported to the compositor process.
       std::vector<std::pair<std::string, std::string>> variables;
+      bool operator==(const Environment&) const = default;
     } environment;
 
     struct Input {
@@ -206,27 +253,33 @@ namespace umbriel {
         std::string variant;
         int repeatRate = 25;
         int repeatDelay = 600;
+        bool operator==(const Keyboard&) const = default;
       } keyboard;
 
       struct Touchpad {
         std::optional<bool> tap;
         std::optional<bool> naturalScroll;
+        bool operator==(const Touchpad&) const = default;
       } touchpad;
 
       struct Mouse {
         std::optional<bool> naturalScroll;
         int scrollWheelStep = 60;
+        bool operator==(const Mouse&) const = default;
       } mouse;
 
       struct Cursor {
         std::string theme;
         int size = 24;
+        bool operator==(const Cursor&) const = default;
       } cursor;
 
       struct Focus {
         bool followsMouse = false;
         std::optional<double> followsMouseMaxScroll;
+        bool operator==(const Focus&) const = default;
       } focus;
+      bool operator==(const Input&) const = default;
     } input;
 
     std::vector<Keybind> keybinds;
@@ -234,6 +287,8 @@ namespace umbriel {
     std::vector<WindowRule> windowRules;
     std::vector<LayerRule> layerRules;
     std::vector<WorkspaceConfig> workspaceRules; // [[workspace]] layout rules
+
+    bool operator==(const Config&) const = default;
   };
 
   [[nodiscard]] const Config& config();

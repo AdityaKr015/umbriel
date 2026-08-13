@@ -422,38 +422,45 @@ namespace umbriel {
           return reject("unknown workspace on output " + bind.workspaceOutput + ": " + bind.workspaceName);
         }
       } else {
-        bool ambiguous = false;
-        for (const auto& output : m_outputs) {
-          WorkspaceGroup* group = output->workspaceGroup();
-          Workspace* match = group != nullptr ? group->workspaceNamed(bind.workspaceName) : nullptr;
-          if (match == nullptr) {
-            continue;
-          }
-          if (target != nullptr) {
-            ambiguous = true;
-          } else {
-            target = match;
-          }
+        Output* preferred = outputFromWlr(preferredOutput());
+        WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
+        // Dynamic numbered workspaces belong to their output. Resolve this
+        // first so an existing number elsewhere cannot steal a local request.
+        const bool numericSelector = !bind.workspaceName.empty()
+            && std::ranges::all_of(bind.workspaceName, [](char value) { return value >= '0' && value <= '9'; });
+        if (preferredGroup != nullptr && preferredGroup->dynamic() && numericSelector) {
+          target = preferredGroup->workspaceForSelector(bind.workspaceName);
         }
         if (target == nullptr) {
-          Output* preferred = outputFromWlr(preferredOutput());
-          WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
-          target = preferredGroup != nullptr ? preferredGroup->workspaceForSelector(bind.workspaceName) : nullptr;
+          bool ambiguous = false;
+          for (const auto& output : m_outputs) {
+            WorkspaceGroup* group = output->workspaceGroup();
+            Workspace* match = group != nullptr ? group->workspaceNamed(bind.workspaceName) : nullptr;
+            if (match == nullptr) {
+              continue;
+            }
+            if (target != nullptr) {
+              ambiguous = true;
+            } else {
+              target = match;
+            }
+          }
           if (target == nullptr) {
-            return reject("unknown workspace: " + bind.workspaceName);
+            target = preferredGroup != nullptr ? preferredGroup->workspaceForSelector(bind.workspaceName) : nullptr;
+            if (target == nullptr) {
+              return reject("unknown workspace: " + bind.workspaceName);
+            }
           }
-        }
-        if (ambiguous) {
-          Output* preferred = outputFromWlr(preferredOutput());
-          WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
-          Workspace* preferredMatch =
-              preferredGroup != nullptr ? preferredGroup->workspaceNamed(bind.workspaceName) : nullptr;
-          if (preferredMatch == nullptr) {
-            return reject(
-                "ambiguous workspace: " + bind.workspaceName + " (qualify it as " + bind.workspaceName + "/<output>)"
-            );
+          if (ambiguous) {
+            Workspace* preferredMatch =
+                preferredGroup != nullptr ? preferredGroup->workspaceNamed(bind.workspaceName) : nullptr;
+            if (preferredMatch == nullptr) {
+              return reject(
+                  "ambiguous workspace: " + bind.workspaceName + " (qualify it as " + bind.workspaceName + "/<output>)"
+              );
+            }
+            target = preferredMatch;
           }
-          target = preferredMatch;
         }
       }
 

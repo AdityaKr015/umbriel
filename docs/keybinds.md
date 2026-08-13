@@ -50,8 +50,9 @@ set.
 Workspace selectors use exact names, including numeric names such as `1`.
 Unique names resolve globally; duplicate names resolve on the preferred output.
 Append `/output` to target a different output explicitly. On a dynamic output,
-a numeric target beyond its current workspace count clamps to the last
-workspace.
+a numeric target resolves on the preferred output before an exact match on
+another output, then clamps to the last workspace when it exceeds the current
+dynamic inventory.
 
 ### Floating action
 

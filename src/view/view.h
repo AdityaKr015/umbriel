@@ -1,9 +1,7 @@
 #pragma once
 #include "core/animation.h"
 #include "scene/node.h"
-#include "scene/surface_blur.h"
-#include "scene/surface_shadow.h"
-#include "view/border_ring.h"
+#include "view/decoration.h"
 
 #include <array>
 #include <optional>
@@ -60,6 +58,9 @@ namespace umbriel {
     void setScratchpadBorder(bool scratchpad);
     void animateTo(int x, int y);
     void setPosition(int x, int y);
+    // Move the scene nodes without touching the position animation: an
+    // interactive drag tracks the pointer 1:1 and owns the position itself.
+    void setDragPosition(int x, int y);
     // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
     void clampFloatingPosition();
     // Animate the presented size toward a layout-assigned size. Called by
@@ -133,21 +134,20 @@ namespace umbriel {
     void handleForeignDestroy();
     void handleExtForeignDestroy();
     void handleCaptureSourceDestroy();
-    [[nodiscard]] std::array<BorderEdge, 4> borderEdges() const;
-    [[nodiscard]] std::array<BorderEdge, 4> borderEdges(int contentWidth, int contentHeight) const;
     void updateBorderGeometry();
     void updateBorderGeometry(int contentWidth, int contentHeight);
     void setBorderFocused(bool focused);
-    void applyBorderClip(
-        wlr_scene_rect* const rects[4], const std::array<BorderEdge, 4>& edges, const wlr_box& target,
-        const wlr_box& outputBox
-    );
-    void applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight);
     void applyCornerRadius();
     void updateBlur();
-    [[nodiscard]] SurfaceBlurOptions blurOptions() const;
-    [[nodiscard]] SurfaceBlurOptions popupBlurOptions() const;
+    void updateBlur(int contentWidth, int contentHeight);
+    [[nodiscard]] SurfaceBlurOptions blurOptions() const { return m_decoration.blurOptions(); }
+    [[nodiscard]] SurfaceBlurOptions popupBlurOptions() const { return m_decoration.popupBlurOptions(); }
     void updateShadow();
+    void updateShadow(int contentWidth, int contentHeight);
+    // Show the borders and refresh everything derived from them. The four steps
+    // are always wanted together: a ring that exists but was never given a
+    // geometry draws at 0x0, and the surface radius and effects follow the ring.
+    void showDecorations(bool enabled);
     // Record the dimensions currently rendered by the scene. Client geometry
     // can lag a layout configure, so presentation consumers must not infer
     // their size independently from the committed geometry.
@@ -195,7 +195,6 @@ namespace umbriel {
     void adoptFloatingClientSize();
     [[nodiscard]] wlr_box floatingUsableArea() const;
     void placeInUsableArea();
-    void ensureBorders();
     void updateForeignIdentity();
     void updateForeignState();
     void enterForeignOutput();
@@ -210,17 +209,8 @@ namespace umbriel {
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
     wlr_scene_tree* m_sceneTree = nullptr;
-    wlr_scene_tree* m_borderTree = nullptr;
-    wlr_scene_rect* m_borderRects[4] = {};       // top, bottom, left, right (inner)
-    wlr_scene_rect* m_outerBorderRect = nullptr; // single rounded ring outside the inner border
     wlr_scene_rect* m_fullscreenBackdrop = nullptr;
-    SurfaceBlur m_blur;
-    SurfaceBlurOptions m_blurOptions;
-    SurfaceBlurOptions m_popupBlurOptions;
-    SurfaceShadow m_shadow;
-    wlr_scene_tree* m_shadowContainer = nullptr; // child of workspace shadow layer
-    bool m_hasShadowOutputClip = false;
-    wlr_box m_shadowOutputClip{}; // global (scene-root), valid when m_hasShadowOutputClip
+    ViewDecoration m_decoration;
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_ext_foreign_toplevel_handle_v1* m_extForeign = nullptr;
     wlr_output* m_foreignOutput = nullptr;

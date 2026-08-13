@@ -899,10 +899,7 @@ namespace umbriel {
   void Cursor::processMove() {
     const int nx = static_cast<int>(m_cursor->x - m_grabX);
     const int ny = static_cast<int>(m_cursor->y - m_grabY);
-    wlr_scene_node_set_position(&m_grabbedView->sceneTree()->node, nx, ny);
-    if (m_grabbedView->m_shadowContainer != nullptr) {
-      wlr_scene_node_set_position(&m_grabbedView->m_shadowContainer->node, nx, ny);
-    }
+    m_grabbedView->setDragPosition(nx, ny);
     // Both floating (Move) and tiled (MoveTile) drags keep the view unclipped so
     // it spans outputs as the pointer crosses monitors.
     presentGrabbedViewSpanning();

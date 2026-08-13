@@ -207,9 +207,7 @@ namespace umbriel {
     if (m_sceneTree != nullptr) {
       wlr_scene_node_set_enabled(&m_sceneTree->node, active);
     }
-    if (m_shadowContainer != nullptr) {
-      wlr_scene_node_set_enabled(&m_shadowContainer->node, active);
-    }
+    m_decoration.setShadowEnabled(active);
     if (!m_mapped) {
       return;
     }
@@ -224,16 +222,12 @@ namespace umbriel {
 
   void View::setNodeEnabled(bool enabled) {
     wlr_scene_node_set_enabled(&m_sceneTree->node, enabled);
-    if (m_shadowContainer != nullptr) {
-      wlr_scene_node_set_enabled(&m_shadowContainer->node, enabled);
-    }
+    m_decoration.setShadowEnabled(enabled);
   }
 
   void View::raiseToTop() {
     wlr_scene_node_raise_to_top(&m_sceneTree->node);
-    if (m_shadowContainer != nullptr) {
-      wlr_scene_node_raise_to_top(&m_shadowContainer->node);
-    }
+    m_decoration.raiseShadowToTop();
   }
 
   void View::setScratchpadBorder(bool scratchpad) {
@@ -245,21 +239,7 @@ namespace umbriel {
   }
 
   void View::reparentShadow(wlr_scene_tree* shadowLayer) {
-    if (shadowLayer == nullptr) {
-      m_shadow.reset();
-      if (m_shadowContainer != nullptr) {
-        wlr_scene_node_destroy(&m_shadowContainer->node);
-        m_shadowContainer = nullptr;
-      }
-      return;
-    }
-    if (m_shadowContainer == nullptr) {
-      m_shadowContainer = wlr_scene_tree_create(shadowLayer);
-    } else {
-      wlr_scene_node_reparent(&m_shadowContainer->node, shadowLayer);
-    }
-    wlr_scene_node_set_position(&m_shadowContainer->node, m_sceneTree->node.x, m_sceneTree->node.y);
-    wlr_scene_node_set_enabled(&m_shadowContainer->node, m_sceneTree->node.enabled);
+    m_decoration.reparentShadow(shadowLayer, m_sceneTree->node.x, m_sceneTree->node.y, m_sceneTree->node.enabled);
     updateShadow();
   }
 
@@ -313,8 +293,7 @@ namespace umbriel {
         &effective
     );
     setBorderFocused(m_borderFocusedState);
-    m_shadow.setAlpha(effective);
-    m_blur.setAlpha(effective);
+    m_decoration.setAlpha(effective);
   }
 
   void View::applyEffectiveOpacity() {
@@ -467,22 +446,10 @@ namespace umbriel {
     // syncViewPresentation below, so the animated size and the output clip are
     // always applied together instead of fighting over dest_size.
     updateBorderGeometry(m_presentedW, m_presentedH);
-    // Shadow with presented size.
-    if (!m_toplevel->scheduled.fullscreen && m_shadowContainer != nullptr) {
-      const int total = borderInset();
-      const int radius = decorated() ? expandedRadius(config().appearance.cornerRadius, total) : 0;
-      m_shadow.update(
-          m_shadowContainer, m_presentedW, m_presentedH, total, radius,
-          m_hasShadowOutputClip ? &m_shadowOutputClip : nullptr
-      );
+    if (!m_toplevel->scheduled.fullscreen) {
+      updateShadow(m_presentedW, m_presentedH);
     }
-    // Blur with presented size.
-    const wlr_box nodeBox{0, 0, m_presentedW, m_presentedH};
-    m_blur.update(
-        m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry, surfaceRadius(), nullptr,
-        blurOptions()
-    );
-    m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
+    updateBlur(m_presentedW, m_presentedH);
     if (m_workspace != nullptr) {
       m_workspace->syncViewPresentation(this);
     }
@@ -580,9 +547,12 @@ namespace umbriel {
     m_posY.snap(y);
     m_positioned = true;
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
-    if (m_shadowContainer != nullptr) {
-      wlr_scene_node_set_position(&m_shadowContainer->node, x, y);
-    }
+    m_decoration.setShadowPosition(x, y);
+  }
+
+  void View::setDragPosition(int x, int y) {
+    wlr_scene_node_set_position(&m_sceneTree->node, x, y);
+    m_decoration.setShadowPosition(x, y);
   }
 
   void View::animateTo(int x, int y) {
@@ -628,9 +598,7 @@ namespace umbriel {
       const int cx = static_cast<int>(std::lround(m_posX.current()));
       const int cy = static_cast<int>(std::lround(m_posY.current()));
       wlr_scene_node_set_position(&m_sceneTree->node, cx, cy);
-      if (m_shadowContainer != nullptr) {
-        wlr_scene_node_set_position(&m_shadowContainer->node, cx, cy);
-      }
+      m_decoration.setShadowPosition(cx, cy);
       // Clips are derived from the node's current position; refresh them as the
       // node moves or partial-visibility trims land displaced.
       if (m_workspace != nullptr) {
@@ -769,12 +737,10 @@ namespace umbriel {
     const int y = usable.y + (usable.height - height) / 2;
     m_positioned = true;
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
-    if (m_shadowContainer != nullptr) {
-      wlr_scene_node_set_position(&m_shadowContainer->node, x, y);
-    }
+    m_decoration.setShadowPosition(x, y);
   }
 
-  bool View::decorated() const { return m_borderTree != nullptr && m_borderTree->node.enabled; }
+  bool View::decorated() const { return m_decoration.bordersVisible(); }
 
   int View::borderInset() const { return decorated() ? config().appearance.totalBorderWidth() : 0; }
 
@@ -782,210 +748,18 @@ namespace umbriel {
     return decorated() && !m_toplevel->scheduled.fullscreen ? config().appearance.cornerRadius : 0;
   }
 
-  std::array<BorderEdge, 4> View::borderEdges() const {
-    const wlr_box& geometry = m_toplevel->base->geometry;
-    return borderEdges(geometry.width, geometry.height);
-  }
-
-  std::array<BorderEdge, 4> View::borderEdges(int contentWidth, int contentHeight) const {
-    return makeBorderRing(
-        contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.borderWidth
-    );
-  }
-
-  void View::updateBorderGeometry() {
-    const wlr_box& geometry = m_toplevel->base->geometry;
-    updateBorderGeometry(geometry.width, geometry.height);
-  }
-
-  void View::updateBorderGeometry(int contentWidth, int contentHeight) {
-    if (m_borderTree == nullptr) {
-      return;
-    }
-    const auto edges = borderEdges(contentWidth, contentHeight);
-    for (size_t i = 0; i < edges.size(); ++i) {
-      wlr_scene_rect* rect = m_borderRects[i];
-      if (rect == nullptr) {
-        continue;
-      }
-      const BorderEdge& edge = edges[i];
-      wlr_scene_node_set_position(&rect->node, edge.box.x, edge.box.y);
-      wlr_scene_rect_set_size(rect, edge.box.width, edge.box.height);
-      wlr_scene_rect_set_corner_radii(rect, edge.outer);
-      wlr_scene_rect_set_clipped_region(
-          rect,
-          edge.hasHole ? clipped_region{.area = edge.hole, .corners = edge.holeCorners} : clipped_region_get_default()
-      );
-    }
-
-    if (m_outerBorderRect != nullptr) {
-      const int outer = config().appearance.outerBorderWidth;
-      const int total = config().appearance.totalBorderWidth();
-      const int radius = config().appearance.cornerRadius;
-      if (outer <= 0) {
-        wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
-      } else {
-        // Fill the full decoration bounds; hole is only the window surface so the
-        // outer color tucks under the inner border (no gap between the two rings).
-        wlr_scene_node_set_position(&m_outerBorderRect->node, -total, -total);
-        wlr_scene_rect_set_size(m_outerBorderRect, contentWidth + 2 * total, contentHeight + 2 * total);
-        const int outerRadius = expandedRadius(radius, total);
-        wlr_scene_rect_set_corner_radii(
-            m_outerBorderRect, corner_radii_new(outerRadius, outerRadius, outerRadius, outerRadius)
-        );
-        wlr_scene_rect_set_color(m_outerBorderRect, config().appearance.outerBorderColor.data());
-        wlr_scene_rect_set_clipped_region(
-            m_outerBorderRect,
-            clipped_region{
-                .area = {total, total, contentWidth, contentHeight},
-                .corners = corner_radii_new(radius, radius, radius, radius),
-            }
-        );
-      }
-    }
-
-    for (wlr_scene_rect* rect : m_borderRects) {
-      if (rect != nullptr) {
-        wlr_scene_node_raise_to_top(&rect->node);
-      }
-    }
-  }
-
   void View::setBorderFocused(bool focused) {
     const bool focusChanged = m_borderFocusedState != focused;
     m_borderFocusedState = focused;
-    if (m_borderTree == nullptr) {
-      if (focusChanged && m_mapped) {
-        applyDynamicRules();
-      }
-      return;
-    }
-    const auto& baseColor = m_scratchpadBorder
-        ? (focused ? config().appearance.scratchpadBorderFocused : config().appearance.scratchpadBorderUnfocused)
-        : (focused ? config().appearance.borderFocused : config().appearance.borderUnfocused);
-    float color[4];
-    premultiplied(color, baseColor, m_fadeAlpha);
-    for (wlr_scene_rect* rect : m_borderRects) {
-      if (rect == nullptr) {
-        continue;
-      }
-      wlr_scene_rect_set_color(rect, color);
-    }
-    if (m_outerBorderRect != nullptr) {
-      float outerColor[4];
-      premultiplied(outerColor, config().appearance.outerBorderColor, m_fadeAlpha);
-      wlr_scene_rect_set_color(m_outerBorderRect, outerColor);
-    }
-
+    m_decoration.setBorderColor(focused, m_scratchpadBorder, m_fadeAlpha);
     if (focusChanged && m_mapped) {
       applyDynamicRules();
     }
   }
 
-  void
-  View::applyOuterBorderClip(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight) {
-    if (m_outerBorderRect == nullptr || config().appearance.outerBorderWidth <= 0) {
-      if (m_outerBorderRect != nullptr) {
-        wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
-      }
-      return;
-    }
-    const int total = config().appearance.totalBorderWidth();
-    const int radius = config().appearance.cornerRadius;
-    const wlr_box screenBox{
-        .x = target.x - total,
-        .y = target.y - total,
-        .width = contentWidth + 2 * total,
-        .height = contentHeight + 2 * total,
-    };
-    wlr_box visible{};
-    if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
-      wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
-      return;
-    }
-
-    wlr_scene_node_set_position(&m_outerBorderRect->node, visible.x - target.x, visible.y - target.y);
-    wlr_scene_rect_set_size(m_outerBorderRect, visible.width, visible.height);
-
-    const bool trimLeft = visible.x > screenBox.x;
-    const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
-    const bool trimTop = visible.y > screenBox.y;
-    const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
-    const int outerRadius = expandedRadius(radius, total);
-    wlr_scene_rect_set_corner_radii(
-        m_outerBorderRect,
-        corner_radii_new(
-            trimLeft || trimTop ? 0 : outerRadius, trimRight || trimTop ? 0 : outerRadius,
-            trimRight || trimBottom ? 0 : outerRadius, trimLeft || trimBottom ? 0 : outerRadius
-        )
-    );
-
-    // Hole matches the window surface; inner border covers the overlap on top.
-    wlr_box hole{
-        .x = screenBox.x + total - visible.x,
-        .y = screenBox.y + total - visible.y,
-        .width = contentWidth,
-        .height = contentHeight,
-    };
-    wlr_scene_rect_set_clipped_region(
-        m_outerBorderRect,
-        clipped_region{
-            .area = hole,
-            .corners = corner_radii_new(
-                trimLeft || trimTop ? 0 : radius, trimRight || trimTop ? 0 : radius,
-                trimRight || trimBottom ? 0 : radius, trimLeft || trimBottom ? 0 : radius
-            ),
-        }
-    );
-  }
-
-  void View::applyBorderClip(
-      wlr_scene_rect* const rects[4], const std::array<BorderEdge, 4>& edges, const wlr_box& target,
-      const wlr_box& outputBox
-  ) {
-    for (size_t i = 0; i < edges.size(); ++i) {
-      wlr_scene_rect* rect = rects[i];
-      if (rect == nullptr) {
-        continue;
-      }
-      const BorderEdge& edge = edges[i];
-      wlr_box screenBox = edge.box;
-      screenBox.x += target.x;
-      screenBox.y += target.y;
-
-      wlr_box visible{};
-      if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
-        wlr_scene_rect_set_size(rect, 0, 0);
-        continue;
-      }
-
-      wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
-      wlr_scene_rect_set_size(rect, visible.width, visible.height);
-
-      const bool trimLeft = visible.x > screenBox.x;
-      const bool trimRight = visible.x + visible.width < screenBox.x + screenBox.width;
-      const bool trimTop = visible.y > screenBox.y;
-      const bool trimBottom = visible.y + visible.height < screenBox.y + screenBox.height;
-      const auto trimCorners = [&](fx_corner_radii corners) {
-        return corner_radii_new(
-            trimLeft || trimTop ? 0 : corners.top_left, trimRight || trimTop ? 0 : corners.top_right,
-            trimRight || trimBottom ? 0 : corners.bottom_right, trimLeft || trimBottom ? 0 : corners.bottom_left
-        );
-      };
-
-      wlr_scene_rect_set_corner_radii(rect, trimCorners(edge.outer));
-      if (edge.hasHole) {
-        wlr_box hole = edge.hole;
-        hole.x += screenBox.x - visible.x;
-        hole.y += screenBox.y - visible.y;
-        wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = hole, .corners = trimCorners(edge.holeCorners)});
-      } else {
-        wlr_scene_rect_set_clipped_region(rect, clipped_region_get_default());
-      }
-    }
-  }
-
   void View::applyCornerRadius() {
+    // Every buffer under the tree has to be told, but only the toplevel's own
+    // surface should round: subsurfaces are separate scene buffers.
     wlr_scene_node_for_each_buffer(
         &m_sceneTree->node,
         [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
@@ -994,38 +768,62 @@ namespace umbriel {
           if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
             return;
           }
-
           wlr_scene_buffer_set_corner_radius(buffer, self->surfaceRadius());
         },
         this
     );
   }
 
-  SurfaceBlurOptions View::blurOptions() const { return m_blurOptions; }
-
-  SurfaceBlurOptions View::popupBlurOptions() const { return m_popupBlurOptions; }
-
   void View::updateBlur() {
     const wlr_box& geometry = m_toplevel->base->geometry;
-    const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
-    m_blur.update(m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, surfaceRadius(), nullptr, blurOptions());
-    m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
+    updateBlur(geometry.width, geometry.height);
+  }
+
+  void View::updateBlur(int contentWidth, int contentHeight) {
+    const wlr_box nodeBox{0, 0, contentWidth, contentHeight};
+    m_decoration.updateBlur(
+        m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry, surfaceRadius(), nullptr,
+        m_fadeAlpha * m_ruleOpacity
+    );
   }
 
   void View::updateShadow() {
     if (m_toplevel->scheduled.fullscreen) {
-      m_shadow.hide();
+      m_decoration.hideShadow();
       return;
     }
-    if (m_shadowContainer == nullptr) {
-      return;
-    }
+    // A tiled view's committed geometry lags the layout, so the presented size is
+    // the one the shadow must match; a float has no such lag.
     const wlr_box& geometry = m_toplevel->base->geometry;
-    const int w = m_tiled && m_presentedW > 0 ? m_presentedW : geometry.width;
-    const int h = m_tiled && m_presentedH > 0 ? m_presentedH : geometry.height;
-    const int total = borderInset();
-    const int radius = decorated() ? expandedRadius(config().appearance.cornerRadius, total) : 0;
-    m_shadow.update(m_shadowContainer, w, h, total, radius, m_hasShadowOutputClip ? &m_shadowOutputClip : nullptr);
+    updateShadow(
+        m_tiled && m_presentedW > 0 ? m_presentedW : geometry.width,
+        m_tiled && m_presentedH > 0 ? m_presentedH : geometry.height
+    );
+  }
+
+  void View::updateShadow(int contentWidth, int contentHeight) {
+    const int inset = borderInset();
+    m_decoration.updateShadow(
+        contentWidth, contentHeight, inset, decorated() ? expandedRadius(config().appearance.cornerRadius, inset) : 0
+    );
+  }
+
+  void View::showDecorations(bool enabled) {
+    m_decoration.ensureBorders(m_sceneTree);
+    m_decoration.setBordersEnabled(enabled);
+    updateBorderGeometry();
+    applyCornerRadius();
+    updateBlur();
+    updateShadow();
+  }
+
+  void View::updateBorderGeometry() {
+    const wlr_box& geometry = m_toplevel->base->geometry;
+    updateBorderGeometry(geometry.width, geometry.height);
+  }
+
+  void View::updateBorderGeometry(int contentWidth, int contentHeight) {
+    m_decoration.updateBorderGeometry(contentWidth, contentHeight);
   }
 
   void View::beginCloseAnimation() {
@@ -1045,38 +843,7 @@ namespace umbriel {
     // Collect border rects for the snapshot.
     std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> snapRects;
 
-    if (decorated()) {
-      const auto& focusedColor =
-          m_borderFocusedState ? config().appearance.borderFocused : config().appearance.borderUnfocused;
-      for (wlr_scene_rect* srcRect : m_borderRects) {
-        if (srcRect == nullptr) {
-          continue;
-        }
-        wlr_scene_rect* copy = wlr_scene_rect_create(snap, srcRect->width, srcRect->height, srcRect->color);
-        if (copy == nullptr) {
-          continue;
-        }
-        wlr_scene_node_set_position(
-            &copy->node, m_borderTree->node.x + srcRect->node.x, m_borderTree->node.y + srcRect->node.y
-        );
-        wlr_scene_rect_set_corner_radii(copy, srcRect->corners);
-        wlr_scene_rect_set_clipped_region(copy, srcRect->clipped_region);
-        snapRects.emplace_back(copy, focusedColor);
-      }
-      if (m_outerBorderRect != nullptr && config().appearance.outerBorderWidth > 0) {
-        wlr_scene_rect* copy =
-            wlr_scene_rect_create(snap, m_outerBorderRect->width, m_outerBorderRect->height, m_outerBorderRect->color);
-        if (copy != nullptr) {
-          wlr_scene_node_set_position(
-              &copy->node, m_borderTree->node.x + m_outerBorderRect->node.x,
-              m_borderTree->node.y + m_outerBorderRect->node.y
-          );
-          wlr_scene_rect_set_corner_radii(copy, m_outerBorderRect->corners);
-          wlr_scene_rect_set_clipped_region(copy, m_outerBorderRect->clipped_region);
-          snapRects.emplace_back(copy, config().appearance.outerBorderColor);
-        }
-      }
-    }
+    m_decoration.snapshotBorders(snap, m_borderFocusedState, snapRects);
 
     // Copy surface buffers.
     struct CopyCtx {
@@ -1200,17 +967,13 @@ namespace umbriel {
     trackPresentedSize(geometry.width, geometry.height);
     if (!fullscreen && !m_tiled) {
       syncFloatingSurfaceClip();
-      if (m_borderTree != nullptr) {
-        updateBorderGeometry();
-      }
+      updateBorderGeometry();
       return;
     }
     const wlr_box* clip = (!fullscreen && m_tiled) ? &m_toplevel->base->geometry : nullptr;
     setSurfaceTreeClip(clip);
-    if (m_borderTree != nullptr) {
-      updateBorderGeometry();
-    }
-    m_hasShadowOutputClip = false;
+    updateBorderGeometry();
+    m_decoration.clearShadowOutputClip();
     updateBlur();
     updateShadow();
   }
@@ -1306,7 +1069,7 @@ namespace umbriel {
     } else {
       setSurfaceTreeClip(nullptr);
     }
-    m_hasShadowOutputClip = false;
+    m_decoration.clearShadowOutputClip();
     updateBlur();
     updateShadow();
   }
@@ -1337,9 +1100,7 @@ namespace umbriel {
       wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
     }
     wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
-    if (m_shadowContainer != nullptr) {
-      wlr_scene_node_set_position(&m_shadowContainer->node, fullArea.x, fullArea.y);
-    }
+    m_decoration.setShadowPosition(fullArea.x, fullArea.y);
     updateFullscreenPresentation(fullArea.width, fullArea.height);
     // Oversized buffers (client mid mode-change) get cropped to the output.
     const wlr_box& geo = m_toplevel->base->geometry;
@@ -1416,28 +1177,17 @@ namespace umbriel {
       const wlr_box offSurface{-kFarAway, -kFarAway, 1, 1};
       setSurfaceTreeClip(&offSurface);
     }
-    if (m_borderTree != nullptr) {
-      if (decoratedFullyVisible) {
-        updateBorderGeometry(content.width, content.height);
-      } else {
-        applyOuterBorderClip(target, outputBox, content.width, content.height);
-        applyBorderClip(m_borderRects, borderEdges(content.width, content.height), target, outputBox);
-        for (wlr_scene_rect* rect : m_borderRects) {
-          if (rect != nullptr) {
-            wlr_scene_node_raise_to_top(&rect->node);
-          }
-        }
-      }
+    if (decoratedFullyVisible) {
+      updateBorderGeometry(content.width, content.height);
+    } else {
+      m_decoration.clipBorders(target, outputBox, content.width, content.height);
     }
-    if (m_shadowContainer != nullptr) {
-      m_shadowOutputClip = outputBox;
-      m_hasShadowOutputClip = true;
-    }
+    m_decoration.setShadowOutputClip(outputBox);
     updateShadow();
 
     const wlr_box nodeBox{0, 0, content.width, content.height};
     if (!contentOnOutput) {
-      m_blur.hide();
+      m_decoration.hideBlur();
       return;
     }
 
@@ -1458,7 +1208,7 @@ namespace umbriel {
     wlr_box blurClip{};
     if (!wlr_box_intersection(&blurClip, &nodeBox, &contentLocal)
         || !wlr_box_intersection(&blurClip, &blurClip, &outputLocal)) {
-      m_blur.hide();
+      m_decoration.hideBlur();
       return;
     }
     const int bleed = std::max(0, config().appearance.blur.radius) * std::max(1, config().appearance.blur.passes);
@@ -1479,28 +1229,15 @@ namespace umbriel {
       }
     }
     if (blurClip.width <= 0 || blurClip.height <= 0) {
-      m_blur.hide();
+      m_decoration.hideBlur();
       return;
     }
-    m_blur.update(m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, surfaceRadius(), &blurClip, blurOptions());
-    m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
+    m_decoration.updateBlur(
+        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, surfaceRadius(), &blurClip,
+        m_fadeAlpha * m_ruleOpacity
+    );
   }
 
-  void View::ensureBorders() {
-    if (m_borderTree != nullptr) {
-      return;
-    }
-    m_borderTree = wlr_scene_tree_create(m_sceneTree);
-    // Outer below, then inner on top so the focus ring stays visible.
-    m_outerBorderRect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.outerBorderColor.data());
-    for (auto*& rect : m_borderRects) {
-      rect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.borderUnfocused.data());
-    }
-    for (wlr_scene_rect* rect : m_borderRects) {
-      wlr_scene_node_raise_to_top(&rect->node);
-    }
-    wlr_scene_node_lower_to_bottom(&m_borderTree->node);
-  }
   void View::handleMap() {
     m_mapped = true;
     m_tiled = looksTiled(m_toplevel);
@@ -1519,12 +1256,7 @@ namespace umbriel {
     // the client mapped with a placeholder.
     m_initialRulesSettled = !anyWindowRuleHasTitlePattern();
 
-    ensureBorders();
-    wlr_scene_node_set_enabled(&m_borderTree->node, !m_toplevel->current.fullscreen);
-    updateBorderGeometry();
-    applyCornerRadius();
-    updateBlur();
-    updateShadow();
+    showDecorations(!m_toplevel->current.fullscreen);
 
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this, rule.defaultWidth);
@@ -1620,11 +1352,8 @@ namespace umbriel {
     cancelFadeAnimation();
     cancelSizeAnimation();
     cancelPositionAnimation();
-    if (m_borderTree != nullptr) {
-      wlr_scene_node_set_enabled(&m_borderTree->node, false);
-    }
-    m_blur.hide();
-    m_shadow.hide();
+    m_decoration.setBordersEnabled(false);
+    m_decoration.hideEffects();
     wlr_scene_node_set_enabled(&m_fullscreenBackdrop->node, false);
     if (m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
       // Move out of the fullscreen layer back to the normal workspace/xdg tree.
@@ -1699,15 +1428,9 @@ namespace umbriel {
         }
       }
     }
-    if (m_borderTree != nullptr && !sizeAnimating()) {
+    if (!sizeAnimating()) {
       const wlr_box& geometry = m_toplevel->base->geometry;
-      if (m_borderRects[0]->width != geometry.width + 2 * config().appearance.borderWidth
-          || m_borderRects[2]->height != std::max(0, geometry.height - 2 * config().appearance.cornerRadius)
-          || (m_outerBorderRect != nullptr
-              && m_outerBorderRect->width
-                  != (config().appearance.outerBorderWidth > 0
-                          ? geometry.width + 2 * config().appearance.totalBorderWidth()
-                          : 0))) {
+      if (m_decoration.borderGeometryStale(geometry.width, geometry.height)) {
         updateBorderGeometry();
       }
     }
@@ -1848,16 +1571,12 @@ namespace umbriel {
       if (usable.width > 0 && usable.height > 0) {
         wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
         wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
-        if (m_shadowContainer != nullptr) {
-          wlr_scene_node_set_position(&m_shadowContainer->node, usable.x, usable.y);
-        }
+        m_decoration.setShadowPosition(usable.x, usable.y);
       }
     } else if (!maximized && wasMaximized && m_hasMaximizeRestoreBox) {
       requestFloatingSize(m_maximizeRestoreBox.width, m_maximizeRestoreBox.height);
       wlr_scene_node_set_position(&m_sceneTree->node, m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
-      if (m_shadowContainer != nullptr) {
-        wlr_scene_node_set_position(&m_shadowContainer->node, m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
-      }
+      m_decoration.setShadowPosition(m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
       m_hasMaximizeRestoreBox = false;
     }
     wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
@@ -2070,12 +1789,7 @@ namespace umbriel {
       animateTo(floatX, floatY);
       syncFloatingSurfaceClip();
       // Keep the focus ring when floating a tiled window.
-      ensureBorders();
-      wlr_scene_node_set_enabled(&m_borderTree->node, true);
-      updateBorderGeometry();
-      applyCornerRadius();
-      updateBlur();
-      updateShadow();
+      showDecorations(true);
       m_server->focusView(this);
       updateForeignState();
       return;
@@ -2101,8 +1815,8 @@ namespace umbriel {
     }
     wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
     wlr_xdg_toplevel_set_maximized(m_toplevel, false);
-    ensureBorders();
-    wlr_scene_node_set_enabled(&m_borderTree->node, true);
+    m_decoration.ensureBorders(m_sceneTree);
+    m_decoration.setBordersEnabled(true);
     updateBorderGeometry();
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this);
@@ -2161,9 +1875,7 @@ namespace umbriel {
         m_workspace->restackFloatingViews();
       }
     }
-    if (m_borderTree != nullptr) {
-      wlr_scene_node_set_enabled(&m_borderTree->node, !fullscreen);
-    }
+    m_decoration.setBordersEnabled(!fullscreen);
     applyCornerRadius();
     updateShadow();
     if (!fullscreen) {
@@ -2253,16 +1965,7 @@ namespace umbriel {
       resolved = &owned;
     }
     const ResolvedWindowRule& rule = *resolved;
-    m_blurOptions = SurfaceBlurOptions{
-        .ignoreAlpha = static_cast<float>(rule.blurIgnoreAlpha.value_or(0.0)),
-        .enabled = rule.blur.value_or(false),
-        .optimized = rule.blurOptimized,
-    };
-    m_popupBlurOptions = SurfaceBlurOptions{
-        .ignoreAlpha = static_cast<float>(rule.blurIgnoreAlpha.value_or(0.0)),
-        .enabled = rule.blurPopups.value_or(false),
-        .optimized = rule.blurOptimized,
-    };
+    m_decoration.applyRule(rule);
     const float newOpacity = rule.opacity ? static_cast<float>(*rule.opacity) : 1.0F;
     if (newOpacity != m_ruleOpacity) {
       m_ruleOpacity = newOpacity;

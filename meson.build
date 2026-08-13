@@ -107,6 +107,19 @@ output_mgmt_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+virtual_pointer_client_h = custom_target(
+  'wlr-virtual-pointer-unstable-v1-client-protocol.h',
+  input: 'protocols/wlr-virtual-pointer-unstable-v1.xml',
+  output: 'wlr-virtual-pointer-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+virtual_pointer_client_c = custom_target(
+  'wlr-virtual-pointer-unstable-v1-protocol.c',
+  input: 'protocols/wlr-virtual-pointer-unstable-v1.xml',
+  output: 'wlr-virtual-pointer-unstable-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 sources = files(
   'src/main.cpp',
   'src/core/animation.cpp',
@@ -201,6 +214,15 @@ unit_tests = [
     [wlroots_dep],
   ],
 ]
+
+# Harness helper, not a unit test: drives a virtual pointer against a running
+# compositor. The headless backend has no input devices, so this is the only way
+# to exercise pointer hit-testing without a physical mouse.
+executable(
+  'pointer-client',
+  ['tests/harness/pointer_client.cpp', virtual_pointer_client_h, virtual_pointer_client_c],
+  dependencies: [wayland_client_dep],
+)
 
 foreach unit_test : unit_tests
   test_exe = executable(

@@ -16,6 +16,7 @@
 #include <charconv>
 #include <cstddef>
 #include <system_error>
+#include <utility>
 
 namespace umbriel {
 
@@ -309,13 +310,16 @@ namespace umbriel {
   std::vector<Keybind> defaultKeybinds() {
     std::vector<Keybind> keybinds;
     keybinds.reserve(60);
+    // Built by assignment rather than aggregate initialisation: the trigger and
+    // payload fields already carry default member initialisers, and naming every
+    // one of them just to satisfy -Wmissing-field-initializers is noise.
     auto add = [&keybinds](KeybindAction action, uint32_t keysym, uint32_t modifiers = 0) {
-      keybinds.push_back({
-          .modifiers = modifiers,
-          .useMod = true,
-          .keysym = xkb_keysym_to_lower(keysym),
-          .action = action,
-      });
+      Keybind bind;
+      bind.modifiers = modifiers;
+      bind.useMod = true;
+      bind.keysym = xkb_keysym_to_lower(keysym);
+      bind.action = action;
+      keybinds.push_back(std::move(bind));
     };
 
     add(KeybindAction::SessionQuit, XKB_KEY_Escape);
@@ -347,25 +351,28 @@ namespace umbriel {
     add(KeybindAction::ToggleFloating, XKB_KEY_t);
     add(KeybindAction::TogglePinned, XKB_KEY_p);
     // Overview must not repeat: holding the key would thrash open/close.
-    keybinds.push_back({
-        .modifiers = 0,
-        .useMod = true,
-        .keysym = XKB_KEY_o,
-        .repeat = false,
-        .action = KeybindAction::OverviewToggle,
-    });
+    {
+      Keybind overview;
+      overview.useMod = true;
+      overview.keysym = XKB_KEY_o;
+      overview.repeat = false;
+      overview.action = KeybindAction::OverviewToggle;
+      keybinds.push_back(std::move(overview));
+    }
 
     for (int index = 0; index < 9; ++index) {
       const uint32_t digit = XKB_KEY_1 + static_cast<uint32_t>(index);
       const uint32_t keypad = XKB_KEY_KP_1 + static_cast<uint32_t>(index);
       auto addWorkspace = [&](KeybindAction action, uint32_t keysym, uint32_t modifiers) {
-        keybinds.push_back({
-            .modifiers = modifiers,
-            .useMod = true,
-            .keysym = keysym,
-            .action = action,
-            .payload = WorkspaceArg{.name = std::to_string(index + 1)},
-        });
+        Keybind bind;
+        bind.modifiers = modifiers;
+        bind.useMod = true;
+        bind.keysym = keysym;
+        bind.action = action;
+        WorkspaceArg workspace;
+        workspace.name = std::to_string(index + 1);
+        bind.payload = std::move(workspace);
+        keybinds.push_back(std::move(bind));
       };
       addWorkspace(KeybindAction::WorkspaceSwitch, digit, 0);
       addWorkspace(KeybindAction::WorkspaceSwitch, keypad, 0);
@@ -374,20 +381,20 @@ namespace umbriel {
     }
 
     // Default wheel binds: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
-    keybinds.push_back({
-        .modifiers = 0,
-        .useMod = true,
-        .keysym = 0,
-        .wheel = WheelDirection::Up,
-        .action = KeybindAction::WindowFocusLeft,
-    });
-    keybinds.push_back({
-        .modifiers = 0,
-        .useMod = true,
-        .keysym = 0,
-        .wheel = WheelDirection::Down,
-        .action = KeybindAction::WindowFocusRight,
-    });
+    {
+      Keybind wheel;
+      wheel.useMod = true;
+      wheel.wheel = WheelDirection::Up;
+      wheel.action = KeybindAction::WindowFocusLeft;
+      keybinds.push_back(std::move(wheel));
+    }
+    {
+      Keybind wheel;
+      wheel.useMod = true;
+      wheel.wheel = WheelDirection::Down;
+      wheel.action = KeybindAction::WindowFocusRight;
+      keybinds.push_back(std::move(wheel));
+    }
 
     return keybinds;
   }

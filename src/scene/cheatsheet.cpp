@@ -8,16 +8,22 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <format>
 #include <glib.h>
+#include <limits>
 #include <linux/input-event-codes.h>
-#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace {
+
+  using umbriel::CheatsheetRow;
+  using umbriel::Group;
+  using umbriel::groupForAction;
+  using umbriel::groupTitle;
+  using umbriel::renderTextBuffer;
+  using umbriel::TextBufferResult;
 
   constexpr int kPad = 28;
   constexpr int kCornerRadius = 16;
@@ -36,6 +42,326 @@ namespace {
     std::string result(escaped);
     g_free(escaped);
     return result;
+  }
+
+  // Fixed groups in display order; submaps follow in first-seen order.
+  constexpr Group kFixedGroups[] = {
+      Group::Apps, Group::Focus, Group::MoveSize, Group::Windows, Group::Workspaces, Group::Overview, Group::System,
+  };
+
+  // A display line is either a group header or a bind row.
+  struct DisplayLine {
+    bool isHeader = false;
+    bool isDitto = false;
+    int group = 0;    // group index: lines with the same value are never split across columns
+    std::string text; // Pango markup for the full line (header or row)
+  };
+
+  // A group header, preceded by a blank spacer unless it opens the list. The
+  // spacer carries the upcoming group's id because a column break happens
+  // before it, never between it and its header.
+  void pushHeader(std::vector<DisplayLine>& lines, int groupId, std::string_view title) {
+    if (!lines.empty()) {
+      lines.push_back({.isHeader = false, .group = groupId, .text = ""});
+    }
+    lines.push_back({
+        .isHeader = true,
+        .group = groupId,
+        .text = std::format("<span foreground='#f5c96b' weight='bold'>{}</span>", escape(std::string(title))),
+    });
+  }
+
+  // One bind: the chord in a pill, then the label padded out to the group's
+  // widest chord so the actions line up. A ditto repeat is dimmed.
+  DisplayLine bindLine(const std::string& chord, const std::string& label, int groupId, size_t maxChordLen) {
+    const bool isDitto = label == "\xe2\x80\xb3";
+    const size_t extraPad = maxChordLen > chord.size() ? maxChordLen - chord.size() : 0;
+    return {
+        .isHeader = false,
+        .isDitto = isDitto,
+        .group = groupId,
+        .text = std::format(
+            "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span foreground='{}'>{}</span>",
+            escape(chord), std::string(extraPad, ' '), isDitto ? "#8a8a92" : "#e8e8ea", escape(label)
+        ),
+    };
+  }
+
+  // Apps: binaries bound once render as flat rows here; a binary bound to
+  // several distinct commands is promoted to its own top-level section so its
+  // variants read as a set. Advances `groupId` for each section it opens.
+  void pushAppsRows(
+      std::vector<DisplayLine>& lines, int& groupId, const std::vector<const CheatsheetRow*>& groupRows,
+      size_t maxChordLen
+  ) {
+    // Collect unique binaries in first-seen order.
+    std::vector<std::string> binOrder;
+    for (const auto* row : groupRows) {
+      const std::string& bin = row->spawnBinary;
+      if (std::ranges::find(binOrder, bin) == binOrder.end()) {
+        binOrder.push_back(bin);
+      }
+    }
+
+    // Partition: single-usage binaries render flat under "Apps",
+    // multi-usage binaries are collected for their own groups.
+    struct DeferredGroup {
+      std::string title;
+      std::vector<const CheatsheetRow*> rows;
+    };
+    std::vector<DeferredGroup> deferred;
+
+    for (const auto& bin : binOrder) {
+      std::vector<const CheatsheetRow*> binRows;
+      for (const auto* row : groupRows) {
+        if (row->spawnBinary == bin) {
+          binRows.push_back(row);
+        }
+      }
+
+      const auto realCount =
+          std::ranges::count_if(binRows, [](const CheatsheetRow* r) { return r->action != "\xe2\x80\xb3"; });
+      const bool promote =
+          realCount >= 2 && std::ranges::any_of(binRows, [](const CheatsheetRow* r) { return !r->spawnArgs.empty(); });
+
+      if (promote) {
+        // Capitalize first letter for the group title.
+        std::string groupTitle = bin;
+        if (!groupTitle.empty()) {
+          groupTitle[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(groupTitle[0])));
+        }
+        deferred.push_back({.title = std::move(groupTitle), .rows = std::move(binRows)});
+      } else {
+        // Flat under "Apps": combine binary + args.
+        for (const auto* row : binRows) {
+          std::string label = row->action;
+          if (label != "\xe2\x80\xb3") {
+            label = row->spawnArgs.empty() ? row->spawnBinary : row->spawnBinary + " " + row->action;
+            if (label.size() > 32) {
+              label = label.substr(0, 32) + "\xe2\x80\xa6";
+            }
+          }
+          lines.push_back(bindLine(row->chord, label, groupId, maxChordLen));
+        }
+      }
+    }
+
+    // Render deferred binary groups as top-level sections.
+    for (auto& dg : deferred) {
+      ++groupId;
+      pushHeader(lines, groupId, dg.title);
+      for (const auto* row : dg.rows) {
+        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen));
+      }
+    }
+  }
+
+  // Rows become Pango markup lines under their group headers. Lines sharing a
+  // group value are never split across columns, so a header cannot be stranded
+  // at the foot of one.
+  std::vector<DisplayLine>
+  buildDisplayLines(const std::vector<umbriel::CheatsheetRow>& rows, const std::vector<std::string>& submapOrder) {
+    std::vector<DisplayLine> lines;
+    int groupId = 0;
+
+    for (Group grp : kFixedGroups) {
+      std::vector<const CheatsheetRow*> groupRows;
+      for (const auto& row : rows) {
+        if (!row.submap.empty())
+          continue;
+        if (groupForAction(row.actionType) == grp) {
+          groupRows.push_back(&row);
+        }
+      }
+      if (groupRows.empty())
+        continue;
+
+      ++groupId;
+      pushHeader(lines, groupId, groupTitle(grp));
+
+      // Find max chord width in this group (character count, for padding).
+      size_t maxChordLen = 0;
+      for (const auto* row : groupRows) {
+        maxChordLen = std::max(maxChordLen, row->chord.size());
+      }
+
+      if (grp == Group::Apps) {
+        pushAppsRows(lines, groupId, groupRows, maxChordLen);
+        continue;
+      }
+
+      // All other groups: flat row rendering.
+      for (const auto* row : groupRows) {
+        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen));
+      }
+    }
+
+    // Submap groups.
+    for (const auto& smName : submapOrder) {
+      std::vector<const CheatsheetRow*> groupRows;
+      for (const auto& row : rows) {
+        if (row.submap == smName) {
+          groupRows.push_back(&row);
+        }
+      }
+      if (groupRows.empty())
+        continue;
+
+      ++groupId;
+      pushHeader(lines, groupId, "Submap: " + smName);
+
+      size_t maxChordLen = 0;
+      for (const auto* row : groupRows) {
+        maxChordLen = std::max(maxChordLen, row->chord.size());
+      }
+
+      for (const auto* row : groupRows) {
+        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen));
+      }
+    }
+
+    return lines;
+  }
+
+  // Pack the lines into `numCols` columns of markup, breaking only between groups.
+  std::vector<std::string> layoutColumns(const std::vector<DisplayLine>& allLines, int numCols) {
+    const int lineCount = static_cast<int>(allLines.size());
+    const int linesPerCol = (lineCount + numCols - 1) / numCols;
+    std::vector<std::string> columns;
+
+    // Collect group boundary indices (first line of each group).
+    std::vector<int> groupStarts;
+    if (lineCount > 0) {
+      groupStarts.push_back(0);
+      for (int i = 1; i < lineCount; ++i) {
+        if (allLines[static_cast<size_t>(i)].group != allLines[static_cast<size_t>(i - 1)].group) {
+          groupStarts.push_back(i);
+        }
+      }
+    }
+
+    int pos = 0;
+    for (int col = 0; col < numCols && pos < lineCount; ++col) {
+      std::string markup;
+      int colEnd = std::min(pos + linesPerCol, lineCount);
+
+      // Snap colEnd back to the nearest group boundary so no group is split.
+      if (colEnd < lineCount) {
+        // Find the largest group start <= colEnd.
+        auto it = std::ranges::upper_bound(groupStarts, colEnd);
+        if (it != groupStarts.begin()) {
+          --it;
+          // Only pull back if it doesn't collapse the column to nothing.
+          if (*it > pos) {
+            colEnd = *it;
+          }
+        }
+      }
+
+      for (int i = pos; i < colEnd; ++i) {
+        if (i > pos) {
+          markup += '\n';
+        }
+        markup += allLines[static_cast<size_t>(i)].text;
+      }
+      if (!markup.empty()) {
+        columns.push_back(std::move(markup));
+      }
+      pos = colEnd;
+    }
+
+    // Remaining lines go into the last column.
+    if (pos < lineCount && !columns.empty()) {
+      auto& last = columns.back();
+      for (int i = pos; i < lineCount; ++i) {
+        last += '\n';
+        last += allLines[static_cast<size_t>(i)].text;
+      }
+    }
+
+    return columns;
+  }
+
+  // Lay the columns out and rasterise each, returning the buffers and the tallest.
+  std::pair<std::vector<umbriel::TextBufferResult>, int>
+  renderColumns(const std::vector<DisplayLine>& allLines, int cols, double scale) {
+    auto colMarkups = layoutColumns(allLines, cols);
+    std::vector<TextBufferResult> buffers;
+    int maxH = 0;
+    for (auto& markup : colMarkups) {
+      TextBufferResult buf = renderTextBuffer({
+          .markup = std::move(markup),
+          .font = "monospace 11",
+          .maxWidth = kColumnMaxWidth,
+          .padding = 0,
+          .scale = scale,
+          .bgR = 0.0,
+          .bgG = 0.0,
+          .bgB = 0.0,
+          .bgA = 0.0,
+      });
+      maxH = std::max(maxH, buf.logicalHeight);
+      buffers.push_back(buf);
+    }
+    return {std::move(buffers), maxH};
+  }
+
+  struct Chrome {
+    TextBufferResult title;
+    TextBufferResult footer;
+  };
+
+  // The panel's fixed furniture: the title (which doubles as the "no config"
+  // notice) and the footer naming the modifier key.
+  Chrome renderChrome(bool configMissing, bool nested, double scale) {
+    std::string titleMarkup = "<span size='14pt' weight='bold' foreground='#7aa3ff'>Umbriel keybinds</span>";
+    if (configMissing) {
+      titleMarkup += "\n<span foreground='#f5c96b'>no config found \xc2\xb7 showing built-in defaults</span>";
+      titleMarkup += "\n<span foreground='#8a8a92'>copy example.toml to ~/.config/umbriel/config.toml</span>";
+    }
+    const std::string footerMarkup = std::format(
+        "<span foreground='#8a8a92'>Mod = {} \xc2\xb7 press any key to close</span>", nested ? "Alt" : "Super"
+    );
+
+    const auto render = [scale](std::string markup) {
+      return renderTextBuffer({
+          .markup = std::move(markup),
+          .font = "monospace 11",
+          .maxWidth = 900,
+          .padding = 0,
+          .scale = scale,
+          .bgR = 0.0,
+          .bgG = 0.0,
+          .bgB = 0.0,
+          .bgA = 0.0,
+      });
+    };
+    return {.title = render(std::move(titleMarkup)), .footer = render(footerMarkup)};
+  }
+
+  struct FittedBody {
+    std::vector<TextBufferResult> columns;
+    int maxColumnHeight = 0;
+    int totalHeight = 0;
+  };
+
+  // Rasterise the body at `cols` columns; if the resulting panel would overflow
+  // `maxHeight`, widen by one column and try again. Buffers from a rejected
+  // attempt are dropped rather than leaked into the scene.
+  FittedBody
+  fitBody(const std::vector<DisplayLine>& allLines, int cols, double scale, int chromeHeight, int maxHeight) {
+    auto [buffers, maxColH] = renderColumns(allLines, cols, scale);
+    int totalH = chromeHeight + maxColH;
+    if (totalH > maxHeight && cols < kMaxColumns) {
+      for (auto& buf : buffers) {
+        if (buf.buffer != nullptr) {
+          wlr_buffer_drop(buf.buffer);
+        }
+      }
+      std::tie(buffers, maxColH) = renderColumns(allLines, std::min(cols + 1, kMaxColumns), scale);
+      totalH = chromeHeight + maxColH;
+    }
+    return {.columns = std::move(buffers), .maxColumnHeight = maxColH, .totalHeight = totalH};
   }
 
 } // namespace
@@ -102,11 +428,6 @@ namespace umbriel {
     std::vector<CheatsheetRow> rows = buildCheatsheetRows(config().keybinds);
 
     // --- Step 2: Group rows ---
-    // Fixed groups in display order, then submaps in first-seen order.
-    constexpr Group kFixedGroups[] = {
-        Group::Apps, Group::Focus, Group::MoveSize, Group::Windows, Group::Workspaces, Group::Overview, Group::System,
-    };
-
     // Collect submaps in first-seen order.
     std::vector<std::string> submapOrder;
     for (const auto& row : rows) {
@@ -117,222 +438,7 @@ namespace umbriel {
       }
     }
 
-    // A display line is either a group header or a bind row.
-    struct DisplayLine {
-      bool isHeader = false;
-      bool isDitto = false;
-      int group = 0;    // group index: lines with the same value are never split across columns
-      std::string text; // Pango markup for the full line (header or row)
-    };
-
-    auto buildLines = [&]() -> std::vector<DisplayLine> {
-      std::vector<DisplayLine> lines;
-      int groupId = 0;
-
-      for (Group grp : kFixedGroups) {
-        std::vector<const CheatsheetRow*> groupRows;
-        for (const auto& row : rows) {
-          if (!row.submap.empty())
-            continue;
-          if (groupForAction(row.actionType) == grp) {
-            groupRows.push_back(&row);
-          }
-        }
-        if (groupRows.empty())
-          continue;
-
-        const char* title = groupTitle(grp);
-        // Blank separator belongs to the upcoming group (break happens before it).
-        ++groupId;
-        if (!lines.empty()) {
-          lines.push_back({.isHeader = false, .group = groupId, .text = ""});
-        }
-        lines.push_back({
-            .isHeader = true,
-            .group = groupId,
-            .text = std::format("<span foreground='#f5c96b' weight='bold'>{}</span>", title),
-        });
-
-        // Find max chord width in this group (character count, for padding).
-        size_t maxChordLen = 0;
-        for (const auto* row : groupRows) {
-          maxChordLen = std::max(maxChordLen, row->chord.size());
-        }
-
-        // Apps group: single-usage binaries stay here as flat rows.
-        // Multi-usage binaries are deferred to their own top-level groups
-        // (rendered right after Apps with the same header style).
-        if (grp == Group::Apps) {
-          // Collect unique binaries in first-seen order.
-          std::vector<std::string> binOrder;
-          for (const auto* row : groupRows) {
-            const std::string& bin = row->spawnBinary;
-            if (std::ranges::find(binOrder, bin) == binOrder.end()) {
-              binOrder.push_back(bin);
-            }
-          }
-
-          // Partition: single-usage binaries render flat under "Apps",
-          // multi-usage binaries are collected for their own groups.
-          struct DeferredGroup {
-            std::string title;
-            std::vector<const CheatsheetRow*> rows;
-          };
-          std::vector<DeferredGroup> deferred;
-
-          for (const auto& bin : binOrder) {
-            std::vector<const CheatsheetRow*> binRows;
-            for (const auto* row : groupRows) {
-              if (row->spawnBinary == bin) {
-                binRows.push_back(row);
-              }
-            }
-
-            const auto realCount =
-                std::ranges::count_if(binRows, [](const CheatsheetRow* r) { return r->action != "\xe2\x80\xb3"; });
-            const bool promote = realCount >= 2
-                && std::ranges::any_of(binRows, [](const CheatsheetRow* r) { return !r->spawnArgs.empty(); });
-
-            if (promote) {
-              // Capitalize first letter for the group title.
-              std::string groupTitle = bin;
-              if (!groupTitle.empty()) {
-                groupTitle[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(groupTitle[0])));
-              }
-              deferred.push_back({.title = std::move(groupTitle), .rows = std::move(binRows)});
-            } else {
-              // Flat under "Apps": combine binary + args.
-              for (const auto* row : binRows) {
-                std::string escapedChord = escape(row->chord);
-                const bool isDitto = row->action == "\xe2\x80\xb3";
-                std::string label;
-                if (isDitto) {
-                  label = row->action;
-                } else {
-                  label = row->spawnArgs.empty() ? row->spawnBinary : row->spawnBinary + " " + row->action;
-                  if (label.size() > 32) {
-                    label = label.substr(0, 32) + "\xe2\x80\xa6";
-                  }
-                }
-                std::string escapedAction = escape(label);
-                size_t extraPad = maxChordLen > row->chord.size() ? maxChordLen - row->chord.size() : 0;
-                std::string padding(extraPad, ' ');
-                const char* actionColor = isDitto ? "#8a8a92" : "#e8e8ea";
-                lines.push_back({
-                    .isHeader = false,
-                    .isDitto = isDitto,
-                    .group = groupId,
-                    .text = std::format(
-                        "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span "
-                        "foreground='{}'>{}</span>",
-                        escapedChord, padding, actionColor, escapedAction
-                    ),
-                });
-              }
-            }
-          }
-
-          // Render deferred binary groups as top-level sections.
-          for (auto& dg : deferred) {
-            ++groupId;
-            if (!lines.empty()) {
-              lines.push_back({.isHeader = false, .group = groupId, .text = ""});
-            }
-            lines.push_back({
-                .isHeader = true,
-                .group = groupId,
-                .text = std::format("<span foreground='#f5c96b' weight='bold'>{}</span>", escape(dg.title)),
-            });
-            for (const auto* row : dg.rows) {
-              std::string escapedChord = escape(row->chord);
-              const bool isDitto = row->action == "\xe2\x80\xb3";
-              std::string escapedAction = escape(isDitto ? row->action : row->action);
-              size_t extraPad = maxChordLen > row->chord.size() ? maxChordLen - row->chord.size() : 0;
-              std::string padding(extraPad, ' ');
-              const char* actionColor = isDitto ? "#8a8a92" : "#e8e8ea";
-              lines.push_back({
-                  .isHeader = false,
-                  .isDitto = isDitto,
-                  .group = groupId,
-                  .text = std::format(
-                      "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span foreground='{}'>{}</span>",
-                      escapedChord, padding, actionColor, escapedAction
-                  ),
-              });
-            }
-          }
-          continue;
-        }
-
-        // All other groups: flat row rendering.
-        for (const auto* row : groupRows) {
-          std::string escapedChord = escape(row->chord);
-          std::string escapedAction = escape(row->action);
-          size_t extraPad = maxChordLen > row->chord.size() ? maxChordLen - row->chord.size() : 0;
-          std::string padding(extraPad, ' ');
-          const bool isDitto = row->action == "\xe2\x80\xb3";
-          const char* actionColor = isDitto ? "#8a8a92" : "#e8e8ea";
-          lines.push_back({
-              .isHeader = false,
-              .isDitto = isDitto,
-              .group = groupId,
-              .text = std::format(
-                  "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span foreground='{}'>{}</span>",
-                  escapedChord, padding, actionColor, escapedAction
-              ),
-          });
-        }
-      }
-
-      // Submap groups.
-      for (const auto& smName : submapOrder) {
-        std::vector<const CheatsheetRow*> groupRows;
-        for (const auto& row : rows) {
-          if (row.submap == smName) {
-            groupRows.push_back(&row);
-          }
-        }
-        if (groupRows.empty())
-          continue;
-
-        ++groupId;
-        if (!lines.empty()) {
-          lines.push_back({.isHeader = false, .group = groupId, .text = ""});
-        }
-        lines.push_back({
-            .isHeader = true,
-            .group = groupId,
-            .text = std::format("<span foreground='#f5c96b' weight='bold'>Submap: {}</span>", escape(smName)),
-        });
-
-        size_t maxChordLen = 0;
-        for (const auto* row : groupRows) {
-          maxChordLen = std::max(maxChordLen, row->chord.size());
-        }
-
-        for (const auto* row : groupRows) {
-          std::string escapedChord = escape(row->chord);
-          std::string escapedAction = escape(row->action);
-          size_t extraPad = maxChordLen > row->chord.size() ? maxChordLen - row->chord.size() : 0;
-          std::string padding(extraPad, ' ');
-          const bool isDitto = row->action == "\xe2\x80\xb3";
-          const char* actionColor = isDitto ? "#8a8a92" : "#e8e8ea";
-          lines.push_back({
-              .isHeader = false,
-              .isDitto = isDitto,
-              .group = groupId,
-              .text = std::format(
-                  "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span foreground='{}'>{}</span>",
-                  escapedChord, padding, actionColor, escapedAction
-              ),
-          });
-        }
-      }
-
-      return lines;
-    };
-
-    auto allLines = buildLines();
+    auto allLines = buildDisplayLines(rows, submapOrder);
 
     // --- Handle empty bind list ---
     if (allLines.empty()) {
@@ -343,141 +449,21 @@ namespace umbriel {
     }
 
     // --- Step 4: Column layout ---
-    auto layoutColumns = [&](int numCols) -> std::vector<std::string> {
-      const int lineCount = static_cast<int>(allLines.size());
-      const int linesPerCol = (lineCount + numCols - 1) / numCols;
-      std::vector<std::string> columns;
-
-      // Collect group boundary indices (first line of each group).
-      std::vector<int> groupStarts;
-      if (lineCount > 0) {
-        groupStarts.push_back(0);
-        for (int i = 1; i < lineCount; ++i) {
-          if (allLines[static_cast<size_t>(i)].group != allLines[static_cast<size_t>(i - 1)].group) {
-            groupStarts.push_back(i);
-          }
-        }
-      }
-
-      int pos = 0;
-      for (int col = 0; col < numCols && pos < lineCount; ++col) {
-        std::string markup;
-        int colEnd = std::min(pos + linesPerCol, lineCount);
-
-        // Snap colEnd back to the nearest group boundary so no group is split.
-        if (colEnd < lineCount) {
-          // Find the largest group start <= colEnd.
-          auto it = std::ranges::upper_bound(groupStarts, colEnd);
-          if (it != groupStarts.begin()) {
-            --it;
-            // Only pull back if it doesn't collapse the column to nothing.
-            if (*it > pos) {
-              colEnd = *it;
-            }
-          }
-        }
-
-        for (int i = pos; i < colEnd; ++i) {
-          if (i > pos) {
-            markup += '\n';
-          }
-          markup += allLines[static_cast<size_t>(i)].text;
-        }
-        if (!markup.empty()) {
-          columns.push_back(std::move(markup));
-        }
-        pos = colEnd;
-      }
-
-      // Remaining lines go into the last column.
-      if (pos < lineCount && !columns.empty()) {
-        auto& last = columns.back();
-        for (int i = pos; i < lineCount; ++i) {
-          last += '\n';
-          last += allLines[static_cast<size_t>(i)].text;
-        }
-      }
-
-      return columns;
-    };
 
     int lineCount = static_cast<int>(allLines.size());
     int numCols = std::clamp((lineCount + 17) / 18, 1, 3);
 
     // --- Step 5: Header/footer buffers ---
-    std::string titleMarkup = "<span size='14pt' weight='bold' foreground='#7aa3ff'>Umbriel keybinds</span>";
-    if (configFileMissing()) {
-      titleMarkup += "\n<span foreground='#f5c96b'>no config found \xc2\xb7 showing built-in defaults</span>";
-      titleMarkup += "\n<span foreground='#8a8a92'>copy example.toml to ~/.config/umbriel/config.toml</span>";
-    }
+    Chrome chrome = renderChrome(configFileMissing(), m_server.nested(), scale);
+    TextBufferResult& titleBuf = chrome.title;
+    TextBufferResult& footerBuf = chrome.footer;
 
-    const char* modName = m_server.nested() ? "Alt" : "Super";
-    std::string footerMarkup =
-        std::format("<span foreground='#8a8a92'>Mod = {} \xc2\xb7 press any key to close</span>", modName);
-
-    // Render title and footer.
-    TextBufferResult titleBuf = renderTextBuffer({
-        .markup = titleMarkup,
-        .font = "monospace 11",
-        .maxWidth = 900,
-        .padding = 0,
-        .scale = scale,
-        .bgR = 0.0,
-        .bgG = 0.0,
-        .bgB = 0.0,
-        .bgA = 0.0,
-    });
-    TextBufferResult footerBuf = renderTextBuffer({
-        .markup = footerMarkup,
-        .font = "monospace 11",
-        .maxWidth = 900,
-        .padding = 0,
-        .scale = scale,
-        .bgR = 0.0,
-        .bgG = 0.0,
-        .bgB = 0.0,
-        .bgA = 0.0,
-    });
-
-    // Render columns, potentially retrying with more columns if too tall.
-    auto renderColumns = [&](int cols) -> std::pair<std::vector<TextBufferResult>, int> {
-      auto colMarkups = layoutColumns(cols);
-      std::vector<TextBufferResult> buffers;
-      int maxH = 0;
-      for (auto& markup : colMarkups) {
-        TextBufferResult buf = renderTextBuffer({
-            .markup = std::move(markup),
-            .font = "monospace 11",
-            .maxWidth = kColumnMaxWidth,
-            .padding = 0,
-            .scale = scale,
-            .bgR = 0.0,
-            .bgG = 0.0,
-            .bgB = 0.0,
-            .bgA = 0.0,
-        });
-        maxH = std::max(maxH, buf.logicalHeight);
-        buffers.push_back(buf);
-      }
-      return {std::move(buffers), maxH};
-    };
-
-    auto [colBufs, maxColH] = renderColumns(numCols);
-
-    // Check if panel exceeds output height.
-    int totalH = titleBuf.logicalHeight + kTitleBodyGap + maxColH + kBodyFooterGap + footerBuf.logicalHeight + 2 * kPad;
-    if (haveOutput && totalH > outputBox.height - 120 && numCols < kMaxColumns) {
-      // Drop previous column buffers.
-      for (auto& buf : colBufs) {
-        if (buf.buffer != nullptr)
-          wlr_buffer_drop(buf.buffer);
-      }
-      numCols = std::min(numCols + 1, kMaxColumns);
-      auto [newBufs, newMaxH] = renderColumns(numCols);
-      colBufs = std::move(newBufs);
-      maxColH = newMaxH;
-      totalH = titleBuf.logicalHeight + kTitleBodyGap + maxColH + kBodyFooterGap + footerBuf.logicalHeight + 2 * kPad;
-    }
+    // Everything the body has to share the panel with.
+    const int chromeHeight =
+        titleBuf.logicalHeight + kTitleBodyGap + kBodyFooterGap + footerBuf.logicalHeight + 2 * kPad;
+    const int maxPanelHeight = haveOutput ? outputBox.height - 120 : std::numeric_limits<int>::max();
+    FittedBody body = fitBody(allLines, numCols, scale, chromeHeight, maxPanelHeight);
+    auto& colBufs = body.columns;
 
     // --- Step 6: Panel assembly ---
     int totalColW = 0;
@@ -489,7 +475,7 @@ namespace umbriel {
     }
 
     int panelW = std::max({titleBuf.logicalWidth, footerBuf.logicalWidth, totalColW}) + 2 * kPad;
-    int panelH = totalH;
+    int panelH = body.totalHeight;
 
     // Shadow.
     m_shadow.update(m_tree, panelW, panelH, 0, kCornerRadius, nullptr);
@@ -524,7 +510,7 @@ namespace umbriel {
       addBuffer(buf, colX, curY);
       colX += buf.logicalWidth + kColumnGap;
     }
-    curY += maxColH + kBodyFooterGap;
+    curY += body.maxColumnHeight + kBodyFooterGap;
 
     // Footer.
     addBuffer(footerBuf, kPad, curY);

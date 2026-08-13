@@ -134,7 +134,7 @@ sources = files(
   'src/view/view.cpp',
   'src/view/view_foreign.cpp',
   'src/view/popup.cpp',
-  'src/layer/surface.cpp',
+  'src/layer/layer_surface.cpp',
   'src/scene/surface_blur.cpp',
   'src/scene/hint_rect.cpp',
   'src/scene/surface_shadow.cpp',

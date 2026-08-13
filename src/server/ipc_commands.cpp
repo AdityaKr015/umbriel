@@ -1,7 +1,7 @@
 #include "server/ipc_commands.h"
 
 #include "config/config.h"
-#include "layer/surface.h"
+#include "layer/layer_surface.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"

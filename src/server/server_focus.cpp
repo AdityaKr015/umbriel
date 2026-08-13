@@ -1,7 +1,7 @@
 #include "config/config.h"
 #include "input/cursor.h"
 #include "input/seat.h"
-#include "layer/surface.h"
+#include "layer/layer_surface.h"
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"

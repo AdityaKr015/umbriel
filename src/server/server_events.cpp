@@ -5,7 +5,7 @@
 #include "input/gestures.h"
 #include "input/keyboard.h"
 #include "input/seat.h"
-#include "layer/surface.h"
+#include "layer/layer_surface.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"

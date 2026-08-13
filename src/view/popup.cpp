@@ -1,6 +1,6 @@
 #include "view/popup.h"
 
-#include "layer/surface.h"
+#include "layer/layer_surface.h"
 #include "scene/node.h"
 #include "view/view.h"
 #include "wlr.h"

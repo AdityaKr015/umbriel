@@ -2,7 +2,7 @@
 
 #include "config/config.h"
 #include "input/seat.h"
-#include "layer/surface.h"
+#include "layer/layer_surface.h"
 #include "layout/drop_target.h"
 #include "layout/scrolling.h"
 #include "lock/session_lock.h"

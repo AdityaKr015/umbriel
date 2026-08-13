@@ -2,7 +2,7 @@
 
 #include "config/config.h"
 #include "core/log.h"
-#include "layer/surface.h"
+#include "layer/layer_surface.h"
 #include "scene/node.h"
 #include "server/server.h"
 #include "wlr.h"

@@ -18,16 +18,19 @@ namespace umbriel {
 
   private:
     static void onCommit(wl_listener* listener, void* data);
+    static void onReposition(wl_listener* listener, void* data);
     static void onUnmap(wl_listener* listener, void* data);
     static void onDestroy(wl_listener* listener, void* data);
 
     void handleCommit();
+    void unconstrain();
     void handleDestroy();
 
     wlr_xdg_popup* m_popup = nullptr;
     SurfaceBlur m_blur;
 
     wl_listener m_commit{};
+    wl_listener m_reposition{};
     wl_listener m_unmap{};
     wl_listener m_destroy{};
   };

@@ -59,6 +59,8 @@ namespace umbriel {
 
     m_commit.notify = onCommit;
     wl_signal_add(&m_popup->base->surface->events.commit, &m_commit);
+    m_reposition.notify = onReposition;
+    wl_signal_add(&m_popup->events.reposition, &m_reposition);
     m_unmap.notify = onUnmap;
     wl_signal_add(&m_popup->base->surface->events.unmap, &m_unmap);
     m_destroy.notify = onDestroy;
@@ -68,6 +70,7 @@ namespace umbriel {
   Popup::~Popup() {
     if (m_commit.link.next != nullptr) {
       wl_list_remove(&m_commit.link);
+      wl_list_remove(&m_reposition.link);
       wl_list_remove(&m_unmap.link);
       wl_list_remove(&m_destroy.link);
     }
@@ -76,6 +79,11 @@ namespace umbriel {
   void Popup::onCommit(wl_listener* listener, void* /*data*/) {
     Popup* self = wl_container_of(listener, self, m_commit); // NOLINT(modernize-use-auto)
     self->handleCommit();
+  }
+
+  void Popup::onReposition(wl_listener* listener, void* /*data*/) {
+    Popup* self = wl_container_of(listener, self, m_reposition); // NOLINT(modernize-use-auto)
+    self->unconstrain();
   }
 
   void Popup::onUnmap(wl_listener* listener, void* /*data*/) {
@@ -104,22 +112,26 @@ namespace umbriel {
       return;
     }
 
-    if (wlr_layer_surface_v1* layer = wlr_layer_surface_v1_try_from_wlr_surface(m_popup->parent)) {
-      if (auto* surface = static_cast<LayerSurface*>(layer->data)) {
-        surface->unconstrainPopup(m_popup);
-      }
+    unconstrain();
+  }
+
+  void Popup::unconstrain() {
+    if (LayerSurface* layer = layerSurfaceFromSurface(m_popup->parent)) {
+      layer->unconstrainPopup(m_popup);
     } else if (View* view = toplevelViewFromSurface(m_popup->parent)) {
       view->unconstrainPopup(m_popup);
+    } else {
+      wlr_xdg_surface_schedule_configure(m_popup->base);
     }
-
-    wlr_xdg_surface_schedule_configure(m_popup->base);
   }
 
   void Popup::handleDestroy() {
     wl_list_remove(&m_commit.link);
+    wl_list_remove(&m_reposition.link);
     wl_list_remove(&m_unmap.link);
     wl_list_remove(&m_destroy.link);
     m_commit.link.next = nullptr;
+    m_reposition.link.next = nullptr;
     m_unmap.link.next = nullptr;
     m_destroy.link.next = nullptr;
     delete this;

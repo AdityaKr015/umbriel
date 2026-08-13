@@ -1187,40 +1187,45 @@ namespace umbriel {
     if (popup == nullptr || m_sceneTree == nullptr) {
       return;
     }
-    wlr_output* wlrOutput = nullptr;
-    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-      wlrOutput = m_workspace->group()->output()->wlr();
+    Output* output = nullptr;
+    if (m_workspace != nullptr && m_workspace->group() != nullptr) {
+      output = m_workspace->group()->output();
     }
-    if (wlrOutput == nullptr) {
-      wlrOutput = m_server->preferredOutput();
+    if (output == nullptr) {
+      output = m_server->outputFromWlr(m_server->preferredOutput());
     }
-    if (wlrOutput == nullptr) {
+    if (output == nullptr) {
       return;
     }
 
-    wlr_box outputBox{};
-    wlr_output_layout_get_box(m_server->outputLayout(), wlrOutput, &outputBox);
-    if (outputBox.width <= 0 || outputBox.height <= 0) {
+    wlr_box target = output->usableArea();
+    if (target.width <= 0 || target.height <= 0) {
+      wlr_output_layout_get_box(m_server->outputLayout(), output->wlr(), &target);
+    }
+    if (target.width <= 0 || target.height <= 0) {
       return;
     }
 
-    wlr_xdg_surface* parentXdg = wlr_xdg_surface_try_from_wlr_surface(popup->parent);
-    if (parentXdg == nullptr || parentXdg->data == nullptr) {
-      return;
-    }
-    auto* parentTree = static_cast<wlr_scene_tree*>(parentXdg->data);
     int lx = 0;
     int ly = 0;
-    if (!wlr_scene_node_coords(&parentTree->node, &lx, &ly)) {
+    if (!wlr_scene_node_coords(&m_sceneTree->node, &lx, &ly)) {
       return;
     }
 
-    // Box is relative to the popup parent surface (xdg scene origin = geometry top-left).
+    // wlroots supports flip, slide, and resize adjustments from the client's
+    // xdg-positioner. Match niri's tiled behavior: constrain horizontally to
+    // the window geometry, so a nested menu at the right edge flips or slides
+    // left even when the tile itself is flush with the output edge. Vertically,
+    // use the output working area. Floating popups can use the whole area.
+    //
+    // The box is in root toplevel surface coordinates. The xdg scene root is
+    // positioned at the window geometry, not at the surface origin.
+    const wlr_box& geometry = m_toplevel->base->geometry;
     const wlr_box box{
-        .x = outputBox.x - lx,
-        .y = outputBox.y - ly,
-        .width = outputBox.width,
-        .height = outputBox.height,
+        .x = m_tiled ? geometry.x : target.x - lx + geometry.x,
+        .y = target.y - ly + geometry.y,
+        .width = m_tiled ? geometry.width : target.width,
+        .height = target.height,
     };
     wlr_xdg_popup_unconstrain_from_box(popup, &box);
   }

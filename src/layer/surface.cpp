@@ -162,8 +162,9 @@ namespace umbriel {
     int height = 0;
     wlr_output_effective_resolution(m_layerSurface->output, &width, &height);
 
-    // Box is relative to the layer surface origin (output-local scene coords).
-    wlr_box box = {
+    // wlroots expects the box in the root layer surface coordinate system and
+    // translates it through every ancestor popup itself.
+    const wlr_box box = {
         .x = -m_scene->tree->node.x,
         .y = -m_scene->tree->node.y,
         .width = width,

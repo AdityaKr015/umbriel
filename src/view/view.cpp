@@ -1,6 +1,7 @@
 #include "view/view.h"
 
 #include "config/config.h"
+#include "config/store.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
@@ -1073,7 +1074,10 @@ namespace umbriel {
     clearOutputClip();
 
     // Resolve window rules and apply one-shot effects.
-    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
+    // Copied, not referenced: the calls below can reach setBorderFocused and
+    // re-resolve into the same cache slot, which would change this value
+    // underneath the code still using it.
+    const ResolvedWindowRule rule = resolvedRules();
     if (rule.defaultFloating) {
       m_tiled = !*rule.defaultFloating;
     }
@@ -1204,7 +1208,7 @@ namespace umbriel {
   void View::handleCommit() {
     if (m_toplevel->base->initial_commit) {
       // Resolve window rules early to influence initial tiled/float decision and size.
-      const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
+      const ResolvedWindowRule rule = resolvedRules();
       const bool wantTiled = rule.defaultFloating ? !*rule.defaultFloating : looksTiled(m_toplevel);
 
       if (wantTiled) {
@@ -1710,7 +1714,10 @@ namespace umbriel {
     if (!m_mapped) {
       return;
     }
-    const ResolvedWindowRule rule = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
+    // Copied, not referenced: the calls below can reach setBorderFocused and
+    // re-resolve into the same cache slot, which would change this value
+    // underneath the code still using it.
+    const ResolvedWindowRule rule = resolvedRules();
 
     if (allowDisruptive) {
       // Float/tile override.
@@ -1775,13 +1782,30 @@ namespace umbriel {
     applyDynamicRules(&rule);
   }
 
-  void View::applyDynamicRules(const ResolvedWindowRule* resolved) {
-    ResolvedWindowRule owned;
-    if (resolved == nullptr) {
-      owned = resolveWindowRules(m_toplevel->app_id, m_toplevel->title, m_borderFocusedState);
-      resolved = &owned;
+  const ResolvedWindowRule& View::resolvedRules() {
+    const char* appId = m_toplevel->app_id;
+    const char* title = m_toplevel->title;
+    const std::string_view appIdView = appId != nullptr ? appId : "";
+    const std::string_view titleView = title != nullptr ? title : "";
+    const uint64_t generation = configStore().generation();
+
+    if (m_rulesGeneration == generation
+        && m_rulesFocused == m_borderFocusedState
+        && m_rulesAppId == appIdView
+        && m_rulesTitle == titleView) {
+      return m_rules;
     }
-    const ResolvedWindowRule& rule = *resolved;
+
+    m_rules = resolveWindowRules(appId, title, m_borderFocusedState);
+    m_rulesGeneration = generation;
+    m_rulesFocused = m_borderFocusedState;
+    m_rulesAppId = appIdView;
+    m_rulesTitle = titleView;
+    return m_rules;
+  }
+
+  void View::applyDynamicRules(const ResolvedWindowRule* resolved) {
+    const ResolvedWindowRule& rule = resolved != nullptr ? *resolved : resolvedRules();
     m_decoration.applyRule(rule);
     const float newOpacity = rule.opacity ? static_cast<float>(*rule.opacity) : 1.0F;
     if (newOpacity != m_ruleOpacity) {

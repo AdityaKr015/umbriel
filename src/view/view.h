@@ -1,4 +1,5 @@
 #pragma once
+#include "config/config.h"
 #include "core/animation.h"
 #include "scene/node.h"
 #include "view/decoration.h"
@@ -7,6 +8,7 @@
 
 #include <array>
 #include <optional>
+#include <string>
 #include <wayland-server-core.h>
 
 extern "C" {
@@ -210,6 +212,21 @@ namespace umbriel {
     // reached on focus changes and on every title change, so resolving twice per
     // pass is work a terminal that retitles per command pays repeatedly.
     void applyDynamicRules(const ResolvedWindowRule* resolved = nullptr);
+    // Window rules, resolved at most once per (config, app-id, title, focus).
+    //
+    // Resolution runs every rule's regexes, and it is reached on focus changes
+    // and on every title change — a terminal that retitles per command would
+    // otherwise pay the whole rule set on each one. All four inputs are part of
+    // the key: `match.is_focused` makes focus a matching criterion, not just a
+    // consumer of the result.
+    [[nodiscard]] const ResolvedWindowRule& resolvedRules();
+
+    // Cache for resolvedRules(); m_rulesGeneration 0 means never resolved.
+    ResolvedWindowRule m_rules;
+    uint64_t m_rulesGeneration = 0;
+    std::string m_rulesAppId;
+    std::string m_rulesTitle;
+    bool m_rulesFocused = false;
 
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;

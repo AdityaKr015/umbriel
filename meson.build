@@ -131,6 +131,7 @@ pure_sources = files(
   'src/layout/layout.cpp',
   'src/layout/scrolling.cpp',
   'src/layout/dwindle.cpp',
+  'src/scene/cheatsheet_rows.cpp',
 )
 
 umbriel_pure = static_library(
@@ -212,6 +213,7 @@ unit_tests = [
   ['keybind-parse', ['tests/keybind_parse.cpp'], [wlroots_dep, xkbcommon_dep]],
   ['scrolling-layout', ['tests/scrolling_layout.cpp'], [wlroots_dep]],
   ['dwindle-layout', ['tests/dwindle_layout.cpp'], [wlroots_dep]],
+  ['cheatsheet-rows', ['tests/cheatsheet_rows.cpp'], [wlroots_dep, xkbcommon_dep]],
 ]
 
 # Harness helper, not a unit test: drives a virtual pointer against a running

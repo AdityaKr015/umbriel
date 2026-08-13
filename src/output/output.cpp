@@ -124,8 +124,7 @@ namespace umbriel {
   void Output::applyConfig() {
     applyConfiguredState();
     addToLayout();
-    arrangeLayers();
-    m_server->relayoutBanner();
+    markDirty(Dirty::LayerArrange | Dirty::Banner);
     if (m_server->sessionLocked()) {
       m_server->updateLockBlank();
     }
@@ -135,7 +134,7 @@ namespace umbriel {
   void Output::handleExternalConfigChange() {
     // Mode changes can drop the DRM gamma LUT; re-apply on the next frame.
     m_gammaDirty = true;
-    arrangeLayers();
+    markDirty(Dirty::LayerArrange);
     wlr_output_schedule_frame(m_output);
   }
 
@@ -302,16 +301,44 @@ namespace umbriel {
       m_gammaDirty = true;
     }
     wlr_output_state_finish(&state);
-    arrangeLayers();
-    m_server->relayoutBanner();
-    m_server->updateBackdrop();
+    markDirty(Dirty::LayerArrange | Dirty::Banner | Dirty::Backdrop);
     if (m_server->sessionLocked()) {
       m_server->updateLockBlank();
     }
     wlr_output_schedule_frame(m_output);
   }
 
+  void Output::markDirty(Dirty what) {
+    m_dirty |= what;
+    wlr_output_schedule_frame(m_output);
+  }
+
+  void Output::flushDirty() {
+    // Server-wide chrome is recorded on the Server and flushed by whichever
+    // output frames first; each of these is idempotent and cheap.
+    const Dirty pending = m_dirty | m_server->takeDirty();
+    m_dirty = Dirty::None;
+    if (!any(pending)) {
+      return;
+    }
+    // Order matters: exclusive zones define the usable area, the layout fills
+    // it, and the chrome sits over the result.
+    if (has(pending, Dirty::LayerArrange)) {
+      arrangeLayers();
+    }
+    if (has(pending, Dirty::Banner)) {
+      m_server->relayoutBanner();
+    }
+    if (has(pending, Dirty::Backdrop)) {
+      m_server->updateBackdrop();
+    }
+    if (has(pending, Dirty::Cheatsheet)) {
+      m_server->relayoutCheatsheet();
+    }
+  }
+
   void Output::handleFrame() {
+    flushDirty();
     if (m_hasDeferredMode) {
       m_hasDeferredMode = false;
       applyMode(m_deferredWidth, m_deferredHeight);
@@ -410,9 +437,7 @@ namespace umbriel {
       return;
     }
     if ((event->state->committed & (WLR_OUTPUT_STATE_MODE | WLR_OUTPUT_STATE_ENABLED)) != 0) {
-      arrangeLayers();
-      m_server->relayoutBanner();
-      m_server->updateBackdrop();
+      markDirty(Dirty::LayerArrange | Dirty::Banner | Dirty::Backdrop);
       m_gammaDirty = true;
     }
     wlr_output_schedule_frame(m_output);

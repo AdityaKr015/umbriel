@@ -1,5 +1,6 @@
 #pragma once
 #include "core/animation.h"
+#include "core/dirty.h"
 #include "server/focus.h"
 #include "view/registry.h"
 
@@ -176,7 +177,18 @@ namespace umbriel {
 
     // Runs a parsed action. Shared by the keybind path and the IPC `msg` command.
     bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);
+    // Record that something server-wide became stale. The work happens once, in
+    // a fixed order, at the top of the next frame — see Output::flushDirty.
+    // Schedules a frame on every output, so recording is always enough.
+    void markDirty(Dirty what);
+    // Hand the pending set to the flush and clear it.
+    [[nodiscard]] Dirty takeDirty() {
+      const Dirty pending = m_dirty;
+      m_dirty = Dirty::None;
+      return pending;
+    }
     void relayoutBanner();
+    void relayoutCheatsheet();
     void spawn(const char* command);
     void handleConfigReload();
     // Rotate the view registry until the front is a mapped view on the active
@@ -253,7 +265,6 @@ namespace umbriel {
     void recreateRenderer();
     void applyConfig();
     void showConfigDiagnostics();
-    void relayoutCheatsheet();
     void clearNormalFocus() { m_focus.clearNormalFocus(); }
     void setLockBlankEnabled(bool enabled);
     void updateIdleInhibit();
@@ -402,6 +413,7 @@ namespace umbriel {
     std::vector<std::unique_ptr<PointerDevice>> m_pointers;
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;
     std::vector<std::unique_ptr<VirtualPointerDevice>> m_virtualPointers;
+    Dirty m_dirty = Dirty::None;
     ViewRegistry m_registry;
     FocusManager m_focus{*this};
     std::vector<std::unique_ptr<LayerSurface>> m_layerSurfaces;

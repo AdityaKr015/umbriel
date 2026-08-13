@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/dirty.h"
+
 #include <cstdint>
 #include <memory>
 #include <wayland-server-core.h>
@@ -38,12 +40,23 @@ namespace umbriel {
     [[nodiscard]] WorkspaceGroup* workspaceGroup() const { return m_workspaceGroup.get(); }
 
     void arrangeLayers();
+    // Record that something on this output became stale; flushed at the top of
+    // the next frame. Schedules that frame, so recording is always enough on its
+    // own — marking work that nothing then asks for would simply never happen.
+    void markDirty(Dirty what);
     void onGammaChanged(wlr_gamma_control_v1* control);
     void applyConfig();
     void markBlurBackgroundDirty();
     void handleExternalConfigChange();
 
   private:
+    // Flushed at the top of handleFrame, in Dirty declaration order: layer
+    // arrange defines the usable area, which the layout depends on, which the
+    // chrome over it depends on.
+    void flushDirty();
+
+    Dirty m_dirty = Dirty::None;
+
     static void onFrame(wl_listener* listener, void* data);
     static void onRequestState(wl_listener* listener, void* data);
     static void onDestroy(wl_listener* listener, void* data);

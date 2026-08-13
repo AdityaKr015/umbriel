@@ -1,5 +1,6 @@
 #include "layer/layer_surface.h"
 
+#include "core/dirty.h"
 #include "core/log.h"
 #include "input/seat.h"
 #include "output/output.h"
@@ -216,7 +217,7 @@ namespace umbriel {
   void LayerSurface::handleMap() {
     m_mapped = true;
     if (Output* out = output()) {
-      out->arrangeLayers();
+      out->markDirty(Dirty::LayerArrange);
       if (m_layerSurface->current.layer == ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
         out->markBlurBackgroundDirty();
       }
@@ -235,7 +236,7 @@ namespace umbriel {
     // Avoid sending configures while unmapping (wrong serial / client abort).
     m_arrangingOut = true;
     if (Output* out = output()) {
-      out->arrangeLayers();
+      out->markDirty(Dirty::LayerArrange);
       if (m_layerSurface->current.layer == ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
         out->markBlurBackgroundDirty();
       }
@@ -255,7 +256,7 @@ namespace umbriel {
     }
     if (m_layerSurface->initial_commit) {
       if (Output* out = output()) {
-        out->arrangeLayers();
+        out->markDirty(Dirty::LayerArrange);
       }
       return;
     }
@@ -274,7 +275,7 @@ namespace umbriel {
 
     if (m_layerSurface->current.committed != 0) {
       if (Output* out = output()) {
-        out->arrangeLayers();
+        out->markDirty(Dirty::LayerArrange);
       }
     }
   }

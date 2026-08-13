@@ -223,7 +223,7 @@ namespace umbriel {
       }
       // The chrome loop above cleared every focus ring; put it back.
       refocus();
-      updateBackdrop();
+      markDirty(Dirty::Backdrop);
       if (m_sessionLocked) {
         updateLockBlank();
       }
@@ -242,7 +242,7 @@ namespace umbriel {
       kLog.info("config reloaded ({})", changed.empty() ? "no changes" : changed);
     }
     showConfigDiagnostics();
-    relayoutCheatsheet();
+    markDirty(Dirty::Cheatsheet);
     if (m_configWatcher != nullptr) {
       m_configWatcher->watch(configWatchPaths());
     }
@@ -645,9 +645,7 @@ namespace umbriel {
 
   void Server::addOutput(wlr_output* output) {
     m_outputs.push_back(std::make_unique<Output>(*this, output));
-    updateBackdrop();
-    relayoutBanner();
-    relayoutCheatsheet();
+    markDirty(Dirty::Backdrop | Dirty::Banner | Dirty::Cheatsheet);
     if (m_sessionLocked) {
       updateLockBlank();
       raiseLockTree();
@@ -749,8 +747,7 @@ namespace umbriel {
     }
 
     std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) { return entry.get() == output; });
-    relayoutBanner();
-    relayoutCheatsheet();
+    markDirty(Dirty::Banner | Dirty::Cheatsheet);
     if (m_sessionLocked) {
       updateLockBlank();
     }
@@ -812,7 +809,7 @@ namespace umbriel {
   void Server::onOutputLayoutChange(wl_listener* listener, void* /*data*/) {
     Server* self;
     self = wl_container_of(listener, self, m_outputLayoutChange);
-    self->updateBackdrop();
+    self->markDirty(Dirty::Backdrop);
     self->updateOutputManagerConfig();
   }
 
@@ -864,8 +861,7 @@ namespace umbriel {
           out->handleExternalConfigChange();
         }
       }
-      relayoutBanner();
-      relayoutCheatsheet();
+      markDirty(Dirty::Banner | Dirty::Cheatsheet);
       if (m_sessionLocked) {
         updateLockBlank();
       }

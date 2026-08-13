@@ -1,3 +1,4 @@
+#include "core/dirty.h"
 #include "input/cursor.h"
 #include "layer/layer_surface.h"
 #include "output/output.h"
@@ -9,7 +10,7 @@ namespace umbriel {
 
   void Server::arrangeLayers(wlr_output* output) {
     if (Output* out = outputFromWlr(output)) {
-      out->arrangeLayers();
+      out->markDirty(Dirty::LayerArrange);
     }
   }
 

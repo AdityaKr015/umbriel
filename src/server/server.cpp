@@ -391,6 +391,17 @@ namespace umbriel {
 
   void Server::showConfigDiagnostics() { m_configBanner->show(configDiagnostics()); }
 
+  void Server::markDirty(Dirty what) {
+    m_dirty |= what;
+    // Recording is only useful if a frame follows, so ask for one. Marking work
+    // that nothing then flushes would simply never happen.
+    for (const auto& output : m_outputs) {
+      if (output->wlr() != nullptr) {
+        wlr_output_schedule_frame(output->wlr());
+      }
+    }
+  }
+
   void Server::relayoutBanner() {
     if (m_configBanner != nullptr) {
       m_configBanner->relayout();

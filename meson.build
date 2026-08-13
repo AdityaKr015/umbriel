@@ -120,20 +120,35 @@ virtual_pointer_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+# Logic with no dependency on the compositor: string parsing and layout geometry.
+# Built once and linked by both the compositor and the tests, so a test never
+# recompiles a translation unit and two tests cannot drift in what they cover.
+# Keep this list free of anything needing SceneFX, pango, or a running server;
+# that is what makes these tests cheap and the coverage honest.
+pure_sources = files(
+  'src/config/keybind_parse.cpp',
+  'src/config/value_parse.cpp',
+  'src/layout/layout.cpp',
+  'src/layout/scrolling.cpp',
+  'src/layout/dwindle.cpp',
+)
+
+umbriel_pure = static_library(
+  'umbriel-pure',
+  pure_sources,
+  include_directories: include_directories('src'),
+  dependencies: [wlroots_dep, xkbcommon_dep],
+)
+
 sources = files(
   'src/main.cpp',
   'src/core/animation.cpp',
   'src/core/fdlimit.cpp',
   'src/core/log.cpp',
   'src/config/config.cpp',
-  'src/config/keybind_parse.cpp',
-  'src/config/value_parse.cpp',
   'src/config/config_merge.cpp',
   'src/config/config_watcher.cpp',
   'src/layout/drop_target.cpp',
-  'src/layout/scrolling.cpp',
-  'src/layout/dwindle.cpp',
-  'src/layout/layout.cpp',
   'src/server/server.cpp',
   'src/server/server_events.cpp',
   'src/server/server_focus.cpp',
@@ -168,6 +183,7 @@ umbriel = executable(
   'umbriel',
   sources + [layer_shell_protocol_h, output_mgmt_client_h, output_mgmt_client_c],
   include_directories: include_directories('src'),
+  link_with: umbriel_pure,
   dependencies: [
     scenefx_dep,
     wlroots_dep,
@@ -186,33 +202,16 @@ umbriel = executable(
   install: true,
 )
 
-# Unit tests. Meson has no source globbing by design, so each case is one entry:
-#   [name, [sources], [dependencies]]
-# Keep the dependency list minimal per test; a test that needs wlroots cannot run
-# anywhere a test over pure logic can.
+# Unit tests. Each entry is [name, test sources, extra dependencies]. Tests link
+# the pure library rather than listing compositor sources, so adding a case never
+# means editing a source list, and no translation unit is compiled twice.
 unit_tests = [
   ['output-clip', ['tests/output_clip.cpp'], [wlroots_dep]],
-  ['value-parse', ['tests/value_parse.cpp', 'src/config/value_parse.cpp'], []],
   ['scene-node', ['tests/scene_node.cpp'], []],
-  [
-    'keybind-parse',
-    ['tests/keybind_parse.cpp', 'src/config/keybind_parse.cpp'],
-    [wlroots_dep, xkbcommon_dep, scenefx_dep],
-  ],
-  # Layout geometry links against layout/ alone: no view/, no server/, no config
-  # loading. That isolation is the point: geometry stays testable in isolation.
-  # Both layouts come along because layout.cpp holds the shared geometry helpers
-  # and createLayout, which names each concrete layout.
-  [
-    'scrolling-layout',
-    ['tests/scrolling_layout.cpp', 'src/layout/scrolling.cpp', 'src/layout/dwindle.cpp', 'src/layout/layout.cpp'],
-    [wlroots_dep],
-  ],
-  [
-    'dwindle-layout',
-    ['tests/dwindle_layout.cpp', 'src/layout/dwindle.cpp', 'src/layout/scrolling.cpp', 'src/layout/layout.cpp'],
-    [wlroots_dep],
-  ],
+  ['value-parse', ['tests/value_parse.cpp'], []],
+  ['keybind-parse', ['tests/keybind_parse.cpp'], [wlroots_dep, xkbcommon_dep]],
+  ['scrolling-layout', ['tests/scrolling_layout.cpp'], [wlroots_dep]],
+  ['dwindle-layout', ['tests/dwindle_layout.cpp'], [wlroots_dep]],
 ]
 
 # Harness helper, not a unit test: drives a virtual pointer against a running
@@ -229,6 +228,7 @@ foreach unit_test : unit_tests
     unit_test[0] + '-test',
     unit_test[1],
     include_directories: include_directories('src', 'tests'),
+    link_with: umbriel_pure,
     dependencies: unit_test[2],
   )
   test(unit_test[0], test_exe)

@@ -8,7 +8,11 @@
 #include <cmath>
 #include <linux/input-event-codes.h>
 #include <xkbcommon/xkbcommon.h>
-#include "wlr.h"
+// WLR_MODIFIER_* only. Pulling src/wlr.h would drag SceneFX and the renderer
+// into a translation unit that parses strings.
+extern "C" {
+#include <wlr/types/wlr_keyboard.h>
+}
 // clang-format on
 
 #include <algorithm>

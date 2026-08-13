@@ -230,11 +230,6 @@ namespace umbriel {
     static void onNewSessionLock(wl_listener* listener, void* data);
     static void onNewPointerConstraint(wl_listener* listener, void* data);
     static void onNewVirtualPointer(wl_listener* listener, void* data);
-    static void onVirtualPointerMotion(wl_listener* listener, void* data);
-    static void onVirtualPointerMotionAbsolute(wl_listener* listener, void* data);
-    static void onVirtualPointerButton(wl_listener* listener, void* data);
-    static void onVirtualPointerAxis(wl_listener* listener, void* data);
-    static void onVirtualPointerFrame(wl_listener* listener, void* data);
     static void onVirtualPointerDestroy(wl_listener* listener, void* data);
     static void onNewIdleInhibitor(wl_listener* listener, void* data);
     static void onIdleInhibitorDestroy(wl_listener* listener, void* data);
@@ -294,11 +289,6 @@ namespace umbriel {
     struct VirtualPointerDevice {
       Server* server = nullptr;
       wlr_virtual_pointer_v1* vpointer = nullptr;
-      wl_listener motion{};
-      wl_listener motionAbsolute{};
-      wl_listener button{};
-      wl_listener axis{};
-      wl_listener frame{};
       wl_listener destroy{};
     };
 

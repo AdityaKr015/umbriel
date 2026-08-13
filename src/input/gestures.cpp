@@ -1,7 +1,6 @@
 #include "input/gestures.h"
 
 #include "config/config.h"
-#include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layout/scrolling.h"
@@ -19,8 +18,6 @@
 namespace umbriel {
 
   namespace {
-    constexpr Logger kLog("gestures");
-
     // Tuning constants — file-local, no config keys.
     constexpr double kAxisLockPx = 16.0;
     constexpr double kScrollFactor = 3.0;
@@ -31,6 +28,11 @@ namespace umbriel {
     constexpr double kOverscrollMaxWs = 0.08;
     // Finger travel for a full overview open or close.
     constexpr double kOverviewDistancePx = 300.0;
+    // Finger travel per workspace step while the overview is up. Outside it, a
+    // switch commits once the swipe passes kCommitProgress of a full slide, so
+    // that same travel is what the hand already reads as "one workspace"; there
+    // is no slide to be a fraction of in here, so it becomes the step itself.
+    constexpr double kOverviewStepPx = kSwitchDistancePx * kCommitProgress;
   } // namespace
 
   // ----- trampolines (same pattern as Cursor) -----
@@ -109,7 +111,11 @@ namespace umbriel {
   }
 
   void Gestures::cancelForOutput(Output* output) {
-    if (m_output == output && (m_state == State::Pending || m_state == State::Scroll || m_state == State::Switch)) {
+    if (m_output == output
+        && (m_state == State::Pending
+            || m_state == State::Scroll
+            || m_state == State::Switch
+            || m_state == State::OverviewSelect)) {
       // Hard reset — do NOT call into workspace/group objects (they may be mid-destruction).
       m_output = nullptr;
       m_scrollWorkspace = nullptr;
@@ -134,6 +140,7 @@ namespace umbriel {
       wlr_pointer_gestures_v1_send_swipe_end(m_server->pointerGestures(), m_server->seat()->wlr(), 0, true);
       m_state = State::Idle;
       break;
+    case State::OverviewSelect:
     case State::Pending:
     case State::Idle:
       m_state = State::Idle;
@@ -155,6 +162,7 @@ namespace umbriel {
       finishOverview(true);
       break;
     case State::Forward:
+    case State::OverviewSelect:
     case State::Pending:
     case State::Idle:
       m_state = State::Idle;
@@ -185,17 +193,13 @@ namespace umbriel {
       m_lastTimeMsec = event->time_msec;
       return;
     }
-    // Three-finger workspace switching would fight the filmstrip; inside
-    // overview the wheel and arrow keys already cover navigation.
-    if (event->fingers == 3 && (overview == nullptr || !overview->active())) {
+    if (event->fingers == 3) {
+      // Which of the three-finger gestures this is — scroll, switch, or an
+      // overview row step — is decided once the axis locks, not here.
       m_state = State::Pending;
       m_accumX = 0;
       m_accumY = 0;
       m_output = nullptr;
-      return;
-    }
-    if (event->fingers == 3) {
-      m_state = State::Idle;
       return;
     }
     m_state = State::Forward;
@@ -234,6 +238,19 @@ namespace umbriel {
         return;
       }
       m_output = out;
+
+      if (Overview* overview = m_server->overview(); overview != nullptr && overview->interactive()) {
+        // Horizontal has no meaning over the filmstrip, and letting it through
+        // would step rows on any swipe that drifted off true.
+        if (std::abs(m_accumX) > std::abs(m_accumY)) {
+          m_state = State::Idle;
+          return;
+        }
+        // Start measuring row travel from the lock point, not the touch down.
+        m_accumY = 0;
+        m_state = State::OverviewSelect;
+        return;
+      }
 
       if (std::abs(m_accumX) > std::abs(m_accumY)) {
         // ----- Horizontal lock → Scroll -----
@@ -323,6 +340,27 @@ namespace umbriel {
       return;
     }
 
+    case State::OverviewSelect: {
+      Overview* overview = m_server->overview();
+      if (overview == nullptr || !overview->interactive()) {
+        m_state = State::Idle;
+        return;
+      }
+      m_accumY += event->dy;
+      // Natural, and the same sense as the switch outside the overview: swipe
+      // up (negative dy) moves to the next workspace. The leftover travel stays
+      // in m_accumY so one long swipe crosses several rows.
+      while (m_accumY <= -kOverviewStepPx) {
+        m_accumY += kOverviewStepPx;
+        overview->selectRelativeWorkspace(1, m_output);
+      }
+      while (m_accumY >= kOverviewStepPx) {
+        m_accumY -= kOverviewStepPx;
+        overview->selectRelativeWorkspace(-1, m_output);
+      }
+      return;
+    }
+
     case State::Overview: {
       Overview* overview = m_server->overview();
       if (overview == nullptr) {
@@ -364,6 +402,8 @@ namespace umbriel {
       return;
 
     case State::Pending:
+    // Each row step was committed as it happened; there is nothing to settle.
+    case State::OverviewSelect:
       m_state = State::Idle;
       return;
 

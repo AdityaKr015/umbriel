@@ -12,6 +12,7 @@
 //   click <button>      press and release (button is an evdev BTN_* code)
 //   press <button>
 //   release <button>
+//   notch <dir>         one vertical wheel notch, -1 up / 1 down
 //
 // Commands run in order, each followed by a frame and a roundtrip so the
 // compositor has processed one before the next is sent.
@@ -121,6 +122,16 @@ int main(int argc, char** argv) {
       if (command != "press") {
         zwlr_virtual_pointer_v1_button(pointer, nextTime(), button, WL_POINTER_BUTTON_STATE_RELEASED);
       }
+    } else if (command == "notch") {
+      needs(1);
+      const int dir = std::atoi(args[i + 1].c_str()) < 0 ? -1 : 1;
+      i += 1;
+      // A real wheel sends the smooth value and the discrete step together.
+      // The overview counts notches, so the discrete half is the one that
+      // matters here, but sending only that is not something a wheel does.
+      zwlr_virtual_pointer_v1_axis_discrete(
+          pointer, nextTime(), WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(dir * 15.0), dir
+      );
     } else {
       std::println(stderr, "pointer-client: unknown command '{}'", command);
       return EXIT_FAILURE;

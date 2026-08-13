@@ -168,8 +168,11 @@ workspace_background = "#00000044"
 ```
 
 Zoomed-out view of every workspace on every output (default `Mod+O`). Windows
-stay live: click to focus, middle-click to close, drag between workspaces,
-scroll the filmstrip, or 4-finger swipe to toggle. Dwindle drags preview the
+stay live: click to focus, middle-click to close, drag between workspaces, or
+4-finger swipe to toggle. Move up and down the filmstrip with the wheel, the
+arrow keys, or a 3-finger swipe; because the real windows are hidden while the
+overview is up, each of those steps one workspace at a time rather than sliding
+the way a 3-finger swipe does outside. Dwindle drags preview the
 directional split under the pointer before the window is dropped.
 Transparent windows keep their configured window-rule blur throughout the zoom
 transition. Each workspace has a rounded background behind its cards; use the

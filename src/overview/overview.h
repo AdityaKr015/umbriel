@@ -82,6 +82,13 @@ namespace umbriel {
     void handleMotion(double lx, double ly);
     bool handleAxisNotch(bool vertical, double direction, double lx, double ly);
     bool handleFallbackKey(uint32_t keysym);
+    // Step the active workspace `delta` rows down the filmstrip on `output`
+    // (null: wherever the pointer is). Returns false at either end. The wheel,
+    // the arrow keys and the three-finger swipe all arrive here: while the
+    // overview is up the real trees are hidden, so there is nothing to slide
+    // and switching is a discrete step rather than the animated transition it
+    // is outside.
+    bool selectRelativeWorkspace(int delta, Output* output);
     [[nodiscard]] bool dragging() const { return m_dragCard != nullptr; }
 
   private:

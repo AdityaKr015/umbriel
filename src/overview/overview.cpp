@@ -1126,27 +1126,36 @@ namespace umbriel {
     updateDrag(lx, ly);
   }
 
+  bool Overview::selectRelativeWorkspace(int delta, Output* output) {
+    if (!interactive()) {
+      return false;
+    }
+    if (output == nullptr) {
+      output = m_server->outputFromWlr(m_server->preferredOutput());
+    }
+    if (output == nullptr || output->workspaceGroup() == nullptr) {
+      return false;
+    }
+    WorkspaceGroup* group = output->workspaceGroup();
+    if (group->active() == nullptr) {
+      return false;
+    }
+    const int index = static_cast<int>(group->active()->index()) + delta;
+    if (index < 0 || index >= static_cast<int>(group->workspaceCount())) {
+      return false;
+    }
+    // select() lands in onWorkspaceActivated, which animates rowScroll onto the
+    // new row, so the filmstrip follows without the caller arranging anything.
+    group->select(group->workspaceAt(static_cast<size_t>(index)));
+    return true;
+  }
+
   bool Overview::handleAxisNotch(bool vertical, double direction, double lx, double ly) {
     if (!interactive() || !vertical) {
       return true;
     }
     wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), lx, ly);
-    Output* output = m_server->outputFromWlr(wlrOutput);
-    if (output == nullptr) {
-      output = m_server->outputFromWlr(m_server->preferredOutput());
-    }
-    if (output == nullptr || output->workspaceGroup() == nullptr) {
-      return true;
-    }
-    WorkspaceGroup* group = output->workspaceGroup();
-    if (group->active() == nullptr) {
-      return true;
-    }
-    const int index = static_cast<int>(group->active()->index()) + (direction < 0 ? -1 : 1);
-    if (index < 0 || index >= static_cast<int>(group->workspaceCount())) {
-      return true;
-    }
-    group->select(group->workspaceAt(static_cast<size_t>(index)));
+    selectRelativeWorkspace(direction < 0 ? -1 : 1, m_server->outputFromWlr(wlrOutput));
     return true;
   }
 
@@ -1173,18 +1182,9 @@ namespace umbriel {
       }
       return true;
     case XKB_KEY_Up:
-    case XKB_KEY_Down: {
-      Output* output = m_server->outputFromWlr(m_server->preferredOutput());
-      if (output == nullptr || output->workspaceGroup() == nullptr || output->workspaceGroup()->active() == nullptr) {
-        return true;
-      }
-      WorkspaceGroup* group = output->workspaceGroup();
-      const int index = static_cast<int>(group->active()->index()) + (keysym == XKB_KEY_Up ? -1 : 1);
-      if (index >= 0 && index < static_cast<int>(group->workspaceCount())) {
-        group->select(group->workspaceAt(static_cast<size_t>(index)));
-      }
+    case XKB_KEY_Down:
+      selectRelativeWorkspace(keysym == XKB_KEY_Up ? -1 : 1, nullptr);
       return true;
-    }
     default:
       return false;
     }

@@ -21,7 +21,7 @@ namespace umbriel {
     void cancelForOutput(Output* output);
 
   private:
-    enum class State { Idle, Forward, Pending, Scroll, Switch, Overview };
+    enum class State { Idle, Forward, Pending, Scroll, Switch, Overview, OverviewSelect };
 
     static void onSwipeBegin(wl_listener* listener, void* data);
     static void onSwipeUpdate(wl_listener* listener, void* data);
@@ -68,6 +68,9 @@ namespace umbriel {
 
     // Overview state (vertical 4-finger): swipe up opens, swipe down closes.
     bool m_overviewWasOpen = false;
+
+    // OverviewSelect state (vertical 3-finger, overview up) reuses m_accumY as
+    // the travel left over since the last row step.
 
     wl_listener m_swipeBegin{};
     wl_listener m_swipeUpdate{};

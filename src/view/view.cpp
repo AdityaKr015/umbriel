@@ -469,9 +469,8 @@ namespace umbriel {
     updateBorderGeometry(m_presentedW, m_presentedH);
     // Shadow with presented size.
     if (!m_toplevel->scheduled.fullscreen && m_shadowContainer != nullptr) {
-      const bool decorated = m_borderTree != nullptr && m_borderTree->node.enabled;
-      const int total = decorated ? config().appearance.totalBorderWidth() : 0;
-      const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
+      const int total = borderInset();
+      const int radius = decorated() ? expandedRadius(config().appearance.cornerRadius, total) : 0;
       m_shadow.update(
           m_shadowContainer, m_presentedW, m_presentedH, total, radius,
           m_hasShadowOutputClip ? &m_shadowOutputClip : nullptr
@@ -479,10 +478,9 @@ namespace umbriel {
     }
     // Blur with presented size.
     const wlr_box nodeBox{0, 0, m_presentedW, m_presentedH};
-    const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
     m_blur.update(
-        m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry,
-        rounded ? config().appearance.cornerRadius : 0, nullptr, blurOptions()
+        m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry, surfaceRadius(), nullptr,
+        blurOptions()
     );
     m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
     if (m_workspace != nullptr) {
@@ -776,6 +774,14 @@ namespace umbriel {
     }
   }
 
+  bool View::decorated() const { return m_borderTree != nullptr && m_borderTree->node.enabled; }
+
+  int View::borderInset() const { return decorated() ? config().appearance.totalBorderWidth() : 0; }
+
+  int View::surfaceRadius() const {
+    return decorated() && !m_toplevel->scheduled.fullscreen ? config().appearance.cornerRadius : 0;
+  }
+
   std::array<BorderEdge, 4> View::borderEdges() const {
     const wlr_box& geometry = m_toplevel->base->geometry;
     return borderEdges(geometry.width, geometry.height);
@@ -989,10 +995,7 @@ namespace umbriel {
             return;
           }
 
-          const bool rounded = self->m_borderTree != nullptr
-              && self->m_borderTree->node.enabled
-              && !self->m_toplevel->scheduled.fullscreen;
-          wlr_scene_buffer_set_corner_radius(buffer, rounded ? config().appearance.cornerRadius : 0);
+          wlr_scene_buffer_set_corner_radius(buffer, self->surfaceRadius());
         },
         this
     );
@@ -1005,11 +1008,7 @@ namespace umbriel {
   void View::updateBlur() {
     const wlr_box& geometry = m_toplevel->base->geometry;
     const wlr_box nodeBox{0, 0, geometry.width, geometry.height};
-    const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
-    m_blur.update(
-        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0,
-        nullptr, blurOptions()
-    );
+    m_blur.update(m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, surfaceRadius(), nullptr, blurOptions());
     m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
   }
 
@@ -1024,9 +1023,8 @@ namespace umbriel {
     const wlr_box& geometry = m_toplevel->base->geometry;
     const int w = m_tiled && m_presentedW > 0 ? m_presentedW : geometry.width;
     const int h = m_tiled && m_presentedH > 0 ? m_presentedH : geometry.height;
-    const bool decorated = m_borderTree != nullptr && m_borderTree->node.enabled;
-    const int total = decorated ? config().appearance.totalBorderWidth() : 0;
-    const int radius = decorated ? expandedRadius(config().appearance.cornerRadius, total) : 0;
+    const int total = borderInset();
+    const int radius = decorated() ? expandedRadius(config().appearance.cornerRadius, total) : 0;
     m_shadow.update(m_shadowContainer, w, h, total, radius, m_hasShadowOutputClip ? &m_shadowOutputClip : nullptr);
   }
 
@@ -1047,7 +1045,7 @@ namespace umbriel {
     // Collect border rects for the snapshot.
     std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> snapRects;
 
-    if (m_borderTree != nullptr && m_borderTree->node.enabled) {
+    if (decorated()) {
       const auto& focusedColor =
           m_borderFocusedState ? config().appearance.borderFocused : config().appearance.borderUnfocused;
       for (wlr_scene_rect* srcRect : m_borderRects) {
@@ -1377,8 +1375,7 @@ namespace umbriel {
         .height = presentedHeight(target),
     };
     trackPresentedSize(content.width, content.height);
-    const int border =
-        m_borderTree != nullptr && m_borderTree->node.enabled ? config().appearance.totalBorderWidth() : 0;
+    const int border = borderInset();
     wlr_box decorated = content;
     decorated.x -= border;
     decorated.y -= border;
@@ -1439,7 +1436,6 @@ namespace umbriel {
     updateShadow();
 
     const wlr_box nodeBox{0, 0, content.width, content.height};
-    const bool rounded = m_borderTree != nullptr && m_borderTree->node.enabled && !m_toplevel->scheduled.fullscreen;
     if (!contentOnOutput) {
       m_blur.hide();
       return;
@@ -1486,10 +1482,7 @@ namespace umbriel {
       m_blur.hide();
       return;
     }
-    m_blur.update(
-        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, rounded ? config().appearance.cornerRadius : 0,
-        &blurClip, blurOptions()
-    );
+    m_blur.update(m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, surfaceRadius(), &blurClip, blurOptions());
     m_blur.setAlpha(m_fadeAlpha * m_ruleOpacity);
   }
 

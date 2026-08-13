@@ -167,6 +167,14 @@ namespace umbriel {
     // size on the committed geometry and refresh the derived chrome.
     void finishSizeAnimation();
     [[nodiscard]] bool sizeAnimating() const { return m_animW.animating() || m_animH.animating(); }
+    // True while the border ring exists and is showing. Fullscreen keeps the
+    // tree but disables it, so the pointer alone does not answer this.
+    [[nodiscard]] bool decorated() const;
+    // Border thickness actually being drawn, 0 when undecorated.
+    [[nodiscard]] int borderInset() const;
+    // Radius to round the surface itself by: a fullscreen window is square even
+    // though its borders are only hidden, not destroyed.
+    [[nodiscard]] int surfaceRadius() const;
     // True while an interactive grab owns this view's size, so the layout must
     // not animate it (the drag tracks the pointer 1:1).
     [[nodiscard]] bool sizeGrabActive() const;

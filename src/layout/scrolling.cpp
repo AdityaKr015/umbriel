@@ -341,6 +341,20 @@ namespace umbriel {
         / static_cast<double>(viewportWidth);
   }
 
+  double ScrollingLayout::scrollShiftForColumnRemoval(int columnIndex, int viewportWidth) const {
+    if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size()) || viewportWidth <= 0) {
+      return 0.0;
+    }
+    // A stack losing one row leaves the horizontal geometry alone; only the
+    // last view out takes the column, and the space, with it.
+    if (m_columns[static_cast<size_t>(columnIndex)].views.size() != 1) {
+      return 0.0;
+    }
+    const double span = static_cast<double>(columnWidth(columnIndex, viewportWidth)) + m_config->totalGap;
+    const double hidden = m_scroll - static_cast<double>(columnX(columnIndex, viewportWidth));
+    return std::clamp(hidden, 0.0, span);
+  }
+
   void ScrollingLayout::ensureVisible(int columnIndex, int viewportWidth) {
     m_scroll = targetScrollForEnsureVisible(columnIndex, viewportWidth);
   }

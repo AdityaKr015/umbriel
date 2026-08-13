@@ -357,6 +357,87 @@ UMBRIEL_TEST(maxScrollGrowsWithOverflowingColumns) {
   CHECK(fixture.layout.maxScroll(kViewport) > 0);
 }
 
+// ---- re-anchoring when a column closes off-screen ----
+//
+// Removing a column closes the space it held, so everything to its right moves
+// left by its width plus a gap. When that space was off-screen to the left, the
+// user did not ask to see it happen: a window closing several columns back
+// should not shift the one being read. These pin the compensation that keeps
+// the visible strip still, and the cases where there is deliberately none.
+
+// Screen position of a column: layout coordinate minus the scroll offset.
+int screenX(const ScrollingLayout& layout, int column) {
+  return layout.columnX(column, kViewport) - static_cast<int>(std::lround(layout.scroll()));
+}
+
+UMBRIEL_TEST(removingAColumnLeftOfTheViewportDoesNotMoveTheVisibleOnes) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  // Scrolled fully right: column 0 (0..624) sits entirely left of the viewport,
+  // which starts at 636.
+  fixture.layout.setScroll(636);
+  const int before = screenX(fixture.layout, 1);
+
+  const double shift = fixture.layout.scrollShiftForColumnRemoval(0, kViewport);
+  fixture.layout.removeView(stub(0));
+  fixture.layout.setScroll(fixture.layout.scroll() - shift);
+
+  // That survivor is index 0 now. It must be exactly where it was on screen.
+  CHECK_EQ(screenX(fixture.layout, 0), before);
+}
+
+UMBRIEL_TEST(theShiftIsTheColumnWidthPlusOneGap) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.layout.setScroll(636);
+  // 624 wide + 12 of gap: the whole span the column occupied.
+  CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(0, kViewport), 636.0);
+}
+
+UMBRIEL_TEST(aColumnAtTheViewportEdgeIsNotCompensated) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.layout.setScroll(0);
+  // Nothing of it is hidden, so the strip closing up is in plain sight and is
+  // exactly what closing a visible window should look like.
+  CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(0, kViewport), 0.0);
+}
+
+UMBRIEL_TEST(aPartlyHiddenColumnIsCompensatedByTheHiddenPart) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.layout.setScroll(300);
+  // The compensation grows with how much is off-screen rather than switching on
+  // at the edge, so there is no jump as the column scrolls out of view.
+  CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(0, kViewport), 300.0);
+}
+
+UMBRIEL_TEST(aColumnRightOfTheViewportIsNotCompensated) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.layout.setScroll(0);
+  // Nothing left of the viewport moves when a column further right closes.
+  CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(2, kViewport), 0.0);
+}
+
+UMBRIEL_TEST(losingOneRowOfAStackShiftsNothing) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  // Stack view 1 onto column 0, so removing it leaves the column standing.
+  fixture.layout.consumeLeft(stub(1));
+  fixture.layout.setScroll(636);
+  CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(0, kViewport), 0.0);
+}
+
+UMBRIEL_TEST(anOutOfRangeColumnShiftsNothing) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.layout.setScroll(636);
+  CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(-1, kViewport), 0.0);
+  CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(99, kViewport), 0.0);
+  CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(0, 0), 0.0);
+}
+
 UMBRIEL_TEST(setScrollStoresVerbatimAndDoesNotClamp) {
   // Pinning current behavior, not endorsing it: setScroll is a raw setter, and
   // every caller is responsible for clamping to [0, maxScroll] itself. See the

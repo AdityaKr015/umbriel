@@ -183,7 +183,7 @@ namespace umbriel {
       view->reparentShadow(nullptr);
     }
     const int removedColumn = m_layout->columnOf(view);
-    m_layout->removeView(view);
+    detachFromLayout(view);
     std::erase(m_views, view);
     std::erase(m_floatingStack, view);
     std::erase(m_switchViews, view);
@@ -226,7 +226,7 @@ namespace umbriel {
   }
 
   void Workspace::layoutDetach(View* view, bool animate) {
-    m_layout->removeView(view);
+    detachFromLayout(view);
     // The column just left the strip, so the old offset can now point past the
     // end: a survivor stays cut off at the left edge while empty space opens on
     // the right. niri re-anchors after a removal, activating an adjacent column
@@ -240,13 +240,30 @@ namespace umbriel {
     markArrange(animate);
   }
 
+  int Workspace::viewportWidth() const {
+    if (m_group == nullptr || m_group->output() == nullptr) {
+      return 1;
+    }
+    return std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
+  }
+
+  void Workspace::detachFromLayout(View* view) {
+    ScrollingLayout* scrolling = scrollingLayout();
+    // Measured before the removal, because it depends on where the column is.
+    const double shift =
+        scrolling != nullptr ? scrolling->scrollShiftForColumnRemoval(scrolling->columnOf(view), viewportWidth()) : 0.0;
+    m_layout->removeView(view);
+    if (scrolling != nullptr && shift != 0.0) {
+      scrolling->setScroll(scrolling->scroll() - shift);
+    }
+  }
+
   void Workspace::clampScrollToRange() {
     ScrollingLayout* scrolling = scrollingLayout();
-    if (scrolling == nullptr || m_group == nullptr || m_group->output() == nullptr) {
+    if (scrolling == nullptr) {
       return;
     }
-    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
-    const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportWidth));
+    const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportWidth()));
     scrolling->setScroll(std::clamp(scrolling->scroll(), 0.0, maxScroll));
   }
 
@@ -576,9 +593,7 @@ namespace umbriel {
     if (scrolling == nullptr || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
-    const int column = scrolling->columnOf(m_focusedView);
-    const int viewportWidth = std::max(1, m_group->output()->usableArea().width - 2 * m_layoutConfig.edgePad);
-    scrolling->ensureVisible(column, viewportWidth);
+    scrolling->ensureVisible(scrolling->columnOf(m_focusedView), viewportWidth());
   }
 
   double Workspace::scrollFractionToReveal(const View* view) const {

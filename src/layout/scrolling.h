@@ -33,6 +33,23 @@ namespace umbriel {
     void removeView(View* view) override;
     void moveColumn(int from, int to) override;
     void setScroll(double scroll);
+    // How much to subtract from the scroll offset when `columnIndex` is about
+    // to lose its last view, so the columns still on screen do not slide.
+    //
+    // Removing a column closes the space it held: everything to its right moves
+    // left by its width plus one gap. When that space sat off-screen to the
+    // left, the movement is not something the user asked to see — a window
+    // closing three columns back should not shift the one being read. niri
+    // re-anchors on removal for the same reason.
+    //
+    // Returns the part of that span that was hidden, so it goes to zero as the
+    // column comes into view rather than switching on at the edge: a column
+    // sitting exactly at the left edge of the viewport gets no compensation and
+    // the strip closes up in plain sight, which is what a visible column
+    // closing should look like.
+    //
+    // Call before removeView, while the column still exists.
+    [[nodiscard]] double scrollShiftForColumnRemoval(int columnIndex, int viewportWidth) const;
     void ensureVisible(int columnIndex, int viewportWidth);
     [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportWidth) const;
     void arrange(const wlr_box& usable) override;

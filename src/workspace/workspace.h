@@ -109,6 +109,13 @@ namespace umbriel {
     // Pull the scroll offset back into [0, maxScroll]. Only for removals: a
     // touchpad swipe overscrolls on purpose.
     void clampScrollToRange();
+    // Width the strip scrolls within: the usable area less the edge padding on
+    // both sides. At least 1, so callers can divide by it.
+    [[nodiscard]] int viewportWidth() const;
+    // Take `view` out of the layout, holding the columns that stay on screen
+    // still. Both removal paths come through here: closing a window reaches
+    // layoutDetach, moving one to another workspace reaches removeView.
+    void detachFromLayout(View* view);
     WorkspaceGroup* m_group = nullptr;
     wlr_ext_workspace_handle_v1* m_handle = nullptr;
     std::string m_name;

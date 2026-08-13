@@ -382,7 +382,7 @@ namespace umbriel {
   }
 
   int View::presentedWidth(const wlr_box& target) const {
-    if (m_toplevel->current.fullscreen) {
+    if (m_toplevel->current.fullscreen || sizeGrabActive()) {
       return target.width;
     }
     if (sizeAnimating()) {
@@ -392,7 +392,7 @@ namespace umbriel {
   }
 
   int View::presentedHeight(const wlr_box& target) const {
-    if (m_toplevel->current.fullscreen) {
+    if (m_toplevel->current.fullscreen || sizeGrabActive()) {
       return target.height;
     }
     if (sizeAnimating()) {
@@ -1434,10 +1434,10 @@ namespace umbriel {
       // Crop the toplevel surface to the visible tile; popup children are unclipped in
       // setSurfaceTreeClip so context menus can extend past the window edge.
       setSurfaceTreeClip(&surfaceClip);
-      if (sizeAnimating()) {
+      if (sizeAnimating() || sizeGrabActive()) {
         // The clip crops 1:1 in surface coordinates and caps the destination at
-        // the committed surface size, so it cannot express the size animation's
-        // "scale to presented, then crop". Program the buffer directly; the clip
+        // the committed surface size, so it cannot express an animated or
+        // interactive presented size. Program the buffer directly; the clip
         // above keeps the buffer node positioned at the visible box origin.
         applyPresentedCrop(content, surfaceClip);
       }

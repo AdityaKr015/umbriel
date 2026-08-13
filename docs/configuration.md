@@ -206,7 +206,7 @@ Scrolling layout options:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `default_width_fraction` | float | `0.5` | Initial width assigned to new scrolling columns (0.1-1.0). |
-| `always_center_single_column` | bool | `true` | Center a lone column when it is narrower than the viewport. Set to `false` to align it at the left edge. |
+| `always_center_single_column` | bool | `true` | Center a lone column when it is narrower than the viewport. Set to `false` to align it at the left edge; that edge becomes a fixed layout anchor, so resize the column from its right edge. |
 
 Layout fields can be overridden per-workspace; see
 [Workspace Rules](outputs.md#workspace-rules).

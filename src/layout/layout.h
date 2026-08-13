@@ -74,7 +74,7 @@ namespace umbriel {
     // ---- Interactive resize ----
     // Edges grabbable at a pointer position (0 = none). Base = not resizable.
     [[nodiscard]] virtual uint32_t resizeEdgesAt(const View* /*view*/, double /*cx*/, double /*cy*/) const { return 0; }
-    // Drop edges this layout can't resize (e.g. solo scrolling column vertical). Base = unchanged.
+    // Drop edges this layout cannot resize. Base = unchanged.
     [[nodiscard]] virtual uint32_t sanitizeResizeEdges(const View* /*view*/, uint32_t edges) const { return edges; }
     // Resolve the final resize edges: an explicit request is sanitized; an empty
     // request (or one sanitized to nothing) falls back to the pointer proposal.

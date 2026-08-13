@@ -539,13 +539,13 @@ namespace umbriel {
     public:
       ScrollingResizeGrab(
           ScrollingLayout* layout, int column, int row, uint32_t edges, bool soloHorizontal, bool clearedFullWidth,
-          double startScroll, int startWidthPx, int startPrevWidthPx, int upperRow, double startUpperWeight,
-          double startLowerWeight
+          double startScroll, int startColumnX, int startWidthPx, int startPrevWidthPx, int upperRow,
+          double startUpperWeight, double startLowerWeight
       )
           : m_layout(layout), m_column(column), m_row(row), m_edges(edges), m_soloHorizontal(soloHorizontal),
-            m_clearedFullWidth(clearedFullWidth), m_startScroll(startScroll), m_startWidthPx(startWidthPx),
-            m_startPrevWidthPx(startPrevWidthPx), m_upperRow(upperRow), m_startUpperWeight(startUpperWeight),
-            m_startLowerWeight(startLowerWeight) {}
+            m_clearedFullWidth(clearedFullWidth), m_startScroll(startScroll), m_startColumnX(startColumnX),
+            m_startWidthPx(startWidthPx), m_startPrevWidthPx(startPrevWidthPx), m_upperRow(upperRow),
+            m_startUpperWeight(startUpperWeight), m_startLowerWeight(startLowerWeight) {}
 
       [[nodiscard]] bool unmaximizeOnBegin() const override { return m_clearedFullWidth; }
 
@@ -593,21 +593,35 @@ namespace umbriel {
           }
           return std::max(maxWidth, columnMinWidth(columnIndex));
         };
+        const int gap = layout.layoutConfig()->totalGap;
+        auto setColumnWidthPx = [&](int columnIndex, int width) {
+          const double fraction = static_cast<double>(width + gap) / static_cast<double>(viewportWidth + gap);
+          layout.setWidthFraction(columnIndex, fraction);
+        };
+        const bool centeredSolo =
+            layout.columns().size() == 1 && layout.layoutConfig()->scrolling.alwaysCenterSingleColumn;
 
         if ((m_edges & WLR_EDGE_RIGHT) != 0) {
-          // Pin left edge; only this column's width changes (neighbors untouched).
+          // A centered solo column grows symmetrically, so twice the width
+          // delta keeps the grabbed edge under the pointer.
+          const double widthDelta = centeredSolo ? 2.0 * dx : dx;
           const int newWidth = std::clamp(
-              m_startWidthPx + static_cast<int>(std::lround(dx)), columnMinWidth(m_column), columnMaxWidth(m_column)
+              m_startWidthPx + static_cast<int>(std::lround(widthDelta)), columnMinWidth(m_column),
+              columnMaxWidth(m_column)
           );
-          layout.setWidthFraction(m_column, static_cast<double>(newWidth) / viewportWidth);
-          if (m_soloHorizontal) {
-            // Keep the left edge where the full-width column was aligned.
+          setColumnWidthPx(m_column, newWidth);
+          if (centeredSolo) {
             layout.setScroll(m_startScroll);
+          } else {
+            // Width changes can change row centering. Compensate so the left
+            // edge stays fixed and the right edge tracks the pointer.
+            layout.setScroll(
+                m_startScroll + static_cast<double>(layout.columnX(m_column, viewportWidth) - m_startColumnX)
+            );
           }
         } else if ((m_edges & WLR_EDGE_LEFT) != 0) {
           if (m_column > 0 && !m_soloHorizontal) {
             // Shared boundary with previous column: move both widths, keep pair span fixed.
-            const int gap = layout.layoutConfig()->totalGap;
             const int pair = m_startPrevWidthPx + gap + m_startWidthPx;
             const int minPrev = columnMinWidth(m_column - 1);
             const int minCur = columnMinWidth(m_column);
@@ -618,109 +632,116 @@ namespace umbriel {
                 std::min(maxPrev, pair - gap - minCur)
             );
             const int newCur = pair - gap - newPrev;
-            layout.setWidthFraction(m_column - 1, static_cast<double>(newPrev) / viewportWidth);
-            layout.setWidthFraction(m_column, static_cast<double>(newCur) / viewportWidth);
+            setColumnWidthPx(m_column - 1, newPrev);
+            setColumnWidthPx(m_column, newCur);
           } else {
-            // Column 0 or full-width: pin the right edge, move only this column via width + scroll.
+            const double widthDelta = centeredSolo ? -2.0 * dx : -dx;
             const int newWidth = std::clamp(
-                m_startWidthPx - static_cast<int>(std::lround(dx)), columnMinWidth(m_column), columnMaxWidth(m_column)
+                m_startWidthPx + static_cast<int>(std::lround(widthDelta)), columnMinWidth(m_column),
+                columnMaxWidth(m_column)
             );
-            layout.setWidthFraction(m_column, static_cast<double>(newWidth) / viewportWidth);
-            layout.setScroll(m_startScroll + static_cast<double>(newWidth - m_startWidthPx));
+            setColumnWidthPx(m_column, newWidth);
+            if (centeredSolo) {
+              layout.setScroll(m_startScroll);
+            } else {
+              // Keep the right edge fixed while accounting for any change in
+              // automatic row centering.
+              layout.setScroll(
+                  m_startScroll
+                  + static_cast<double>(layout.columnX(m_column, viewportWidth) - m_startColumnX)
+                  + static_cast<double>(newWidth - m_startWidthPx)
+              );
+            }
           }
         }
 
         if ((m_edges & (WLR_EDGE_TOP | WLR_EDGE_BOTTOM)) != 0 && m_row >= 0) {
           const Column& column = layout.columns()[static_cast<size_t>(m_column)];
           const int rowCount = static_cast<int>(column.views.size());
-          // Vertical resize only with 2+ stacked windows (solo + gap weights get stuck later).
-          if (rowCount >= 2) {
-            const int gap = layout.layoutConfig()->totalGap;
-            const int gapsTotal = std::max(0, rowCount - 1) * gap;
-            const int stackHeight = std::max(rowCount, availableHeight - gapsTotal);
-            if (stackHeight > 0) {
-              constexpr double kMinWindow = 0.05;
-              double totalWeight = std::max(0.0, column.topGapWeight) + std::max(0.0, column.bottomGapWeight);
-              for (double weight : column.heightWeights) {
-                totalWeight += std::max(kMinWindow, weight);
+          const int gapsTotal = std::max(0, rowCount - 1) * gap;
+          const int stackHeight = std::max(rowCount, availableHeight - gapsTotal);
+          if (stackHeight > 0) {
+            constexpr double kMinWindow = 0.05;
+            double totalWeight = std::max(0.0, column.topGapWeight) + std::max(0.0, column.bottomGapWeight);
+            for (double weight : column.heightWeights) {
+              totalWeight += std::max(kMinWindow, weight);
+            }
+            totalWeight = std::max(kMinWindow, totalWeight);
+
+            auto minWindowWeight = [&](View* view) {
+              if (view == nullptr) {
+                return kMinWindow;
               }
-              totalWeight = std::max(kMinWindow, totalWeight);
+              const double fromHints =
+                  static_cast<double>(xdgSizeHints(view->toplevel()).minHeight) / stackHeight * totalWeight;
+              return std::max(kMinWindow, fromHints);
+            };
 
-              auto minWindowWeight = [&](View* view) {
-                if (view == nullptr) {
-                  return kMinWindow;
-                }
-                const double fromHints =
-                    static_cast<double>(xdgSizeHints(view->toplevel()).minHeight) / stackHeight * totalWeight;
-                return std::max(kMinWindow, fromHints);
-              };
+            const double pair = std::max(kMinWindow, m_startUpperWeight + m_startLowerWeight);
+            const double deltaWeight = dy / static_cast<double>(stackHeight) * totalWeight;
 
-              const double pair = std::max(kMinWindow, m_startUpperWeight + m_startLowerWeight);
-              const double deltaWeight = dy / static_cast<double>(stackHeight) * pair;
-
-              auto splitWindows = [&](double startUpper, double /*startLower*/, double delta, double minUpper,
-                                      double minLower) {
-                double upper = startUpper + delta;
-                double lower = pair - upper;
-                if (upper < minUpper) {
-                  upper = minUpper;
-                  lower = pair - upper;
-                }
-                if (lower < minLower) {
-                  lower = minLower;
-                  upper = pair - lower;
-                }
-                return std::pair{upper, lower};
-              };
-              auto splitGapAndWindow = [&](double startGap, double /*startWindow*/, double deltaGap, double minWindow) {
-                double gapWeight = startGap + deltaGap;
-                double windowWeight = pair - gapWeight;
+            auto splitWindows = [&](double startUpper, double /*startLower*/, double delta, double minUpper,
+                                    double minLower) {
+              double upper = startUpper + delta;
+              double lower = pair - upper;
+              if (upper < minUpper) {
+                upper = minUpper;
+                lower = pair - upper;
+              }
+              if (lower < minLower) {
+                lower = minLower;
+                upper = pair - lower;
+              }
+              return std::pair{upper, lower};
+            };
+            auto splitGapAndWindow = [&](double startGap, double /*startWindow*/, double deltaGap, double minWindow) {
+              double gapWeight = startGap + deltaGap;
+              double windowWeight = pair - gapWeight;
+              if (gapWeight < 0.0) {
+                gapWeight = 0.0;
+                windowWeight = pair;
+              }
+              if (windowWeight < minWindow) {
+                windowWeight = minWindow;
+                gapWeight = pair - windowWeight;
                 if (gapWeight < 0.0) {
                   gapWeight = 0.0;
                   windowWeight = pair;
                 }
-                if (windowWeight < minWindow) {
-                  windowWeight = minWindow;
-                  gapWeight = pair - windowWeight;
-                  if (gapWeight < 0.0) {
-                    gapWeight = 0.0;
-                    windowWeight = pair;
-                  }
-                }
-                return std::pair{gapWeight, windowWeight};
-              };
+              }
+              return std::pair{gapWeight, windowWeight};
+            };
 
-              if ((m_edges & WLR_EDGE_TOP) != 0) {
-                if (m_row == 0) {
-                  // Top edge of first window: trade with top gap only.
-                  const double minWindow = minWindowWeight(column.views[0]);
-                  const auto [gapWeight, windowWeight] =
-                      splitGapAndWindow(m_startUpperWeight, m_startLowerWeight, deltaWeight, minWindow);
-                  layout.setTopGapWeight(m_column, gapWeight);
-                  layout.setHeightWeight(m_column, 0, windowWeight);
-                } else if (m_upperRow >= 0) {
-                  const double minUpper = minWindowWeight(column.views[static_cast<size_t>(m_upperRow)]);
-                  const double minLower = minWindowWeight(column.views[static_cast<size_t>(m_row)]);
-                  const auto [upper, lower] =
-                      splitWindows(m_startUpperWeight, m_startLowerWeight, deltaWeight, minUpper, minLower);
-                  layout.setRowBoundary(m_column, m_upperRow, upper, lower);
-                }
-              } else if ((m_edges & WLR_EDGE_BOTTOM) != 0) {
-                if (m_row + 1 >= rowCount) {
-                  // Bottom edge of last window: trade with bottom gap only.
-                  // Dragging down with no gap must not steal height from the window above.
-                  const double minWindow = minWindowWeight(column.views[static_cast<size_t>(m_row)]);
-                  const auto [gapWeight, windowWeight] =
-                      splitGapAndWindow(m_startLowerWeight, m_startUpperWeight, -deltaWeight, minWindow);
-                  layout.setHeightWeight(m_column, m_row, windowWeight);
-                  layout.setBottomGapWeight(m_column, gapWeight);
-                } else if (m_upperRow >= 0) {
-                  const double minUpper = minWindowWeight(column.views[static_cast<size_t>(m_upperRow)]);
-                  const double minLower = minWindowWeight(column.views[static_cast<size_t>(m_row + 1)]);
-                  const auto [upper, lower] =
-                      splitWindows(m_startUpperWeight, m_startLowerWeight, deltaWeight, minUpper, minLower);
-                  layout.setRowBoundary(m_column, m_upperRow, upper, lower);
-                }
+            if ((m_edges & WLR_EDGE_TOP) != 0) {
+              if (m_row == 0) {
+                // Top edge of first window: trade with top gap only.
+                const double minWindow = minWindowWeight(column.views[0]);
+                const auto [gapWeight, windowWeight] =
+                    splitGapAndWindow(m_startUpperWeight, m_startLowerWeight, deltaWeight, minWindow);
+                layout.setTopGapWeight(m_column, gapWeight);
+                layout.setHeightWeight(m_column, 0, windowWeight);
+              } else if (m_upperRow >= 0) {
+                const double minUpper = minWindowWeight(column.views[static_cast<size_t>(m_upperRow)]);
+                const double minLower = minWindowWeight(column.views[static_cast<size_t>(m_row)]);
+                const auto [upper, lower] =
+                    splitWindows(m_startUpperWeight, m_startLowerWeight, deltaWeight, minUpper, minLower);
+                layout.setRowBoundary(m_column, m_upperRow, upper, lower);
+              }
+            } else if ((m_edges & WLR_EDGE_BOTTOM) != 0) {
+              if (m_row + 1 >= rowCount) {
+                // Bottom edge of last window: trade with bottom gap only.
+                // Dragging down with no gap must not steal height from the window above.
+                const double minWindow = minWindowWeight(column.views[static_cast<size_t>(m_row)]);
+                const auto [gapWeight, windowWeight] =
+                    splitGapAndWindow(m_startLowerWeight, m_startUpperWeight, -deltaWeight, minWindow);
+                layout.setHeightWeight(m_column, m_row, windowWeight);
+                layout.setBottomGapWeight(m_column, gapWeight);
+              } else if (m_upperRow >= 0) {
+                const double minUpper = minWindowWeight(column.views[static_cast<size_t>(m_upperRow)]);
+                const double minLower = minWindowWeight(column.views[static_cast<size_t>(m_row + 1)]);
+                const auto [upper, lower] =
+                    splitWindows(m_startUpperWeight, m_startLowerWeight, deltaWeight, minUpper, minLower);
+                layout.setRowBoundary(m_column, m_upperRow, upper, lower);
               }
             }
           }
@@ -735,6 +756,7 @@ namespace umbriel {
       bool m_soloHorizontal;
       bool m_clearedFullWidth;
       double m_startScroll;
+      int m_startColumnX;
       int m_startWidthPx;
       int m_startPrevWidthPx;
       int m_upperRow;
@@ -756,25 +778,21 @@ namespace umbriel {
     const double nearestH = std::min(distLeft, distRight);
     const double nearestV = std::min(distTop, distBottom);
 
-    bool allowVertical = false;
-    const int columnIndex = columnOf(view);
-    if (columnIndex >= 0) {
-      allowVertical = columnIndex < static_cast<int>(m_columns.size())
-          && m_columns[static_cast<size_t>(columnIndex)].views.size() >= 2;
-    }
-
-    if (!allowVertical || nearestH <= nearestV) {
+    if (nearestH <= nearestV) {
+      const bool leftAlignedSolo = m_columns.size() == 1 && !m_config->scrolling.alwaysCenterSingleColumn;
+      if (leftAlignedSolo && distLeft <= distRight) {
+        // This edge is the column's fixed layout anchor. Moving it would only
+        // create transient scroll that focus immediately snaps away.
+        return 0;
+      }
       return distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
     }
     return distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
   }
 
-  uint32_t ScrollingLayout::sanitizeResizeEdges(const View* view, uint32_t edges) const {
-    const int column = columnOf(view);
-    if (column >= 0
-        && column < static_cast<int>(m_columns.size())
-        && m_columns[static_cast<size_t>(column)].views.size() < 2) {
-      edges &= ~(WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
+  uint32_t ScrollingLayout::sanitizeResizeEdges(const View* /*view*/, uint32_t edges) const {
+    if (m_columns.size() == 1 && !m_config->scrolling.alwaysCenterSingleColumn) {
+      edges &= ~WLR_EDGE_LEFT;
     }
     return edges;
   }
@@ -797,6 +815,7 @@ namespace umbriel {
     const int viewportWidth = std::max(1, usable.width - 2 * m_config->edgePad);
 
     const wlr_box box = targetBox(view);
+    const int startColumnX = columnX(column, viewportWidth);
     const int startWidthPx = box.width;
     if (startWidthPx >= viewportWidth) {
       soloHorizontal = true;
@@ -836,8 +855,8 @@ namespace umbriel {
     }
 
     return std::make_unique<ScrollingResizeGrab>(
-        this, column, row, edges, soloHorizontal, clearedFullWidth, startScroll, startWidthPx, startPrevWidthPx,
-        upperRow, startUpperWeight, startLowerWeight
+        this, column, row, edges, soloHorizontal, clearedFullWidth, startScroll, startColumnX, startWidthPx,
+        startPrevWidthPx, upperRow, startUpperWeight, startLowerWeight
     );
   }
 

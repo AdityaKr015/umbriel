@@ -115,7 +115,7 @@ rules apply afterward and take precedence.
 | `layout.gap` | int | Gap in pixels (0-500). |
 | `layout.width_presets` | float array | Widths used by the width-cycle action in both layouts. |
 | `layout.scrolling.default_width_fraction` | float | Initial scrolling column width (0.1-1.0). |
-| `layout.scrolling.always_center_single_column` | bool | Center a lone scrolling column when narrower than the viewport. |
+| `layout.scrolling.always_center_single_column` | bool | Center a lone scrolling column when narrower than the viewport. When disabled, the left-aligned column has a fixed left edge and resizes from its right edge. |
 
 ## Examples
 

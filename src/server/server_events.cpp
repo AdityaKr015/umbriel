@@ -184,7 +184,7 @@ namespace umbriel {
       view->applyCornerRadius();
       view->applyDynamicRules();
       view->updateShadow();
-      wlr_scene_rect_set_color(view->m_fullscreenBackdrop, config().appearance.backdropColor.data());
+      view->reloadBackdropColor();
     }
     for (const auto& layer : m_layerSurfaces) {
       if (layer->mapped()) {

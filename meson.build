@@ -173,6 +173,7 @@ core_sources = files(
   'src/input/cursor_constraint.cpp',
   'src/view/view.cpp',
   'src/view/decoration.cpp',
+  'src/view/presentation.cpp',
   'src/view/view_foreign.cpp',
   'src/view/popup.cpp',
   'src/layer/layer_surface.cpp',

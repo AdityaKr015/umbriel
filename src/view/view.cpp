@@ -79,10 +79,7 @@ namespace umbriel {
     m_sceneTree->node.data = sceneNodeData(this);
     m_toplevel->base->data = m_sceneTree;
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
-    m_fullscreenBackdrop = wlr_scene_rect_create(m_sceneTree, 0, 0, config().appearance.backdropColor.data());
-    wlr_scene_rect_set_corner_radius(m_fullscreenBackdrop, 0);
-    wlr_scene_node_lower_to_bottom(&m_fullscreenBackdrop->node);
-    wlr_scene_node_set_enabled(&m_fullscreenBackdrop->node, false);
+    m_presentation.createBackdrop(m_sceneTree);
     if (wlr_output* output = m_server->preferredOutput()) {
       wlr_surface* surface = m_toplevel->base->surface;
       wlr_fractional_scale_v1_notify_scale(surface, output->scale);
@@ -323,26 +320,21 @@ namespace umbriel {
       return target.width;
     }
     if (sizeAnimating()) {
-      return m_presentedW;
+      return m_presentation.width();
     }
     return std::min(m_toplevel->base->geometry.width, target.width);
   }
+
+  void View::trackPresentedSize(int width, int height) { m_presentation.track(width, height); }
 
   int View::presentedHeight(const wlr_box& target) const {
     if (m_toplevel->current.fullscreen || sizeGrabActive()) {
       return target.height;
     }
     if (sizeAnimating()) {
-      return m_presentedH;
+      return m_presentation.height();
     }
     return std::min(m_toplevel->base->geometry.height, target.height);
-  }
-  void View::trackPresentedSize(int width, int height) {
-    if (sizeAnimating() || width <= 0 || height <= 0) {
-      return;
-    }
-    m_presentedW = width;
-    m_presentedH = height;
   }
 
   // Fullscreen presentation follows the client's committed state, not the
@@ -350,139 +342,45 @@ namespace umbriel {
   // actually committed fullscreen, so a client
   // mid-transition (wine flipping modes) never renders as a mismatched pair
   // of stale buffer + fullscreen chrome. Never scale buffers (wrong aspect).
+
   void View::updateFullscreenPresentation(int width, int height) {
-    const bool fullscreen = m_toplevel->current.fullscreen;
-    const bool validSize = width > 0 && height > 0;
-    wlr_scene_node_set_enabled(&m_fullscreenBackdrop->node, fullscreen && validSize);
-    wlr_scene_node* surfaceNode = toplevelSurfaceTreeNode(m_sceneTree, m_toplevel->base->surface);
-    const wlr_box& geo = m_toplevel->base->geometry;
-    if (fullscreen && validSize) {
-      wlr_scene_rect_set_size(m_fullscreenBackdrop, width, height);
-      wlr_scene_node_set_position(&m_fullscreenBackdrop->node, 0, 0);
-      // Centering may go negative for oversized buffers to crop both sides equally.
-      m_fullscreenOffsetX = geo.width > 0 ? (width - geo.width) / 2 : 0;
-      m_fullscreenOffsetY = geo.height > 0 ? (height - geo.height) / 2 : 0;
-      if (surfaceNode != nullptr) {
-        // The wlroots xdg scene helper resets this to (-geo.x, -geo.y) on every
-        // commit; our commit handler re-applies the centering offset afterwards.
-        wlr_scene_node_set_position(surfaceNode, m_fullscreenOffsetX - geo.x, m_fullscreenOffsetY - geo.y);
-      }
-      m_fullscreenContentCentered = m_fullscreenOffsetX != 0 || m_fullscreenOffsetY != 0;
-      return;
-    }
-    m_fullscreenOffsetX = 0;
-    m_fullscreenOffsetY = 0;
-    if (!fullscreen && m_fullscreenContentCentered) {
-      if (surfaceNode != nullptr) {
-        wlr_scene_node_set_position(surfaceNode, -geo.x, -geo.y);
-      }
-      m_fullscreenContentCentered = false;
-    }
+    m_presentation.updateFullscreen(
+        m_toplevel->current.fullscreen, width, height, toplevelSurfaceTreeNode(m_sceneTree, m_toplevel->base->surface),
+        m_toplevel->base->geometry
+    );
   }
 
   void View::applyPresentedCrop(const wlr_box& content, const wlr_box& surfaceClip) {
-    // The presented (animated) box scales the geometry; surfaceClip names the
-    // visible part of it in surface coordinates. Map that region back through
-    // the presented scale onto the committed buffer.
-    struct Ctx {
-      View* self;
-      const wlr_box* content;
-      const wlr_box* clip;
-    } ctx{this, &content, &surfaceClip};
-    wlr_scene_node_for_each_buffer(
-        &m_sceneTree->node,
-        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
-          auto& ctx = *static_cast<Ctx*>(data);
-          wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-          if (sceneSurface == nullptr || sceneSurface->surface != ctx.self->m_toplevel->base->surface) {
-            return;
-          }
-          wlr_surface* surface = sceneSurface->surface;
-          const wlr_box& geo = ctx.self->m_toplevel->base->geometry;
-          if (ctx.content->width <= 0
-              || ctx.content->height <= 0
-              || geo.width <= 0
-              || geo.height <= 0
-              || surface->current.width <= 0
-              || surface->current.height <= 0) {
-            return;
-          }
-          // Surface px per presented px.
-          const double fx = static_cast<double>(geo.width) / ctx.content->width;
-          const double fy = static_cast<double>(geo.height) / ctx.content->height;
-          // Surface-local region backing the visible presented box.
-          const double sx = geo.x + (ctx.clip->x - geo.x) * fx;
-          const double sy = geo.y + (ctx.clip->y - geo.y) * fy;
-          const double sw = ctx.clip->width * fx;
-          const double sh = ctx.clip->height * fy;
-          // Surface -> buffer coordinates (viewport/scale aware).
-          wlr_fbox base{};
-          wlr_surface_get_buffer_source_box(surface, &base);
-          const double bx = base.width / surface->current.width;
-          const double by = base.height / surface->current.height;
-          wlr_fbox src{base.x + sx * bx, base.y + sy * by, sw * bx, sh * by};
-          if (src.x < base.x) {
-            src.width -= base.x - src.x;
-            src.x = base.x;
-          }
-          if (src.y < base.y) {
-            src.height -= base.y - src.y;
-            src.y = base.y;
-          }
-          src.width = std::min(src.width, base.x + base.width - src.x);
-          src.height = std::min(src.height, base.y + base.height - src.y);
-          if (src.width <= 0 || src.height <= 0) {
-            return;
-          }
-          wlr_scene_buffer_set_source_box(buffer, &src);
-          wlr_scene_buffer_set_dest_size(buffer, ctx.clip->width, ctx.clip->height);
-        },
-        &ctx
-    );
+    m_presentation.applyCrop(m_sceneTree, m_toplevel->base->surface, m_toplevel->base->geometry, content, surfaceClip);
+  }
+
+  void View::resetPresentedSurface() {
+    m_presentation.resetCrop(m_sceneTree, m_toplevel->base->surface);
+    // Clear the subsurface clip so the next syncViewPresentation re-applies the
+    // resting clip through a real reconfigure: an unchanged clip box early-outs
+    // and would leave the animated src/dst behind.
+    setSurfaceTreeClip(nullptr);
   }
 
   void View::applyPresentedSize() {
     // Buffer scale + crop is derived in setOutputClip (applyPresentedCrop) via
     // syncViewPresentation below, so the animated size and the output clip are
     // always applied together instead of fighting over dest_size.
-    updateBorderGeometry(m_presentedW, m_presentedH);
+    const int width = m_presentation.width();
+    const int height = m_presentation.height();
+    updateBorderGeometry(width, height);
     if (!m_toplevel->scheduled.fullscreen) {
-      updateShadow(m_presentedW, m_presentedH);
+      updateShadow(width, height);
     }
-    updateBlur(m_presentedW, m_presentedH);
+    updateBlur(width, height);
     if (m_workspace != nullptr) {
       m_workspace->syncViewPresentation(this);
     }
   }
 
-  void View::resetPresentedSurface() {
-    // Restore the primary surface buffer to its real size and drop the animated
-    // source crop, then clear the subsurface clip so the next
-    // syncViewPresentation re-applies the resting clip through a real
-    // reconfigure (an unchanged clip box would early-out and leave the animated
-    // src/dst behind).
-    wlr_scene_node_for_each_buffer(
-        &m_sceneTree->node,
-        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
-          auto* self = static_cast<View*>(data);
-          wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-          if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
-            return;
-          }
-          wlr_scene_buffer_set_source_box(buffer, nullptr);
-          wlr_scene_buffer_set_dest_size(
-              buffer, sceneSurface->surface->current.width, sceneSurface->surface->current.height
-          );
-        },
-        this
-    );
-    setSurfaceTreeClip(nullptr);
-  }
-
   void View::finishSizeAnimation() {
     const wlr_box& geo = m_toplevel->base->geometry;
-    m_presentedW = geo.width;
-    m_presentedH = geo.height;
+    m_presentation.setSize(geo.width, geo.height);
     resetPresentedSurface();
     updateBorderGeometry();
     updateBlur();
@@ -497,8 +395,7 @@ namespace umbriel {
       return;
     }
     const wlr_box& geo = m_toplevel->base->geometry;
-    m_animW.snap(geo.width);
-    m_animH.snap(geo.height);
+    m_presentation.snapTo(geo.width, geo.height);
     finishSizeAnimation();
   }
 
@@ -524,21 +421,16 @@ namespace umbriel {
       return;
     }
     // Nothing presented yet (first map): the fade-in covers the appear.
-    if (m_presentedW <= 0 || m_presentedH <= 0) {
+    if (m_presentation.width() <= 0 || m_presentation.height() <= 0) {
       return;
     }
-    if (sizeGrabActive() || (width == m_presentedW && height == m_presentedH)) {
+    if (sizeGrabActive() || (width == m_presentation.width() && height == m_presentation.height())) {
       return;
     }
-    if (sizeAnimating()
-        && width == static_cast<int>(m_animW.target())
-        && height == static_cast<int>(m_animH.target())) {
+    if (m_presentation.targeting(width, height)) {
       return;
     }
-    m_animW.snap(m_presentedW);
-    m_animW.retarget(width, config().appearance.animationMs);
-    m_animH.snap(m_presentedH);
-    m_animH.retarget(height, config().appearance.animationMs);
+    m_presentation.animateTo(width, height, config().appearance.animationMs);
     scheduleFrame();
   }
 
@@ -607,11 +499,7 @@ namespace umbriel {
       active = m_posX.animating() || m_posY.animating();
     }
 
-    const bool resizedW = m_animW.tick(nowMsec);
-    const bool resizedH = m_animH.tick(nowMsec);
-    if (resizedW || resizedH) {
-      m_presentedW = static_cast<int>(std::lround(m_animW.current()));
-      m_presentedH = static_cast<int>(std::lround(m_animH.current()));
+    if (m_presentation.tick(nowMsec)) {
       applyPresentedSize();
       if (sizeAnimating()) {
         active = true;
@@ -796,8 +684,8 @@ namespace umbriel {
     // the one the shadow must match; a float has no such lag.
     const wlr_box& geometry = m_toplevel->base->geometry;
     updateShadow(
-        m_tiled && m_presentedW > 0 ? m_presentedW : geometry.width,
-        m_tiled && m_presentedH > 0 ? m_presentedH : geometry.height
+        m_tiled && m_presentation.width() > 0 ? m_presentation.width() : geometry.width,
+        m_tiled && m_presentation.height() > 0 ? m_presentation.height() : geometry.height
     );
   }
 
@@ -1106,8 +994,8 @@ namespace umbriel {
     const wlr_box& geo = m_toplevel->base->geometry;
     if (geo.width > fullArea.width || geo.height > fullArea.height) {
       const wlr_box clip{
-          geo.x - std::min(0, m_fullscreenOffsetX),
-          geo.y - std::min(0, m_fullscreenOffsetY),
+          geo.x - std::min(0, m_presentation.offsetX()),
+          geo.y - std::min(0, m_presentation.offsetY()),
           std::min(geo.width, fullArea.width),
           std::min(geo.height, fullArea.height),
       };
@@ -1122,10 +1010,10 @@ namespace umbriel {
   void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
     updateFullscreenPresentation(target.width, target.height);
     if (m_toplevel->current.fullscreen && screenIntersection != nullptr) {
-      wlr_scene_node_set_position(
-          &m_fullscreenBackdrop->node, screenIntersection->x - target.x, screenIntersection->y - target.y
+      m_presentation.setBackdropBox(
+          screenIntersection->x - target.x, screenIntersection->y - target.y, screenIntersection->width,
+          screenIntersection->height
       );
-      wlr_scene_rect_set_size(m_fullscreenBackdrop, screenIntersection->width, screenIntersection->height);
     }
     const wlr_box& geometry = m_toplevel->base->geometry;
     // Stay inside the tile while geometry lags configure (Electron often stays wide).
@@ -1156,7 +1044,7 @@ namespace umbriel {
     const bool decoratedFullyVisible = wlr_box_equal(&decoratedVisible, &decorated);
     if (contentOnOutput) {
       const wlr_box surfaceClip =
-          surfaceClipForOutput(geometry, content, contentVisible, m_fullscreenOffsetX, m_fullscreenOffsetY);
+          surfaceClipForOutput(geometry, content, contentVisible, m_presentation.offsetX(), m_presentation.offsetY());
       // Crop the toplevel surface to the visible tile; popup children are unclipped in
       // setSurfaceTreeClip so context menus can extend past the window edge.
       setSurfaceTreeClip(&surfaceClip);
@@ -1191,43 +1079,8 @@ namespace umbriel {
       return;
     }
 
-    // Always clip blur to this output. SceneFX blur sampling can extend past the
-    // node, so inset from output edges by the blur kernel to avoid neighbor bleed.
-    const wlr_box outputLocal{
-        .x = outputBox.x - target.x,
-        .y = outputBox.y - target.y,
-        .width = outputBox.width,
-        .height = outputBox.height,
-    };
-    const wlr_box contentLocal{
-        .x = contentVisible.x - target.x,
-        .y = contentVisible.y - target.y,
-        .width = contentVisible.width,
-        .height = contentVisible.height,
-    };
-    wlr_box blurClip{};
-    if (!wlr_box_intersection(&blurClip, &nodeBox, &contentLocal)
-        || !wlr_box_intersection(&blurClip, &blurClip, &outputLocal)) {
-      m_decoration.hideBlur();
-      return;
-    }
     const int bleed = std::max(0, config().appearance.blur.radius) * std::max(1, config().appearance.blur.passes);
-    if (bleed > 0) {
-      if (blurClip.x <= outputLocal.x) {
-        blurClip.x += bleed;
-        blurClip.width -= bleed;
-      }
-      if (blurClip.y <= outputLocal.y) {
-        blurClip.y += bleed;
-        blurClip.height -= bleed;
-      }
-      if (blurClip.x + blurClip.width >= outputLocal.x + outputLocal.width) {
-        blurClip.width -= bleed;
-      }
-      if (blurClip.y + blurClip.height >= outputLocal.y + outputLocal.height) {
-        blurClip.height -= bleed;
-      }
-    }
+    const wlr_box blurClip = blurClipForOutput(nodeBox, contentVisible, outputBox, target, bleed);
     if (blurClip.width <= 0 || blurClip.height <= 0) {
       m_decoration.hideBlur();
       return;
@@ -1242,8 +1095,7 @@ namespace umbriel {
     m_mapped = true;
     m_tiled = looksTiled(m_toplevel);
     const wlr_box& mapGeo = m_toplevel->base->geometry;
-    m_presentedW = mapGeo.width;
-    m_presentedH = mapGeo.height;
+    m_presentation.setSize(mapGeo.width, mapGeo.height);
     clearOutputClip();
 
     // Resolve window rules and apply one-shot effects.
@@ -1354,7 +1206,7 @@ namespace umbriel {
     cancelPositionAnimation();
     m_decoration.setBordersEnabled(false);
     m_decoration.hideEffects();
-    wlr_scene_node_set_enabled(&m_fullscreenBackdrop->node, false);
+    m_presentation.setBackdropEnabled(false);
     if (m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
       // Move out of the fullscreen layer back to the normal workspace/xdg tree.
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
@@ -1453,8 +1305,7 @@ namespace umbriel {
         if (sizeAnimating()) {
           cancelSizeAnimation();
         }
-        m_presentedW = geometry.width;
-        m_presentedH = geometry.height;
+        m_presentation.setSize(geometry.width, geometry.height);
       }
     }
     // Re-apply output clip after configure ack so Super+F / resize sizes show

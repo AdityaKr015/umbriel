@@ -2,6 +2,7 @@
 #include "core/animation.h"
 #include "scene/node.h"
 #include "view/decoration.h"
+#include "view/presentation.h"
 
 #include <array>
 #include <optional>
@@ -65,7 +66,7 @@ namespace umbriel {
     void clampFloatingPosition();
     // Animate the presented size toward a layout-assigned size. Called by
     // Workspace::arrange when it configures the client, so the animation owns
-    // m_presentedW/H before the clip can report the final size.
+    // the presented size before the clip can report the final size.
     void beginResizeAnimation(int width, int height);
     void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
     // Drop the per-output clip so the view renders unclipped (e.g. a window
@@ -138,6 +139,7 @@ namespace umbriel {
     void updateBorderGeometry(int contentWidth, int contentHeight);
     void setBorderFocused(bool focused);
     void applyCornerRadius();
+    void reloadBackdropColor() { m_presentation.reloadBackdropColor(); }
     void updateBlur();
     void updateBlur(int contentWidth, int contentHeight);
     [[nodiscard]] SurfaceBlurOptions blurOptions() const { return m_decoration.blurOptions(); }
@@ -166,7 +168,7 @@ namespace umbriel {
     // Shared tail of a finished/cancelled size animation: settle the presented
     // size on the committed geometry and refresh the derived chrome.
     void finishSizeAnimation();
-    [[nodiscard]] bool sizeAnimating() const { return m_animW.animating() || m_animH.animating(); }
+    [[nodiscard]] bool sizeAnimating() const { return m_presentation.animating(); }
     // True while the border ring exists and is showing. Fullscreen keeps the
     // tree but disables it, so the pointer alone does not answer this.
     [[nodiscard]] bool decorated() const;
@@ -209,8 +211,8 @@ namespace umbriel {
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
     wlr_scene_tree* m_sceneTree = nullptr;
-    wlr_scene_rect* m_fullscreenBackdrop = nullptr;
     ViewDecoration m_decoration;
+    ViewPresentation m_presentation;
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_ext_foreign_toplevel_handle_v1* m_extForeign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
@@ -229,16 +231,6 @@ namespace umbriel {
     AnimatedValue m_fade;
     float m_fadeAlpha = 1.0F;
     bool m_borderFocusedState = false;
-    AnimatedValue m_animW;
-    AnimatedValue m_animH;
-    // Dimensions currently rendered by the scene. These follow the layout clip
-    // while client geometry lags, and the interpolated size during animation.
-    int m_presentedW = 0;
-    int m_presentedH = 0;
-    // Fullscreen: content offset centering a stale (smaller) buffer in the tile.
-    int m_fullscreenOffsetX = 0;
-    int m_fullscreenOffsetY = 0;
-    bool m_fullscreenContentCentered = false;
     // Window rules: unsettled means title was empty at map, so a later
     // handleSetTitle re-applies all rule effects one more time.
     bool m_initialRulesSettled = false;

@@ -141,8 +141,18 @@ umbriel_pure = static_library(
   dependencies: [wlroots_dep, xkbcommon_dep],
 )
 
-sources = files(
-  'src/main.cpp',
+# What a test needs to use the pure layer: the library, the include root, and
+# the two dependencies its headers pull in.
+umbriel_pure_dep = declare_dependency(
+  link_with: umbriel_pure,
+  include_directories: include_directories('src'),
+  dependencies: [wlroots_dep, xkbcommon_dep],
+)
+
+# The compositor itself. main.cpp is deliberately not here: everything lives in
+# a library so a test can link any of it without re-listing or recompiling
+# sources, and the executable is just an entry point.
+core_sources = files(
   'src/core/animation.cpp',
   'src/core/fdlimit.cpp',
   'src/core/log.cpp',
@@ -180,40 +190,59 @@ sources = files(
   'src/server/ipc_commands.cpp',
 )
 
-umbriel = executable(
-  'umbriel',
-  sources + [layer_shell_protocol_h, output_mgmt_client_h, output_mgmt_client_c],
+umbriel_core_deps = [
+  scenefx_dep,
+  wlroots_dep,
+  wayland_server_dep,
+  wayland_client_dep,
+  wayland_protocols_enums,
+  xkbcommon_dep,
+  libinput_dep,
+  pixman_dep,
+  tomlplusplus_dep,
+  cairo_dep,
+  pangocairo_dep,
+  libdrm_dep,
+  nlohmann_json_dep,
+]
+
+umbriel_core = static_library(
+  'umbriel-core',
+  core_sources + [layer_shell_protocol_h, output_mgmt_client_h, output_mgmt_client_c],
   include_directories: include_directories('src'),
   link_with: umbriel_pure,
-  dependencies: [
-    scenefx_dep,
-    wlroots_dep,
-    wayland_server_dep,
-    wayland_client_dep,
-    wayland_protocols_enums,
-    xkbcommon_dep,
-    libinput_dep,
-    pixman_dep,
-    tomlplusplus_dep,
-    cairo_dep,
-    pangocairo_dep,
-    libdrm_dep,
-    nlohmann_json_dep,
-  ],
+  dependencies: umbriel_core_deps,
+)
+
+# A test over compositor code links this and nothing else. It is far heavier than
+# umbriel_pure_dep (SceneFX, pango, cairo), so prefer the pure layer wherever the
+# code under test allows it.
+umbriel_core_dep = declare_dependency(
+  link_with: umbriel_core,
+  include_directories: include_directories('src'),
+  dependencies: umbriel_core_deps,
+)
+
+umbriel = executable(
+  'umbriel',
+  'src/main.cpp',
+  dependencies: [umbriel_core_dep],
   install: true,
 )
 
-# Unit tests. Each entry is [name, test sources, extra dependencies]. Tests link
-# the pure library rather than listing compositor sources, so adding a case never
-# means editing a source list, and no translation unit is compiled twice.
+# Unit tests. Each entry is [name, test sources, extra dependencies]. Every test
+# gets umbriel_pure_dep; add umbriel_core_dep to the third field for a test that
+# needs compositor code. Either way a test never lists or recompiles a source.
 unit_tests = [
-  ['output-clip', ['tests/output_clip.cpp'], [wlroots_dep]],
+  ['output-clip', ['tests/output_clip.cpp'], []],
   ['scene-node', ['tests/scene_node.cpp'], []],
   ['value-parse', ['tests/value_parse.cpp'], []],
-  ['keybind-parse', ['tests/keybind_parse.cpp'], [wlroots_dep, xkbcommon_dep]],
-  ['scrolling-layout', ['tests/scrolling_layout.cpp'], [wlroots_dep]],
-  ['dwindle-layout', ['tests/dwindle_layout.cpp'], [wlroots_dep]],
-  ['cheatsheet-rows', ['tests/cheatsheet_rows.cpp'], [wlroots_dep, xkbcommon_dep]],
+  ['keybind-parse', ['tests/keybind_parse.cpp'], []],
+  ['scrolling-layout', ['tests/scrolling_layout.cpp'], []],
+  ['dwindle-layout', ['tests/dwindle_layout.cpp'], []],
+  ['cheatsheet-rows', ['tests/cheatsheet_rows.cpp'], []],
+  # Reaches compositor code, so it takes the heavier library.
+  ['config-resolve', ['tests/config_resolve.cpp'], [umbriel_core_dep]],
 ]
 
 # Harness helper, not a unit test: drives a virtual pointer against a running
@@ -229,9 +258,8 @@ foreach unit_test : unit_tests
   test_exe = executable(
     unit_test[0] + '-test',
     unit_test[1],
-    include_directories: include_directories('src', 'tests'),
-    link_with: umbriel_pure,
-    dependencies: unit_test[2],
+    include_directories: include_directories('tests'),
+    dependencies: [umbriel_pure_dep] + unit_test[2],
   )
   test(unit_test[0], test_exe)
 endforeach

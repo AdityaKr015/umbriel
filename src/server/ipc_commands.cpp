@@ -5,6 +5,7 @@
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "workspace/workspace.h"
 
 #include <nlohmann/json.hpp>
 #include <print>
@@ -32,9 +33,9 @@ namespace umbriel {
         const std::string appId = entry.value("app_id", "");
         const std::string title = entry.value("title", "");
         std::println(
-            "{}\t{}\t[{} {}x{}{:+}{:+}]", appId.empty() ? "-" : appId, title.empty() ? "-" : title,
-            entry.value("floating", false) ? "float" : "tile", entry.value("w", 0), entry.value("h", 0),
-            entry.value("x", 0), entry.value("y", 0)
+            "{}{}\t{}\t[{} {}x{}{:+}{:+}]", entry.value("focused", false) ? "*" : " ", appId.empty() ? "-" : appId,
+            title.empty() ? "-" : title, entry.value("floating", false) ? "float" : "tile", entry.value("w", 0),
+            entry.value("h", 0), entry.value("x", 0), entry.value("y", 0)
         );
       }
     }
@@ -62,6 +63,9 @@ namespace umbriel {
       entry["app_id"] = v->toplevel()->app_id != nullptr ? v->toplevel()->app_id : "";
       entry["title"] = v->toplevel()->title != nullptr ? v->toplevel()->title : "";
       entry["floating"] = v->floating();
+      // The compositor's own notion of focus, which is what every action acts
+      // on. Lets a caller (and the harness) see where focus went.
+      entry["focused"] = v->workspace() != nullptr && v->workspace()->focusedView() == v.get();
       entry["x"] = v->sceneTree()->node.x;
       entry["y"] = v->sceneTree()->node.y;
       entry["w"] = v->toplevel()->base->geometry.width;

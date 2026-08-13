@@ -292,6 +292,7 @@ namespace umbriel {
     wl_list_remove(&m_outputManagerTest.link);
     wl_list_remove(&m_outputLayoutChange.link);
     wl_list_remove(&m_rendererLost.link);
+    wl_list_remove(&m_toplevelCaptureRequest.link);
     m_configWatcher.reset();
     m_ipc.reset();
 
@@ -301,6 +302,8 @@ namespace umbriel {
     }
     m_closeSnapshots.clear();
     m_configBanner.reset();
+    // Owns scene nodes under m_scene; must go before the scene teardown below.
+    m_cheatsheet.reset();
     m_overview.reset();
     m_sessionLock.reset();
     m_layerSurfaces.clear();
@@ -308,6 +311,9 @@ namespace umbriel {
     m_keyboards.clear();
     m_outputs.clear();
     m_seat.reset();
+    // Holds listeners on the wlr_cursor's gesture signals. wlr_cursor_destroy
+    // asserts its signal lists are empty, so this must precede the cursor.
+    m_gestures.reset();
     m_cursor.reset();
 
     // Tear down xwayland-satellite before destroying Wayland clients.

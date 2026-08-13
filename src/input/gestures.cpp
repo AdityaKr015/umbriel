@@ -412,20 +412,32 @@ namespace umbriel {
       // Snap to the column nearest the viewport center.
       const auto& layout = m_scrollWorkspace->layout();
       const auto maxScroll = static_cast<double>(layout.maxScroll(m_viewportWidth));
-      const double currentScroll = std::clamp(layout.scroll(), 0.0, maxScroll);
-      const double center = currentScroll + m_viewportWidth / 2.0;
+      const double rawScroll = layout.scroll();
+      const double currentScroll = std::clamp(rawScroll, 0.0, maxScroll);
       int best = -1;
-      double bestDist = 1e18;
-      for (int i = 0; i < static_cast<int>(layout.columns().size()); ++i) {
-        const double colCenter =
-            static_cast<double>(layout.columnX(i, m_viewportWidth)) + layout.columnWidth(i, m_viewportWidth) / 2.0;
-        const double dist = std::abs(colCenter - center);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = i;
+
+      // The viewport-center heuristic has no snap point at either strip edge.
+      // With mixed column widths, the second column can remain closer to the
+      // viewport center even at scroll 0, making the first column unreachable.
+      // Preserve the gesture direction at an overscrolled edge and explicitly
+      // select that endpoint, as niri does with first/last boundary snap points.
+      if (m_accumX > 0.0 && rawScroll <= 0.0) {
+        best = 0;
+      } else if (m_accumX < 0.0 && rawScroll >= maxScroll) {
+        best = static_cast<int>(layout.columns().size()) - 1;
+      } else {
+        const double center = currentScroll + m_viewportWidth / 2.0;
+        double bestDist = 1e18;
+        for (int i = 0; i < static_cast<int>(layout.columns().size()); ++i) {
+          const double colCenter =
+              static_cast<double>(layout.columnX(i, m_viewportWidth)) + layout.columnWidth(i, m_viewportWidth) / 2.0;
+          const double dist = std::abs(colCenter - center);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = i;
+          }
         }
       }
-
       if (best >= 0) {
         View* focused = m_scrollWorkspace->focusedView();
         if (focused != nullptr && layout.columnOf(focused) == best) {

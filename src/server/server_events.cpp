@@ -175,7 +175,7 @@ namespace umbriel {
         group->reconcileConfig();
       }
     }
-    for (const auto& view : m_views) {
+    for (const auto& view : m_registry.all()) {
       if (!view->mapped()) {
         continue;
       }
@@ -233,7 +233,7 @@ namespace umbriel {
     timespec now{};
     clock_gettime(CLOCK_MONOTONIC, &now);
 
-    for (const auto& view : self->m_views) {
+    for (const auto& view : self->m_registry.all()) {
       if (!view->mapped() || view->onActiveWorkspace()) {
         continue;
       }
@@ -338,7 +338,7 @@ namespace umbriel {
   void Server::onNewXdgToplevel(wl_listener* listener, void* data) {
     Server* self;
     self = wl_container_of(listener, self, m_newXdgToplevel);
-    self->m_views.push_back(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
+    self->m_registry.add(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
   }
 
   void Server::onNewXdgPopup(wl_listener* /*listener*/, void* data) {
@@ -464,7 +464,7 @@ namespace umbriel {
       return;
     }
 
-    for (const auto& entry : self->m_views) {
+    for (const auto& entry : self->m_registry.all()) {
       if (entry->toplevel() == toplevel && entry->mapped()) {
         kLog.debug("xdg-activation focus app_id='{}'", toplevel->app_id != nullptr ? toplevel->app_id : "");
         self->focusView(entry.get());
@@ -567,8 +567,8 @@ namespace umbriel {
   void Server::unlockSession() {
     m_sessionLocked = false;
     wlr_scene_node_set_enabled(&m_lockBlank->node, false);
-    if (!m_views.empty()) {
-      focusView(m_views.front().get());
+    if (View* recent = m_registry.mostRecent()) {
+      focusView(recent);
     }
   }
 
@@ -586,7 +586,7 @@ namespace umbriel {
     wlr_seat* seat = m_seat->wlr();
     wlr_seat_keyboard_notify_clear_focus(seat);
     wlr_seat_pointer_clear_focus(seat);
-    for (const auto& entry : m_views) {
+    for (const auto& entry : m_registry.all()) {
       if (entry->mapped()) {
         wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
         entry->setBorderFocused(false);
@@ -723,7 +723,7 @@ namespace umbriel {
       if (fallback != nullptr && fallback->workspaceGroup() != nullptr) {
         destination = fallback->workspaceGroup()->active();
       }
-      for (const auto& entry : m_views) {
+      for (const auto& entry : m_registry.all()) {
         Workspace* workspace = entry->workspace();
         if (workspace == nullptr || workspace->group() != dying) {
           continue;
@@ -766,7 +766,7 @@ namespace umbriel {
       replacement = workspace->removeView(view);
       view->detachWorkspace();
     }
-    std::erase_if(m_views, [view](const std::unique_ptr<View>& entry) { return entry.get() == view; });
+    m_registry.remove(view);
     if (hadKeyboardFocus) {
       wlr_seat_keyboard_notify_clear_focus(m_seat->wlr());
       if (replacement != nullptr) {

@@ -1,5 +1,6 @@
 #pragma once
 #include "core/animation.h"
+#include "view/registry.h"
 
 #include <array>
 #include <chrono>
@@ -176,7 +177,7 @@ namespace umbriel {
     // callers can walk the registry without reaching into Server's internals or
     // being able to add to and remove from it.
     [[nodiscard]] std::span<const std::unique_ptr<Output>> outputs() const { return m_outputs; }
-    [[nodiscard]] std::span<const std::unique_ptr<View>> views() const { return m_views; }
+    [[nodiscard]] std::span<const std::unique_ptr<View>> views() const { return m_registry.all(); }
     [[nodiscard]] std::span<const std::unique_ptr<LayerSurface>> layerSurfaces() const { return m_layerSurfaces; }
 
     // Runs a parsed action. Shared by the keybind path and the IPC `msg` command.
@@ -405,7 +406,7 @@ namespace umbriel {
     std::vector<std::unique_ptr<PointerDevice>> m_pointers;
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;
     std::vector<std::unique_ptr<VirtualPointerDevice>> m_virtualPointers;
-    std::vector<std::unique_ptr<View>> m_views;
+    ViewRegistry m_registry;
     std::vector<std::unique_ptr<LayerSurface>> m_layerSurfaces;
   };
 

@@ -49,12 +49,7 @@ namespace umbriel {
       m_scratchpadManager->noteFocus(view);
     }
 
-    auto it = std::ranges::find_if(m_views, [view](const std::unique_ptr<View>& entry) { return entry.get() == view; });
-    if (it != m_views.end() && it != m_views.begin()) {
-      auto entry = std::move(*it);
-      m_views.erase(it);
-      m_views.insert(m_views.begin(), std::move(entry));
-    }
+    m_registry.promote(view);
 
     // Keep workspace focus while exclusive layer-shell holds the seat; refocus applies it later.
     // Still clear activation chrome so the previous window does not stay visually focused.
@@ -127,7 +122,7 @@ namespace umbriel {
           return true;
         }
       }
-      for (const auto& entry : m_views) {
+      for (const auto& entry : m_registry.all()) {
         if (entry->mapped() && entry->workspace() == workspace) {
           focusView(entry.get());
           return true;
@@ -155,7 +150,7 @@ namespace umbriel {
   }
 
   void Server::deactivateViews(View* except) {
-    for (const auto& entry : m_views) {
+    for (const auto& entry : m_registry.all()) {
       if (entry.get() == except || !entry->mapped()) {
         continue;
       }
@@ -256,19 +251,12 @@ namespace umbriel {
   }
 
   bool Server::focusNextWindow() {
-    if (m_views.size() < 2) {
+    View* next = m_registry.rotateToNext([](const View& view) { return view.mapped() && view.onActiveWorkspace(); });
+    if (next == nullptr) {
       return false;
     }
-    for (size_t n = 0; n < m_views.size(); ++n) {
-      auto current = std::move(m_views.front());
-      m_views.erase(m_views.begin());
-      m_views.push_back(std::move(current));
-      if (m_views.front()->mapped() && m_views.front()->onActiveWorkspace()) {
-        focusView(m_views.front().get(), FocusReason::Directional);
-        return true;
-      }
-    }
-    return false;
+    focusView(next, FocusReason::Directional);
+    return true;
   }
 
   const Keybind* Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {

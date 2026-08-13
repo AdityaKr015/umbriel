@@ -271,7 +271,7 @@ namespace umbriel {
     m_overview.reset();
     m_sessionLock.reset();
     m_layerSurfaces.clear();
-    m_views.clear();
+    m_registry.clear();
     m_keyboards.clear();
     m_outputs.clear();
     m_seat.reset();

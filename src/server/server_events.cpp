@@ -619,6 +619,8 @@ namespace umbriel {
     }
   }
 
+  // Security boundary: never defer this through Dirty. One stale frame can
+  // expose content that the lock exists to hide.
   void Server::updateLockBlank() {
     wlr_box layoutBox{};
     wlr_output_layout_get_box(m_outputLayout, nullptr, &layoutBox);

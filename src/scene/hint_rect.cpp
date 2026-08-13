@@ -22,9 +22,12 @@ namespace umbriel {
     }
   } // namespace
 
-  HintRect::HintRect(Server& server, wlr_scene_tree* parent) : m_server(&server), m_parent(parent) {}
+  HintRect::HintRect(Server& server, wlr_scene_tree* parent) : m_server(&server), m_parent(parent) {
+    m_server->registerAnimatable(this);
+  }
 
   HintRect::~HintRect() {
+    m_server->unregisterAnimatable(this);
     hideImmediate();
     if (m_tree != nullptr) {
       wlr_scene_node_destroy(&m_tree->node);

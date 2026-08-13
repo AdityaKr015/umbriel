@@ -4,7 +4,39 @@
 
 namespace umbriel {
 
+  class Output;
+
   enum class Easing { Linear, EaseOutCubic, EaseInOutCubic };
+
+  // Owners tick in phase order, and the order is load-bearing. Finishing an
+  // overview animation calls Server::focusView, which moves the focused view to
+  // the front of the view registry; views must therefore be done with their pass
+  // before any overlay runs. Within a phase the order does not matter.
+  enum class AnimationPhase : uint8_t {
+    Views,
+    Workspaces,
+    Overlays,
+  };
+
+  // Anything the central frame tick advances. Registering with the Server is the
+  // only thing an owner has to do; the three traversals (advance, is-anything-
+  // running, is-anything-running-for-this-output) all derive from this.
+  class Animatable {
+  public:
+    Animatable() = default;
+    virtual ~Animatable() = default;
+    Animatable(const Animatable&) = delete;
+    Animatable& operator=(const Animatable&) = delete;
+
+    [[nodiscard]] virtual AnimationPhase animationPhase() const = 0;
+    // Advance to `nowMsec`; true while anything is still running.
+    virtual bool tickAnimations(uint64_t nowMsec) = 0;
+    [[nodiscard]] virtual bool hasActiveAnimations() const = 0;
+    // Whether `output` has to keep scheduling frames for this owner. An owner
+    // spanning every output (the overview) answers true for all of them; one
+    // with no output yet answers false for all.
+    [[nodiscard]] virtual bool animatesOn(const Output* output) const = 0;
+  };
 
   // A single animatable scalar owned by the animated object. The owner ticks it
   // from the central Server tick and reads current() to drive its scene state.

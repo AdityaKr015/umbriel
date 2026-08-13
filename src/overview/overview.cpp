@@ -99,9 +99,10 @@ namespace umbriel {
     }
   } // namespace
 
-  Overview::Overview(Server& server) : m_server(&server) {}
+  Overview::Overview(Server& server) : m_server(&server) { m_server->registerAnimatable(this); }
 
   Overview::~Overview() {
+    m_server->unregisterAnimatable(this);
     m_anim.snap(0.0);
     for (const auto& state : m_outputs) {
       for (const auto& card : state->cards) {

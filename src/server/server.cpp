@@ -308,9 +308,7 @@ namespace umbriel {
     m_ipc.reset();
 
     m_insertHint.reset();
-    for (auto& snap : m_closeSnapshots) {
-      wlr_scene_node_destroy(&snap.tree->node);
-    }
+    // Each snapshot destroys its own scene tree.
     m_closeSnapshots.clear();
     m_configBanner.reset();
     // Owns scene nodes under m_scene; must go before the scene teardown below.
@@ -644,6 +642,56 @@ namespace umbriel {
     }
   }
 
+  Server::CloseSnapshot::CloseSnapshot(
+      Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects,
+      int durationMs
+  )
+      : m_tree(tree), m_output(output), m_rects(std::move(rects)) {
+    m_alpha.snap(1.0);
+    m_alpha.retarget(0.0, durationMs, Easing::EaseOutCubic);
+  }
+
+  Server::CloseSnapshot::~CloseSnapshot() {
+    if (m_tree != nullptr) {
+      wlr_scene_node_destroy(&m_tree->node);
+    }
+  }
+
+  bool Server::CloseSnapshot::tickAnimations(uint64_t nowMsec) {
+    if (!m_alpha.tick(nowMsec)) {
+      return false;
+    }
+    const auto alpha = static_cast<float>(m_alpha.current());
+    wlr_scene_node_for_each_buffer(
+        &m_tree->node,
+        [](wlr_scene_buffer* buf, int /*sx*/, int /*sy*/, void* data) {
+          wlr_scene_buffer_set_opacity(buf, *static_cast<float*>(data));
+        },
+        const_cast<float*>(&alpha)
+    );
+    for (auto& [rect, base] : m_rects) {
+      float color[4];
+      premultiplied(color, base, alpha);
+      wlr_scene_rect_set_color(rect, color);
+    }
+    return m_alpha.animating();
+  }
+
+  void Server::registerAnimatable(Animatable* animatable) {
+    if (animatable == nullptr) {
+      return;
+    }
+    // Insert after every owner in an earlier or equal phase, so the registry
+    // stays in phase order and registration order is preserved within a phase.
+    const auto phase = animatable->animationPhase();
+    const auto at = std::ranges::find_if(m_animatables, [phase](const Animatable* entry) {
+      return entry->animationPhase() > phase;
+    });
+    m_animatables.insert(at, animatable);
+  }
+
+  void Server::unregisterAnimatable(Animatable* animatable) { std::erase(m_animatables, animatable); }
+
   bool Server::tickAnimations(uint64_t nowMsec) {
     if (nowMsec == m_lastAnimTickMsec) {
       return animationsActive();
@@ -651,109 +699,49 @@ namespace umbriel {
     m_lastAnimTickMsec = nowMsec;
 
     bool active = false;
-    // Views first: the overview's finish path calls focusView, which reorders
-    // m_views, and it may tear down workspaces the earlier owners just touched.
-    for (const auto& view : m_views) {
-      active = view->tickAnimations(nowMsec) || active;
+    // Iterate a copy so a registration during the pass cannot invalidate the
+    // walk. Nothing unregisters mid-pass: snapshots are reaped below rather than
+    // from their own tick, and no owner destroys another. The phase order is
+    // what makes that hold, since finishing the overview calls focusView, which
+    // reorders the view registry after every view has already ticked.
+    const std::vector<Animatable*> owners = m_animatables;
+    for (Animatable* owner : owners) {
+      active = owner->tickAnimations(nowMsec) || active;
     }
-    for (const auto& output : m_outputs) {
-      if (WorkspaceGroup* group = output->workspaceGroup()) {
-        active = group->tickAnimations(nowMsec) || active;
-      }
-    }
-    if (m_overview != nullptr) {
-      active = m_overview->tickAnimations(nowMsec) || active;
-    }
-    if (m_insertHint != nullptr) {
-      active = m_insertHint->tickAnimations(nowMsec) || active;
-    }
-    for (CloseSnapshot& snap : m_closeSnapshots) {
-      if (!snap.alpha.tick(nowMsec)) {
-        continue;
-      }
-      const auto alpha = static_cast<float>(snap.alpha.current());
-      wlr_scene_node_for_each_buffer(
-          &snap.tree->node,
-          [](wlr_scene_buffer* buf, int /*sx*/, int /*sy*/, void* data) {
-            wlr_scene_buffer_set_opacity(buf, *static_cast<float*>(data));
-          },
-          const_cast<float*>(&alpha)
-      );
-      for (auto& [rect, base] : snap.rects) {
-        float color[4];
-        premultiplied(color, base, alpha);
-        wlr_scene_rect_set_color(rect, color);
-      }
-      active = snap.alpha.animating() || active;
-    }
+
     // A snapshot only exists while fading out, so a settled one is finished.
-    std::erase_if(m_closeSnapshots, [](const CloseSnapshot& snap) {
-      if (snap.alpha.animating()) {
+    // Erasing destroys its scene tree and unregisters it.
+    std::erase_if(m_closeSnapshots, [this](const std::unique_ptr<CloseSnapshot>& snap) {
+      if (snap->hasActiveAnimations()) {
         return false;
       }
-      wlr_scene_node_destroy(&snap.tree->node);
+      unregisterAnimatable(snap.get());
       return true;
     });
     return active;
   }
 
   bool Server::animationsActive() const {
-    if (std::ranges::any_of(m_views, [](const auto& view) { return view->hasActiveAnimations(); })) {
-      return true;
-    }
-    if (std::ranges::any_of(m_outputs, [](const auto& output) {
-          const WorkspaceGroup* group = output->workspaceGroup();
-          return group != nullptr && group->hasActiveAnimations();
-        })) {
-      return true;
-    }
-    if (m_overview != nullptr && m_overview->hasActiveAnimations()) {
-      return true;
-    }
-    if (m_insertHint != nullptr && m_insertHint->hasActiveAnimations()) {
-      return true;
-    }
-    return std::ranges::any_of(m_closeSnapshots, [](const CloseSnapshot& snap) { return snap.alpha.animating(); });
+    return std::ranges::any_of(m_animatables, [](const Animatable* owner) { return owner->hasActiveAnimations(); });
   }
 
   bool Server::animationsActiveFor(const Output* output) const {
     if (output == nullptr) {
       return false;
     }
-    if (std::ranges::any_of(m_views, [output](const auto& view) {
-          const Workspace* workspace = view->workspace();
-          return view->hasActiveAnimations()
-              && workspace != nullptr
-              && workspace->group() != nullptr
-              && workspace->group()->output() == output;
-        })) {
-      return true;
-    }
-    const WorkspaceGroup* group = output->workspaceGroup();
-    if (group != nullptr && group->hasActiveAnimations()) {
-      return true;
-    }
-    // Overview zooms every output at once.
-    if (m_overview != nullptr && m_overview->hasActiveAnimations()) {
-      return true;
-    }
-    if (m_insertHint != nullptr && m_insertHint->hasActiveAnimations() && m_insertHint->output() == output) {
-      return true;
-    }
-    return std::ranges::any_of(m_closeSnapshots, [output](const CloseSnapshot& snap) {
-      return snap.output == output && snap.alpha.animating();
+    return std::ranges::any_of(m_animatables, [output](const Animatable* owner) {
+      return owner->hasActiveAnimations() && owner->animatesOn(output);
     });
   }
 
   void Server::animateCloseSnapshot(
       Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
   ) {
-    CloseSnapshot& snap = m_closeSnapshots.emplace_back();
-    snap.tree = tree;
-    snap.output = output;
-    snap.rects = std::move(rects);
-    snap.alpha.snap(1.0);
-    snap.alpha.retarget(0.0, std::max(1, config().appearance.animationMs / 2), Easing::EaseOutCubic);
+    auto snapshot = std::make_unique<CloseSnapshot>(
+        output, tree, std::move(rects), std::max(1, config().appearance.animationMs / 2)
+    );
+    registerAnimatable(snapshot.get());
+    m_closeSnapshots.push_back(std::move(snapshot));
   }
 
 } // namespace umbriel

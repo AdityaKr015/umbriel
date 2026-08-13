@@ -26,7 +26,7 @@ namespace umbriel {
   class Workspace;
   struct ResolvedWindowRule;
 
-  class View : public SceneNode {
+  class View : public SceneNode, public Animatable {
   public:
     View(Server& server, wlr_xdg_toplevel* toplevel);
     ~View();
@@ -88,8 +88,10 @@ namespace umbriel {
     // Create or destroy the shadow container in the given workspace shadow layer.
     void reparentShadow(wlr_scene_tree* shadowLayer);
     // Advances this view's animations; returns true while any is still running.
-    bool tickAnimations(uint64_t nowMsec);
-    [[nodiscard]] bool hasActiveAnimations() const;
+    [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Views; }
+    bool tickAnimations(uint64_t nowMsec) override;
+    [[nodiscard]] bool hasActiveAnimations() const override;
+    [[nodiscard]] bool animatesOn(const Output* output) const override;
 
   private:
     friend class Cursor;

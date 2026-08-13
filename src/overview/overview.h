@@ -34,7 +34,7 @@ namespace umbriel {
   // buffers sharing the client textures and scaled by the scene graph. The
   // overview is also an editor (click to focus, middle-click to close, drag to
   // relocate), so it owns pointer and keyboard input while open.
-  class Overview {
+  class Overview : public Animatable {
   public:
     explicit Overview(Server& server);
     ~Overview();
@@ -61,11 +61,14 @@ namespace umbriel {
     void gestureUpdate(double progress);
     void gestureEnd(bool commitOpen);
 
+    [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Overlays; }
     // Advances the zoom animation; returns true while it is still running.
-    bool tickAnimations(uint64_t nowMsec);
-    [[nodiscard]] bool hasActiveAnimations() const {
+    bool tickAnimations(uint64_t nowMsec) override;
+    [[nodiscard]] bool hasActiveAnimations() const override {
       return m_anim.animating() || (m_dropHint != nullptr && m_dropHint->hasActiveAnimations());
     }
+    // The overview zooms every output at once.
+    [[nodiscard]] bool animatesOn(const Output* /*output*/) const override { return true; }
 
     void onViewMapped(View* view);
     void onViewUnmapped(View* view);

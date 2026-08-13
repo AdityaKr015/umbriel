@@ -731,11 +731,12 @@ namespace umbriel {
     if (m_insertHint != nullptr && m_insertHint->output() == output) {
       m_insertHint->hideImmediate();
     }
-    std::erase_if(m_closeSnapshots, [output](CloseSnapshot& snap) {
-      if (snap.output != output) {
+    // Dropping the snapshot unregisters it and destroys its scene tree.
+    std::erase_if(m_closeSnapshots, [this, output](const std::unique_ptr<CloseSnapshot>& snap) {
+      if (!snap->animatesOn(output)) {
         return false;
       }
-      wlr_scene_node_destroy(&snap.tree->node);
+      unregisterAnimatable(snap.get());
       return true;
     });
     // wlroots 0.20 does not track output lifetime for layer surfaces, so

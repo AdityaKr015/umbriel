@@ -106,7 +106,7 @@ namespace umbriel {
     wlr_scene_tree* m_fullscreenTree = nullptr;
   };
 
-  class WorkspaceGroup {
+  class WorkspaceGroup : public Animatable {
   public:
     WorkspaceGroup(Server& server, Output& output);
     ~WorkspaceGroup();
@@ -140,8 +140,10 @@ namespace umbriel {
     void slideSettle(int delta);
     void slideFinish();
     // Advances the workspace slide; returns true while it is still running.
-    bool tickAnimations(uint64_t nowMsec);
-    [[nodiscard]] bool hasActiveAnimations() const { return m_slideAnim.animating(); }
+    [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Workspaces; }
+    bool tickAnimations(uint64_t nowMsec) override;
+    [[nodiscard]] bool hasActiveAnimations() const override { return m_slideAnim.animating(); }
+    [[nodiscard]] bool animatesOn(const Output* output) const override { return m_output == output; }
 
   private:
     std::unique_ptr<Workspace> createConfiguredWorkspace(ResolvedWorkspace workspace, size_t index);

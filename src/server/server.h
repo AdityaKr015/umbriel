@@ -136,11 +136,16 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_output_layout* sceneLayout() const { return m_sceneLayout; }
     [[nodiscard]] Seat* seat() const { return m_seat.get(); }
     [[nodiscard]] Cursor* cursor() const { return m_cursor.get(); }
-    // Central animation tick: advances every animated owner once per msec and
+    // Central animation tick: advances every registered owner once per msec and
     // reports whether anything is still animating.
     bool tickAnimations(uint64_t nowMsec);
     [[nodiscard]] bool animationsActive() const;
     [[nodiscard]] bool animationsActiveFor(const Output* output) const;
+    // Owners register themselves for the frame tick. The registry is kept in
+    // phase order, so the three traversals above never re-state which owners
+    // exist or in what order they run.
+    void registerAnimatable(Animatable* animatable);
+    void unregisterAnimatable(Animatable* animatable);
     [[nodiscard]] HintRect& insertHint();
     void hideInsertHint();
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
@@ -343,13 +348,31 @@ namespace umbriel {
     // Same-msec dedupe: several outputs can call tickAnimations per vblank.
     uint64_t m_lastAnimTickMsec = 0;
 
-    struct CloseSnapshot {
-      wlr_scene_tree* tree = nullptr;
-      Output* output = nullptr;
-      AnimatedValue alpha;
-      std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects;
+    // A fading copy of a closed window's scene tree. Owns that tree and destroys
+    // it once the fade completes.
+    class CloseSnapshot : public Animatable {
+    public:
+      CloseSnapshot(
+          Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects,
+          int durationMs
+      );
+      ~CloseSnapshot() override;
+
+      [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Overlays; }
+      bool tickAnimations(uint64_t nowMsec) override;
+      [[nodiscard]] bool hasActiveAnimations() const override { return m_alpha.animating(); }
+      [[nodiscard]] bool animatesOn(const Output* output) const override { return m_output == output; }
+
+    private:
+      wlr_scene_tree* m_tree = nullptr;
+      Output* m_output = nullptr;
+      AnimatedValue m_alpha;
+      std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> m_rects;
     };
-    std::vector<CloseSnapshot> m_closeSnapshots;
+    // unique_ptr because the registry holds raw pointers to these: a vector of
+    // values would move them out from under it on reallocation.
+    std::vector<std::unique_ptr<CloseSnapshot>> m_closeSnapshots;
+    std::vector<Animatable*> m_animatables;
 
     std::unique_ptr<Seat> m_seat;
     std::unique_ptr<Cursor> m_cursor;

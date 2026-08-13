@@ -113,6 +113,7 @@ namespace umbriel {
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
       : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
+    m_server->registerAnimatable(this);
     // Register map/unmap listeners BEFORE creating the scene tree so our
     // handlers fire before wlroots' internal unmap handler disables the
     // surface subtree (needed for close-animation buffer snapshot).
@@ -183,6 +184,7 @@ namespace umbriel {
   }
 
   View::~View() {
+    m_server->unregisterAnimatable(this);
     setWorkspace(nullptr);
     if (m_map.link.next != nullptr) {
       wl_list_remove(&m_map.link);
@@ -704,6 +706,11 @@ namespace umbriel {
       active = active || m_fade.animating();
     }
     return active;
+  }
+
+  bool View::animatesOn(const Output* output) const {
+    const Workspace* workspace = m_workspace;
+    return workspace != nullptr && workspace->group() != nullptr && workspace->group()->output() == output;
   }
 
   bool View::hasActiveAnimations() const {

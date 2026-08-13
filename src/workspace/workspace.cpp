@@ -634,6 +634,7 @@ namespace umbriel {
   }
 
   WorkspaceGroup::WorkspaceGroup(Server& server, Output& output) : m_server(&server), m_output(&output) {
+    m_server->registerAnimatable(this);
     wlr_ext_workspace_manager_v1* manager = m_server->workspaceManager();
     m_handle = wlr_ext_workspace_group_handle_v1_create(manager, kGroupCaps);
     m_handle->data = this;
@@ -653,6 +654,7 @@ namespace umbriel {
   }
 
   WorkspaceGroup::~WorkspaceGroup() {
+    m_server->unregisterAnimatable(this);
     slideFinish();
     m_active = nullptr;
     m_previous = nullptr;

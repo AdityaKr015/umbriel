@@ -169,32 +169,54 @@ namespace {
     return {std::move(base), std::string(rest)};
   }
 
+  // Empty unless the bind targets a workspace. Used to collapse the runs of
+  // per-digit workspace binds into a single row.
+  std::string workspaceSelectorName(const umbriel::Keybind& bind) {
+    const auto* workspace = umbriel::payloadIf<umbriel::WorkspaceArg>(bind);
+    return workspace != nullptr ? workspace->name : std::string{};
+  }
+
+  // Driven by the spec's argument kind and the bind's payload variant, so the
+  // set of parameterized actions lives in exactly one place: the spec table.
   std::string actionLabel(const umbriel::Keybind& bind) {
     for (const auto& spec : umbriel::actionSpecs()) {
-      if (spec.action == bind.action) {
-        std::string name(spec.name);
-        if (bind.action == umbriel::KeybindAction::Spawn) {
-          return name + ": " + bind.spawnCommand;
+      if (spec.action != bind.action) {
+        continue;
+      }
+      std::string name(spec.name);
+      switch (spec.argKind) {
+      case umbriel::ActionArgKind::None:
+        return name;
+      case umbriel::ActionArgKind::Command:
+        if (const auto* spawn = umbriel::payloadIf<umbriel::SpawnArg>(bind)) {
+          return name + ": " + spawn->command;
         }
-        if (bind.action == umbriel::KeybindAction::WorkspaceSwitch
-            || bind.action == umbriel::KeybindAction::WindowMoveToWorkspace) {
-          std::string label = name + ": " + bind.workspaceName;
-          if (!bind.workspaceOutput.empty()) {
-            label += "/" + bind.workspaceOutput;
+        if (const auto* submap = umbriel::payloadIf<umbriel::SubmapArg>(bind)) {
+          return name + ": " + submap->name;
+        }
+        return name;
+      case umbriel::ActionArgKind::WidthFraction:
+        if (const auto* width = umbriel::payloadIf<umbriel::WidthArg>(bind)) {
+          return std::format("{}: {:.2g}", name, width->fraction);
+        }
+        return name;
+      case umbriel::ActionArgKind::Workspace:
+        if (const auto* workspace = umbriel::payloadIf<umbriel::WorkspaceArg>(bind)) {
+          std::string label = name + ": " + workspace->name;
+          if (!workspace->output.empty()) {
+            label += "/" + workspace->output;
           }
           return label;
         }
-        if (bind.action == umbriel::KeybindAction::WindowSetWidth) {
-          return std::format("{}: {:.2g}", name, bind.widthFraction);
-        }
-        if (bind.action == umbriel::KeybindAction::Submap) {
-          return name + ": " + bind.spawnCommand;
-        }
-        if (!bind.scratchpadOutput.empty()) {
-          return name + ": " + bind.scratchpadOutput;
+        return name;
+      case umbriel::ActionArgKind::OptionalOutput:
+        if (const auto* output = umbriel::payloadIf<umbriel::OutputArg>(bind);
+            output != nullptr && !output->output.empty()) {
+          return name + ": " + output->output;
         }
         return name;
       }
+      return name;
     }
     return "unknown";
   }
@@ -432,7 +454,7 @@ namespace umbriel {
             .actionType = bind.action,
             .submap = bind.submap,
             .keysym = bind.keysym,
-            .workspaceName = bind.workspaceName,
+            .workspaceName = workspaceSelectorName(bind),
             .modifiers = bind.modifiers,
             .useMod = bind.useMod,
         });

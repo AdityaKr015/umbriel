@@ -7,6 +7,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace umbriel {
@@ -59,21 +60,58 @@ namespace umbriel {
     Submap,
   };
 
+  // Action payloads. Exactly one is valid for a given action, so they live in a
+  // variant rather than as sibling fields: a spawn command and a workspace
+  // selector can no longer be set at the same time, and the submap name no
+  // longer shares storage with the spawn command.
+  struct SpawnArg {
+    std::string command;
+  };
+  struct SubmapArg {
+    std::string name;
+  };
+  struct WidthArg {
+    double fraction = 0.0;
+  };
+  struct WorkspaceArg {
+    std::string name;
+    std::string output; // empty = resolve against the focused output
+  };
+  struct OutputArg {
+    std::string output; // empty = the focused output
+  };
+
+  using KeybindPayload = std::variant<std::monostate, SpawnArg, SubmapArg, WidthArg, WorkspaceArg, OutputArg>;
+
   struct Keybind {
+    // What triggers the bind.
     std::string submap;
     uint32_t modifiers = 0;
     bool useMod = false;
     uint32_t keysym = 0;
     WheelDirection wheel = WheelDirection::None;
     uint32_t mouseButton = 0; // evdev BTN_* code, 0 = not a mouse bind
-    KeybindAction action = KeybindAction::None;
-    std::string spawnCommand;
-    std::string workspaceName;
-    std::string workspaceOutput;
-    double widthFraction = 0.0;
     bool repeat = true;
-    std::string scratchpadOutput;
+
+    // What it does.
+    KeybindAction action = KeybindAction::None;
+    KeybindPayload payload;
   };
+
+  // Null unless the bind carries that payload alternative.
+  template <typename Arg> [[nodiscard]] const Arg* payloadIf(const Keybind& bind) {
+    return std::get_if<Arg>(&bind.payload);
+  }
+
+  // "reset" and "disable" pop the current submap instead of pushing a new one.
+  // Recognised in two places: the action itself, and the keybind matcher, which
+  // lets such a bind fire from inside any submap as an emergency exit.
+  [[nodiscard]] inline bool isSubmapReset(const SubmapArg& arg) { return arg.name == "reset" || arg.name == "disable"; }
+
+  [[nodiscard]] inline bool isSubmapResetBind(const Keybind& bind) {
+    const auto* arg = payloadIf<SubmapArg>(bind);
+    return bind.action == KeybindAction::Submap && arg != nullptr && isSubmapReset(*arg);
+  }
 
   enum class ActionArgKind : uint8_t { None, Command, WidthFraction, Workspace, OptionalOutput };
 

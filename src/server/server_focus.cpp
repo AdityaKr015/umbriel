@@ -284,10 +284,7 @@ namespace umbriel {
       if (bind.submap != currentSubmap) {
         // Allow submap:reset / submap:disable from the default context to
         // always match, so users can define a global emergency exit.
-        if (!m_activeSubmaps.empty()
-            && bind.submap.empty()
-            && bind.action == KeybindAction::Submap
-            && (bind.spawnCommand == "reset" || bind.spawnCommand == "disable")) {
+        if (!m_activeSubmaps.empty() && bind.submap.empty() && isSubmapResetBind(bind)) {
           // Fall through to match below.
         } else {
           continue;

@@ -234,13 +234,20 @@ namespace umbriel {
       case ActionArgKind::None:
         if (value == spec.name) {
           output.action = spec.action;
+          output.payload = std::monostate{};
           return true;
         }
         break;
       case ActionArgKind::Command:
         if (takeActionArg(value, spec, arg)) {
           output.action = spec.action;
-          output.spawnCommand = arg;
+          // "submap" shares the name:<text> syntax with "spawn", but its
+          // argument is a submap name rather than a shell command.
+          if (spec.action == KeybindAction::Submap) {
+            output.payload = SubmapArg{.name = std::string(arg)};
+          } else {
+            output.payload = SpawnArg{.command = std::string(arg)};
+          }
           return true;
         }
         break;
@@ -258,15 +265,14 @@ namespace umbriel {
           break;
         }
         output.action = spec.action;
-        output.widthFraction = fraction;
+        output.payload = WidthArg{.fraction = fraction};
         return true;
       }
       case ActionArgKind::Workspace: {
         if (!takeActionArg(value, spec, arg)) {
           break;
         }
-        output.workspaceName.clear();
-        output.workspaceOutput.clear();
+        WorkspaceArg workspace;
         std::string_view selector = arg;
         const size_t separator = selector.find('/');
         if (separator != std::string_view::npos) {
@@ -275,22 +281,23 @@ namespace umbriel {
               || selector.find('/', separator + 1) != std::string_view::npos) {
             break;
           }
-          output.workspaceOutput = selector.substr(separator + 1);
+          workspace.output = selector.substr(separator + 1);
           selector = selector.substr(0, separator);
         }
+        workspace.name = selector;
         output.action = spec.action;
-        output.workspaceName = selector;
+        output.payload = std::move(workspace);
         return true;
       }
       case ActionArgKind::OptionalOutput:
         if (value == spec.name) {
           output.action = spec.action;
-          output.scratchpadOutput.clear();
+          output.payload = OutputArg{};
           return true;
         }
         if (takeActionArg(value, spec, arg)) {
           output.action = spec.action;
-          output.scratchpadOutput = arg;
+          output.payload = OutputArg{.output = std::string(arg)};
           return true;
         }
         break;
@@ -304,15 +311,10 @@ namespace umbriel {
     keybinds.reserve(60);
     auto add = [&keybinds](KeybindAction action, uint32_t keysym, uint32_t modifiers = 0) {
       keybinds.push_back({
-          .submap = {},
           .modifiers = modifiers,
           .useMod = true,
           .keysym = xkb_keysym_to_lower(keysym),
           .action = action,
-          .spawnCommand = {},
-          .workspaceName = {},
-          .workspaceOutput = {},
-          .scratchpadOutput = {},
       });
     };
 
@@ -346,16 +348,11 @@ namespace umbriel {
     add(KeybindAction::TogglePinned, XKB_KEY_p);
     // Overview must not repeat: holding the key would thrash open/close.
     keybinds.push_back({
-        .submap = {},
         .modifiers = 0,
         .useMod = true,
         .keysym = XKB_KEY_o,
-        .action = KeybindAction::OverviewToggle,
-        .spawnCommand = {},
-        .workspaceName = {},
-        .workspaceOutput = {},
         .repeat = false,
-        .scratchpadOutput = {},
+        .action = KeybindAction::OverviewToggle,
     });
 
     for (int index = 0; index < 9; ++index) {
@@ -363,15 +360,11 @@ namespace umbriel {
       const uint32_t keypad = XKB_KEY_KP_1 + static_cast<uint32_t>(index);
       auto addWorkspace = [&](KeybindAction action, uint32_t keysym, uint32_t modifiers) {
         keybinds.push_back({
-            .submap = {},
             .modifiers = modifiers,
             .useMod = true,
             .keysym = keysym,
             .action = action,
-            .spawnCommand = {},
-            .workspaceName = std::to_string(index + 1),
-            .workspaceOutput = {},
-            .scratchpadOutput = {},
+            .payload = WorkspaceArg{.name = std::to_string(index + 1)},
         });
       };
       addWorkspace(KeybindAction::WorkspaceSwitch, digit, 0);
@@ -381,30 +374,20 @@ namespace umbriel {
     }
 
     // Default wheel binds: Mod+WheelUp = window-focus-left, Mod+WheelDown = window-focus-right.
-    keybinds.push_back(
-        {.submap = {},
-         .modifiers = 0,
-         .useMod = true,
-         .keysym = 0,
-         .wheel = WheelDirection::Up,
-         .action = KeybindAction::WindowFocusLeft,
-         .spawnCommand = {},
-         .workspaceName = {},
-         .workspaceOutput = {},
-         .scratchpadOutput = {}}
-    );
-    keybinds.push_back(
-        {.submap = {},
-         .modifiers = 0,
-         .useMod = true,
-         .keysym = 0,
-         .wheel = WheelDirection::Down,
-         .action = KeybindAction::WindowFocusRight,
-         .spawnCommand = {},
-         .workspaceName = {},
-         .workspaceOutput = {},
-         .scratchpadOutput = {}}
-    );
+    keybinds.push_back({
+        .modifiers = 0,
+        .useMod = true,
+        .keysym = 0,
+        .wheel = WheelDirection::Up,
+        .action = KeybindAction::WindowFocusLeft,
+    });
+    keybinds.push_back({
+        .modifiers = 0,
+        .useMod = true,
+        .keysym = 0,
+        .wheel = WheelDirection::Down,
+        .action = KeybindAction::WindowFocusRight,
+    });
 
     return keybinds;
   }

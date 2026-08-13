@@ -27,12 +27,13 @@ namespace umbriel {
     }
 
     Output* scratchpadOutput(Server& server, const Keybind& bind, std::string* error) {
-      if (bind.scratchpadOutput.empty()) {
+      const auto* arg = payloadIf<OutputArg>(bind);
+      if (arg == nullptr || arg->output.empty()) {
         return server.outputFromWlr(server.preferredOutput());
       }
-      Output* output = server.outputFromName(bind.scratchpadOutput);
+      Output* output = server.outputFromName(arg->output);
       if (output == nullptr && error != nullptr) {
-        *error = "unknown output: " + bind.scratchpadOutput;
+        *error = "unknown output: " + arg->output;
       }
       return output;
     }
@@ -49,18 +50,22 @@ namespace umbriel {
     // layout. Qualified selectors address exactly one group; unqualified ones
     // prefer the focused output, then a unique match anywhere.
     std::expected<Workspace*, std::string> resolveWorkspaceSelector(Server& server, const Keybind& bind) {
-      if (!bind.workspaceOutput.empty()) {
-        Output* output = server.outputFromName(bind.workspaceOutput);
+      const auto* selector = payloadIf<WorkspaceArg>(bind);
+      if (selector == nullptr) {
+        return std::unexpected(std::string("action carries no workspace selector"));
+      }
+      if (!selector->output.empty()) {
+        Output* output = server.outputFromName(selector->output);
         if (output == nullptr) {
-          return std::unexpected("unknown output: " + bind.workspaceOutput);
+          return std::unexpected("unknown output: " + selector->output);
         }
         WorkspaceGroup* group = output->workspaceGroup();
         if (group == nullptr) {
-          return std::unexpected("output has no workspace group: " + bind.workspaceOutput);
+          return std::unexpected("output has no workspace group: " + selector->output);
         }
-        Workspace* target = group->workspaceForSelector(bind.workspaceName);
+        Workspace* target = group->workspaceForSelector(selector->name);
         if (target == nullptr) {
-          return std::unexpected("unknown workspace on output " + bind.workspaceOutput + ": " + bind.workspaceName);
+          return std::unexpected("unknown workspace on output " + selector->output + ": " + selector->name);
         }
         return target;
       }
@@ -70,10 +75,10 @@ namespace umbriel {
 
       // Dynamic numbered workspaces belong to their output. Resolve this first
       // so an existing number elsewhere cannot steal a local request.
-      const bool numericSelector = !bind.workspaceName.empty()
-          && std::ranges::all_of(bind.workspaceName, [](char value) { return value >= '0' && value <= '9'; });
+      const bool numericSelector = !selector->name.empty()
+          && std::ranges::all_of(selector->name, [](char value) { return value >= '0' && value <= '9'; });
       if (preferredGroup != nullptr && preferredGroup->dynamic() && numericSelector) {
-        if (Workspace* target = preferredGroup->workspaceForSelector(bind.workspaceName)) {
+        if (Workspace* target = preferredGroup->workspaceForSelector(selector->name)) {
           return target;
         }
       }
@@ -82,7 +87,7 @@ namespace umbriel {
       bool ambiguous = false;
       for (const auto& output : server.outputs()) {
         WorkspaceGroup* group = output->workspaceGroup();
-        Workspace* match = group != nullptr ? group->workspaceNamed(bind.workspaceName) : nullptr;
+        Workspace* match = group != nullptr ? group->workspaceNamed(selector->name) : nullptr;
         if (match == nullptr) {
           continue;
         }
@@ -94,19 +99,19 @@ namespace umbriel {
       }
 
       if (target == nullptr) {
-        target = preferredGroup != nullptr ? preferredGroup->workspaceForSelector(bind.workspaceName) : nullptr;
+        target = preferredGroup != nullptr ? preferredGroup->workspaceForSelector(selector->name) : nullptr;
         if (target == nullptr) {
-          return std::unexpected("unknown workspace: " + bind.workspaceName);
+          return std::unexpected("unknown workspace: " + selector->name);
         }
         return target;
       }
 
       if (ambiguous) {
         Workspace* preferredMatch =
-            preferredGroup != nullptr ? preferredGroup->workspaceNamed(bind.workspaceName) : nullptr;
+            preferredGroup != nullptr ? preferredGroup->workspaceNamed(selector->name) : nullptr;
         if (preferredMatch == nullptr) {
           return std::unexpected(
-              "ambiguous workspace: " + bind.workspaceName + " (qualify it as " + bind.workspaceName + "/<output>)"
+              "ambiguous workspace: " + selector->name + " (qualify it as " + selector->name + "/<output>)"
           );
         }
         return preferredMatch;
@@ -123,7 +128,8 @@ namespace umbriel {
     // ---- Session ----
 
     bool actionSpawn(Server& server, const Keybind& bind, std::string* /*error*/) {
-      server.spawn(bind.spawnCommand.c_str());
+      const auto* arg = payloadIf<SpawnArg>(bind);
+      server.spawn(arg != nullptr ? arg->command.c_str() : "");
       return true;
     }
 
@@ -138,13 +144,17 @@ namespace umbriel {
     }
 
     bool actionSubmap(Server& server, const Keybind& bind, std::string* /*error*/) {
-      if (bind.spawnCommand == "reset" || bind.spawnCommand == "disable") {
+      const auto* arg = payloadIf<SubmapArg>(bind);
+      if (arg == nullptr) {
+        return false;
+      }
+      if (isSubmapReset(*arg)) {
         if (!server.inSubmap()) {
           return false;
         }
         server.popSubmap();
       } else {
-        server.pushSubmap(bind.spawnCommand);
+        server.pushSubmap(arg->name);
       }
       return true;
     }
@@ -223,7 +233,9 @@ namespace umbriel {
 
     bool actionSetWidth(Server& server, const Keybind& bind, std::string* /*error*/) {
       if (Workspace* workspace = activeWorkspace(server)) {
-        workspace->setFocusedWidth(bind.widthFraction);
+        if (const auto* arg = payloadIf<WidthArg>(bind)) {
+          workspace->setFocusedWidth(arg->fraction);
+        }
       }
       return true;
     }

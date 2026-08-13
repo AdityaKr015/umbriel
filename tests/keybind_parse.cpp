@@ -11,6 +11,7 @@
 // clang-format on
 
 #include <algorithm>
+#include <variant>
 
 using umbriel::ActionArgKind;
 using umbriel::Keybind;
@@ -157,18 +158,47 @@ UMBRIEL_TEST(parsesCommandActions) {
   Keybind bind;
   CHECK(parseAction("spawn:foot -e htop", bind));
   CHECK(bind.action == KeybindAction::Spawn);
-  CHECK_EQ(bind.spawnCommand, std::string{"foot -e htop"});
+  const auto* spawn = umbriel::payloadIf<umbriel::SpawnArg>(bind);
+  CHECK(spawn != nullptr);
+  CHECK_EQ(spawn != nullptr ? spawn->command : std::string{}, std::string{"foot -e htop"});
+}
 
+UMBRIEL_TEST(submapNoLongerSharesStorageWithSpawn) {
+  // These used to be the same string field, so a submap name was indistinguishable
+  // from a shell command.
+  Keybind bind;
   CHECK(parseAction("submap:resize", bind));
   CHECK(bind.action == KeybindAction::Submap);
-  CHECK_EQ(bind.spawnCommand, std::string{"resize"});
+  const auto* submap = umbriel::payloadIf<umbriel::SubmapArg>(bind);
+  CHECK(submap != nullptr);
+  CHECK_EQ(submap != nullptr ? submap->name : std::string{}, std::string{"resize"});
+  CHECK(umbriel::payloadIf<umbriel::SpawnArg>(bind) == nullptr);
+
+  CHECK(parseAction("spawn:resize", bind));
+  CHECK(umbriel::payloadIf<umbriel::SubmapArg>(bind) == nullptr);
+}
+
+UMBRIEL_TEST(submapResetIsRecognisedByName) {
+  Keybind bind;
+  for (const char* name : {"reset", "disable"}) {
+    CHECK(parseAction(std::string("submap:") + name, bind));
+    CHECK(umbriel::isSubmapResetBind(bind));
+  }
+  CHECK(parseAction("submap:resize", bind));
+  CHECK(!umbriel::isSubmapResetBind(bind));
+
+  // Only a submap bind can be a submap reset, whatever its payload says.
+  CHECK(parseAction("spawn:reset", bind));
+  CHECK(!umbriel::isSubmapResetBind(bind));
 }
 
 UMBRIEL_TEST(parsesWidthFractions) {
   Keybind bind;
   CHECK(parseAction("window-set-width:0.5", bind));
   CHECK(bind.action == KeybindAction::WindowSetWidth);
-  CHECK(std::fabs(bind.widthFraction - 0.5) < 1e-9);
+  const auto* width = umbriel::payloadIf<umbriel::WidthArg>(bind);
+  CHECK(width != nullptr);
+  CHECK(width != nullptr && std::fabs(width->fraction - 0.5) < 1e-9);
 
   CHECK(parseAction("window-set-width:1.0", bind));
   CHECK(parseAction("window-set-width:0.1", bind));
@@ -187,20 +217,26 @@ UMBRIEL_TEST(rejectsOutOfRangeWidthFractions) {
 }
 
 UMBRIEL_TEST(parsesWorkspaceSelectors) {
+  const auto selector = [](const Keybind& bind) {
+    static const umbriel::WorkspaceArg empty;
+    const auto* arg = umbriel::payloadIf<umbriel::WorkspaceArg>(bind);
+    return arg != nullptr ? *arg : empty;
+  };
+
   Keybind bind;
   CHECK(parseAction("workspace-switch:3", bind));
   CHECK(bind.action == KeybindAction::WorkspaceSwitch);
-  CHECK_EQ(bind.workspaceName, std::string{"3"});
-  CHECK(bind.workspaceOutput.empty());
+  CHECK_EQ(selector(bind).name, std::string{"3"});
+  CHECK(selector(bind).output.empty());
 
   CHECK(parseAction("workspace-switch:web/DP-1", bind));
-  CHECK_EQ(bind.workspaceName, std::string{"web"});
-  CHECK_EQ(bind.workspaceOutput, std::string{"DP-1"});
+  CHECK_EQ(selector(bind).name, std::string{"web"});
+  CHECK_EQ(selector(bind).output, std::string{"DP-1"});
 
   CHECK(parseAction("window-move-to-workspace:2/HDMI-A-1", bind));
   CHECK(bind.action == KeybindAction::WindowMoveToWorkspace);
-  CHECK_EQ(bind.workspaceName, std::string{"2"});
-  CHECK_EQ(bind.workspaceOutput, std::string{"HDMI-A-1"});
+  CHECK_EQ(selector(bind).name, std::string{"2"});
+  CHECK_EQ(selector(bind).output, std::string{"HDMI-A-1"});
 }
 
 UMBRIEL_TEST(rejectsMalformedWorkspaceSelectors) {
@@ -212,19 +248,72 @@ UMBRIEL_TEST(rejectsMalformedWorkspaceSelectors) {
 }
 
 UMBRIEL_TEST(parsesOptionalOutputActions) {
+  const auto outputOf = [](const Keybind& bind) {
+    const auto* arg = umbriel::payloadIf<umbriel::OutputArg>(bind);
+    return arg != nullptr ? arg->output : std::string{};
+  };
+
   Keybind bind;
   CHECK(parseAction("scratchpad-toggle", bind));
   CHECK(bind.action == KeybindAction::ScratchpadToggle);
-  CHECK(bind.scratchpadOutput.empty());
+  // The alternative is present even with no output, so the payload still says
+  // which action shape it belongs to.
+  CHECK(umbriel::payloadIf<umbriel::OutputArg>(bind) != nullptr);
+  CHECK(outputOf(bind).empty());
 
   CHECK(parseAction("scratchpad-toggle:DP-2", bind));
-  CHECK_EQ(bind.scratchpadOutput, std::string{"DP-2"});
+  CHECK_EQ(outputOf(bind), std::string{"DP-2"});
 
   CHECK(parseAction("window-move-to-scratchpad", bind));
   CHECK(bind.action == KeybindAction::WindowMoveToScratchpad);
   CHECK(parseAction("window-restore-from-scratchpad:eDP-1", bind));
-  CHECK_EQ(bind.scratchpadOutput, std::string{"eDP-1"});
+  CHECK_EQ(outputOf(bind), std::string{"eDP-1"});
   CHECK(parseAction("scratchpad-focus-next", bind));
+}
+
+UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
+  // The whole point of the variant: the spec's argKind and the payload the
+  // parser produces cannot drift apart.
+  for (const auto& spec : umbriel::actionSpecs()) {
+    Keybind bind;
+    std::string input(spec.name);
+    switch (spec.argKind) {
+    case ActionArgKind::None:
+    case ActionArgKind::OptionalOutput:
+      break;
+    case ActionArgKind::Command:
+      input += ":value";
+      break;
+    case ActionArgKind::WidthFraction:
+      input += ":0.5";
+      break;
+    case ActionArgKind::Workspace:
+      input += ":1";
+      break;
+    }
+    CHECK(parseAction(input, bind));
+
+    switch (spec.argKind) {
+    case ActionArgKind::None:
+      CHECK(std::holds_alternative<std::monostate>(bind.payload));
+      break;
+    case ActionArgKind::Command:
+      CHECK(
+          umbriel::payloadIf<umbriel::SpawnArg>(bind) != nullptr
+          || umbriel::payloadIf<umbriel::SubmapArg>(bind) != nullptr
+      );
+      break;
+    case ActionArgKind::WidthFraction:
+      CHECK(umbriel::payloadIf<umbriel::WidthArg>(bind) != nullptr);
+      break;
+    case ActionArgKind::Workspace:
+      CHECK(umbriel::payloadIf<umbriel::WorkspaceArg>(bind) != nullptr);
+      break;
+    case ActionArgKind::OptionalOutput:
+      CHECK(umbriel::payloadIf<umbriel::OutputArg>(bind) != nullptr);
+      break;
+    }
+  }
 }
 
 UMBRIEL_TEST(rejectsUnknownActions) {

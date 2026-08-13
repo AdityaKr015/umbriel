@@ -2022,19 +2022,12 @@ namespace umbriel {
           keepWidth = m_toplevel->scheduled.width;
           keepHeight = m_toplevel->scheduled.height;
         }
-        if (m_workspace != nullptr) {
+        if ((keepWidth <= 0 || keepHeight <= 0) && m_workspace != nullptr) {
           const wlr_box target = m_workspace->layout().targetBox(this);
           if (target.width > 0 && target.height > 0) {
             const XdgSizeHints hints = xdgSizeHints(m_toplevel);
-            const int tw = clampXdgWidth(target.width, hints);
-            const int th = clampXdgHeight(target.height, hints);
-            if (keepWidth <= 0 || keepHeight <= 0) {
-              keepWidth = tw;
-              keepHeight = th;
-            } else {
-              keepWidth = std::min(keepWidth, tw);
-              keepHeight = std::min(keepHeight, th);
-            }
+            keepWidth = clampXdgWidth(target.width, hints);
+            keepHeight = clampXdgHeight(target.height, hints);
           }
         }
         if (keepWidth <= 0 || keepHeight <= 0) {
@@ -2074,8 +2067,13 @@ namespace umbriel {
         floatY = usable.y + static_cast<int>(std::lround((*m_floatingPosFrac)[1] * usable.height));
       }
       if (usable.width > 0 && usable.height > 0 && keepWidth > 0 && keepHeight > 0) {
-        floatX = std::clamp(floatX, usable.x, std::max(usable.x, usable.x + usable.width - keepWidth));
-        floatY = std::clamp(floatY, usable.y, std::max(usable.y, usable.y + usable.height - keepHeight));
+        const int decoration = config().appearance.totalBorderWidth();
+        const int minX = usable.x + decoration;
+        const int minY = usable.y + decoration;
+        const int maxX = usable.x + usable.width - decoration - keepWidth;
+        const int maxY = usable.y + usable.height - decoration - keepHeight;
+        floatX = std::clamp(floatX, minX, std::max(minX, maxX));
+        floatY = std::clamp(floatY, minY, std::max(minY, maxY));
         m_floatingPosFrac = {{
             static_cast<double>(floatX - usable.x) / usable.width,
             static_cast<double>(floatY - usable.y) / usable.height,

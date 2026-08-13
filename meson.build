@@ -184,6 +184,10 @@ unit_tests = [
     ['tests/keybind_parse.cpp', 'src/config/keybind_parse.cpp'],
     [wlroots_dep, xkbcommon_dep, scenefx_dep],
   ],
+  # Layout geometry links against layout/ alone: no view/, no server/, no config
+  # loading. That isolation is the point: geometry stays testable in isolation.
+  ['scrolling-layout', ['tests/scrolling_layout.cpp', 'src/layout/scrolling.cpp'], [wlroots_dep]],
+  ['dwindle-layout', ['tests/dwindle_layout.cpp', 'src/layout/dwindle.cpp'], [wlroots_dep]],
 ]
 
 foreach unit_test : unit_tests

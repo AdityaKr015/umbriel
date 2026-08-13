@@ -25,6 +25,21 @@ namespace umbriel {
         | EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_DEACTIVATE;
 
     constexpr uint32_t kGroupCaps = EXT_WORKSPACE_GROUP_HANDLE_V1_GROUP_CAPABILITIES_CREATE_WORKSPACE;
+
+    // The bridge between the layout's opaque View identity and the client state
+    // it needs to size that view. Workspace owns both sides, so it owns the
+    // lookup; layout/ stays free of view/ and its geometry stays testable.
+    LayoutConstraints viewLayoutConstraints(const View* view) {
+      const wlr_xdg_toplevel* toplevel = view != nullptr ? view->toplevel() : nullptr;
+      const XdgSizeHints hints = xdgSizeHints(toplevel);
+      return {
+          .minWidth = hints.minWidth,
+          .minHeight = hints.minHeight,
+          .maxWidth = hints.maxWidth,
+          .maxHeight = hints.maxHeight,
+          .fullscreen = toplevel != nullptr && toplevel->scheduled.fullscreen,
+      };
+    }
   } // namespace
 
   Workspace::Workspace(
@@ -35,6 +50,7 @@ namespace umbriel {
         m_layout(createLayout(layoutConfig.mode)), m_layoutConfig(std::move(layoutConfig)),
         m_layoutMode(m_layoutConfig.mode) {
     m_layout->setConfig(&m_layoutConfig);
+    m_layout->setConstraints(&viewLayoutConstraints);
     m_handle->data = this;
     wlr_ext_workspace_handle_v1_set_group(m_handle, m_group->handle());
     wlr_ext_workspace_handle_v1_set_name(m_handle, m_name.c_str());
@@ -615,6 +631,7 @@ namespace umbriel {
     m_layoutConfig = std::move(layoutConfig);
     if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
       m_layout->setConfig(&m_layoutConfig);
+      m_layout->setConstraints(&viewLayoutConstraints);
       arrange(true);
       return;
     }
@@ -628,6 +645,7 @@ namespace umbriel {
     m_layoutMode = m_layoutConfig.mode;
     m_layout = createLayout(m_layoutMode);
     m_layout->setConfig(&m_layoutConfig);
+    m_layout->setConstraints(&viewLayoutConstraints);
     for (View* view : tiledViews) {
       m_layout->insertView(view, static_cast<int>(m_layout->columns().size()));
     }

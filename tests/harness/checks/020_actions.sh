@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Every action `umbriel actions` advertises is parseable and accepted by `msg`.
 #
-# This is the regression net for the action registry: the roadmap's R7 collapses
-# the enum, the spec table, and the dispatch switch into one table, and R8
-# reshapes the payload. Both are exactly the kind of change that can silently
-# drop an action, and the compiler will not notice.
+# This is the regression net for the action registry. The action list is spread
+# across the KeybindAction enum, the kActionSpecs table, and the dispatch switch,
+# so any change that consolidates or reshapes them can silently drop an action
+# without the compiler noticing.
 set -euo pipefail
 
 # Actions deliberately not exercised: they act on the harness itself rather than

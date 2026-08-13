@@ -18,6 +18,38 @@ namespace umbriel {
     Dwindle,
   };
 
+  // What a layout needs to know about a view in order to size it: the client's
+  // size hints plus whether it is going fullscreen.
+  struct LayoutConstraints {
+    int minWidth = 1;
+    int minHeight = 1;
+    int maxWidth = 0;  // 0 = unlimited
+    int maxHeight = 0; // 0 = unlimited
+    bool fullscreen = false;
+
+    [[nodiscard]] int clampWidth(int width) const {
+      width = width < minWidth ? minWidth : width;
+      if (maxWidth > 0 && width > maxWidth) {
+        width = maxWidth;
+      }
+      return width < 1 ? 1 : width;
+    }
+
+    [[nodiscard]] int clampHeight(int height) const {
+      height = height < minHeight ? minHeight : height;
+      if (maxHeight > 0 && height > maxHeight) {
+        height = maxHeight;
+      }
+      return height < 1 ? 1 : height;
+    }
+  };
+
+  // Layouts treat View as an opaque identity. They still need its constraints,
+  // so the owning Workspace supplies the lookup rather than layout/ depending on
+  // View's definition. Unset means unconstrained, which is what the geometry
+  // tests want.
+  using LayoutConstraintsFn = LayoutConstraints (*)(const View*);
+
   struct Column {
     std::vector<View*> views;
     std::vector<double> heightWeights;
@@ -46,6 +78,11 @@ namespace umbriel {
     virtual ~Layout() = default;
     void setConfig(const ResolvedLayoutConfig* config) { m_config = config; }
     [[nodiscard]] const ResolvedLayoutConfig* layoutConfig() const { return m_config; }
+
+    void setConstraints(LayoutConstraintsFn constraints) { m_constraints = constraints; }
+    [[nodiscard]] LayoutConstraints constraintsFor(const View* view) const {
+      return m_constraints != nullptr && view != nullptr ? m_constraints(view) : LayoutConstraints{};
+    }
 
     [[nodiscard]] virtual LayoutMode mode() const = 0;
 
@@ -117,6 +154,7 @@ namespace umbriel {
 
   protected:
     const ResolvedLayoutConfig* m_config = nullptr;
+    LayoutConstraintsFn m_constraints = nullptr;
   };
 
   [[nodiscard]] std::unique_ptr<Layout> createLayout(LayoutMode mode);

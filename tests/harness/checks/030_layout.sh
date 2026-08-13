@@ -2,10 +2,9 @@
 # Real clients map into the scrolling layout and land on the geometry the layout
 # math predicts.
 #
-# This is the regression net for the roadmap's R11 (move initial sizing into
-# Layout::initialSizeFor) and R14/R15 (the Layout interface rework). The
-# first-configure size and the arranged size must agree, or windows visibly
-# resize on first paint.
+# This is the regression net for the layout sizing path. The size a view is
+# first configured with and the size the layout arranges it to must agree, or
+# windows visibly resize on first paint.
 set -euo pipefail
 
 CLIENT_PIDS=()

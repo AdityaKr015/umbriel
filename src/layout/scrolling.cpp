@@ -1,15 +1,17 @@
 #include "layout/scrolling.h"
 
 #include "config/config.h"
-#include "view/view.h"
-#include "view/xdg_size.h"
 
-// clang-format off
 #include <algorithm>
 #include <cmath>
 #include <ranges>
-#include "wlr.h"
-// clang-format on
+
+// wlr_box and WLR_EDGE_* only. Layout geometry must not pull src/wlr.h, which
+// drags SceneFX and the renderer into a translation unit that does arithmetic.
+extern "C" {
+#include <wlr/util/box.h>
+#include <wlr/util/edges.h>
+}
 
 namespace umbriel {
 
@@ -34,25 +36,25 @@ namespace umbriel {
       return std::max(kMinHeightWeight, total);
     }
 
-    int columnMinWidthPx(const Column& column) {
+    int columnMinWidthPx(const Column& column, const Layout& layout) {
       int minWidth = 1;
       for (const View* view : column.views) {
-        if (view == nullptr || view->toplevel() == nullptr) {
+        if (view == nullptr) {
           continue;
         }
-        minWidth = std::max(minWidth, xdgSizeHints(view->toplevel()).minWidth);
+        minWidth = std::max(minWidth, layout.constraintsFor(view).minWidth);
       }
       return minWidth;
     }
 
-    int columnMaxWidthPx(const Column& column) {
+    int columnMaxWidthPx(const Column& column, const Layout& layout) {
       int maxWidth = 0;
       bool any = false;
       for (const View* view : column.views) {
-        if (view == nullptr || view->toplevel() == nullptr) {
+        if (view == nullptr) {
           continue;
         }
-        const int clientMax = xdgSizeHints(view->toplevel()).maxWidth;
+        const int clientMax = layout.constraintsFor(view).maxWidth;
         if (clientMax > 0) {
           maxWidth = any ? std::min(maxWidth, clientMax) : clientMax;
           any = true;
@@ -61,9 +63,9 @@ namespace umbriel {
       return any ? maxWidth : 0;
     }
 
-    bool columnIsFullscreen(const Column& column) {
+    bool columnIsFullscreen(const Column& column, const Layout& layout) {
       for (const View* view : column.views) {
-        if (view != nullptr && view->toplevel() != nullptr && view->toplevel()->scheduled.fullscreen) {
+        if (view != nullptr && layout.constraintsFor(view).fullscreen) {
           return true;
         }
       }
@@ -99,7 +101,7 @@ namespace umbriel {
     }
     const Column& column = m_columns[static_cast<size_t>(columnIndex)];
     // Fullscreen columns fill the entire viewport, bypassing widthFrac and size-hint clamps.
-    if (columnIsFullscreen(column)) {
+    if (columnIsFullscreen(column, *this)) {
       return std::max(1, viewportWidth);
     }
     // Gap-aware: reserve one inter-column gap per column so N columns whose
@@ -108,8 +110,8 @@ namespace umbriel {
     // gives Σw = V - (N-1)g, which the (N-1) inter-column gaps fill.
     const int gap = m_config->totalGap;
     int width = static_cast<int>(std::lround(column.widthFrac * (viewportWidth + gap) - gap));
-    width = std::max(width, columnMinWidthPx(column));
-    const int maxWidth = columnMaxWidthPx(column);
+    width = std::max(width, columnMinWidthPx(column, *this));
+    const int maxWidth = columnMaxWidthPx(column, *this);
     if (maxWidth > 0) {
       width = std::min(width, maxWidth);
     }
@@ -159,7 +161,7 @@ namespace umbriel {
       return false;
     }
     const Column& column = m_columns[static_cast<size_t>(columnIndex)];
-    return column.savedWidthFrac > 0.0 || columnIsFullscreen(column);
+    return column.savedWidthFrac > 0.0 || columnIsFullscreen(column, *this);
   }
 
   void ScrollingLayout::insertView(View* view, int columnIndex) {
@@ -391,7 +393,7 @@ namespace umbriel {
         }
         View* view = column.views[static_cast<size_t>(row)];
         if (view != nullptr) {
-          height = clampXdgHeight(height, xdgSizeHints(view->toplevel()));
+          height = constraintsFor(view).clampHeight(height);
         }
         m_targets.push_back({.view = view, .x = x, .y = y, .width = width, .height = height});
         y += height + gap;
@@ -566,7 +568,7 @@ namespace umbriel {
           }
           for (View* view : layout.columns()[static_cast<size_t>(columnIndex)].views) {
             if (view != nullptr) {
-              minWidth = std::max(minWidth, xdgSizeHints(view->toplevel()).minWidth);
+              minWidth = std::max(minWidth, layout.constraintsFor(view).minWidth);
             }
           }
           return std::min(minWidth, viewportWidth);
@@ -582,7 +584,7 @@ namespace umbriel {
             if (view == nullptr) {
               continue;
             }
-            const int hintMax = xdgSizeHints(view->toplevel()).maxWidth;
+            const int hintMax = layout.constraintsFor(view).maxWidth;
             if (hintMax > 0) {
               clientMax = any ? std::min(clientMax, hintMax) : hintMax;
               any = true;
@@ -673,7 +675,7 @@ namespace umbriel {
                 return kMinWindow;
               }
               const double fromHints =
-                  static_cast<double>(xdgSizeHints(view->toplevel()).minHeight) / stackHeight * totalWeight;
+                  static_cast<double>(layout.constraintsFor(view).minHeight) / stackHeight * totalWeight;
               return std::max(kMinWindow, fromHints);
             };
 

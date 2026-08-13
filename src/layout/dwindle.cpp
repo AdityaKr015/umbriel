@@ -1,16 +1,17 @@
 #include "layout/dwindle.h"
 
 #include "config/config.h"
-#include "view/view.h"
-#include "view/xdg_size.h"
 
-// clang-format off
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <ranges>
-#include "wlr.h"
-// clang-format on
+
+// wlr_box and WLR_EDGE_* only; see the note in scrolling.cpp.
+extern "C" {
+#include <wlr/util/box.h>
+#include <wlr/util/edges.h>
+}
 
 namespace umbriel {
 

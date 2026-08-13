@@ -197,6 +197,7 @@ namespace umbriel {
           group->refreshLayouts();
         }
       }
+      m_cursor->cancelStaleTiledResize();
     }
     if (effects.viewChrome) {
       for (const auto& view : m_registry.all()) {
@@ -695,6 +696,9 @@ namespace umbriel {
   void Server::removeOutput(Output* output) {
     m_overview->onOutputRemoved(output);
     m_gestures->cancelForOutput(output);
+    if (!m_cursor->isPassthrough()) {
+      m_cursor->resetMode();
+    }
     if (m_insertHint != nullptr && m_insertHint->output() == output) {
       m_insertHint->hideImmediate();
     }

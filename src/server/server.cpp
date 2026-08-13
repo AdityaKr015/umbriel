@@ -136,6 +136,7 @@ namespace umbriel {
     m_scratchpadManager = std::make_unique<ScratchpadManager>(*this, m_scratchpadContentTree, m_scratchpadShadowTree);
     m_overviewTree = wlr_scene_tree_create(&m_scene->tree);
     wlr_scene_node_set_enabled(&m_overviewTree->node, false);
+    m_dragShadowTree = wlr_scene_tree_create(&m_scene->tree);
     m_dragTree = wlr_scene_tree_create(&m_scene->tree);
     m_dragIconTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);

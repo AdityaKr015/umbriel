@@ -119,6 +119,7 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* overviewTree() const { return m_overviewTree; }
     [[nodiscard]] Overview* overview() const { return m_overview.get(); }
     [[nodiscard]] Cheatsheet* cheatsheet() const { return m_cheatsheet.get(); }
+    [[nodiscard]] wlr_scene_tree* dragShadowTree() const { return m_dragShadowTree; }
     // Above xdg windows, below layer-shell top/overlay (drag/drop insert hint).
     [[nodiscard]] wlr_scene_tree* dragTree() const { return m_dragTree; }
     // Parent for wl_data_device drag icons; moved to the cursor while a drag is active.
@@ -328,6 +329,7 @@ namespace umbriel {
     wlr_scene_tree* m_scratchpadShadowTree = nullptr;
     wlr_scene_tree* m_scratchpadContentTree = nullptr;
     wlr_scene_tree* m_overviewTree = nullptr;
+    wlr_scene_tree* m_dragShadowTree = nullptr;
     wlr_scene_tree* m_dragTree = nullptr;
     wlr_scene_tree* m_dragIconTree = nullptr;
     wlr_scene_tree* m_fullscreenTree = nullptr;

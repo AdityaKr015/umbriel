@@ -78,7 +78,7 @@ namespace umbriel {
   }
 
   void Cursor::updateConstraintForSurface(wlr_surface* surface) {
-    if (m_server->sessionLocked() || m_mode != CursorMode::Passthrough) {
+    if (m_server->sessionLocked() || !isPassthrough()) {
       setActiveConstraint(nullptr);
       return;
     }

@@ -202,6 +202,13 @@ namespace umbriel {
         && std::ranges::none_of(m_entries, [previous](const Entry& entry) { return entry.output == previous; })) {
       std::erase(m_visibleOutputs, previous);
     }
+    restorePresentation(view);
+  }
+
+  void ScratchpadManager::restorePresentation(View* view) {
+    if (view == nullptr || !contains(view)) {
+      return;
+    }
     wlr_scene_node_reparent(&view->sceneTree()->node, m_root);
     view->reparentShadow(m_shadowRoot);
     view->setOnActiveWorkspace(true);

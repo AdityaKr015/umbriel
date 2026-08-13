@@ -406,10 +406,44 @@ namespace umbriel {
     if (cursor == nullptr) {
       return false;
     }
-    const bool interactiveTileResize = cursor->mode() == CursorMode::ResizeTile
-        && cursor->grabbedView() != nullptr
-        && cursor->grabbedView()->workspace() == m_workspace;
-    return cursor->grabbedView() == this || interactiveTileResize;
+    return cursor->grabbedView() == this || cursor->isResizingWorkspace(m_workspace);
+  }
+
+  void View::enterDragPresentation() {
+    cancelPositionAnimation();
+    wlr_scene_node_reparent(&m_sceneTree->node, m_server->dragTree());
+    reparentShadow(m_server->dragShadowTree());
+    setNodeEnabled(true);
+    clearOutputClip();
+    raiseToTop();
+  }
+
+  void View::restoreHomePresentation() {
+    if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
+        scratchpad != nullptr && scratchpad->contains(this)) {
+      scratchpad->restorePresentation(this);
+      return;
+    }
+    if (m_pinned) {
+      restorePinnedSceneParent();
+      if (m_workspace != nullptr) {
+        m_workspace->syncViewPresentation(this);
+      }
+      return;
+    }
+
+    wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
+    if (m_workspace == nullptr) {
+      reparentShadow(nullptr);
+      setNodeEnabled(m_mapped && m_onActiveWorkspace);
+      return;
+    }
+    reparentShadow(m_workspace->shadowLayer());
+    setNodeEnabled(m_mapped && m_onActiveWorkspace);
+    m_workspace->restackFloatingViews();
+    if (m_mapped) {
+      m_workspace->syncViewPresentation(this);
+    }
   }
 
   void View::beginResizeAnimation(int width, int height) {
@@ -478,11 +512,7 @@ namespace umbriel {
     // Disable sibling size animations during a tiled resize, so they do not
     // trail the pointer while clients acknowledge successive configures.
     const Cursor* cursor = m_server->cursor();
-    const bool interactiveTileResize = cursor != nullptr
-        && cursor->mode() == CursorMode::ResizeTile
-        && cursor->grabbedView() != nullptr
-        && cursor->grabbedView()->workspace() == m_workspace;
-    if (interactiveTileResize && sizeAnimating()) {
+    if (cursor != nullptr && cursor->isResizingWorkspace(m_workspace) && sizeAnimating()) {
       cancelSizeAnimation();
     }
 
@@ -1206,7 +1236,7 @@ namespace umbriel {
     }
     leaveForeignOutput();
     setForeignActivated(false);
-    if (m_server->cursor()->mode() != CursorMode::Passthrough) {
+    if (!m_server->cursor()->isPassthrough()) {
       m_server->cursor()->resetMode();
     }
     m_initialRulesSettled = false;
@@ -1371,13 +1401,11 @@ namespace umbriel {
     m_server->removeView(this);
   }
 
-  void View::handleRequestMove() {
-    m_server->cursor()->beginInteractive(this, m_tiled ? CursorMode::MoveTile : CursorMode::Move, 0);
-  }
+  void View::handleRequestMove() { m_server->cursor()->beginMove(this); }
 
   void View::handleRequestResize(void* data) {
     auto* event = static_cast<wlr_xdg_toplevel_resize_event*>(data);
-    m_server->cursor()->beginInteractive(this, m_tiled ? CursorMode::ResizeTile : CursorMode::Resize, event->edges);
+    m_server->cursor()->beginResize(this, event->edges);
   }
 
   void View::setMaximized(bool maximized) {

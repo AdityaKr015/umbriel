@@ -186,6 +186,10 @@ namespace umbriel {
     // True while an interactive grab owns this view's size, so the layout must
     // not animate it (the drag tracks the pointer 1:1).
     [[nodiscard]] bool sizeGrabActive() const;
+    // Cursor owns when a drag starts and ends; View owns the scene invariants
+    // for the temporary global presentation and its resting presentation.
+    void enterDragPresentation();
+    void restoreHomePresentation();
     // Kick the owning output so an animation started outside a frame gets ticked.
     void scheduleFrame();
     void cancelSizeAnimation();

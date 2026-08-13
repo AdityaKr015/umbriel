@@ -3,7 +3,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 #include <wayland-server-core.h>
 
@@ -21,15 +23,46 @@ namespace umbriel {
   class Workspace;
   struct ResizeGrab;
 
-  enum class CursorMode {
-    Passthrough,
-    Move,
-    MoveTile,
-    Resize,
-    ResizeTile,
-  };
-
   class Cursor {
+    struct PassthroughGrab {};
+    struct FloatingMoveGrab {
+      View* view = nullptr;
+      double offsetX = 0;
+      double offsetY = 0;
+    };
+    struct TiledMoveGrab {
+      View* view = nullptr;
+      double offsetX = 0;
+      double offsetY = 0;
+      Workspace* sourceWorkspace = nullptr;
+      int sourceColumn = -1;
+      std::optional<DropColumnWidth> sourceWidth;
+      DropTarget drop;
+      bool pending = true;
+      double startX = 0;
+      double startY = 0;
+    };
+    struct FloatingResizeGrab {
+      View* view = nullptr;
+      double offsetX = 0;
+      double offsetY = 0;
+      int geometryX = 0;
+      int geometryY = 0;
+      int geometryWidth = 0;
+      int geometryHeight = 0;
+      uint32_t edges = 0;
+    };
+    struct TiledResizeGrab {
+      View* view = nullptr;
+      Workspace* workspace = nullptr;
+      double startX = 0;
+      double startY = 0;
+      uint32_t edges = 0;
+      std::unique_ptr<ResizeGrab> session;
+    };
+    using GrabState =
+        std::variant<PassthroughGrab, FloatingMoveGrab, TiledMoveGrab, FloatingResizeGrab, TiledResizeGrab>;
+
   public:
     explicit Cursor(Server& server);
     ~Cursor();
@@ -39,20 +72,24 @@ namespace umbriel {
 
     [[nodiscard]] wlr_cursor* wlr() const { return m_cursor; }
     [[nodiscard]] wlr_xcursor_manager* xcursorManager() const { return m_xcursorManager; }
-    [[nodiscard]] CursorMode mode() const { return m_mode; }
-    [[nodiscard]] View* grabbedView() const { return m_grabbedView; }
-    // True while `view` is the window under an interactive move (spans outputs
-    // unclipped); layout code must not re-clip it during the drag.
-    [[nodiscard]] bool isDraggingView(const View* view) const {
-      return view != nullptr && view == m_grabbedView && (m_mode == CursorMode::Move || m_mode == CursorMode::MoveTile);
-    }
+    [[nodiscard]] bool isPassthrough() const;
+    [[nodiscard]] View* grabbedView() const;
+    // True while `view` is under an interactive move and spans outputs
+    // unclipped. Layout code must not re-clip it during the drag.
+    [[nodiscard]] bool isDraggingView(const View* view) const;
+    // A tiled resize updates every view in its workspace without size
+    // animations trailing the pointer.
+    [[nodiscard]] bool isResizingWorkspace(const Workspace* workspace) const;
 
     void attachInputDevice(wlr_input_device* device);
     void applyConfig();
     void setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY);
     void setXcursor(const char* name);
-    void beginInteractive(View* view, CursorMode mode, uint32_t edges);
+    void beginMove(View* view);
+    void beginResize(View* view, uint32_t edges);
     void resetMode();
+    // A layout-mode reload can replace the layout that owns a tiled resize.
+    void cancelStaleTiledResize();
     void handleNewConstraint(wlr_pointer_constraint_v1* constraint);
     void clearConstraint();
     // Recompute compositor cursor (mod-held resize/move affordance, or active grab).
@@ -115,28 +152,7 @@ namespace umbriel {
     int m_xcursorSize = 0;
     wlr_pointer_constraint_v1* m_activeConstraint = nullptr;
 
-    CursorMode m_mode = CursorMode::Passthrough;
-    View* m_grabbedView = nullptr;
-    double m_grabX = 0;
-    double m_grabY = 0;
-    int m_grabGeoX = 0;
-    int m_grabGeoY = 0;
-    int m_grabGeoWidth = 0;
-    int m_grabGeoHeight = 0;
-    uint32_t m_resizeEdges = 0;
-    Workspace* m_dragSourceWorkspace = nullptr;
-    int m_dragSourceColumn = -1;
-    DropColumnWidth m_dragSourceWidth{};
-    bool m_hasDragSourceWidth = false;
-    DropTarget m_drop{};
-    bool m_tileDragPending = false;
-    double m_tileDragStartX = 0;
-    double m_tileDragStartY = 0;
-    Workspace* m_resizeWorkspace = nullptr;
-    double m_resizeStartX = 0;
-    double m_resizeStartY = 0;
-    // Layout-owned resize session for the active tiled resize (scrolling/dwindle).
-    std::unique_ptr<ResizeGrab> m_resizeGrab;
+    GrabState m_grab;
     // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
     wlr_output* m_pointerOutput = nullptr;
     double m_wheelAccum[2]{};

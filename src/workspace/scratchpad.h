@@ -24,6 +24,8 @@ namespace umbriel {
     [[nodiscard]] bool hasFocus(Output* output) const;
     void noteFocus(View* view);
     void finishMove(View* view, Output* output);
+    // Restore the manager-owned scene parents after a temporary global drag.
+    void restorePresentation(View* view);
     void remove(View* view);
     void moveOutput(Output* from, Output* to);
 

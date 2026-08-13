@@ -28,11 +28,16 @@ RUNTIME_DIR=$(mktemp -d /tmp/umv.XXXXXXXX)
 LOG=$RUNTIME_DIR/compositor.log
 CONFIG=$RUNTIME_DIR/config.toml
 SERVER_PID=
+IPC_CLIENT_PID=
 
 cleanup() {
   if [[ -n $SERVER_PID ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
     kill -KILL "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
+  fi
+  if [[ -n $IPC_CLIENT_PID ]] && kill -0 "$IPC_CLIENT_PID" 2>/dev/null; then
+    kill -KILL "$IPC_CLIENT_PID" 2>/dev/null || true
+    wait "$IPC_CLIENT_PID" 2>/dev/null || true
   fi
   rm -rf "$RUNTIME_DIR"
 }
@@ -103,10 +108,41 @@ fi
 # Clean shutdown is itself a check: a listener still attached to a wlroots object
 # at teardown trips an assert and the process dies on SIGABRT (exit 134) after
 # having already logged "shutting down".
+# Keep one incomplete IPC connection registered through teardown. Completed
+# connections were exercised by the checks above; both lifecycle paths must
+# leave no event source or descriptor behind.
+IPC_READY=$RUNTIME_DIR/ipc-idle-ready
+python3 - "$UMBRIEL_SOCKET" "$IPC_READY" <<'PY' &
+import pathlib
+import socket
+import sys
+import time
+
+client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+client.connect(sys.argv[1])
+client.sendall(b"{")
+pathlib.Path(sys.argv[2]).touch()
+time.sleep(30)
+PY
+IPC_CLIENT_PID=$!
+for _ in $(seq 20); do
+  [[ -f $IPC_READY ]] && break
+  sleep 0.01
+done
+if [[ ! -f $IPC_READY ]]; then
+  echo "  FAIL shutdown setup (idle IPC client did not connect)"
+  failed=$((failed + 1))
+fi
+
 kill -TERM "$SERVER_PID"
 status=0
 wait "$SERVER_PID" || status=$?
 SERVER_PID=
+if [[ -n $IPC_CLIENT_PID ]] && kill -0 "$IPC_CLIENT_PID" 2>/dev/null; then
+  kill -KILL "$IPC_CLIENT_PID" 2>/dev/null || true
+  wait "$IPC_CLIENT_PID" 2>/dev/null || true
+fi
+IPC_CLIENT_PID=
 
 if [[ $status -ne 0 ]]; then
   echo "  FAIL shutdown (exit status $status, expected 0)"

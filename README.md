@@ -43,6 +43,7 @@ What works today:
 - Native DRM: Ctrl+Alt+F1..F12 switches VT
 - Live config reload with file watcher, diagnostics banner, and include files
 - `umbriel outputs` CLI subcommand for listing connectors and modes
+- Nonblocking local IPC for commands and state queries, with per-connection deadlines
 - Clean shutdown on `SIGINT` / `SIGTERM` / mod+Escape
 - Noctalia shell runs against the protocols above
 

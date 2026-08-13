@@ -4,6 +4,7 @@
 #include "server/ipc_commands.h"
 #include "server/server.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <nlohmann/json.hpp>
@@ -18,7 +19,7 @@ namespace umbriel {
   namespace {
     constexpr Logger kLog("ipc");
     constexpr size_t kMaxRequestSize = 65536;
-
+    constexpr int kConnectionTimeoutMs = 1000;
   } // namespace
 
   Ipc::Ipc(Server& server, const std::string& waylandSocketName) : m_server(&server) {
@@ -79,70 +80,170 @@ namespace umbriel {
   Ipc::~Ipc() {
     if (m_eventSource != nullptr) {
       wl_event_source_remove(m_eventSource);
+      m_eventSource = nullptr;
     }
     if (m_listenFd >= 0) {
       close(m_listenFd);
+      m_listenFd = -1;
     }
+    for (const auto& connection : m_connections) {
+      closeConnection(*connection);
+    }
+    m_connections.clear();
     if (!m_socketPath.empty()) {
       unlink(m_socketPath.c_str());
     }
   }
 
   int Ipc::onListenReadable(int /*fd*/, uint32_t /*mask*/, void* data) {
-    auto* ipc = static_cast<Ipc*>(data);
+    static_cast<Ipc*>(data)->acceptConnections();
+    return 0;
+  }
+
+  void Ipc::acceptConnections() {
     while (true) {
-      int clientFd = accept4(ipc->m_listenFd, nullptr, nullptr, SOCK_CLOEXEC);
-      if (clientFd < 0) {
-        break;
+      const int clientFd = accept4(m_listenFd, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
+      if (clientFd >= 0) {
+        addConnection(clientFd);
+        continue;
       }
-      ipc->handleClient(clientFd);
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno != EAGAIN && errno != EWOULDBLOCK) {
+        kLog.warn("failed to accept IPC connection: {}", strerror(errno));
+      }
+      return;
+    }
+  }
+
+  void Ipc::addConnection(int clientFd) {
+    auto connection = std::make_unique<Connection>();
+    connection->owner = this;
+    connection->fd = clientFd;
+
+    wl_event_loop* loop = wl_display_get_event_loop(m_server->display());
+    connection->fdSource = wl_event_loop_add_fd(loop, clientFd, WL_EVENT_READABLE, onConnectionEvent, connection.get());
+    connection->deadline = wl_event_loop_add_timer(loop, onConnectionTimeout, connection.get());
+    if (connection->fdSource == nullptr
+        || connection->deadline == nullptr
+        || wl_event_source_timer_update(connection->deadline, kConnectionTimeoutMs) < 0) {
+      kLog.warn("failed to register IPC connection");
+      closeConnection(*connection);
+      return;
+    }
+    m_connections.push_back(std::move(connection));
+  }
+
+  int Ipc::onConnectionEvent(int /*fd*/, uint32_t mask, void* data) {
+    auto* connection = static_cast<Connection*>(data);
+    Ipc* owner = connection->owner;
+    if ((mask & WL_EVENT_ERROR) != 0) {
+      owner->removeConnection(connection);
+      return 0;
+    }
+
+    bool keep = true;
+    if (!connection->responding && (mask & (WL_EVENT_READABLE | WL_EVENT_HANGUP)) != 0) {
+      keep = owner->readRequest(*connection);
+    }
+    if (keep && connection->responding) {
+      keep = owner->writeResponse(*connection);
+    }
+    if (!keep) {
+      owner->removeConnection(connection);
     }
     return 0;
   }
 
-  void Ipc::handleClient(int clientFd) {
-    // Set timeouts so a stalled client cannot hang the compositor.
-    timeval tv{};
-    tv.tv_usec = 500000; // 500 ms
-    setsockopt(clientFd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    setsockopt(clientFd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-
-    std::string buf;
+  bool Ipc::readRequest(Connection& connection) {
     char chunk[4096];
     while (true) {
-      ssize_t n = recv(clientFd, chunk, sizeof(chunk), 0);
-      if (n <= 0) {
-        break;
+      const ssize_t size = recv(connection.fd, chunk, sizeof(chunk), 0);
+      if (size > 0) {
+        connection.input.append(chunk, static_cast<size_t>(size));
+        if (connection.input.size() > kMaxRequestSize) {
+          prepareResponse(connection, R"({"err":"request too long"})");
+          return true;
+        }
+        if (connection.input.contains('\n')) {
+          const size_t newline = connection.input.find('\n');
+          prepareResponse(connection, handleRequest(std::string_view(connection.input).substr(0, newline)));
+          return true;
+        }
+        continue;
       }
-      buf.append(chunk, static_cast<size_t>(n));
-      if (buf.size() > kMaxRequestSize) {
-        std::string resp = R"({"err":"request too long"})"
-                           "\n";
-        send(clientFd, resp.data(), resp.size(), MSG_NOSIGNAL);
-        close(clientFd);
-        return;
+      if (size == 0) {
+        if (connection.input.empty()) {
+          return false;
+        }
+        prepareResponse(connection, handleRequest(connection.input));
+        return true;
       }
-      if (buf.contains('\n')) {
-        break;
+      if (errno == EINTR) {
+        continue;
       }
+      return errno == EAGAIN || errno == EWOULDBLOCK;
     }
+  }
 
-    // Extract up to the first newline.
-    auto nlPos = buf.find('\n');
-    std::string_view line = nlPos != std::string::npos ? std::string_view(buf).substr(0, nlPos) : std::string_view(buf);
+  void Ipc::prepareResponse(Connection& connection, std::string response) {
+    connection.output = std::move(response);
+    connection.output += '\n';
+    connection.responding = true;
+  }
 
-    std::string resp = handleRequest(line) + "\n";
-
-    size_t sent = 0;
-    while (sent < resp.size()) {
-      ssize_t n = send(clientFd, resp.data() + sent, resp.size() - sent, MSG_NOSIGNAL);
-      if (n <= 0) {
-        break;
+  bool Ipc::writeResponse(Connection& connection) {
+    while (connection.writeOffset < connection.output.size()) {
+      const ssize_t size = send(
+          connection.fd, connection.output.data() + connection.writeOffset,
+          connection.output.size() - connection.writeOffset, MSG_NOSIGNAL
+      );
+      if (size > 0) {
+        connection.writeOffset += static_cast<size_t>(size);
+        continue;
       }
-      sent += static_cast<size_t>(n);
+      if (size < 0 && errno == EINTR) {
+        continue;
+      }
+      if (size < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return wl_event_source_fd_update(connection.fdSource, WL_EVENT_WRITABLE) >= 0;
+      }
+      return false;
     }
+    return false;
+  }
 
-    close(clientFd);
+  int Ipc::onConnectionTimeout(void* data) {
+    auto* connection = static_cast<Connection*>(data);
+    connection->owner->removeConnection(connection);
+    return 0;
+  }
+
+  void Ipc::removeConnection(Connection* connection) {
+    const auto entry = std::ranges::find_if(m_connections, [connection](const auto& candidate) {
+      return candidate.get() == connection;
+    });
+    if (entry == m_connections.end()) {
+      return;
+    }
+    closeConnection(**entry);
+    m_connections.erase(entry);
+  }
+
+  void Ipc::closeConnection(Connection& connection) {
+    if (connection.fdSource != nullptr) {
+      wl_event_source_remove(connection.fdSource);
+      connection.fdSource = nullptr;
+    }
+    if (connection.deadline != nullptr) {
+      wl_event_source_remove(connection.deadline);
+      connection.deadline = nullptr;
+    }
+    if (connection.fd >= 0) {
+      close(connection.fd);
+      connection.fd = -1;
+    }
   }
 
   std::string Ipc::handleRequest(std::string_view line) {

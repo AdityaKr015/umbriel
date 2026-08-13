@@ -58,6 +58,7 @@ namespace umbriel {
     WindowRestoreFromScratchpad,
     ScratchpadFocusNext,
     Submap,
+    Count,
   };
 
   // Action payloads. Exactly one is valid for a given action, so they live in a

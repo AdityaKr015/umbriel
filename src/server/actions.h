@@ -17,4 +17,8 @@ namespace umbriel {
   // `actionSpecs()` lets the parser stay free of any dependency on Server.
   [[nodiscard]] ActionHandlerFn actionHandlerFor(KeybindAction action);
 
+  // True when every advertised action has exactly one handler and every
+  // non-sentinel action is advertised.
+  [[nodiscard]] bool actionRegistryComplete();
+
 } // namespace umbriel

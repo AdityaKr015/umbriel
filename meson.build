@@ -258,6 +258,8 @@ unit_tests = [
   ['floating', ['tests/floating.cpp'], []],
   ['config-section', ['tests/config_section.cpp'], []],
   ['config-change', ['tests/config_change.cpp'], []],
+  ['config-load', ['tests/config_load.cpp'], [umbriel_core_dep]],
+  ['action-registry', ['tests/action_registry.cpp'], [umbriel_core_dep]],
   ['config-resolve', ['tests/config_resolve.cpp'], []],
 ]
 

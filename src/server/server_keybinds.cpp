@@ -5,7 +5,6 @@
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
-#include "scene/node.h"
 #include "server/actions.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -13,9 +12,7 @@
 #include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
-#include <algorithm>
-#include <cstdlib>
-#include <ranges>
+#include <string_view>
 
 namespace umbriel {
 
@@ -78,7 +75,7 @@ namespace umbriel {
 
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
     const uint32_t lowered = xkb_keysym_to_lower(keysym);
-    const std::string& currentSubmap = m_activeSubmaps.empty() ? std::string{} : m_activeSubmaps.back();
+    const std::string_view currentSubmap = m_activeSubmaps.empty() ? std::string_view{} : m_activeSubmaps.back();
 
     for (const Keybind& bind : config().keybinds) {
       if (bind.submap != currentSubmap) {
@@ -109,7 +106,7 @@ namespace umbriel {
     }
 
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
-    const std::string& currentSubmap = m_activeSubmaps.empty() ? std::string{} : m_activeSubmaps.back();
+    const std::string_view currentSubmap = m_activeSubmaps.empty() ? std::string_view{} : m_activeSubmaps.back();
 
     for (const Keybind& bind : config().keybinds) {
       if (bind.submap != currentSubmap) {
@@ -134,7 +131,7 @@ namespace umbriel {
     }
 
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
-    const std::string& currentSubmap = m_activeSubmaps.empty() ? std::string{} : m_activeSubmaps.back();
+    const std::string_view currentSubmap = m_activeSubmaps.empty() ? std::string_view{} : m_activeSubmaps.back();
 
     for (const Keybind& bind : config().keybinds) {
       if (bind.submap != currentSubmap) {

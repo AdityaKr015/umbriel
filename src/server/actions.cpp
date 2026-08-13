@@ -12,6 +12,7 @@
 #include "workspace/workspace.h"
 
 #include <algorithm>
+#include <array>
 #include <expected>
 #include <utility>
 
@@ -402,59 +403,74 @@ namespace umbriel {
       return scratchpad != nullptr && scratchpad->focusNext(output);
     }
 
-    struct ActionEntry {
-      KeybindAction action;
-      ActionHandlerFn run;
+    constexpr std::array<ActionHandlerFn, static_cast<size_t>(KeybindAction::Count)> kActionHandlers = {
+        nullptr,
+        &actionSpawn,
+        &actionWindowClose,
+        &actionSessionQuit,
+        &actionFocusAdjacent<-1>,
+        &actionFocusAdjacent<1>,
+        &actionFocusVertical<-1>,
+        &actionFocusVertical<1>,
+        &actionMoveColumn<-1>,
+        &actionMoveColumn<1>,
+        &actionMoveVertical<-1>,
+        &actionMoveVertical<1>,
+        &actionConsumeLeft,
+        &actionExpelRight,
+        &actionCycleWidth,
+        &actionSetWidth,
+        &actionToggleMaximize,
+        &actionToggleFullscreen,
+        &actionToggleFloating,
+        &actionTogglePinned,
+        &actionFocusNext,
+        &actionWorkspace,
+        &actionWorkspace,
+        &actionConfigReload,
+        &actionLayoutScroll<-1>,
+        &actionLayoutScroll<1>,
+        &actionOverviewToggle,
+        &actionOverviewOpen,
+        &actionOverviewClose,
+        &actionCheatsheetToggle,
+        &actionCheatsheetOpen,
+        &actionCheatsheetClose,
+        &actionMoveToScratchpad,
+        &actionScratchpadToggle,
+        &actionRestoreFromScratchpad,
+        &actionScratchpadFocusNext,
+        &actionSubmap,
     };
 
-    constexpr ActionEntry kActionHandlers[] = {
-        {KeybindAction::Spawn, &actionSpawn},
-        {KeybindAction::WindowClose, &actionWindowClose},
-        {KeybindAction::SessionQuit, &actionSessionQuit},
-        {KeybindAction::WindowFocusLeft, &actionFocusAdjacent<-1>},
-        {KeybindAction::WindowFocusRight, &actionFocusAdjacent<1>},
-        {KeybindAction::WindowFocusUp, &actionFocusVertical<-1>},
-        {KeybindAction::WindowFocusDown, &actionFocusVertical<1>},
-        {KeybindAction::ColumnMoveLeft, &actionMoveColumn<-1>},
-        {KeybindAction::ColumnMoveRight, &actionMoveColumn<1>},
-        {KeybindAction::WindowMoveUp, &actionMoveVertical<-1>},
-        {KeybindAction::WindowMoveDown, &actionMoveVertical<1>},
-        {KeybindAction::WindowConsumeLeft, &actionConsumeLeft},
-        {KeybindAction::WindowExpelRight, &actionExpelRight},
-        {KeybindAction::WindowCycleWidth, &actionCycleWidth},
-        {KeybindAction::WindowSetWidth, &actionSetWidth},
-        {KeybindAction::ToggleMaximize, &actionToggleMaximize},
-        {KeybindAction::ToggleFullscreen, &actionToggleFullscreen},
-        {KeybindAction::ToggleFloating, &actionToggleFloating},
-        {KeybindAction::TogglePinned, &actionTogglePinned},
-        {KeybindAction::WindowFocusNext, &actionFocusNext},
-        {KeybindAction::WorkspaceSwitch, &actionWorkspace},
-        {KeybindAction::WindowMoveToWorkspace, &actionWorkspace},
-        {KeybindAction::ConfigReload, &actionConfigReload},
-        {KeybindAction::LayoutScrollLeft, &actionLayoutScroll<-1>},
-        {KeybindAction::LayoutScrollRight, &actionLayoutScroll<1>},
-        {KeybindAction::OverviewToggle, &actionOverviewToggle},
-        {KeybindAction::OverviewOpen, &actionOverviewOpen},
-        {KeybindAction::OverviewClose, &actionOverviewClose},
-        {KeybindAction::CheatsheetToggle, &actionCheatsheetToggle},
-        {KeybindAction::CheatsheetOpen, &actionCheatsheetOpen},
-        {KeybindAction::CheatsheetClose, &actionCheatsheetClose},
-        {KeybindAction::WindowMoveToScratchpad, &actionMoveToScratchpad},
-        {KeybindAction::ScratchpadToggle, &actionScratchpadToggle},
-        {KeybindAction::WindowRestoreFromScratchpad, &actionRestoreFromScratchpad},
-        {KeybindAction::ScratchpadFocusNext, &actionScratchpadFocusNext},
-        {KeybindAction::Submap, &actionSubmap},
-    };
+    consteval bool everyActionHasHandler() {
+      if (kActionHandlers.front() != nullptr) {
+        return false;
+      }
+      return std::ranges::all_of(kActionHandlers.begin() + 1, kActionHandlers.end(), [](ActionHandlerFn handler) {
+        return handler != nullptr;
+      });
+    }
+
+    static_assert(everyActionHasHandler());
 
   } // namespace
 
   ActionHandlerFn actionHandlerFor(KeybindAction action) {
-    for (const ActionEntry& entry : kActionHandlers) {
-      if (entry.action == action) {
-        return entry.run;
+    const auto index = static_cast<size_t>(action);
+    return index < kActionHandlers.size() ? kActionHandlers[index] : nullptr;
+  }
+
+  bool actionRegistryComplete() {
+    std::array<bool, kActionHandlers.size()> advertised{};
+    for (const ActionSpec& spec : actionSpecs()) {
+      const auto index = static_cast<size_t>(spec.action);
+      if (index == 0 || index >= advertised.size() || advertised[index] || kActionHandlers[index] == nullptr) {
+        return false;
       }
+      advertised[index] = true;
     }
-    return nullptr;
+    return std::ranges::all_of(advertised.begin() + 1, advertised.end(), [](bool present) { return present; });
   }
 
 } // namespace umbriel

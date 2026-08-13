@@ -86,6 +86,16 @@ UMBRIEL_TEST(unknownKeysAreReportedWithoutAParallelList) {
   CHECK(!contains(diagnostics, "demo.count"));
 }
 
+UMBRIEL_TEST(emptySectionNameReportsTopLevelKeysWithoutLeadingDot) {
+  const auto table = toml::parse("typo = 2");
+  std::vector<ConfigDiagnostic> diagnostics;
+  {
+    Section root(table, "", diagnostics);
+  }
+  CHECK(contains(diagnostics, "unknown key typo"));
+  CHECK(!contains(diagnostics, "unknown key .typo"));
+}
+
 UMBRIEL_TEST(unknownKeysAreReportedEvenWhenTheReaderStopsEarly) {
   // Emitted from the destructor, so a reader that returns before asking for
   // everything still reports what it never claimed.

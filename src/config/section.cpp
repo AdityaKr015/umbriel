@@ -33,12 +33,14 @@ namespace umbriel {
     }
     for (const auto& [key, value] : m_table) {
       if (std::ranges::find(m_seen, key.str()) == m_seen.end()) {
-        warn(value, std::format("unknown key {}.{}", m_name, key.str()));
+        warn(value, std::format("unknown key {}", qualified(key.str())));
       }
     }
   }
 
-  std::string Section::qualified(std::string_view key) const { return std::format("{}.{}", m_name, key); }
+  std::string Section::qualified(std::string_view key) const {
+    return m_name.empty() ? std::string(key) : std::format("{}.{}", m_name, key);
+  }
 
   const toml::node* Section::claim(std::string_view key) {
     m_seen.emplace_back(key);

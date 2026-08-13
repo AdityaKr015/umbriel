@@ -39,14 +39,11 @@ namespace {
 
     Fixture() { layout.setConfig(&config); }
 
-    // Mirrors Workspace::layoutAttach, which arranges after every insert.
-    // DwindleLayout::insertView locates the target leaf through the flat-column
-    // cache, and only arrange() and removeView() refresh that cache, so a batch
-    // of inserts with no arrange between them does not build the tree.
+    // Deliberately no arrange() between inserts: Workspace::applyConfig
+    // batch-inserts on a fresh layout when the layout mode changes.
     void addLeaves(int count) {
       for (int i = 0; i < count; ++i) {
         layout.insertView(stub(i), i);
-        layout.arrange(kUsable);
       }
     }
   };
@@ -84,8 +81,41 @@ UMBRIEL_TEST(insertIsIdempotentPerView) {
   Fixture fixture;
   fixture.addLeaves(1);
   fixture.layout.insertView(stub(0), 0);
-  fixture.layout.arrange(kUsable);
   CHECK_EQ(fixture.layout.columns().size(), size_t{1});
+}
+
+UMBRIEL_TEST(batchInsertWithoutArrangeKeepsEveryView) {
+  // Workspace::applyConfig creates a fresh layout and re-inserts every tiled
+  // view in a loop, arranging only afterwards. insertView locates its target
+  // leaf through the flat-column cache, so if a structural edit leaves that
+  // cache stale, every view after the first is silently dropped.
+  Fixture fixture;
+  for (int i = 0; i < 5; ++i) {
+    fixture.layout.insertView(stub(i), static_cast<int>(fixture.layout.columns().size()));
+  }
+  CHECK_EQ(fixture.layout.columns().size(), size_t{5});
+
+  fixture.layout.arrange(kUsable);
+  for (int i = 0; i < 5; ++i) {
+    CHECK(fixture.layout.columnOf(stub(i)) >= 0);
+    CHECK(fixture.layout.targetBox(stub(i)).width > 0);
+  }
+}
+
+UMBRIEL_TEST(swapOperationsRefreshTheColumnMapping) {
+  // consumeLeft, expelRight, moveViewVertical, and moveColumn reassign leaf
+  // views. The column mapping must be current straight afterwards, without
+  // waiting for the next arrange().
+  Fixture fixture;
+  fixture.addLeaves(2);
+  const int first = fixture.layout.columnOf(stub(0));
+  const int second = fixture.layout.columnOf(stub(1));
+  CHECK(first >= 0);
+  CHECK(second >= 0);
+
+  fixture.layout.moveColumn(first, second);
+  CHECK_EQ(fixture.layout.columnOf(stub(0)), second);
+  CHECK_EQ(fixture.layout.columnOf(stub(1)), first);
 }
 
 UMBRIEL_TEST(unknownViewHasNoColumn) {

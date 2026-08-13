@@ -311,6 +311,7 @@ namespace umbriel {
       node->type = Node::Leaf;
       node->view = view;
       m_root = std::move(node);
+      rebuildFlatColumns();
       return;
     }
     const int count = static_cast<int>(m_flatColumns.size());
@@ -329,6 +330,7 @@ namespace umbriel {
         splitNode(target, view);
       }
     }
+    rebuildFlatColumns();
   }
 
   void DwindleLayout::insertViewIntoColumn(View* view, int columnIndex, int /*rowIndex*/) {
@@ -346,6 +348,7 @@ namespace umbriel {
       return false;
     }
     std::swap(a->view, b->view);
+    rebuildFlatColumns();
     return true;
   }
 
@@ -360,6 +363,7 @@ namespace umbriel {
       return false;
     }
     std::swap(a->view, b->view);
+    rebuildFlatColumns();
     return true;
   }
 
@@ -381,6 +385,7 @@ namespace umbriel {
       return false;
     }
     std::swap(a->view, sibling->view);
+    rebuildFlatColumns();
     return true;
   }
 
@@ -391,8 +396,6 @@ namespace umbriel {
     }
     detachNode(node);
     std::erase_if(m_targets, [view](const Target& t) { return t.view == view; });
-    // Keep the flat-column cache consistent between structural edits (callers may
-    // remove then re-insert before the next arrange()).
     rebuildFlatColumns();
   }
 
@@ -409,6 +412,7 @@ namespace umbriel {
     Node* b = nodeAtFlatIndex(destination);
     if (a != nullptr && b != nullptr && a->type == Node::Leaf && b->type == Node::Leaf) {
       std::swap(a->view, b->view);
+      rebuildFlatColumns();
     }
   }
 
@@ -557,11 +561,13 @@ namespace umbriel {
     }
     if (edge == 0) {
       splitNode(target, newView);
+      rebuildFlatColumns();
       return;
     }
     const bool horizontal = (edge & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) != 0;
     const bool newFirst = (edge & (WLR_EDGE_LEFT | WLR_EDGE_TOP)) != 0;
     splitNodeDirected(target, newView, horizontal, newFirst);
+    rebuildFlatColumns();
   }
 
   // ---- Interactive resize ----

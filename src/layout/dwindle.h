@@ -99,6 +99,10 @@ namespace umbriel {
     [[nodiscard]] Node* boundaryNode(const View* view, uint32_t edge) const;
     void arrangeNode(Node* node, const wlr_box& area);
     void collectColumns(const Node* node);
+    // Refreshes the flat-column cache. Every operation that changes the tree or
+    // reassigns a leaf's view must call this before returning: insertView reads
+    // the cache to locate its target leaf, so a caller that inserts twice with
+    // no arrange() in between would otherwise silently drop the second view.
     void rebuildFlatColumns();
     void detachNode(Node* node);
 

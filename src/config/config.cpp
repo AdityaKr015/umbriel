@@ -93,27 +93,6 @@ namespace umbriel {
       }
     }
 
-    void readInteger(
-        const toml::table& section, std::string_view name, std::string_view fullName, int minimum, int maximum,
-        int& target
-    ) {
-      const toml::node* node = section.get(name);
-      if (node == nullptr) {
-        return;
-      }
-      const auto value = node->value<std::int64_t>();
-      if (!value) {
-        warnAt(node->source(), "ignoring {} (expected integer)", fullName);
-        return;
-      }
-      const std::int64_t used =
-          std::clamp(*value, static_cast<std::int64_t>(minimum), static_cast<std::int64_t>(maximum));
-      if (used != *value) {
-        warnAt(node->source(), "{} = {} out of range, clamped to {}", fullName, *value, used);
-      }
-      target = static_cast<int>(used);
-    }
-
     void readDouble(
         const toml::table& section, std::string_view name, std::string_view fullName, double minimum, double maximum,
         double& target
@@ -132,28 +111,6 @@ namespace umbriel {
         warnAt(node->source(), "{} = {} out of range, clamped to {}", fullName, *value, used);
       }
       target = used;
-    }
-
-    void readBoolean(
-        const toml::table& section, std::string_view name, std::string_view fullName, std::optional<bool>& target
-    ) {
-      const toml::node* node = section.get(name);
-      if (node == nullptr) {
-        return;
-      }
-      if (!node->is_boolean()) {
-        warnAt(node->source(), "ignoring {} (expected boolean)", fullName);
-        return;
-      }
-      target = node->value<bool>();
-    }
-
-    void readBoolean(const toml::table& section, std::string_view name, std::string_view fullName, bool& target) {
-      std::optional<bool> parsed;
-      readBoolean(section, name, fullName, parsed);
-      if (parsed) {
-        target = *parsed;
-      }
     }
 
     void readWidthPresets(const toml::table& section, std::vector<double>& target) {
@@ -213,97 +170,41 @@ namespace umbriel {
       target = std::move(parsed);
     }
 
-    void readOptionalInt(
-        const toml::table& section, std::string_view name, std::string_view fullName, int minimum, int maximum,
-        std::optional<int>& target
-    ) {
-      const toml::node* node = section.get(name);
-      if (node == nullptr) {
-        return;
-      }
-      const auto value = node->value<std::int64_t>();
-      if (!value) {
-        warnAt(node->source(), "ignoring {} (expected integer)", fullName);
-        return;
-      }
-      const std::int64_t used =
-          std::clamp(*value, static_cast<std::int64_t>(minimum), static_cast<std::int64_t>(maximum));
-      if (used != *value) {
-        warnAt(node->source(), "{} = {} out of range, clamped to {}", fullName, *value, used);
-      }
-      target = static_cast<int>(used);
-    }
-
-    void readOptionalDouble(
-        const toml::table& section, std::string_view name, std::string_view fullName, double minimum, double maximum,
-        std::optional<double>& target
-    ) {
-      const toml::node* node = section.get(name);
-      if (node == nullptr) {
-        return;
-      }
-      const auto value = node->value<double>();
-      if (!value || std::isnan(*value)) {
-        warnAt(node->source(), "ignoring {} (expected number)", fullName);
-        return;
-      }
-      const double used = std::clamp(*value, minimum, maximum);
-      if (used != *value) {
-        warnAt(node->source(), "{} = {} out of range, clamped to {}", fullName, *value, used);
-      }
-      target = used;
-    }
-
     void readWorkspaceLayoutOverrides(
         const toml::table& section, std::string_view context, WorkspaceLayoutOverrides& overrides
     ) {
-      const toml::node* layoutNode = section.get("layout");
-      if (layoutNode == nullptr) {
-        return;
-      }
-      const auto* layout = layoutNode->as_table();
-      if (layout == nullptr) {
-        warnAt(layoutNode->source(), "ignoring {}.layout (expected table)", context);
-        return;
-      }
-      warnUnknownKeys(*layout, std::string(context) + ".layout", {"mode", "gap", "width_presets", "scrolling"});
-      if (const toml::node* modeNode = layout->get("mode")) {
-        if (const auto* modeStr = modeNode->as_string()) {
-          const std::string_view sv = modeStr->get();
-          if (sv == "dwindle") {
-            overrides.mode = LayoutMode::Dwindle;
-          } else if (sv == "scrolling") {
-            overrides.mode = LayoutMode::Scrolling;
-          } else {
-            warnAt(
-                modeNode->source(), R"(unknown {}.layout.mode "{}" (expected "scrolling" or "dwindle"))", context, sv
-            );
-          }
-        } else {
-          warnAt(modeNode->source(), R"({}.layout.mode must be a string ("scrolling" or "dwindle"))", context);
-        }
-      }
       const std::string ctx(context);
-      readOptionalInt(*layout, "gap", ctx + ".layout.gap", 0, 500, overrides.gap);
-      readWidthPresetsInto(*layout, ctx + ".layout", overrides.widthPresets);
-      if (const toml::node* scrollingNode = layout->get("scrolling")) {
-        const auto* scrolling = scrollingNode->as_table();
-        if (scrolling == nullptr) {
-          warnAt(scrollingNode->source(), "ignoring {}.layout.scrolling (expected table)", context);
-          return;
-        }
-        warnUnknownKeys(
-            *scrolling, ctx + ".layout.scrolling", {"default_width_fraction", "always_center_single_column"}
-        );
-        readOptionalDouble(
-            *scrolling, "default_width_fraction", ctx + ".layout.scrolling.default_width_fraction", 0.1, 1.0,
-            overrides.scrolling.defaultWidthFraction
-        );
-        readBoolean(
-            *scrolling, "always_center_single_column", ctx + ".layout.scrolling.always_center_single_column",
-            overrides.scrolling.alwaysCenterSingleColumn
-        );
-      }
+      readSection(
+          section, "layout", configStore().mutableDiagnostics(),
+          [&](Section& s) {
+            s.custom("mode");
+            if (const toml::node* modeNode = s.node("mode")) {
+              if (const auto* modeStr = modeNode->as_string()) {
+                const std::string_view sv = modeStr->get();
+                if (sv == "dwindle") {
+                  overrides.mode = LayoutMode::Dwindle;
+                } else if (sv == "scrolling") {
+                  overrides.mode = LayoutMode::Scrolling;
+                } else {
+                  warnAt(
+                      modeNode->source(), R"(unknown {}.layout.mode "{}" (expected "scrolling" or "dwindle"))", context,
+                      sv
+                  );
+                }
+              } else {
+                warnAt(modeNode->source(), R"({}.layout.mode must be a string ("scrolling" or "dwindle"))", context);
+              }
+            }
+            s.integer("gap", 0, 500, overrides.gap);
+            s.custom("width_presets");
+            readWidthPresetsInto(s.table(), ctx + ".layout", overrides.widthPresets);
+            s.sub("scrolling", [&](Section& sc) {
+              sc.real("default_width_fraction", 0.1, 1.0, overrides.scrolling.defaultWidthFraction)
+                  .boolean("always_center_single_column", overrides.scrolling.alwaysCenterSingleColumn);
+            });
+          },
+          ctx + ".layout"
+      );
     }
 
     constexpr size_t kMaxWorkspaces = 64;
@@ -526,152 +427,60 @@ namespace umbriel {
     }
 
     void readLayout(const toml::table& table, Config& loaded) {
-      const toml::node* node = table.get("layout");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* section = node->as_table();
-      if (section == nullptr) {
-        warnAt(node->source(), "ignoring layout (expected table)");
-        return;
-      }
-      warnUnknownKeys(*section, "layout", {"mode", "gap", "width_presets", "scrolling"});
-      if (const toml::node* modeNode = section->get("mode")) {
-        if (const auto* modeStr = modeNode->as_string()) {
-          const std::string_view sv = modeStr->get();
-          if (sv == "dwindle") {
-            loaded.layout.mode = LayoutMode::Dwindle;
-          } else if (sv == "scrolling") {
-            loaded.layout.mode = LayoutMode::Scrolling;
+      readSection(table, "layout", configStore().mutableDiagnostics(), [&](Section& s) {
+        s.custom("mode");
+        if (const toml::node* modeNode = s.node("mode")) {
+          if (const auto* modeStr = modeNode->as_string()) {
+            const std::string_view sv = modeStr->get();
+            if (sv == "dwindle") {
+              loaded.layout.mode = LayoutMode::Dwindle;
+            } else if (sv == "scrolling") {
+              loaded.layout.mode = LayoutMode::Scrolling;
+            } else {
+              warnAt(modeNode->source(), R"(unknown layout.mode "{}" (expected "scrolling" or "dwindle"))", sv);
+            }
           } else {
-            warnAt(modeNode->source(), R"(unknown layout.mode "{}" (expected "scrolling" or "dwindle"))", sv);
+            warnAt(modeNode->source(), R"(layout.mode must be a string ("scrolling" or "dwindle"))");
           }
-        } else {
-          warnAt(modeNode->source(), R"(layout.mode must be a string ("scrolling" or "dwindle"))");
         }
-      }
-      readInteger(*section, "gap", "layout.gap", 0, 500, loaded.layout.gap);
-      readWidthPresets(*section, loaded.layout.widthPresets);
-      if (const toml::node* scrollingNode = section->get("scrolling")) {
-        const auto* scrolling = scrollingNode->as_table();
-        if (scrolling == nullptr) {
-          warnAt(scrollingNode->source(), "ignoring layout.scrolling (expected table)");
-          return;
-        }
-        warnUnknownKeys(*scrolling, "layout.scrolling", {"default_width_fraction", "always_center_single_column"});
-        readDouble(
-            *scrolling, "default_width_fraction", "layout.scrolling.default_width_fraction", 0.1, 1.0,
-            loaded.layout.scrolling.defaultWidthFraction
-        );
-        readBoolean(
-            *scrolling, "always_center_single_column", "layout.scrolling.always_center_single_column",
-            loaded.layout.scrolling.alwaysCenterSingleColumn
-        );
-      }
+        s.integer("gap", 0, 500, loaded.layout.gap);
+        s.custom("width_presets");
+        readWidthPresets(s.table(), loaded.layout.widthPresets);
+        s.sub("scrolling", [&](Section& sc) {
+          sc.real("default_width_fraction", 0.1, 1.0, loaded.layout.scrolling.defaultWidthFraction)
+              .boolean("always_center_single_column", loaded.layout.scrolling.alwaysCenterSingleColumn);
+        });
+      });
     }
 
     void readWorkspaceSettings(const toml::table& table, Config& loaded) {
-      const toml::node* node = table.get("workspaces");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* section = node->as_table();
-      if (section == nullptr) {
-        warnAt(node->source(), "ignoring workspaces (expected table)");
-        return;
-      }
-      warnUnknownKeys(*section, "workspaces", {"back_and_forth"});
-      if (const toml::node* backAndForth = section->get("back_and_forth")) {
-        if (const auto value = backAndForth->value<bool>()) {
-          loaded.workspaces.backAndForth = *value;
-        } else {
-          warnAt(backAndForth->source(), "ignoring workspaces.back_and_forth (expected boolean)");
-        }
-      }
+      readSection(table, "workspaces", configStore().mutableDiagnostics(), [&](Section& s) {
+        s.boolean("back_and_forth", loaded.workspaces.backAndForth);
+      });
     }
 
     void readGeneral(const toml::table& table, Config& loaded) {
-      const toml::node* node = table.get("general");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* section = node->as_table();
-      if (section == nullptr) {
-        warnAt(node->source(), "ignoring general (expected table)");
-        return;
-      }
-      warnUnknownKeys(*section, "general", {"autostart", "prefer_no_csd", "show_cheatsheet", "xwayland"});
-      if (const toml::node* preferNoCsd = section->get("prefer_no_csd")) {
-        if (const auto value = preferNoCsd->value<bool>()) {
-          loaded.appearance.preferNoCsd = *value;
-          warnAt(preferNoCsd->source(), "general.prefer_no_csd is deprecated; use appearance.prefer_no_csd");
-        } else {
-          warnAt(preferNoCsd->source(), "ignoring general.prefer_no_csd (expected boolean)");
+      readSection(table, "general", configStore().mutableDiagnostics(), [&](Section& s) {
+        s.boolean("xwayland", loaded.general.xwayland)
+            .boolean("show_cheatsheet", loaded.general.showCheatsheet)
+            .strings("autostart", loaded.general.autostart);
+        // Deprecated alias for appearance.prefer_no_csd. Read through the same
+        // helper so a wrong type still reports, then note the move.
+        std::optional<bool> preferNoCsd;
+        s.boolean("prefer_no_csd", preferNoCsd);
+        if (preferNoCsd) {
+          loaded.appearance.preferNoCsd = *preferNoCsd;
+          warnAt(
+              s.node("prefer_no_csd")->source(), "general.prefer_no_csd is deprecated; use appearance.prefer_no_csd"
+          );
         }
-      }
-      if (const toml::node* xwayland = section->get("xwayland")) {
-        if (const auto value = xwayland->value<bool>()) {
-          loaded.general.xwayland = *value;
-        } else {
-          warnAt(xwayland->source(), "ignoring general.xwayland (expected boolean)");
-        }
-      }
-      if (const toml::node* showCheatsheet = section->get("show_cheatsheet")) {
-        if (const auto value = showCheatsheet->value<bool>()) {
-          loaded.general.showCheatsheet = *value;
-        } else {
-          warnAt(showCheatsheet->source(), "ignoring general.show_cheatsheet (expected boolean)");
-        }
-      }
-
-      const toml::node* autostart = section->get("autostart");
-      if (autostart == nullptr) {
-        return;
-      }
-      const auto* array = autostart->as_array();
-      if (array == nullptr) {
-        warnAt(autostart->source(), "ignoring general.autostart (expected array of strings)");
-        return;
-      }
-      std::vector<std::string> parsed;
-      parsed.reserve(array->size());
-      for (const auto& entry : *array) {
-        const auto value = entry.value<std::string>();
-        if (!value) {
-          warnAt(entry.source(), "ignoring general.autostart (expected array of strings)");
-          return;
-        }
-        if (value->empty()) {
-          warnAt(entry.source(), "ignoring empty general.autostart entry");
-          continue;
-        }
-        parsed.push_back(*value);
-      }
-      loaded.general.autostart = std::move(parsed);
+      });
     }
 
     void readEnvironment(const toml::table& table, Config& loaded) {
-      const toml::node* node = table.get("environment");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* section = node->as_table();
-      if (section == nullptr) {
-        warnAt(node->source(), "ignoring environment (expected table)");
-        return;
-      }
-
-      std::vector<std::pair<std::string, std::string>> parsed;
-      parsed.reserve(section->size());
-      for (const auto& [key, value] : *section) {
-        const auto entry = value.value<std::string>();
-        if (!entry) {
-          warnAt(value.source(), "ignoring environment.{} (expected string)", key.str());
-          continue;
-        }
-        parsed.emplace_back(std::string(key.str()), *entry);
-      }
-      loaded.environment.variables = std::move(parsed);
+      readSection(table, "environment", configStore().mutableDiagnostics(), [&](Section& s) {
+        s.eachString(loaded.environment.variables);
+      });
     }
 
     void validateKeyboardInput(Config::Input::Keyboard& keyboard, const toml::source_region& source) {

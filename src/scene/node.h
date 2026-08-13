@@ -23,6 +23,15 @@ namespace umbriel {
     SceneNodeKind kind;
   };
 
+  // Produces the pointer to store in wlr_scene_node::data.
+  //
+  // Always store through this rather than assigning `this` directly. A derived
+  // class that also inherits a polymorphic base does not begin with its
+  // SceneNode subobject: the vptr takes offset 0 and SceneNode moves down, so a
+  // raw `this` would not round-trip through sceneNodeFrom. Passing `this` here
+  // makes the compiler apply the offset as an ordinary argument conversion.
+  [[nodiscard]] inline void* sceneNodeData(SceneNode* node) { return node; }
+
   // Recovers a SceneNode from a wlr_scene_node::data pointer, or null when the
   // pointer is something else.
   //

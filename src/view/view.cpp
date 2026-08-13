@@ -123,7 +123,7 @@ namespace umbriel {
     wl_signal_add(&m_toplevel->base->surface->events.unmap, &m_unmap);
 
     m_sceneTree = wlr_scene_xdg_surface_create(m_server->xdgTree(), m_toplevel->base);
-    m_sceneTree->node.data = this;
+    m_sceneTree->node.data = sceneNodeData(this);
     m_toplevel->base->data = m_sceneTree;
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
     m_fullscreenBackdrop = wlr_scene_rect_create(m_sceneTree, 0, 0, config().appearance.backdropColor.data());

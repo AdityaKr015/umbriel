@@ -19,7 +19,7 @@ namespace umbriel {
       kLog.error("failed to create lock surface scene tree");
       return;
     }
-    m_sceneTree->node.data = this;
+    m_sceneTree->node.data = sceneNodeData(this);
 
     m_map.notify = onMap;
     wl_signal_add(&m_lockSurface->surface->events.map, &m_map);

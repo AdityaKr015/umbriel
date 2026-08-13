@@ -48,7 +48,7 @@ namespace umbriel {
       return;
     }
     m_rule = resolveLayerRules(m_layerSurface->namespace_);
-    m_scene->tree->node.data = this;
+    m_scene->tree->node.data = sceneNodeData(this);
     m_layerSurface->data = this;
 
     m_map.notify = onMap;

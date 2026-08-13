@@ -131,19 +131,6 @@ namespace umbriel {
       target = used;
     }
 
-    void readString(const toml::table& section, std::string_view name, std::string_view fullName, std::string& target) {
-      const toml::node* node = section.get(name);
-      if (node == nullptr) {
-        return;
-      }
-      const auto value = node->value<std::string>();
-      if (!value) {
-        warnAt(node->source(), "ignoring {} (expected string)", fullName);
-        return;
-      }
-      target = *value;
-    }
-
     void readBoolean(
         const toml::table& section, std::string_view name, std::string_view fullName, std::optional<bool>& target
     ) {
@@ -164,26 +151,6 @@ namespace umbriel {
       if (parsed) {
         target = *parsed;
       }
-    }
-
-    void readColor(
-        const toml::table& section, std::string_view name, std::string_view fullName, std::array<float, 4>& target
-    ) {
-      const toml::node* node = section.get(name);
-      if (node == nullptr) {
-        return;
-      }
-      const auto value = node->value<std::string>();
-      if (!value) {
-        warnAt(node->source(), "ignoring {} (expected color string)", fullName);
-        return;
-      }
-      std::array<float, 4> parsed;
-      if (!parseColor(*value, parsed)) {
-        warnAt(node->source(), "ignoring {} (invalid color '{}')", fullName, *value);
-        return;
-      }
-      target = parsed;
     }
 
     void readWidthPresets(const toml::table& section, std::vector<double>& target) {

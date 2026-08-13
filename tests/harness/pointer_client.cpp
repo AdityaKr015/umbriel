@@ -19,9 +19,9 @@
 #include "wlr-virtual-pointer-unstable-v1-client-protocol.h"
 
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <print>
 #include <string>
 #include <vector>
 #include <wayland-client.h>
@@ -63,7 +63,7 @@ namespace {
 
 int main(int argc, char** argv) {
   if (argc < 4) {
-    std::fprintf(stderr, "usage: %s <width> <height> <command>...\n", argv[0]);
+    std::println(stderr, "usage: {} <width> <height> <command>...", argv[0]);
     return EXIT_FAILURE;
   }
   const auto extentWidth = static_cast<uint32_t>(std::atoi(argv[1]));
@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
 
   wl_display* display = wl_display_connect(nullptr);
   if (display == nullptr) {
-    std::fprintf(stderr, "pointer-client: cannot connect to WAYLAND_DISPLAY\n");
+    std::println(stderr, "pointer-client: cannot connect to WAYLAND_DISPLAY");
     return EXIT_FAILURE;
   }
 
@@ -81,13 +81,13 @@ int main(int argc, char** argv) {
   wl_display_roundtrip(display);
 
   if (state.manager == nullptr) {
-    std::fprintf(stderr, "pointer-client: compositor does not offer zwlr_virtual_pointer_manager_v1\n");
+    std::println(stderr, "pointer-client: compositor does not offer zwlr_virtual_pointer_manager_v1");
     return EXIT_FAILURE;
   }
 
   zwlr_virtual_pointer_v1* pointer = zwlr_virtual_pointer_manager_v1_create_virtual_pointer(state.manager, state.seat);
   if (pointer == nullptr) {
-    std::fprintf(stderr, "pointer-client: failed to create a virtual pointer\n");
+    std::println(stderr, "pointer-client: failed to create a virtual pointer");
     return EXIT_FAILURE;
   }
 
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
     const std::string& command = args[i];
     auto needs = [&](size_t count) {
       if (i + count >= args.size()) {
-        std::fprintf(stderr, "pointer-client: '%s' needs %zu argument(s)\n", command.c_str(), count);
+        std::println(stderr, "pointer-client: '{}' needs {} argument(s)", command, count);
         std::exit(EXIT_FAILURE);
       }
     };
@@ -122,13 +122,13 @@ int main(int argc, char** argv) {
         zwlr_virtual_pointer_v1_button(pointer, nextTime(), button, WL_POINTER_BUTTON_STATE_RELEASED);
       }
     } else {
-      std::fprintf(stderr, "pointer-client: unknown command '%s'\n", command.c_str());
+      std::println(stderr, "pointer-client: unknown command '{}'", command);
       return EXIT_FAILURE;
     }
 
     zwlr_virtual_pointer_v1_frame(pointer);
     if (wl_display_roundtrip(display) < 0) {
-      std::fprintf(stderr, "pointer-client: connection lost\n");
+      std::println(stderr, "pointer-client: connection lost");
       return EXIT_FAILURE;
     }
   }

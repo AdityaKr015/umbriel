@@ -152,8 +152,8 @@ UMBRIEL_TEST(perDigitWorkspaceBindsCollapseToOneRow) {
   CHECK_EQ(countRows(rows, KeybindAction::WorkspaceSwitch), size_t{1});
   CHECK(rows.size() == 1);
   if (!rows.empty()) {
-    CHECK(rows[0].chord.find("1") != std::string::npos);
-    CHECK(rows[0].action.find("1-9") != std::string::npos);
+    CHECK(rows[0].chord.contains("1"));
+    CHECK(rows[0].action.contains("1-9"));
   }
 }
 
@@ -161,6 +161,7 @@ UMBRIEL_TEST(anIncompleteWorkspaceRunIsLeftAlone) {
   // Only three digits bound: collapsing would misreport the range, so the rows
   // stay as they are.
   std::vector<Keybind> binds;
+  binds.reserve(3);
   for (int i = 0; i < 3; ++i) {
     binds.push_back(workspaceBind(static_cast<uint32_t>(XKB_KEY_1 + i), std::to_string(i + 1)));
   }

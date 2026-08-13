@@ -121,7 +121,7 @@ namespace umbriel {
     return wlr_output_layout_add_auto(m_server->outputLayout(), m_output);
   }
 
-  void Output::applyConfig() {
+  void Output::applyOutputState() {
     applyConfiguredState();
     addToLayout();
     markDirty(Dirty::LayerArrange | Dirty::Banner);

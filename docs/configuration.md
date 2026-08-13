@@ -5,6 +5,11 @@ path passed with `umbriel -c <path>`. Changes apply immediately on save; invalid
 values keep the previous state. You can also bind `config-reload` to a key for
 manual reloads.
 
+Reloads are transactional. A parse failure keeps the committed configuration
+and live compositor state, while diagnostics and include watches update so
+fixing an included file can recover automatically. Successful reloads with no
+runtime effects leave active overlays and output state untouched.
+
 ## Include
 
 ```toml

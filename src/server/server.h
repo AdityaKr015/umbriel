@@ -56,6 +56,7 @@ struct wlr_virtual_pointer_manager_v1;
 struct wlr_virtual_pointer_v1;
 
 namespace umbriel {
+  struct ConfigEffects;
 
   // Slow tick that ferries wl_surface.frame callbacks to toplevels that are
   // mapped but not on the active workspace. wlroots' scene helper only walks
@@ -263,7 +264,7 @@ namespace umbriel {
     void updateSeatCapabilities();
     void beginSessionLock(wlr_session_lock_v1* lock);
     void recreateRenderer();
-    void applyConfig();
+    void applyConfig(const ConfigEffects& effects);
     void showConfigDiagnostics();
     void clearNormalFocus() { m_focus.clearNormalFocus(); }
     void setLockBlankEnabled(bool enabled);

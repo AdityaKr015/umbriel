@@ -995,24 +995,23 @@ namespace umbriel {
       }
     }
     sortDiagnostics();
-    commit(std::move(loaded), rootFileMissing(m_rootPath));
+    (void)commit(std::move(loaded), rootFileMissing(m_rootPath));
   }
 
-  bool ConfigStore::reload() {
+  ConfigReloadResult ConfigStore::reload() {
     Config loaded;
     const bool ok = parseInto(loaded);
     sortDiagnostics();
     if (!ok) {
       kLog.warn("config reload failed; keeping previous configuration");
-      return false;
+      return {};
     }
-    commit(std::move(loaded), rootFileMissing(m_rootPath));
-    return true;
+    return commit(std::move(loaded), rootFileMissing(m_rootPath));
   }
 
   void loadConfig(const char* explicitPath) { configStore().load(explicitPath); }
 
-  bool reloadConfig() { return configStore().reload(); }
+  ConfigReloadResult reloadConfig() { return configStore().reload(); }
 
   const std::vector<std::filesystem::path>& configWatchPaths() { return configStore().watchPaths(); }
 

@@ -28,13 +28,18 @@ namespace umbriel {
     });
   }
 
-  void ConfigStore::commit(Config&& config, bool fileMissing) {
+  ConfigReloadResult ConfigStore::commit(Config&& config, bool fileMissing) {
     // Computed before the move, and only after the first load: everything is new
     // the first time through.
-    m_lastChange = m_generation == 0 ? ConfigChange::everything() : ConfigChange::between(m_config, config);
+    ConfigReloadResult result{
+        .success = true,
+        .change = m_generation == 0 ? ConfigChange::everything() : ConfigChange::between(m_config, config),
+        .effects = m_generation == 0 ? ConfigEffects::everything() : ConfigEffects::between(m_config, config),
+    };
     m_config = std::move(config);
     m_fileMissing = fileMissing;
     ++m_generation;
+    return result;
   }
 
   void ConfigStore::setRootPath(std::filesystem::path path, bool explicitPath) {

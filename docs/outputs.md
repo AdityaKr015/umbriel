@@ -91,6 +91,11 @@ survive by name, then by position; windows from removed static workspaces move
 to the nearest survivor. Switching to dynamic mode preserves populated and
 active workspaces, renumbers them, and appends a trailing empty workspace.
 
+Layout-only reloads refresh workspace geometry without reconciling the
+inventory or reapplying output mode, scale, transform, or placement. Border
+width changes also refresh workspace spacing because borders contribute to the
+resolved tile gap.
+
 ---
 
 # Workspace Rules

@@ -45,7 +45,7 @@ namespace umbriel {
     // own — marking work that nothing then asks for would simply never happen.
     void markDirty(Dirty what);
     void onGammaChanged(wlr_gamma_control_v1* control);
-    void applyConfig();
+    void applyOutputState();
     void markBlurBackgroundDirty();
     void handleExternalConfigChange();
 

@@ -19,6 +19,7 @@
 namespace umbriel {
 
   inline constexpr size_t kMaxWorkspaces = 64;
+  struct ConfigReloadResult;
 
   // Per-workspace layout overrides (all optional → inherit Config::Layout).
   struct WorkspaceLayoutOverrides {
@@ -296,7 +297,7 @@ namespace umbriel {
 
   [[nodiscard]] const Config& config();
   void loadConfig(const char* explicitPath);
-  [[nodiscard]] bool reloadConfig();
+  [[nodiscard]] ConfigReloadResult reloadConfig();
   [[nodiscard]] const std::vector<std::filesystem::path>& configWatchPaths();
   [[nodiscard]] const std::vector<ConfigDiagnostic>& configDiagnostics();
   [[nodiscard]] const std::filesystem::path& configRootPath();

@@ -145,6 +145,7 @@ namespace umbriel {
     void updateBorderGeometry(int contentWidth, int contentHeight);
     void applyCornerRadius();
     void reloadBackdropColor() { m_presentation.reloadBackdropColor(); }
+    void refreshConfigChrome();
     void updateBlur();
     void updateBlur(int contentWidth, int contentHeight);
     [[nodiscard]] SurfaceBlurOptions blurOptions() const { return m_decoration.blurOptions(); }

@@ -29,7 +29,7 @@ namespace umbriel {
     void load(const char* explicitPath);
     // Re-parse. On failure the previous configuration is kept and the generation
     // does not move: a config with a syntax error must not take the session down.
-    bool reload();
+    [[nodiscard]] ConfigReloadResult reload();
 
     [[nodiscard]] const Config& config() const { return m_config; }
     [[nodiscard]] const std::vector<ConfigDiagnostic>& diagnostics() const { return m_diagnostics; }
@@ -40,8 +40,6 @@ namespace umbriel {
     // found. Drives the "no config" notice on the cheatsheet.
     [[nodiscard]] bool fileMissing() const { return m_fileMissing; }
     [[nodiscard]] uint64_t generation() const { return m_generation; }
-    // What the most recent load or reload altered. Everything, after a first load.
-    [[nodiscard]] const ConfigChange& lastChange() const { return m_lastChange; }
 
     // --- Writers, used only by the loader in config.cpp ---
     //
@@ -61,7 +59,7 @@ namespace umbriel {
     // — so without this the list jumps around the file.
     void sortDiagnostics();
     // Adopt a successfully parsed config and bump the generation.
-    void commit(Config&& config, bool fileMissing);
+    [[nodiscard]] ConfigReloadResult commit(Config&& config, bool fileMissing);
     void setRootPath(std::filesystem::path path, bool explicitPath);
 
   private:
@@ -72,7 +70,6 @@ namespace umbriel {
     bool m_explicitPath = false;
     bool m_fileMissing = false;
     uint64_t m_generation = 0;
-    ConfigChange m_lastChange;
   };
 
   // The process-wide store.

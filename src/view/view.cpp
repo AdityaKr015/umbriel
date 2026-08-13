@@ -711,6 +711,15 @@ namespace umbriel {
     m_decoration.updateBorderGeometry(contentWidth, contentHeight);
   }
 
+  void View::refreshConfigChrome() {
+    setBorderFocused(false);
+    updateBorderGeometry();
+    applyCornerRadius();
+    applyDynamicRules();
+    updateShadow();
+    reloadBackdropColor();
+  }
+
   void View::beginCloseAnimation() {
     if (!m_mapped
         || !m_onActiveWorkspace

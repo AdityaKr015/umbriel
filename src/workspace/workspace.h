@@ -98,7 +98,7 @@ namespace umbriel {
     void showSwitchViews();
     void endSwitchTransition();
     void setSlideOffset(double y);
-    void applyConfig(std::string name, size_t index, ResolvedLayoutConfig layoutConfig);
+    void applyLayoutConfig(ResolvedLayoutConfig layoutConfig);
     void rename(std::string name, size_t index);
 
     [[nodiscard]] std::vector<View*> allViews() const { return m_views; }
@@ -164,7 +164,8 @@ namespace umbriel {
     void select(Workspace* workspace);
     void deactivate(Workspace* workspace);
     Workspace* createWorkspace(const char* name);
-    void reconcileConfig();
+    void reconcileInventory();
+    void refreshLayouts();
     void reconcileDynamic();
     // Every workspace, not just the active one: a client can change fullscreen
     // state while another workspace is showing, and that workspace still owes

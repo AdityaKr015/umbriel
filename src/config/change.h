@@ -9,18 +9,18 @@ namespace umbriel {
   // Which source sections a reload altered. Runtime effects are derived
   // separately because one section can invalidate several subsystems.
   struct ConfigChange {
-    bool appearance = true;
-    bool overview = true;
-    bool layout = true;
-    bool workspaces = true;
-    bool general = true;
-    bool environment = true;
-    bool input = true;
-    bool keybinds = true;
-    bool outputs = true;
-    bool windowRules = true;
-    bool layerRules = true;
-    bool workspaceRules = true;
+    bool appearance = false;
+    bool overview = false;
+    bool layout = false;
+    bool workspaces = false;
+    bool general = false;
+    bool environment = false;
+    bool input = false;
+    bool keybinds = false;
+    bool outputs = false;
+    bool windowRules = false;
+    bool layerRules = false;
+    bool workspaceRules = false;
 
     [[nodiscard]] bool any() const {
       return appearance
@@ -41,8 +41,47 @@ namespace umbriel {
     [[nodiscard]] std::string summary() const;
 
     // What a first load reports: everything is new.
-    [[nodiscard]] static ConfigChange everything() { return {}; }
+    [[nodiscard]] static ConfigChange everything();
     [[nodiscard]] static ConfigChange between(const Config& before, const Config& after);
+  };
+
+  // Runtime subsystems invalidated by a successful reload. These are effects,
+  // not source sections: one source change can invalidate several consumers.
+  struct ConfigEffects {
+    bool outputState = false;
+    bool workspaceInventory = false;
+    bool workspaceLayout = false;
+    bool sceneBlur = false;
+    bool viewChrome = false;
+    bool layerEffects = false;
+    bool input = false;
+    bool overviewPresentation = false;
+
+    [[nodiscard]] bool any() const {
+      return outputState
+          || workspaceInventory
+          || workspaceLayout
+          || sceneBlur
+          || viewChrome
+          || layerEffects
+          || input
+          || overviewPresentation;
+    }
+
+    [[nodiscard]] bool invalidatesOverview() const {
+      return outputState || workspaceInventory || workspaceLayout || viewChrome || overviewPresentation;
+    }
+
+    [[nodiscard]] std::string summary() const;
+
+    [[nodiscard]] static ConfigEffects everything();
+    [[nodiscard]] static ConfigEffects between(const Config& before, const Config& after);
+  };
+
+  struct ConfigReloadResult {
+    bool success = false;
+    ConfigChange change;
+    ConfigEffects effects;
   };
 
 } // namespace umbriel

@@ -24,9 +24,14 @@ if [[ ! -x $POINTER ]]; then
   exit 1
 fi
 
+readonly CONFIG_BACKUP="$UMBRIEL_CONFIG.overview.bak"
 CLIENT_PIDS=()
 cleanup() {
   "$UMBRIEL" msg overview-close > /dev/null 2>&1 || true
+  if [[ -f $CONFIG_BACKUP ]]; then
+    cp "$CONFIG_BACKUP" "$UMBRIEL_CONFIG"
+    "$UMBRIEL" msg config-reload > /dev/null 2>&1 || true
+  fi
   for pid in "${CLIENT_PIDS[@]:-}"; do
     kill -KILL "$pid" 2>/dev/null || true
   done
@@ -81,6 +86,7 @@ if [[ $("$UMBRIEL" windows --json | jq 'length') -ne 1 ]]; then
 fi
 
 # Park the cursor over the output so the notch resolves to this group.
+cp "$UMBRIEL_CONFIG" "$CONFIG_BACKUP"
 pointer move $((OUTPUT_W / 2)) $((OUTPUT_H / 2))
 "$UMBRIEL" msg overview-open > /dev/null
 sleep 0.6
@@ -97,6 +103,22 @@ if [[ $(notch_activates -1) != "none" ]]; then
   exit 1
 fi
 
+# Failed reloads keep both the committed config and live overview state.
+printf '[layout\n' > "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+expect_notch 1 2
+expect_notch -1 1
+
+# A successful source change with no overview-invalidating runtime effect is
+# equally inert. back_and_forth is read directly when switching workspaces.
+{
+  cat "$CONFIG_BACKUP"
+  printf '\n[workspaces]\nback_and_forth = true\n'
+} > "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+expect_notch 1 2
+expect_notch -1 1
+
 "$UMBRIEL" msg overview-close > /dev/null
 
-echo "wheel notches step the filmstrip both ways and clamp at the top"
+echo "wheel steps survive failed and irrelevant reloads, and clamp at the top"

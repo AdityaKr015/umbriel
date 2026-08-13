@@ -1,6 +1,6 @@
+#include "config/change.h"
 #include "config/config.h"
 #include "config/config_watcher.h"
-#include "config/store.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/gestures.h"
@@ -157,20 +157,19 @@ namespace umbriel {
       applyNaturalScroll(libinputDevice, device, config().input.mouse.naturalScroll, "input.mouse.natural_scroll");
     }
   } // namespace
-  void Server::applyConfig() {
-    const ConfigChange& changed = configStore().lastChange();
-    if (!changed.any()) {
+  void Server::applyConfig(const ConfigEffects& effects) {
+    if (!effects.any()) {
       return;
     }
 
-    if (changed.appearance) {
+    if (effects.sceneBlur) {
       const Config::Appearance::Blur& blur = config().appearance.blur;
       wlr_scene_set_blur_data(
           m_scene, blur.passes, blur.radius, static_cast<float>(blur.noise), static_cast<float>(blur.brightness),
           static_cast<float>(blur.contrast), static_cast<float>(blur.saturation)
       );
     }
-    if (changed.input) {
+    if (effects.input) {
       for (const auto& keyboard : m_keyboards) {
         keyboard->applyConfig();
       }
@@ -179,39 +178,32 @@ namespace umbriel {
       }
       m_cursor->applyConfig();
     }
-    // Outputs also own their workspace inventory, so a [[workspace]] change has
-    // to reach them even when no [output] block moved.
-    if (changed.outputs || changed.workspaceRules || changed.layout) {
+    if (effects.outputState) {
       for (const auto& output : m_outputs) {
-        output->applyConfig();
+        output->applyOutputState();
+      }
+      updateOutputManagerConfig();
+    }
+    if (effects.workspaceInventory) {
+      for (const auto& output : m_outputs) {
         if (WorkspaceGroup* group = output->workspaceGroup()) {
-          group->reconcileConfig();
+          group->reconcileInventory();
         }
       }
     }
-    // Window rules feed opacity, blur, and floating state; appearance feeds the
-    // borders and shadow. Either one makes a view's chrome stale.
-    if (changed.appearance || changed.windowRules) {
+    if (effects.workspaceLayout) {
+      for (const auto& output : m_outputs) {
+        if (WorkspaceGroup* group = output->workspaceGroup()) {
+          group->refreshLayouts();
+        }
+      }
+    }
+    if (effects.viewChrome) {
       for (const auto& view : m_registry.all()) {
-        if (!view->mapped()) {
-          continue;
-        }
-        view->setBorderFocused(false);
-        view->updateBorderGeometry();
-        view->applyCornerRadius();
-        view->applyDynamicRules();
-        view->updateShadow();
-        view->reloadBackdropColor();
-      }
-    }
-    if (changed.appearance || changed.layerRules) {
-      for (const auto& layer : m_layerSurfaces) {
-        if (layer->mapped()) {
-          layer->applyConfig();
+        if (view->mapped()) {
+          view->refreshConfigChrome();
         }
       }
-    }
-    if (changed.appearance) {
       applyKdeDecorationDefault(m_serverDecorationManager);
       if (m_xdgDecorationManager != nullptr) {
         wlr_xdg_toplevel_decoration_v1* decoration = nullptr;
@@ -221,25 +213,35 @@ namespace umbriel {
           }
         }
       }
-      // The chrome loop above cleared every focus ring; put it back.
+      // The view refresh cleared every focus ring; put the active one back.
       refocus();
       markDirty(Dirty::Backdrop);
       if (m_sessionLocked) {
         updateLockBlank();
       }
     }
-    if (changed.outputs || changed.workspaceRules) {
-      updateOutputManagerConfig();
+    if (effects.layerEffects) {
+      for (const auto& layer : m_layerSurfaces) {
+        if (layer->mapped()) {
+          layer->applyConfig();
+        }
+      }
     }
   }
 
   void Server::handleConfigReload() {
-    // Workspace inventory is about to be reconciled; overview state indexes it.
-    m_overview->forceClose();
-    if (reloadConfig()) {
-      applyConfig();
-      const std::string changed = configStore().lastChange().summary();
-      kLog.info("config reloaded ({})", changed.empty() ? "no changes" : changed);
+    const ConfigReloadResult result = reloadConfig();
+    if (result.success) {
+      if (result.effects.invalidatesOverview()) {
+        m_overview->forceClose();
+      }
+      applyConfig(result.effects);
+      const std::string changed = result.change.summary();
+      const std::string effects = result.effects.summary();
+      kLog.info(
+          "config reloaded (sections: {}; effects: {})", changed.empty() ? "none" : changed,
+          effects.empty() ? "none" : effects
+      );
     }
     showConfigDiagnostics();
     markDirty(Dirty::Cheatsheet);

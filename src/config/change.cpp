@@ -1,8 +1,98 @@
 #include "config/change.h"
 
+#include <algorithm>
 #include <string_view>
 
 namespace umbriel {
+  namespace {
+
+    const OutputRule* findOutputRule(const Config& config, const std::string& name) {
+      const auto rule =
+          std::ranges::find_if(config.outputs, [&](const OutputRule& candidate) { return candidate.name == name; });
+      return rule != config.outputs.end() ? &*rule : nullptr;
+    }
+
+    template <typename Equal> bool outputProjectionChanged(const Config& before, const Config& after, Equal equal) {
+      for (const OutputRule& rule : before.outputs) {
+        if (!equal(&rule, findOutputRule(after, rule.name))) {
+          return true;
+        }
+      }
+      for (const OutputRule& rule : after.outputs) {
+        if (findOutputRule(before, rule.name) == nullptr && !equal(nullptr, &rule)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    bool sameOutputState(const OutputRule* before, const OutputRule* after) {
+      static const OutputRule defaults;
+      const OutputRule& lhs = before != nullptr ? *before : defaults;
+      const OutputRule& rhs = after != nullptr ? *after : defaults;
+      return lhs.mode == rhs.mode
+          && lhs.position == rhs.position
+          && lhs.scale == rhs.scale
+          && lhs.transform == rhs.transform;
+    }
+
+    bool sameWorkspaceInventory(const OutputRule* before, const OutputRule* after) {
+      static const OutputRule defaults;
+      const OutputRule& lhs = before != nullptr ? *before : defaults;
+      const OutputRule& rhs = after != nullptr ? *after : defaults;
+      return lhs.workspaces == rhs.workspaces;
+    }
+
+  } // namespace
+
+  ConfigEffects ConfigEffects::between(const Config& before, const Config& after) {
+    const bool outputState = outputProjectionChanged(before, after, sameOutputState);
+    const bool workspaceInventory = outputProjectionChanged(before, after, sameWorkspaceInventory);
+    const bool sceneBlur = before.appearance.blur != after.appearance.blur;
+    return {
+        .outputState = outputState,
+        .workspaceInventory = workspaceInventory,
+        .workspaceLayout = workspaceInventory
+            || before.layout != after.layout
+            || before.workspaceRules != after.workspaceRules
+            || before.appearance.totalBorderWidth() != after.appearance.totalBorderWidth(),
+        .sceneBlur = sceneBlur,
+        .viewChrome = before.appearance != after.appearance || before.windowRules != after.windowRules,
+        .layerEffects = sceneBlur || before.layerRules != after.layerRules,
+        .input = before.input != after.input,
+        .overviewPresentation = before.overview != after.overview,
+    };
+  }
+
+  ConfigEffects ConfigEffects::everything() {
+    return {
+        .outputState = true,
+        .workspaceInventory = true,
+        .workspaceLayout = true,
+        .sceneBlur = true,
+        .viewChrome = true,
+        .layerEffects = true,
+        .input = true,
+        .overviewPresentation = true,
+    };
+  }
+
+  ConfigChange ConfigChange::everything() {
+    return {
+        .appearance = true,
+        .overview = true,
+        .layout = true,
+        .workspaces = true,
+        .general = true,
+        .environment = true,
+        .input = true,
+        .keybinds = true,
+        .outputs = true,
+        .windowRules = true,
+        .layerRules = true,
+        .workspaceRules = true,
+    };
+  }
 
   ConfigChange ConfigChange::between(const Config& before, const Config& after) {
     return {
@@ -47,4 +137,25 @@ namespace umbriel {
     return out;
   }
 
+  std::string ConfigEffects::summary() const {
+    std::string out;
+    const auto add = [&out](bool changed, std::string_view name) {
+      if (!changed) {
+        return;
+      }
+      if (!out.empty()) {
+        out += ", ";
+      }
+      out += name;
+    };
+    add(outputState, "output state");
+    add(workspaceInventory, "workspace inventory");
+    add(workspaceLayout, "workspace layout");
+    add(sceneBlur, "scene blur");
+    add(viewChrome, "view chrome");
+    add(layerEffects, "layer effects");
+    add(input, "input");
+    add(overviewPresentation, "overview presentation");
+    return out;
+  }
 } // namespace umbriel

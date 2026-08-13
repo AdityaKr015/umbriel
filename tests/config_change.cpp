@@ -3,6 +3,7 @@
 
 using umbriel::Config;
 using umbriel::ConfigChange;
+using umbriel::ConfigEffects;
 using umbriel::Keybind;
 using umbriel::LayerRule;
 using umbriel::OutputRule;
@@ -172,6 +173,134 @@ UMBRIEL_TEST(ruleEqualitySeesAnOptionChangeUnderTheSamePattern) {
   after.windowRules.push_back(std::move(second));
 
   CHECK(ConfigChange::between(before, after).windowRules);
+}
+
+UMBRIEL_TEST(identicalConfigsProduceNoRuntimeEffects) {
+  const Config before;
+  const Config after;
+  CHECK(!ConfigEffects::between(before, after).any());
+}
+
+UMBRIEL_TEST(firstLoadInvalidatesEveryRuntimeConsumer) {
+  const ConfigEffects effects = ConfigEffects::everything();
+  CHECK(effects.outputState);
+  CHECK(effects.workspaceInventory);
+  CHECK(effects.workspaceLayout);
+  CHECK(effects.sceneBlur);
+  CHECK(effects.viewChrome);
+  CHECK(effects.layerEffects);
+  CHECK(effects.input);
+  CHECK(effects.overviewPresentation);
+}
+
+UMBRIEL_TEST(borderWidthRefreshesChromeAndWorkspaceLayout) {
+  const Config before;
+  Config after;
+  after.appearance.borderWidth += 1;
+
+  const ConfigEffects effects = ConfigEffects::between(before, after);
+  CHECK(effects.workspaceLayout);
+  CHECK(effects.viewChrome);
+  CHECK(!effects.outputState);
+  CHECK(!effects.workspaceInventory);
+  CHECK(!effects.sceneBlur);
+  CHECK(!effects.layerEffects);
+  CHECK(!effects.input);
+}
+
+UMBRIEL_TEST(layoutGapDoesNotReapplyOutputState) {
+  const Config before;
+  Config after;
+  after.layout.gap += 1;
+
+  const ConfigEffects effects = ConfigEffects::between(before, after);
+  CHECK(effects.workspaceLayout);
+  CHECK(!effects.outputState);
+  CHECK(!effects.workspaceInventory);
+  CHECK(!effects.viewChrome);
+}
+
+UMBRIEL_TEST(outputStateAndWorkspaceInventoryAreIndependent) {
+  Config before;
+  OutputRule original;
+  original.name = "HEADLESS-1";
+  before.outputs.push_back(original);
+
+  Config stateChanged = before;
+  stateChanged.outputs[0].scale = 2.0;
+  const ConfigEffects stateEffects = ConfigEffects::between(before, stateChanged);
+  CHECK(stateEffects.outputState);
+  CHECK(!stateEffects.workspaceInventory);
+  CHECK(!stateEffects.workspaceLayout);
+
+  Config inventoryChanged = before;
+  inventoryChanged.outputs[0].workspaces = std::vector<std::string>{"1", "dev"};
+  const ConfigEffects inventoryEffects = ConfigEffects::between(before, inventoryChanged);
+  CHECK(!inventoryEffects.outputState);
+  CHECK(inventoryEffects.workspaceInventory);
+  CHECK(inventoryEffects.workspaceLayout);
+}
+
+UMBRIEL_TEST(blurRulesAndInputReachOnlyTheirConsumers) {
+  const Config before;
+
+  Config blurred;
+  blurred.appearance.blur.radius += 1;
+  const ConfigEffects blurEffects = ConfigEffects::between(before, blurred);
+  CHECK(blurEffects.sceneBlur);
+  CHECK(blurEffects.viewChrome);
+  CHECK(blurEffects.layerEffects);
+  CHECK(!blurEffects.workspaceLayout);
+
+  Config windowed;
+  windowed.windowRules.push_back(WindowRule{});
+  const ConfigEffects windowEffects = ConfigEffects::between(before, windowed);
+  CHECK(windowEffects.viewChrome);
+  CHECK(!windowEffects.layerEffects);
+
+  Config layered;
+  layered.layerRules.push_back(LayerRule{});
+  const ConfigEffects layerEffects = ConfigEffects::between(before, layered);
+  CHECK(layerEffects.layerEffects);
+  CHECK(!layerEffects.viewChrome);
+
+  Config inputChanged;
+  inputChanged.input.keyboard.repeatRate += 1;
+  const ConfigEffects inputEffects = ConfigEffects::between(before, inputChanged);
+  CHECK(inputEffects.input);
+  CHECK(!inputEffects.outputState);
+  CHECK(!inputEffects.workspaceLayout);
+  CHECK(!inputEffects.viewChrome);
+}
+
+UMBRIEL_TEST(overviewInvalidationExcludesIrrelevantRuntimeEffects) {
+  const Config before;
+
+  Config overviewChanged;
+  overviewChanged.overview.zoom += 0.1;
+  const ConfigEffects overviewEffects = ConfigEffects::between(before, overviewChanged);
+  CHECK(overviewEffects.overviewPresentation);
+  CHECK(overviewEffects.invalidatesOverview());
+  CHECK_EQ(overviewEffects.summary(), std::string("overview presentation"));
+
+  Config generalChanged;
+  generalChanged.general.autostart.emplace_back("true");
+  const ConfigEffects generalEffects = ConfigEffects::between(before, generalChanged);
+  CHECK(!generalEffects.any());
+  CHECK(!generalEffects.invalidatesOverview());
+
+  Config inputChanged;
+  inputChanged.input.keyboard.repeatDelay += 1;
+  const ConfigEffects inputEffects = ConfigEffects::between(before, inputChanged);
+  CHECK(inputEffects.any());
+  CHECK(!inputEffects.invalidatesOverview());
+}
+
+UMBRIEL_TEST(aFailedReloadResultCarriesNoChangesOrEffects) {
+  const umbriel::ConfigReloadResult result;
+  CHECK(!result.success);
+  CHECK(!result.change.any());
+  CHECK(!result.effects.any());
 }
 
 int main() { return RUN_TESTS(); }

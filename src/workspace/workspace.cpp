@@ -690,8 +690,7 @@ namespace umbriel {
     }
   }
 
-  void Workspace::applyConfig(std::string name, size_t index, ResolvedLayoutConfig layoutConfig) {
-    rename(std::move(name), index);
+  void Workspace::applyLayoutConfig(ResolvedLayoutConfig layoutConfig) {
     m_layoutConfig = std::move(layoutConfig);
     if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
       m_layout->setConfig(&m_layoutConfig);
@@ -773,7 +772,7 @@ namespace umbriel {
     return result;
   }
 
-  void WorkspaceGroup::reconcileConfig() {
+  void WorkspaceGroup::reconcileInventory() {
     slideFinish();
     const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
     auto resolvedSet = resolveWorkspacesForOutput(config(), outputName);
@@ -796,8 +795,7 @@ namespace umbriel {
         appendDynamicWorkspace();
       }
       for (size_t index = 0; index < m_workspaces.size(); ++index) {
-        const std::string name = std::to_string(index + 1);
-        m_workspaces[index]->applyConfig(name, index, resolveWorkspaceLayout(config(), outputName, name, index));
+        m_workspaces[index]->rename(std::to_string(index + 1), index);
       }
       if (m_previous == m_active) {
         m_previous = nullptr;
@@ -824,7 +822,7 @@ namespace umbriel {
         next[i] = std::move(old[i]);
       }
       if (next[i] != nullptr) {
-        next[i]->applyConfig(std::move(resolved[i].name), i, std::move(resolved[i].layout));
+        next[i]->rename(resolved[i].name, i);
       } else {
         next[i] = createConfiguredWorkspace(std::move(resolved[i]), i);
       }
@@ -874,6 +872,16 @@ namespace umbriel {
     kLog.info("reconciled {} to {} workspaces ({} windows relocated)", outputName, m_workspaces.size(), relocatedViews);
   }
 
+  void WorkspaceGroup::refreshLayouts() {
+    const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
+    for (const auto& workspace : m_workspaces) {
+      ResolvedLayoutConfig layout = resolveWorkspaceLayout(config(), outputName, workspace->name(), workspace->index());
+      if (workspace->layoutConfig() != layout) {
+        workspace->applyLayoutConfig(std::move(layout));
+      }
+    }
+  }
+
   void WorkspaceGroup::flushArrange() {
     // Indexed, and the bound re-read every step: arrange() reaches the overview
     // and the view animations, and a workspace list that grows or shrinks under
@@ -913,8 +921,9 @@ namespace umbriel {
       ResolvedLayoutConfig layout = resolveWorkspaceLayout(config(), outputName, name, index);
       Workspace* workspace = m_workspaces[index].get();
       if (workspace->layoutConfig() != layout) {
-        workspace->applyConfig(name, index, std::move(layout));
-      } else if (workspace->name() != name || workspace->index() != index) {
+        workspace->applyLayoutConfig(std::move(layout));
+      }
+      if (workspace->name() != name || workspace->index() != index) {
         workspace->rename(name, index);
       }
     }

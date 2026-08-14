@@ -184,6 +184,10 @@ under the pointer before the window is dropped.
 Transparent windows keep their configured window-rule blur throughout the zoom
 transition. Each workspace has a rounded background behind its cards; use the
 configured alpha for anything from a subtle tint to an opaque fill.
+Cards carry the same decoration as the real windows: the inner border in its
+focus colour, the outer border ring, and the corner radius, all scaled to the
+thumbnail. A card that a workspace row pushes past the edge of its output is cut
+there, and the cut corners lose their radius, as a window spanning outputs does.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

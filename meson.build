@@ -189,6 +189,7 @@ core_sources = files(
   'src/layer/layer_surface.cpp',
   'src/scene/surface_blur.cpp',
   'src/scene/hint_rect.cpp',
+  'src/scene/border_rect.cpp',
   'src/scene/surface_shadow.cpp',
   'src/scene/config_banner.cpp',
   'src/scene/cheatsheet.cpp',

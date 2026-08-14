@@ -1,8 +1,8 @@
 #include "view/decoration.h"
 
 #include "config/config.h"
+#include "scene/border_rect.h"
 #include "scene/color.h"
-#include "view/output_clip.h"
 
 // clang-format off
 #include "wlr.h"
@@ -39,33 +39,25 @@ namespace umbriel {
       return;
     }
 
-    const auto applyRing = [](wlr_scene_rect* rect, const BorderRing& ring) {
-      wlr_scene_node_set_position(&rect->node, ring.box.x, ring.box.y);
-      wlr_scene_rect_set_size(rect, ring.box.width, ring.box.height);
-      wlr_scene_rect_set_corner_radii(rect, ring.outer);
-      wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = ring.hole, .corners = ring.inner});
-    };
-
+    const auto& appearance = config().appearance;
     if (m_borderRect != nullptr) {
-      applyRing(
-          m_borderRect,
-          makeBorderRing(contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.borderWidth)
+      applyBorderRing(
+          m_borderRect, makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.borderWidth), 0,
+          0, nullptr
       );
     }
 
     if (m_outerBorderRect != nullptr) {
-      const int outer = config().appearance.outerBorderWidth;
-      if (outer <= 0) {
+      if (appearance.outerBorderWidth <= 0) {
         wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
       } else {
         // The outer color tucks under the inner ring, leaving no gap between them.
-        applyRing(
+        applyBorderRing(
             m_outerBorderRect,
-            makeBorderRing(
-                contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.totalBorderWidth()
-            )
+            makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth()), 0, 0,
+            nullptr
         );
-        wlr_scene_rect_set_color(m_outerBorderRect, config().appearance.outerBorderColor.data());
+        wlr_scene_rect_set_color(m_outerBorderRect, appearance.outerBorderColor.data());
       }
     }
 
@@ -107,27 +99,9 @@ namespace umbriel {
         wlr_scene_rect_set_size(rect, 0, 0);
         return;
       }
-
-      const BorderRing ring = makeBorderRing(contentWidth, contentHeight, config().appearance.cornerRadius, thickness);
-      wlr_box screenBox = ring.box;
-      screenBox.x += target.x;
-      screenBox.y += target.y;
-
-      wlr_box visible{};
-      if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
-        wlr_scene_rect_set_size(rect, 0, 0);
-        return;
-      }
-
-      wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
-      wlr_scene_rect_set_size(rect, visible.width, visible.height);
-
-      wlr_scene_rect_set_corner_radii(rect, cornerRadiiForVisible(screenBox, visible, ring.outer));
-      wlr_box hole = ring.hole;
-      hole.x += screenBox.x - visible.x;
-      hole.y += screenBox.y - visible.y;
-      wlr_scene_rect_set_clipped_region(
-          rect, clipped_region{.area = hole, .corners = cornerRadiiForVisible(screenBox, visible, ring.inner)}
+      applyBorderRing(
+          rect, makeBorderRing(contentWidth, contentHeight, config().appearance.cornerRadius, thickness), target.x,
+          target.y, &outputBox
       );
     };
 

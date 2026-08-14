@@ -7,9 +7,11 @@
 #include "layout/drop_target.h"
 #include "layout/layout.h"
 #include "output/output.h"
+#include "scene/border_rect.h"
 #include "scene/color.h"
 #include "scene/hint_rect.h"
 #include "server/server.h"
+#include "view/output_clip.h"
 #include "view/view.h"
 // clang-format off
 #include <algorithm>
@@ -202,38 +204,37 @@ namespace umbriel {
       return;
     }
 
-    const int total = config().appearance.totalBorderWidth();
+    const auto& appearance = config().appearance;
+    const int total = appearance.totalBorderWidth();
     const bool decorated = total > 0 && !view->toplevel()->current.fullscreen;
-    const int radius = decorated ? static_cast<int>(std::lround(config().appearance.cornerRadius * z)) : 0;
-    if (card.border != nullptr) {
-      const int width = std::max(1, static_cast<int>(std::lround(total * z)));
-      const wlr_box full{card.box.x - width, card.box.y - width, contentW + 2 * width, contentH + 2 * width};
-      wlr_box border = full;
-      const bool borderVisible = decorated && (!clipped || wlr_box_intersection(&border, &full, &metrics.outputBox));
-      wlr_scene_node_set_enabled(&card.border->node, borderVisible);
-      if (borderVisible) {
-        wlr_scene_rect_set_size(card.border, border.width, border.height);
-        wlr_scene_node_set_position(&card.border->node, border.x - card.box.x, border.y - card.box.y);
-        wlr_scene_rect_set_corner_radius(
-            card.border, static_cast<int>(std::lround(expandedRadius(config().appearance.cornerRadius, total) * z))
-        );
-        // Punch the content out so this stays a ring. A filled rect would sit
-        // behind the window and tint every translucent client with the border
-        // colour, which then visibly changes with focus.
-        const wlr_box hole{card.box.x - border.x, card.box.y - border.y, contentW, contentH};
-        wlr_scene_rect_set_clipped_region(
-            card.border, clipped_region{.area = hole, .corners = corner_radii_new(radius, radius, radius, radius)}
-        );
-        // Every row advertises its own focused window, not just the active
-        // one: the filmstrip is a browsing aid, and the border is what tells
-        // you where each workspace will land you when you zoom into it.
-        const Workspace* workspace = view->workspace();
-        const bool focused = workspace != nullptr && workspace->focusedView() == view && m_dragCard != &card;
-        const std::array<float, 4> color =
-            tint(focused ? config().appearance.borderFocused : config().appearance.borderUnfocused, cardOpacity);
-        wlr_scene_rect_set_color(card.border, color.data());
+    // Scale the radius and each thickness once, then derive the rings from those
+    // scaled values. Rounding the outer radius on its own drifts from the ring's
+    // own thickness at fractional zoom, so the curve stops matching the stroke.
+    const int radius = decorated ? static_cast<int>(std::lround(appearance.cornerRadius * z)) : 0;
+    const wlr_box* clip = clipped ? &metrics.outputBox : nullptr;
+    const auto paintRing = [&](wlr_scene_rect* rect, int thickness, const std::array<float, 4>& base) {
+      if (rect == nullptr) {
+        return;
       }
-    }
+      const int scaled = thickness > 0 ? std::max(1, static_cast<int>(std::lround(thickness * z))) : 0;
+      const bool visible = decorated
+          && scaled > 0
+          && applyBorderRing(rect, makeBorderRing(contentW, contentH, radius, scaled), card.box.x, card.box.y, clip);
+      wlr_scene_node_set_enabled(&rect->node, visible);
+      if (visible) {
+        const std::array<float, 4> color = tint(base, cardOpacity);
+        wlr_scene_rect_set_color(rect, color.data());
+      }
+    };
+    // The outer ring spans both widths so the inner ring tucks into it without a
+    // seam, exactly as ViewDecoration draws a real window.
+    paintRing(card.outerBorder, appearance.outerBorderWidth > 0 ? total : 0, appearance.outerBorderColor);
+    // Every row advertises its own focused window, not just the active one: the
+    // filmstrip is a browsing aid, and the border is what tells you where each
+    // workspace will land you when you zoom into it.
+    const Workspace* workspace = view->workspace();
+    const bool focused = workspace != nullptr && workspace->focusedView() == view && m_dragCard != &card;
+    paintRing(card.border, appearance.borderWidth, focused ? appearance.borderFocused : appearance.borderUnfocused);
 
     const double fx = static_cast<double>(contentW) / geometry.width;
     const double fy = static_cast<double>(contentH) / geometry.height;
@@ -292,7 +293,11 @@ namespace umbriel {
       wlr_scene_node_set_position(&entry->buffer->node, visible.x - card.box.x, visible.y - card.box.y);
       wlr_scene_buffer_set_source_box(entry->buffer, &src);
       wlr_scene_buffer_set_dest_size(entry->buffer, visible.width, visible.height);
-      wlr_scene_buffer_set_corner_radius(entry->buffer, radius);
+      // A card cut by the output edge drops the radius on the cut corners, the
+      // same rule View applies to a window that spans outputs.
+      wlr_scene_buffer_set_corner_radii(
+          entry->buffer, cornerRadiiForVisible(card.box, visible, corner_radii_all(radius))
+      );
       const wlr_box blurBox{0, 0, contentW, contentH};
       const wlr_box blurClip{
           visible.x - card.box.x,
@@ -428,7 +433,12 @@ namespace umbriel {
     wl_signal_add(&buffer->events.frame_done, &entry->frameDone);
     syncCardBuffer(*entry);
     card->surfaces.push_back(std::move(entry));
-    wlr_scene_node_raise_to_top(&card->border->node);
+    if (card->outerBorder != nullptr) {
+      wlr_scene_node_raise_to_top(&card->outerBorder->node);
+    }
+    if (card->border != nullptr) {
+      wlr_scene_node_raise_to_top(&card->border->node);
+    }
   }
 
   void Overview::syncCardSurface(wlr_surface* surface, int sx, int sy, void* data) {
@@ -518,6 +528,10 @@ namespace umbriel {
     if (card->tree == nullptr) {
       return nullptr;
     }
+    // Outer first so the inner ring, which carries the focus colour, draws over
+    // it. The punched hole keeps both above the card buffers.
+    const std::array<float, 4> outerColor = tint(config().appearance.outerBorderColor, 1.0);
+    card->outerBorder = wlr_scene_rect_create(card->tree, 1, 1, outerColor.data());
     const std::array<float, 4> borderColor = tint(config().appearance.borderUnfocused, 1.0);
     card->border = wlr_scene_rect_create(card->tree, 1, 1, borderColor.data());
     Card* raw = card.get();
@@ -542,6 +556,7 @@ namespace umbriel {
       wlr_scene_node_destroy(&card->tree->node);
       card->tree = nullptr;
     }
+    card->outerBorder = nullptr;
     card->border = nullptr;
   }
 

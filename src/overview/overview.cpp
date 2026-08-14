@@ -189,6 +189,7 @@ namespace umbriel {
       };
     }
     wlr_scene_node_set_position(&card.tree->node, card.box.x, card.box.y);
+    const float cardOpacity = &card == m_dragCard ? View::kDragOpacity : 1.0F;
 
     // Rows overhang the output box by design (adjacent workspaces peek in), so
     // every piece is clipped to the owning output; on a stacked multi-head
@@ -229,7 +230,7 @@ namespace umbriel {
         const Workspace* workspace = view->workspace();
         const bool focused = workspace != nullptr && workspace->focusedView() == view && m_dragCard != &card;
         const std::array<float, 4> color =
-            tint(focused ? config().appearance.borderFocused : config().appearance.borderUnfocused, 1.0);
+            tint(focused ? config().appearance.borderFocused : config().appearance.borderUnfocused, cardOpacity);
         wlr_scene_rect_set_color(card.border, color.data());
       }
     }
@@ -242,6 +243,9 @@ namespace umbriel {
       if (entry->buffer == nullptr || surface->current.width <= 0 || surface->current.height <= 0) {
         continue;
       }
+      const float surfaceOpacity =
+          entry->sourceBuffer != nullptr ? entry->sourceBuffer->opacity * cardOpacity : cardOpacity;
+      wlr_scene_buffer_set_opacity(entry->buffer, surfaceOpacity);
       if (!entry->isRoot) {
         wlr_box sub{
             card.box.x + static_cast<int>(std::lround((entry->sx - geometry.x) * fx)),
@@ -1222,6 +1226,10 @@ namespace umbriel {
     }
     wlr_scene_node_reparent(&card->tree->node, m_tree);
     wlr_scene_node_raise_to_top(&card->tree->node);
+    RowMetrics metrics{};
+    if (card->owner != nullptr && rowMetrics(*card->owner, *m_server, zoom(), metrics)) {
+      layoutCard(*card, metrics, card->owner->rowScroll);
+    }
     m_server->cursor()->overrideCursor("grabbing");
   }
 

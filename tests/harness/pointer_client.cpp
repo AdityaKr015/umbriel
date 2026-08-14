@@ -13,17 +13,20 @@
 //   press <button>
 //   release <button>
 //   notch <dir>         one vertical wheel notch, -1 up / 1 down
+//   pause <ms>          keep the pointer connection and current button state
 //
 // Commands run in order, each followed by a frame and a roundtrip so the
 // compositor has processed one before the next is sent.
 
 #include "wlr-virtual-pointer-unstable-v1-client-protocol.h"
 
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <print>
 #include <string>
+#include <thread>
 #include <vector>
 #include <wayland-client.h>
 
@@ -132,6 +135,11 @@ int main(int argc, char** argv) {
       zwlr_virtual_pointer_v1_axis_discrete(
           pointer, nextTime(), WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(dir * 15.0), dir
       );
+    } else if (command == "pause") {
+      needs(1);
+      const auto duration = std::chrono::milliseconds(std::atoi(args[i + 1].c_str()));
+      i += 1;
+      std::this_thread::sleep_for(duration);
     } else {
       std::println(stderr, "pointer-client: unknown command '{}'", command);
       return EXIT_FAILURE;

@@ -107,6 +107,9 @@ namespace umbriel {
     friend class Server;
     friend class Popup;
     friend class Overview;
+    // Keep the insertion preview legible beneath the window during every
+    // compositor-owned relocate drag, including overview card drags.
+    static constexpr float kDragOpacity = 0.5F;
 
     static void onMap(wl_listener* listener, void* data);
     static void onUnmap(wl_listener* listener, void* data);
@@ -160,9 +163,10 @@ namespace umbriel {
     // can lag a layout configure, so presentation consumers must not infer
     // their size independently from the committed geometry.
     void trackPresentedSize(int width, int height);
-    // Re-apply m_fadeAlpha*m_ruleOpacity to surface buffers. wlroots' scene
-    // surface reconfigure (on commit or clip change) resets buffer opacity, so
-    // this must run after any such operation while effective opacity is < 1.
+    // Re-apply the effective fade, rule, and drag opacity to surface buffers.
+    // wlroots scene surface reconfigure (on commit or clip change) resets
+    // buffer opacity, so this must run afterward while opacity is below 1.
+    [[nodiscard]] float effectiveOpacity() const { return m_fadeAlpha * m_ruleOpacity * m_dragOpacity; }
     void applyEffectiveOpacity();
     void beginCloseAnimation();
     void applyPresentedSize();
@@ -260,6 +264,8 @@ namespace umbriel {
     // handleSetTitle re-applies all rule effects one more time.
     bool m_initialRulesSettled = false;
     float m_ruleOpacity = 1.0F;
+    float m_dragOpacity = 1.0F;
+    bool m_dragOpacityCommitPending = false;
     bool m_hasMaximizeRestoreBox = false;
     wlr_box m_maximizeRestoreBox{};
     FloatingGeometry m_floating;

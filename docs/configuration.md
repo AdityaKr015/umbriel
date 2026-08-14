@@ -177,8 +177,10 @@ stay live: click to focus, middle-click to close, drag between workspaces, or
 4-finger swipe to toggle. Move up and down the filmstrip with the wheel, the
 arrow keys, or a 3-finger swipe; because the real windows are hidden while the
 overview is up, each of those steps one workspace at a time rather than sliding
-the way a 3-finger swipe does outside. Dwindle drags preview the
-directional split under the pointer before the window is dropped.
+the way a 3-finger swipe does outside. Dragged cards render at half opacity so
+the insertion preview remains visible beneath them. Client-provided alpha is
+multiplied by the drag opacity. Dwindle drags preview the directional split
+under the pointer before the window is dropped.
 Transparent windows keep their configured window-rule blur throughout the zoom
 transition. Each workspace has a rounded background behind its cards; use the
 configured alpha for anything from a subtle tint to an opaque fill.
@@ -218,6 +220,10 @@ Scrolling layout options:
 | `center_underfull_strip` | bool | `true` | Center the complete strip whenever it is narrower than the viewport. Set to `false` to align an underfull strip at the left edge. |
 
 Horizontal resizing updates underfull-strip centering continuously.
+
+Dragged windows render at half opacity while the grab is active, keeping the
+insertion preview visible through the window. The drag multiplier composes with
+client-provided transparency and window-rule opacity.
 
 When dragging a column, insertion previews occupy the free space beside the
 actual column edges, including centered strips. For overflowing strips, the

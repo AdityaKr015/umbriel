@@ -9,7 +9,6 @@
 #include "layout/scrolling.h"
 #include "output/output.h"
 #include "overview/overview.h"
-#include "scene/color.h"
 #include "server/server.h"
 #include "view/output_clip.h"
 #include "view/xdg_size.h"
@@ -283,7 +282,7 @@ namespace umbriel {
 
   void View::setFadeAlpha(float alpha) {
     m_fadeAlpha = alpha;
-    float effective = m_fadeAlpha * m_ruleOpacity;
+    float effective = effectiveOpacity();
     wlr_scene_node_for_each_buffer(
         &m_sceneTree->node,
         [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
@@ -299,7 +298,7 @@ namespace umbriel {
     if (m_sceneTree == nullptr) {
       return;
     }
-    float effective = m_fadeAlpha * m_ruleOpacity;
+    float effective = effectiveOpacity();
     if (effective >= 1.0F) {
       return;
     }
@@ -411,6 +410,9 @@ namespace umbriel {
 
   void View::enterDragPresentation() {
     cancelPositionAnimation();
+    m_dragOpacity = kDragOpacity;
+    setFadeAlpha(m_fadeAlpha);
+    m_dragOpacityCommitPending = false;
     wlr_scene_node_reparent(&m_sceneTree->node, m_server->dragTree());
     reparentShadow(m_server->dragShadowTree());
     setNodeEnabled(true);
@@ -419,6 +421,9 @@ namespace umbriel {
   }
 
   void View::restoreHomePresentation() {
+    m_dragOpacity = 1.0F;
+    m_dragOpacityCommitPending = false;
+    setFadeAlpha(m_fadeAlpha);
     if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
         scratchpad != nullptr && scratchpad->contains(this)) {
       scratchpad->restorePresentation(this);
@@ -544,6 +549,12 @@ namespace umbriel {
       setFadeAlpha(static_cast<float>(m_fade.current()));
       active = active || m_fade.animating();
     }
+    // The scene helper may process a surface commit after View::handleCommit.
+    // Reapply on the ensuing frame, after every commit listener has run.
+    if (m_dragOpacityCommitPending) {
+      applyEffectiveOpacity();
+      m_dragOpacityCommitPending = false;
+    }
     return active;
   }
 
@@ -666,7 +677,7 @@ namespace umbriel {
   void View::setBorderFocused(bool focused) {
     const bool focusChanged = m_borderFocusedState != focused;
     m_borderFocusedState = focused;
-    m_decoration.setBorderColor(focused, m_scratchpadBorder, m_fadeAlpha);
+    m_decoration.setBorderColor(focused, m_scratchpadBorder, m_fadeAlpha * m_dragOpacity);
     if (focusChanged && m_mapped) {
       applyDynamicRules();
     }
@@ -698,7 +709,7 @@ namespace umbriel {
     const wlr_box nodeBox{0, 0, contentWidth, contentHeight};
     m_decoration.updateBlur(
         m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry, surfaceRadius(), nullptr,
-        m_fadeAlpha * m_ruleOpacity
+        effectiveOpacity()
     );
   }
 
@@ -1101,8 +1112,7 @@ namespace umbriel {
       return;
     }
     m_decoration.updateBlur(
-        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, surfaceRadius(), &blurClip,
-        m_fadeAlpha * m_ruleOpacity
+        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, surfaceRadius(), &blurClip, effectiveOpacity()
     );
   }
 
@@ -1350,6 +1360,12 @@ namespace umbriel {
     } else {
       updateBlur();
       updateShadow();
+    }
+    // Workspace presentation deliberately skips a dragged view so it remains
+    // unclipped across outputs. A client commit resets scene-buffer opacity;
+    // defer restoration to the frame tick so every commit listener has run.
+    if (m_dragOpacity < 1.0F) {
+      m_dragOpacityCommitPending = true;
     }
     updateForeignState();
   }

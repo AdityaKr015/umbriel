@@ -132,7 +132,8 @@ saturation = 1.1  # 0.0-2.0
 
 `enabled` is the master switch. Individual surfaces must still opt in through
 [window rules](rules.md) or [layer rules](rules.md#layer-rules).
-Blur only renders where a surface is transparent.
+Blur only renders where a surface is transparent. Sampling remains confined to
+the surface's owning output when a window overflows into a neighbouring output.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

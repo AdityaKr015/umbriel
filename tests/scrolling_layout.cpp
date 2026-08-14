@@ -7,6 +7,7 @@
 #include <cmath>
 #include <optional>
 #include <wlr/util/box.h>
+#include <wlr/util/edges.h>
 // clang-format on
 
 using umbriel::Column;
@@ -203,6 +204,35 @@ UMBRIEL_TEST(singleColumnCenteringIsConfigurable) {
   fixture.addColumns(1);
   CHECK(fixture.layout.setWidthFraction(0, 1.0 / 3));
   CHECK_EQ(fixture.layout.columnX(0, kViewport), 0);
+}
+
+UMBRIEL_TEST(horizontalResizeRecentersAnUnderfullStripImmediately) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(0, 1.0 / 3));
+  CHECK(fixture.layout.setWidthFraction(1, 1.0 / 3));
+  fixture.layout.arrange(kUsable);
+
+  const int firstXBefore = fixture.layout.targetBox(stub(0)).x;
+  const wlr_box secondBefore = fixture.layout.targetBox(stub(1));
+  const int rightBefore = secondBefore.x + secondBefore.width;
+
+  auto resize = fixture.layout.beginResize(stub(1), WLR_EDGE_RIGHT, kUsable);
+  CHECK(resize != nullptr);
+  resize->applyDelta(100.0, 0.0, kUsable);
+  fixture.layout.arrange(kUsable);
+
+  const int firstXAfter = fixture.layout.targetBox(stub(0)).x;
+  const wlr_box secondAfter = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(firstXAfter, firstXBefore - 100);
+  CHECK_EQ(secondAfter.x + secondAfter.width, rightBefore + 100);
+  CHECK(
+      std::abs(
+          (firstXAfter - fixture.config.edgePad)
+          - (kUsable.width - fixture.config.edgePad - secondAfter.x - secondAfter.width)
+      )
+      <= 1
+  );
 }
 
 UMBRIEL_TEST(widthFractionsAreClamped) {

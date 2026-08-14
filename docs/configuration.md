@@ -215,7 +215,10 @@ Scrolling layout options:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `default_width_fraction` | float | `0.5` | Initial width assigned to new scrolling columns (0.1-1.0). |
-| `always_center_single_column` | bool | `true` | Center a lone column when it is narrower than the viewport. Set to `false` to align it at the left edge; that edge becomes a fixed layout anchor, so resize the column from its right edge. |
+| `always_center_single_column` | bool | `true` | Underfull strips with multiple columns are always centered. This controls whether that centering also applies when only one column remains. Set to `false` to align a lone column at the left edge; that edge becomes a fixed layout anchor, so resize the column from its right edge. |
+
+Scrolling centers the complete strip whenever multiple columns are narrower
+than the viewport. Horizontal resizing updates that centering continuously.
 
 When dragging a column, insertion previews occupy the free space beside the
 actual column edges, including centered strips. For overflowing strips, the

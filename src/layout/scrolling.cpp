@@ -562,13 +562,13 @@ namespace umbriel {
     public:
       ScrollingResizeGrab(
           ScrollingLayout* layout, int column, int row, uint32_t edges, bool soloHorizontal, bool clearedFullWidth,
-          double startScroll, int startColumnX, int startWidthPx, int startPrevWidthPx, int upperRow,
-          double startUpperWeight, double startLowerWeight
+          double startScroll, int startColumnX, int startWidthPx, int startPrevWidthPx, int startStripWidthPx,
+          int upperRow, double startUpperWeight, double startLowerWeight
       )
           : m_layout(layout), m_column(column), m_row(row), m_edges(edges), m_soloHorizontal(soloHorizontal),
             m_clearedFullWidth(clearedFullWidth), m_startScroll(startScroll), m_startColumnX(startColumnX),
-            m_startWidthPx(startWidthPx), m_startPrevWidthPx(startPrevWidthPx), m_upperRow(upperRow),
-            m_startUpperWeight(startUpperWeight), m_startLowerWeight(startLowerWeight) {}
+            m_startWidthPx(startWidthPx), m_startPrevWidthPx(startPrevWidthPx), m_startStripWidthPx(startStripWidthPx),
+            m_upperRow(upperRow), m_startUpperWeight(startUpperWeight), m_startLowerWeight(startLowerWeight) {}
 
       [[nodiscard]] bool unmaximizeOnBegin() const override { return m_clearedFullWidth; }
 
@@ -621,23 +621,26 @@ namespace umbriel {
           const double fraction = static_cast<double>(width + gap) / static_cast<double>(viewportWidth + gap);
           layout.setWidthFraction(columnIndex, fraction);
         };
-        const bool centeredSolo =
-            layout.columns().size() == 1 && layout.layoutConfig()->scrolling.alwaysCenterSingleColumn;
+        const bool centerUnderfullStrip = m_startStripWidthPx < viewportWidth
+            && (layout.columns().size() != 1 || layout.layoutConfig()->scrolling.alwaysCenterSingleColumn);
+        const double centeredEdgeTravel = std::max(0.0, static_cast<double>(viewportWidth - m_startStripWidthPx) / 2.0);
+        auto centeredWidthDelta = [centeredEdgeTravel](double edgeDelta) {
+          return edgeDelta <= centeredEdgeTravel ? 2.0 * edgeDelta : edgeDelta + centeredEdgeTravel;
+        };
 
         if ((m_edges & WLR_EDGE_RIGHT) != 0) {
-          // A centered solo column grows symmetrically, so twice the width
-          // delta keeps the grabbed edge under the pointer.
-          const double widthDelta = centeredSolo ? 2.0 * dx : dx;
+          // While the strip fits, its center stays fixed: changing a boundary
+          // width by two pointer pixels moves the outer edge by one. Past the
+          // viewport boundary, the strip grows normally at one pixel per pixel.
+          const double widthDelta = centerUnderfullStrip ? centeredWidthDelta(dx) : dx;
           const int newWidth = std::clamp(
               m_startWidthPx + static_cast<int>(std::lround(widthDelta)), columnMinWidth(m_column),
               columnMaxWidth(m_column)
           );
           setColumnWidthPx(m_column, newWidth);
-          if (centeredSolo) {
-            layout.setScroll(m_startScroll);
+          if (centerUnderfullStrip) {
+            layout.setScroll(0.0);
           } else {
-            // Width changes can change row centering. Compensate so the left
-            // edge stays fixed and the right edge tracks the pointer.
             layout.setScroll(
                 m_startScroll + static_cast<double>(layout.columnX(m_column, viewportWidth) - m_startColumnX)
             );
@@ -658,14 +661,14 @@ namespace umbriel {
             setColumnWidthPx(m_column - 1, newPrev);
             setColumnWidthPx(m_column, newCur);
           } else {
-            const double widthDelta = centeredSolo ? -2.0 * dx : -dx;
+            const double widthDelta = centerUnderfullStrip ? centeredWidthDelta(-dx) : -dx;
             const int newWidth = std::clamp(
                 m_startWidthPx + static_cast<int>(std::lround(widthDelta)), columnMinWidth(m_column),
                 columnMaxWidth(m_column)
             );
             setColumnWidthPx(m_column, newWidth);
-            if (centeredSolo) {
-              layout.setScroll(m_startScroll);
+            if (centerUnderfullStrip) {
+              layout.setScroll(0.0);
             } else {
               // Keep the right edge fixed while accounting for any change in
               // automatic row centering.
@@ -782,6 +785,7 @@ namespace umbriel {
       int m_startColumnX;
       int m_startWidthPx;
       int m_startPrevWidthPx;
+      int m_startStripWidthPx;
       int m_upperRow;
       double m_startUpperWeight;
       double m_startLowerWeight;
@@ -879,7 +883,7 @@ namespace umbriel {
 
     return std::make_unique<ScrollingResizeGrab>(
         this, column, row, edges, soloHorizontal, clearedFullWidth, startScroll, startColumnX, startWidthPx,
-        startPrevWidthPx, upperRow, startUpperWeight, startLowerWeight
+        startPrevWidthPx, rawTotalWidth(viewportWidth), upperRow, startUpperWeight, startLowerWeight
     );
   }
 

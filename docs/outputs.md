@@ -131,7 +131,7 @@ workspaces exist.
 | `layout.gap` | int | Gap in pixels (0-500). |
 | `layout.width_presets` | float array | Widths used by the width-cycle action in both layouts. |
 | `layout.scrolling.default_width_fraction` | float | Initial scrolling column width (0.1-1.0). |
-| `layout.scrolling.always_center_single_column` | bool | Center a lone scrolling column when narrower than the viewport. When disabled, the left-aligned column has a fixed left edge and resizes from its right edge. |
+| `layout.scrolling.always_center_single_column` | bool | Underfull strips with multiple columns are always centered. This controls whether centering also applies to a lone column. When disabled, the left-aligned lone column has a fixed left edge and resizes from its right edge. |
 
 ## Examples
 

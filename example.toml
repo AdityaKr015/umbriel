@@ -66,7 +66,7 @@ width_presets = [0.333, 0.5, 0.667] # shared by scrolling and dwindle
 
 [layout.scrolling]
 default_width_fraction = 0.5   # 0.1-1.0
-always_center_single_column = true # false fixes the left edge; resize from the right
+always_center_single_column = true # extend underfull-strip centering to one column
 
 # Workspace layout overrides (see docs/outputs.md#workspace-rules)
 # [[workspace]]

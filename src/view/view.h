@@ -147,6 +147,7 @@ namespace umbriel {
     void updateBorderGeometry();
     void updateBorderGeometry(int contentWidth, int contentHeight);
     void applyCornerRadius();
+    void applyCornerRadii(fx_corner_radii corners);
     void reloadBackdropColor() { m_presentation.reloadBackdropColor(); }
     void refreshConfigChrome();
     void updateBlur();

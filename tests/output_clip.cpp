@@ -14,6 +14,18 @@ UMBRIEL_TEST(clipsToTheRightEdgeOfTheOutput) {
   CHECK_EQ(clip.x + clip.width, 1201);
 }
 
+UMBRIEL_TEST(surfaceCornersSquareTheClippedRightEdge) {
+  const wlr_box content{1520, 100, 800, 600};
+  const wlr_box visible{1520, 100, 400, 600};
+  constexpr int kRadius = 12;
+
+  const fx_corner_radii corners = umbriel::cornerRadiiForVisible(content, visible, corner_radii_all(kRadius));
+  CHECK_EQ(corners.top_left, kRadius);
+  CHECK_EQ(corners.top_right, 0);
+  CHECK_EQ(corners.bottom_right, 0);
+  CHECK_EQ(corners.bottom_left, kRadius);
+}
+
 UMBRIEL_TEST(offsetGeometryShiftsTheClipOrigin) {
   const wlr_box geometry{4, 7, 1200, 900};
   const wlr_box content{-501, 40, 1200, 900};

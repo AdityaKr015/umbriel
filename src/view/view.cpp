@@ -683,20 +683,26 @@ namespace umbriel {
     }
   }
 
-  void View::applyCornerRadius() {
-    // Every buffer under the tree has to be told, but only the toplevel's own
+  void View::applyCornerRadius() { applyCornerRadii(corner_radii_all(surfaceRadius())); }
+
+  void View::applyCornerRadii(fx_corner_radii corners) {
+    // Every buffer under the tree has to be visited, but only the toplevel's own
     // surface should round: subsurfaces are separate scene buffers.
+    struct Ctx {
+      View* view;
+      fx_corner_radii corners;
+    } ctx{this, corners};
     wlr_scene_node_for_each_buffer(
         &m_sceneTree->node,
         [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
-          auto* self = static_cast<View*>(data);
+          auto* ctx = static_cast<Ctx*>(data);
           wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-          if (sceneSurface == nullptr || sceneSurface->surface != self->m_toplevel->base->surface) {
+          if (sceneSurface == nullptr || sceneSurface->surface != ctx->view->m_toplevel->base->surface) {
             return;
           }
-          wlr_scene_buffer_set_corner_radius(buffer, self->surfaceRadius());
+          wlr_scene_buffer_set_corner_radii(buffer, ctx->corners);
         },
-        this
+        &ctx
     );
   }
 
@@ -902,11 +908,13 @@ namespace umbriel {
     trackPresentedSize(geometry.width, geometry.height);
     if (!fullscreen && !m_tiled) {
       syncFloatingSurfaceClip();
+      applyCornerRadius();
       updateBorderGeometry();
       return;
     }
     const wlr_box* clip = (!fullscreen && m_tiled) ? &m_toplevel->base->geometry : nullptr;
     setSurfaceTreeClip(clip);
+    applyCornerRadius();
     updateBorderGeometry();
     m_decoration.clearShadowOutputClip();
     updateBlur();
@@ -1074,6 +1082,7 @@ namespace umbriel {
       // Crop the toplevel surface to the visible tile; popup children are unclipped in
       // setSurfaceTreeClip so context menus can extend past the window edge.
       setSurfaceTreeClip(&surfaceClip);
+      applyCornerRadii(cornerRadiiForVisible(content, contentVisible, corner_radii_all(surfaceRadius())));
       if (sizeAnimating() || sizeGrabActive()) {
         // The clip crops 1:1 in surface coordinates and caps the destination at
         // the committed surface size, so it cannot express an animated or

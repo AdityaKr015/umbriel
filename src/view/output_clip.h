@@ -1,6 +1,7 @@
 #pragma once
 
 extern "C" {
+#include <scenefx/types/fx/clipped_region.h>
 #include <wlr/util/box.h>
 }
 
@@ -15,6 +16,21 @@ namespace umbriel {
         .width = visible.width,
         .height = visible.height,
     };
+  }
+
+  // Scene clipping resizes the rendered buffer to its visible part. Remove the
+  // radius from every cut edge so that the new boundary reads as a clip, not as
+  // a smaller rounded window.
+  [[nodiscard]] constexpr fx_corner_radii
+  cornerRadiiForVisible(const wlr_box& full, const wlr_box& visible, fx_corner_radii corners) {
+    const bool left = visible.x > full.x;
+    const bool right = visible.x + visible.width < full.x + full.width;
+    const bool top = visible.y > full.y;
+    const bool bottom = visible.y + visible.height < full.y + full.height;
+    return corner_radii_new(
+        left || top ? 0 : corners.top_left, right || top ? 0 : corners.top_right,
+        right || bottom ? 0 : corners.bottom_right, left || bottom ? 0 : corners.bottom_left
+    );
   }
 
   // Offset centering a client buffer of `contentSize` in a fullscreen tile of

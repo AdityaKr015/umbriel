@@ -2,41 +2,13 @@
 
 #include "config/config.h"
 #include "scene/color.h"
+#include "view/output_clip.h"
 
 // clang-format off
 #include "wlr.h"
 // clang-format on
 
 namespace umbriel {
-
-  namespace {
-
-    // Which sides of `box` the clip cut away. A cut side must lose its rounding:
-    // a radius drawn against the cut would read as the window curving away mid-edge.
-    struct Trim {
-      bool left;
-      bool right;
-      bool top;
-      bool bottom;
-
-      [[nodiscard]] fx_corner_radii apply(fx_corner_radii corners) const {
-        return corner_radii_new(
-            left || top ? 0 : corners.top_left, right || top ? 0 : corners.top_right,
-            right || bottom ? 0 : corners.bottom_right, left || bottom ? 0 : corners.bottom_left
-        );
-      }
-    };
-
-    [[nodiscard]] Trim trimOf(const wlr_box& visible, const wlr_box& full) {
-      return {
-          .left = (visible.x > full.x),
-          .right = (visible.x + visible.width) < (full.x + full.width),
-          .top = (visible.y > full.y),
-          .bottom = (visible.y + visible.height) < (full.y + full.height),
-      };
-    }
-
-  } // namespace
 
   // --- Borders ---
 
@@ -150,12 +122,13 @@ namespace umbriel {
       wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
       wlr_scene_rect_set_size(rect, visible.width, visible.height);
 
-      const Trim trim = trimOf(visible, screenBox);
-      wlr_scene_rect_set_corner_radii(rect, trim.apply(ring.outer));
+      wlr_scene_rect_set_corner_radii(rect, cornerRadiiForVisible(screenBox, visible, ring.outer));
       wlr_box hole = ring.hole;
       hole.x += screenBox.x - visible.x;
       hole.y += screenBox.y - visible.y;
-      wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = hole, .corners = trim.apply(ring.inner)});
+      wlr_scene_rect_set_clipped_region(
+          rect, clipped_region{.area = hole, .corners = cornerRadiiForVisible(screenBox, visible, ring.inner)}
+      );
     };
 
     if (config().appearance.outerBorderWidth > 0) {

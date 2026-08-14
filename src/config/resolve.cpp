@@ -70,6 +70,20 @@ namespace umbriel {
 
   } // namespace
 
+  const OutputRule* uniqueFixedWorkspaceOwner(const Config& config, size_t index) {
+    const OutputRule* owner = nullptr;
+    for (const OutputRule& output : config.outputs) {
+      if (!output.workspaces || index >= output.workspaces->size()) {
+        continue;
+      }
+      if (owner != nullptr) {
+        return nullptr;
+      }
+      owner = &output;
+    }
+    return owner;
+  }
+
   bool workspaceRuleTargetExists(const Config& config, const WorkspaceConfig& rule) {
     if (!rule.output.empty()) {
       const auto names = workspaceNamesForOutput(config, rule.output);

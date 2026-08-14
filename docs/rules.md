@@ -43,6 +43,13 @@ that first title arrives.
 | `default_fullscreen` | bool | Open in fullscreen. |
 | `default_maximize` | bool | Open maximized. For tiled windows, Umbriel expands the column to full width without changing the layout when the client requests maximize. Floating windows fill the usable area. |
 
+Without `default_output`, a numbered workspace owned by exactly one fixed output
+inventory also selects that output. For example, if only `DP-1` has a fourth
+configured workspace, `default_workspace = 4` opens there even when the window
+was launched from another output. If several fixed outputs contain that
+position, Umbriel keeps the launch output. An explicit `default_output` always
+scopes the workspace lookup to that output.
+
 ### Settings updated while a window is open
 
 | Key | Type | Description |

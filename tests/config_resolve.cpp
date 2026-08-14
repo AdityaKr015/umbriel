@@ -104,6 +104,28 @@ UMBRIEL_TEST(workspaceInventoryResolvesStaticAndDynamicOutputs) {
   CHECK_EQ(dynamicSet.workspaces[0].name, std::string{"1"});
 }
 
+UMBRIEL_TEST(fixedWorkspacePositionSelectsItsUniqueOutput) {
+  Config config;
+
+  OutputRule primary;
+  primary.name = "DP-1";
+  primary.workspaces = std::vector<std::string>{"1", "2", "3", "4"};
+  config.outputs.push_back(std::move(primary));
+
+  OutputRule chat;
+  chat.name = "HDMI-A-1";
+  chat.workspaces = std::vector<std::string>{"CHAT"};
+  config.outputs.push_back(std::move(chat));
+
+  OutputRule dynamic;
+  dynamic.name = "DP-2";
+  config.outputs.push_back(std::move(dynamic));
+
+  CHECK_EQ(umbriel::uniqueFixedWorkspaceOwner(config, 3), config.outputs.data());
+  CHECK(umbriel::uniqueFixedWorkspaceOwner(config, 0) == nullptr);
+  CHECK(umbriel::uniqueFixedWorkspaceOwner(config, 4) == nullptr);
+}
+
 UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   Config config;
 

@@ -14,6 +14,9 @@ namespace umbriel {
   resolveWindowRules(const Config& config, const char* appId, const char* title, bool focused);
   [[nodiscard]] ResolvedLayerRule resolveLayerRules(const Config& config, const char* layerNamespace);
   [[nodiscard]] bool anyWindowRuleHasTitlePattern(const Config& config);
+  // Return the sole fixed-output inventory containing this zero-based workspace
+  // position. Null means no fixed owner or an ambiguous owner.
+  [[nodiscard]] const OutputRule* uniqueFixedWorkspaceOwner(const Config& config, size_t index);
   [[nodiscard]] ResolvedLayoutConfig resolveGlobalLayout(const Config& config);
   [[nodiscard]] ResolvedLayoutConfig
   resolveWorkspaceLayout(const Config& config, const char* outputName, std::string_view name, size_t index);

@@ -63,6 +63,33 @@ namespace umbriel {
       }
       return nullptr;
     }
+    WorkspaceGroup* windowRuleWorkspaceGroup(Server& server, const ResolvedWindowRule& rule, WorkspaceGroup* fallback) {
+      Output* targetOutput = nullptr;
+      if (rule.defaultOutput) {
+        targetOutput = server.outputFromName(*rule.defaultOutput);
+      } else if (rule.defaultWorkspace) {
+        const auto index = static_cast<size_t>(*rule.defaultWorkspace - 1);
+        if (const OutputRule* owner = uniqueFixedWorkspaceOwner(config(), index)) {
+          targetOutput = server.outputFromName(owner->name);
+        }
+      }
+      return targetOutput != nullptr && targetOutput->workspaceGroup() != nullptr ? targetOutput->workspaceGroup()
+                                                                                  : fallback;
+    }
+
+    Workspace* windowRuleWorkspace(WorkspaceGroup* group, const ResolvedWindowRule& rule) {
+      if (group == nullptr) {
+        return nullptr;
+      }
+      Workspace* target = group->active();
+      if (rule.defaultWorkspace) {
+        if (Workspace* ruleTarget = group->workspaceAtClamped(static_cast<size_t>(*rule.defaultWorkspace - 1))) {
+          target = ruleTarget;
+        }
+      }
+      return target;
+    }
+
   } // namespace
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
@@ -1160,27 +1187,12 @@ namespace umbriel {
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this, rule.defaultWidth);
     } else {
-      Output* targetOutput = nullptr;
-      if (rule.defaultOutput) {
-        targetOutput = m_server->outputFromName(*rule.defaultOutput);
-      }
-      if (targetOutput == nullptr) {
-        targetOutput = m_server->outputFromWlr(m_server->preferredOutput());
-      }
-      if (targetOutput != nullptr) {
-        if (WorkspaceGroup* group = targetOutput->workspaceGroup()) {
-          Workspace* target = group->active();
-          if (rule.defaultWorkspace) {
-            Workspace* ruleTarget = group->workspaceAtClamped(static_cast<size_t>(*rule.defaultWorkspace - 1));
-            if (ruleTarget != nullptr) {
-              target = ruleTarget;
-            }
-          }
-          setWorkspace(target, /*attachToLayout=*/false);
-          target->layoutAttach(this, rule.defaultWidth);
-        } else {
-          setOnActiveWorkspace(true);
-        }
+      Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
+      WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
+      WorkspaceGroup* targetGroup = windowRuleWorkspaceGroup(*m_server, rule, preferredGroup);
+      if (Workspace* target = windowRuleWorkspace(targetGroup, rule)) {
+        setWorkspace(target, /*attachToLayout=*/false);
+        target->layoutAttach(this, rule.defaultWidth);
       } else {
         setOnActiveWorkspace(true);
       }
@@ -1805,20 +1817,10 @@ namespace umbriel {
 
       // Workspace redirect.
       if (m_workspace != nullptr) {
-        WorkspaceGroup* targetGroup = m_workspace->group();
-        if (rule.defaultOutput && m_server != nullptr) {
-          Output* ruleOutput = m_server->outputFromName(*rule.defaultOutput);
-          if (ruleOutput != nullptr && ruleOutput->workspaceGroup() != nullptr) {
-            targetGroup = ruleOutput->workspaceGroup();
-          }
-        }
-        if (targetGroup != nullptr) {
-          Workspace* target = rule.defaultWorkspace
-              ? targetGroup->workspaceAtClamped(static_cast<size_t>(*rule.defaultWorkspace - 1))
-              : targetGroup->active();
-          if (target != nullptr && target != m_workspace) {
-            setWorkspace(target);
-          }
+        WorkspaceGroup* targetGroup = windowRuleWorkspaceGroup(*m_server, rule, m_workspace->group());
+        Workspace* target = windowRuleWorkspace(targetGroup, rule);
+        if (target != nullptr && target != m_workspace) {
+          setWorkspace(target);
         }
       }
 

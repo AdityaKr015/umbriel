@@ -111,7 +111,7 @@ namespace umbriel {
     friend class Overview;
     // Keep the insertion preview legible beneath the window during every
     // compositor-owned relocate drag, including overview card drags.
-    static constexpr float kDragOpacity = 0.5F;
+    static constexpr float kDragOpacity = 0.75F;
 
     static void onMap(wl_listener* listener, void* data);
     static void onUnmap(wl_listener* listener, void* data);

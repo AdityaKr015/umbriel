@@ -28,7 +28,7 @@ namespace umbriel {
     std::optional<std::vector<double>> widthPresets;
     struct Scrolling {
       std::optional<double> defaultWidthFraction;
-      std::optional<bool> alwaysCenterSingleColumn;
+      std::optional<bool> centerUnderfullStrip;
       bool operator==(const Scrolling&) const = default;
     } scrolling;
 
@@ -51,7 +51,7 @@ namespace umbriel {
     std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
     struct Scrolling {
       double defaultWidthFraction = 0.5;
-      bool alwaysCenterSingleColumn = true;
+      bool centerUnderfullStrip = true;
       bool operator==(const Scrolling&) const = default;
     } scrolling;
     // Derived from gap + appearance border widths; set by resolve function.
@@ -219,7 +219,7 @@ namespace umbriel {
       std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
       struct Scrolling {
         double defaultWidthFraction = 0.5;
-        bool alwaysCenterSingleColumn = true;
+        bool centerUnderfullStrip = true;
         bool operator==(const Scrolling&) const = default;
       } scrolling;
       bool operator==(const Layout&) const = default;

@@ -31,7 +31,7 @@ namespace {
     config.totalGap = 12;
     config.edgePad = 10;
     config.scrolling.defaultWidthFraction = 0.5;
-    config.scrolling.alwaysCenterSingleColumn = true;
+    config.scrolling.centerUnderfullStrip = true;
     config.widthPresets = {1.0 / 3, 0.5, 2.0 / 3};
     return config;
   }
@@ -198,11 +198,12 @@ UMBRIEL_TEST(aNarrowRowIsCentered) {
   CHECK_EQ(fixture.layout.columnX(0, kViewport), (kViewport - width) / 2);
 }
 
-UMBRIEL_TEST(singleColumnCenteringIsConfigurable) {
+UMBRIEL_TEST(disablingUnderfullCenteringLeftAlignsTheWholeStrip) {
   Fixture fixture;
-  fixture.config.scrolling.alwaysCenterSingleColumn = false;
-  fixture.addColumns(1);
+  fixture.config.scrolling.centerUnderfullStrip = false;
+  fixture.addColumns(2);
   CHECK(fixture.layout.setWidthFraction(0, 1.0 / 3));
+  CHECK(fixture.layout.setWidthFraction(1, 1.0 / 3));
   CHECK_EQ(fixture.layout.columnX(0, kViewport), 0);
 }
 

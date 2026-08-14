@@ -57,8 +57,8 @@ namespace umbriel {
       if (overrides.scrolling.defaultWidthFraction) {
         resolved.scrolling.defaultWidthFraction = *overrides.scrolling.defaultWidthFraction;
       }
-      if (overrides.scrolling.alwaysCenterSingleColumn) {
-        resolved.scrolling.alwaysCenterSingleColumn = *overrides.scrolling.alwaysCenterSingleColumn;
+      if (overrides.scrolling.centerUnderfullStrip) {
+        resolved.scrolling.centerUnderfullStrip = *overrides.scrolling.centerUnderfullStrip;
       }
       if (overrides.widthPresets) {
         resolved.widthPresets = *overrides.widthPresets;
@@ -184,7 +184,7 @@ namespace umbriel {
     resolved.gap = config.layout.gap;
     resolved.widthPresets = config.layout.widthPresets;
     resolved.scrolling.defaultWidthFraction = config.layout.scrolling.defaultWidthFraction;
-    resolved.scrolling.alwaysCenterSingleColumn = config.layout.scrolling.alwaysCenterSingleColumn;
+    resolved.scrolling.centerUnderfullStrip = config.layout.scrolling.centerUnderfullStrip;
     const int borderWidth = config.appearance.totalBorderWidth();
     resolved.totalGap = resolved.gap + 2 * borderWidth;
     resolved.edgePad = resolved.gap + borderWidth;

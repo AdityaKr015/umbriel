@@ -141,7 +141,7 @@ namespace umbriel {
             }
             s.sub("scrolling", [&](Section& sc) {
               sc.real("default_width_fraction", 0.1, 1.0, overrides.scrolling.defaultWidthFraction)
-                  .boolean("always_center_single_column", overrides.scrolling.alwaysCenterSingleColumn);
+                  .boolean("center_underfull_strip", overrides.scrolling.centerUnderfullStrip);
             });
           },
           layoutContext
@@ -332,7 +332,7 @@ namespace umbriel {
         }
         s.sub("scrolling", [&](Section& sc) {
           sc.real("default_width_fraction", 0.1, 1.0, loaded.layout.scrolling.defaultWidthFraction)
-              .boolean("always_center_single_column", loaded.layout.scrolling.alwaysCenterSingleColumn);
+              .boolean("center_underfull_strip", loaded.layout.scrolling.centerUnderfullStrip);
         });
       });
     }

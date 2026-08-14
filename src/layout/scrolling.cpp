@@ -119,12 +119,11 @@ namespace umbriel {
   }
 
   int ScrollingLayout::centeringOffset(int viewportWidth) const {
-    if (m_columns.size() == 1 && !m_config->scrolling.alwaysCenterSingleColumn) {
+    if (!m_config->scrolling.centerUnderfullStrip) {
       return 0;
     }
-    // When the tiled row is narrower than the viewport (Σ widthFrac < 1), split
-    // the leftover space evenly on both sides so a row of three 0.33 columns
-    // doesn't pile the residual against the right edge.
+    // When the tiled row is narrower than the viewport, split the leftover
+    // space evenly on both sides.
     const int total = rawTotalWidth(viewportWidth);
     if (total >= viewportWidth) {
       return 0;
@@ -621,8 +620,8 @@ namespace umbriel {
           const double fraction = static_cast<double>(width + gap) / static_cast<double>(viewportWidth + gap);
           layout.setWidthFraction(columnIndex, fraction);
         };
-        const bool centerUnderfullStrip = m_startStripWidthPx < viewportWidth
-            && (layout.columns().size() != 1 || layout.layoutConfig()->scrolling.alwaysCenterSingleColumn);
+        const bool centerUnderfullStrip =
+            m_startStripWidthPx < viewportWidth && layout.layoutConfig()->scrolling.centerUnderfullStrip;
         const double centeredEdgeTravel = std::max(0.0, static_cast<double>(viewportWidth - m_startStripWidthPx) / 2.0);
         auto centeredWidthDelta = [centeredEdgeTravel](double edgeDelta) {
           return edgeDelta <= centeredEdgeTravel ? 2.0 * edgeDelta : edgeDelta + centeredEdgeTravel;
@@ -806,10 +805,8 @@ namespace umbriel {
     const double nearestV = std::min(distTop, distBottom);
 
     if (nearestH <= nearestV) {
-      const bool leftAlignedSolo = m_columns.size() == 1 && !m_config->scrolling.alwaysCenterSingleColumn;
-      if (leftAlignedSolo && distLeft <= distRight) {
-        // This edge is the column's fixed layout anchor. Moving it would only
-        // create transient scroll that focus immediately snaps away.
+      const bool fixedLeftEdge = columnOf(view) == 0 && !m_config->scrolling.centerUnderfullStrip;
+      if (fixedLeftEdge && distLeft <= distRight) {
         return 0;
       }
       return distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
@@ -817,8 +814,8 @@ namespace umbriel {
     return distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
   }
 
-  uint32_t ScrollingLayout::sanitizeResizeEdges(const View* /*view*/, uint32_t edges) const {
-    if (m_columns.size() == 1 && !m_config->scrolling.alwaysCenterSingleColumn) {
+  uint32_t ScrollingLayout::sanitizeResizeEdges(const View* view, uint32_t edges) const {
+    if (columnOf(view) == 0 && !m_config->scrolling.centerUnderfullStrip) {
       edges &= ~WLR_EDGE_LEFT;
     }
     return edges;

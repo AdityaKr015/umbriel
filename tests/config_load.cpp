@@ -52,6 +52,10 @@ unknown_root_key = true
 mode = "dwindle"
 width_presets = [0.05, 0.5, 2.0]
 
+[layout.scrolling]
+center_underfull_strip = false
+always_center_single_column = true
+
 [output.DP-1]
 workspaces = ["dev"]
 scale = 9.0
@@ -62,6 +66,9 @@ name = "dev"
 [workspace.layout]
 mode = "scrolling"
 width_presets = [0.25, 0.75]
+
+[workspace.layout.scrolling]
+center_underfull_strip = true
 )");
 
   ConfigStore& store = umbriel::configStore();
@@ -74,6 +81,7 @@ width_presets = [0.25, 0.75]
   CHECK_EQ(store.config().layout.widthPresets[0], 0.1);
   CHECK_EQ(store.config().layout.widthPresets[1], 0.5);
   CHECK_EQ(store.config().layout.widthPresets[2], 1.0);
+  CHECK(!store.config().layout.scrolling.centerUnderfullStrip);
   CHECK_EQ(store.config().outputs.size(), size_t{1});
   CHECK(store.config().outputs[0].scale.has_value());
   CHECK_EQ(*store.config().outputs[0].scale, 4.0);
@@ -81,8 +89,10 @@ width_presets = [0.25, 0.75]
   CHECK(store.config().workspaceRules[0].layout.mode == LayoutMode::Scrolling);
   CHECK(store.config().workspaceRules[0].layout.widthPresets.has_value());
   CHECK_EQ(store.config().workspaceRules[0].layout.widthPresets->size(), size_t{2});
+  CHECK(store.config().workspaceRules[0].layout.scrolling.centerUnderfullStrip == true);
   CHECK(containsDiagnostic(store, "unknown key unknown_root_key"));
   CHECK(containsDiagnostic(store, "output.DP-1.scale = 9"));
+  CHECK(containsDiagnostic(store, "unknown key layout.scrolling.always_center_single_column"));
 }
 
 int main() { return RUN_TESTS(); }

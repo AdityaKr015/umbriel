@@ -66,14 +66,14 @@ width_presets = [0.333, 0.5, 0.667] # shared by scrolling and dwindle
 
 [layout.scrolling]
 default_width_fraction = 0.5   # 0.1-1.0
-always_center_single_column = true # extend underfull-strip centering to one column
+center_underfull_strip = true  # center the strip whenever it is narrower than the viewport
 
 # Workspace layout overrides (see docs/outputs.md#workspace-rules)
 # [[workspace]]
 # name = "chat"
 # layout.mode = "dwindle"
 # layout.gap = 4
-# layout.scrolling.always_center_single_column = false
+# layout.scrolling.center_underfull_strip = false
 
 # Outputs (see docs/outputs.md) ---------------------------------------------
 

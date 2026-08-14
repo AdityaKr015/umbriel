@@ -111,10 +111,9 @@ namespace umbriel {
     return std::get_if<Arg>(&bind.payload);
   }
 
-  // "reset" and "disable" pop the current submap instead of pushing a new one.
-  // Recognised in two places: the action itself, and the keybind matcher, which
-  // lets such a bind fire from inside any submap as an emergency exit.
-  [[nodiscard]] inline bool isSubmapReset(const SubmapArg& arg) { return arg.name == "reset" || arg.name == "disable"; }
+  // "reset" pops the current submap instead of pushing a new one. Recognised in
+  // both the action and matcher so a default-context bind can be an emergency exit.
+  [[nodiscard]] inline bool isSubmapReset(const SubmapArg& arg) { return arg.name == "reset"; }
 
   [[nodiscard]] inline bool isSubmapResetBind(const Keybind& bind) {
     const auto* arg = payloadIf<SubmapArg>(bind);

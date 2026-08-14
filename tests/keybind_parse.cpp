@@ -178,12 +178,11 @@ UMBRIEL_TEST(submapNoLongerSharesStorageWithSpawn) {
   CHECK(umbriel::payloadIf<umbriel::SubmapArg>(bind) == nullptr);
 }
 
-UMBRIEL_TEST(submapResetIsRecognisedByName) {
+UMBRIEL_TEST(onlyResetPopsASubmap) {
   Keybind bind;
-  for (const char* name : {"reset", "disable"}) {
-    CHECK(parseAction(std::string("submap:") + name, bind));
-    CHECK(umbriel::isSubmapResetBind(bind));
-  }
+  CHECK(parseAction("submap:reset", bind));
+  CHECK(umbriel::isSubmapResetBind(bind));
+  CHECK(!parseAction("submap:disable", bind));
   CHECK(parseAction("submap:resize", bind));
   CHECK(!umbriel::isSubmapResetBind(bind));
 

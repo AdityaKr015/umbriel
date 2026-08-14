@@ -47,6 +47,12 @@ UMBRIEL_TEST(sharedLayoutAndNumberReadersPreserveConfigBehavior) {
   const TempConfig file;
   file.write(R"(
 unknown_root_key = true
+[general]
+prefer_no_csd = false
+
+[appearance]
+prefer_no_csd = true
+
 
 [layout]
 mode = "dwindle"
@@ -82,6 +88,7 @@ center_underfull_strip = true
   CHECK_EQ(store.config().layout.widthPresets[1], 0.5);
   CHECK_EQ(store.config().layout.widthPresets[2], 1.0);
   CHECK(!store.config().layout.scrolling.centerUnderfullStrip);
+  CHECK(store.config().appearance.preferNoCsd);
   CHECK_EQ(store.config().outputs.size(), size_t{1});
   CHECK(store.config().outputs[0].scale.has_value());
   CHECK_EQ(*store.config().outputs[0].scale, 4.0);
@@ -93,6 +100,7 @@ center_underfull_strip = true
   CHECK(containsDiagnostic(store, "unknown key unknown_root_key"));
   CHECK(containsDiagnostic(store, "output.DP-1.scale = 9"));
   CHECK(containsDiagnostic(store, "unknown key layout.scrolling.always_center_single_column"));
+  CHECK(containsDiagnostic(store, "unknown key general.prefer_no_csd"));
 }
 
 int main() { return RUN_TESTS(); }

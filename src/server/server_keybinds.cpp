@@ -79,8 +79,8 @@ namespace umbriel {
 
     for (const Keybind& bind : config().keybinds) {
       if (bind.submap != currentSubmap) {
-        // Allow submap:reset / submap:disable from the default context to
-        // always match, so users can define a global emergency exit.
+        // Allow submap:reset from the default context to always match, so users
+        // can define a global emergency exit.
         if (!m_activeSubmaps.empty() && bind.submap.empty() && isSubmapResetBind(bind)) {
           // Fall through to match below.
         } else {

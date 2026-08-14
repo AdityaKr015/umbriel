@@ -346,16 +346,6 @@ namespace umbriel {
         s.boolean("xwayland", loaded.general.xwayland)
             .boolean("show_cheatsheet", loaded.general.showCheatsheet)
             .strings("autostart", loaded.general.autostart);
-        // Deprecated alias for appearance.prefer_no_csd. Read through the same
-        // helper so a wrong type still reports, then note the move.
-        std::optional<bool> preferNoCsd;
-        s.boolean("prefer_no_csd", preferNoCsd);
-        if (preferNoCsd) {
-          loaded.appearance.preferNoCsd = *preferNoCsd;
-          warnAt(
-              s.node("prefer_no_csd")->source(), "general.prefer_no_csd is deprecated; use appearance.prefer_no_csd"
-          );
-        }
       });
     }
 

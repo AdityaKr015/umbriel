@@ -125,9 +125,9 @@ namespace umbriel {
     return false;
   }
 
-  bool Server::handleMouseBind(uint32_t button, uint32_t modifiers) {
+  const Keybind* Server::handleMouseBind(uint32_t button, uint32_t modifiers) {
     if (m_sessionLocked) {
-      return false;
+      return nullptr;
     }
 
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
@@ -145,10 +145,10 @@ namespace umbriel {
       if (effective != expected) {
         continue;
       }
-      return executeKeybindAction(bind);
+      return executeKeybindAction(bind) ? &bind : nullptr;
     }
 
-    return false;
+    return nullptr;
   }
 
   void Server::pushSubmap(const std::string& name) { m_activeSubmaps.push_back(name); }

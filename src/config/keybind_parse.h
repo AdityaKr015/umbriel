@@ -120,6 +120,14 @@ namespace umbriel {
     return bind.action == KeybindAction::Submap && arg != nullptr && isSubmapReset(*arg);
   }
 
+  // The cheatsheet's own binds must not dismiss it: the press or chord that
+  // opened the overlay would otherwise close it again in the same event.
+  [[nodiscard]] inline bool isCheatsheetAction(KeybindAction action) {
+    return action == KeybindAction::CheatsheetToggle
+        || action == KeybindAction::CheatsheetOpen
+        || action == KeybindAction::CheatsheetClose;
+  }
+
   enum class ActionArgKind : uint8_t { None, Command, WidthFraction, Workspace, OptionalOutput };
 
   struct ActionSpec {

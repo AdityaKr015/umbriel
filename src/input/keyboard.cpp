@@ -137,10 +137,7 @@ namespace umbriel {
       // Any non-modifier key press dismisses the cheatsheet, except the key
       // that just toggled it.
       if (Cheatsheet* sheet = m_server->cheatsheet(); sheet != nullptr && sheet->visible()) {
-        const bool cheatsheetBind = matched != nullptr
-            && (matched->action == KeybindAction::CheatsheetToggle
-                || matched->action == KeybindAction::CheatsheetOpen
-                || matched->action == KeybindAction::CheatsheetClose);
+        const bool cheatsheetBind = matched != nullptr && isCheatsheetAction(matched->action);
         const bool modifierOnly = nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R;
         if (!cheatsheetBind && !modifierOnly) {
           sheet->hide();

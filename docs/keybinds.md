@@ -90,7 +90,9 @@ The keybinds cheatsheet overlay lists every active keybind in a styled panel.
 It appears automatically on startup when `general.show_cheatsheet` is `true`
 (the default). At runtime, toggle it via IPC (`umbriel msg cheatsheet-toggle`)
 or bind one of the actions above. Any non-modifier key press dismisses the
-overlay; bound chords still execute normally.
+overlay, and so does any mouse button press; bound chords still execute
+normally. The dismissing click is swallowed, so it never reaches the window
+under the overlay, while a bound press runs its action as usual.
 
 ## Repeat
 

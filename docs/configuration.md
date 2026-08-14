@@ -49,7 +49,7 @@ show_cheatsheet = true
 |-----|------|---------|-------------|
 | `autostart` | string array | `[]` | Shell commands run once after startup. Never re-run on config reload. |
 | `xwayland` | bool | `true` | Spawn `xwayland-satellite` for X11 app support. The binary must be installed. Changing this requires a restart. |
-| `show_cheatsheet` | bool | `true` | Show the keybinds cheatsheet overlay on startup. Press any key to dismiss, or toggle at runtime via `cheatsheet-toggle`. |
+| `show_cheatsheet` | bool | `true` | Show the keybinds cheatsheet overlay on startup. Press any key or any mouse button to dismiss, or toggle at runtime via `cheatsheet-toggle`. |
 
 ## Environment
 

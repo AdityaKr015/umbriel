@@ -8,6 +8,7 @@
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
+#include "scene/cheatsheet.h"
 #include "scene/hint_rect.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -443,7 +444,20 @@ namespace umbriel {
     if (event->state == WL_POINTER_BUTTON_STATE_PRESSED && !m_server->sessionLocked() && isPassthrough()) {
       wlr_keyboard* kb = wlr_seat_get_keyboard(m_server->seat()->wlr());
       const uint32_t modifiers = kb != nullptr ? wlr_keyboard_get_modifiers(kb) : 0;
-      if (m_server->handleMouseBind(event->button, modifiers)) {
+      const Keybind* bound = m_server->handleMouseBind(event->button, modifiers);
+      // Any press dismisses the cheatsheet, as any key press does, except one
+      // that just ran a cheatsheet action. Unlike a key press, an unbound press
+      // is consumed: the overlay hides whatever sits under the cursor, so the
+      // click that dismisses it must not also reach that surface.
+      if (Cheatsheet* sheet = m_server->cheatsheet();
+          sheet != nullptr && sheet->visible() && !(bound != nullptr && isCheatsheetAction(bound->action))) {
+        sheet->hide();
+        if (bound == nullptr) {
+          m_swallowedButtons.push_back(event->button);
+          return;
+        }
+      }
+      if (bound != nullptr) {
         m_swallowedButtons.push_back(event->button);
         return;
       }

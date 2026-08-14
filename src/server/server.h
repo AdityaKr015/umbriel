@@ -205,7 +205,9 @@ namespace umbriel {
     }
     const Keybind* handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
     bool handleWheelBind(WheelDirection direction, uint32_t modifiers);
-    bool handleMouseBind(uint32_t button, uint32_t modifiers);
+    // Null when no bind matched or its action declined; otherwise the bind that
+    // ran, so the caller can tell which action consumed the press.
+    const Keybind* handleMouseBind(uint32_t button, uint32_t modifiers);
     bool handleVtSwitch(uint32_t keysym, uint32_t modifiers);
     void arrangeLayers(wlr_output* output);
     [[nodiscard]] wlr_output* preferredOutput() const;

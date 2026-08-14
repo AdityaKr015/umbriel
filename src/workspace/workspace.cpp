@@ -121,6 +121,11 @@ namespace umbriel {
     }
   }
 
+  void Workspace::updateUrgent() {
+    const bool urgent = std::ranges::any_of(m_views, [](const View* view) { return view->urgent(); });
+    wlr_ext_workspace_handle_v1_set_urgent(m_handle, urgent);
+  }
+
   void Workspace::setFocusedView(View* view) {
     if (view == nullptr || view->workspace() == this) {
       m_focusedView = view;
@@ -159,6 +164,7 @@ namespace umbriel {
       return;
     }
     m_views.push_back(view);
+    updateUrgent();
     const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
     if (!view->pinned()) {
       wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : viewLayer(view->tiled()));
@@ -186,6 +192,7 @@ namespace umbriel {
     const int removedColumn = m_layout->columnOf(view);
     detachFromLayout(view);
     std::erase(m_views, view);
+    updateUrgent();
     std::erase(m_floatingStack, view);
     std::erase(m_switchViews, view);
 

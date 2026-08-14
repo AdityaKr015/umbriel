@@ -129,6 +129,9 @@ namespace umbriel {
       if (rule.defaultMaximize) {
         resolved.defaultMaximize = rule.defaultMaximize;
       }
+      if (rule.focusOnActivate) {
+        resolved.focusOnActivate = rule.focusOnActivate;
+      }
       if (rule.opacity) {
         resolved.opacity = rule.opacity;
       }

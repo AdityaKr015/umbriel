@@ -33,9 +33,10 @@ namespace umbriel {
         const std::string appId = entry.value("app_id", "");
         const std::string title = entry.value("title", "");
         std::println(
-            "{}{}\t{}\t[{} {}x{}{:+}{:+}]", entry.value("focused", false) ? "*" : " ", appId.empty() ? "-" : appId,
-            title.empty() ? "-" : title, entry.value("floating", false) ? "float" : "tile", entry.value("w", 0),
-            entry.value("h", 0), entry.value("x", 0), entry.value("y", 0)
+            "{}{}\t{}\t[{} {}x{}{:+}{:+}]",
+            entry.value("focused", false) ? "*" : (entry.value("urgent", false) ? "!" : " "),
+            appId.empty() ? "-" : appId, title.empty() ? "-" : title, entry.value("floating", false) ? "float" : "tile",
+            entry.value("w", 0), entry.value("h", 0), entry.value("x", 0), entry.value("y", 0)
         );
       }
     }
@@ -66,6 +67,7 @@ namespace umbriel {
       // The compositor's own notion of focus, which is what every action acts
       // on. Lets a caller (and the harness) see where focus went.
       entry["focused"] = v->workspace() != nullptr && v->workspace()->focusedView() == v.get();
+      entry["urgent"] = v->urgent();
       entry["x"] = v->sceneTree()->node.x;
       entry["y"] = v->sceneTree()->node.y;
       entry["w"] = v->toplevel()->base->geometry.width;

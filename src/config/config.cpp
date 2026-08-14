@@ -345,6 +345,7 @@ namespace umbriel {
       root.sub("general", [&](Section& s) {
         s.boolean("xwayland", loaded.general.xwayland)
             .boolean("show_cheatsheet", loaded.general.showCheatsheet)
+            .boolean("focus_on_activate", loaded.general.focusOnActivate)
             .strings("autostart", loaded.general.autostart);
       });
     }
@@ -696,6 +697,7 @@ namespace umbriel {
         keys.boolean("default_floating", rule.defaultFloating)
             .boolean("default_fullscreen", rule.defaultFullscreen)
             .boolean("default_maximize", rule.defaultMaximize)
+            .boolean("focus_on_activate", rule.focusOnActivate)
             .boolean("blur", rule.blur)
             .boolean("blur_popups", rule.blurPopups)
             .boolean("blur_optimized", rule.blurOptimized)

@@ -95,6 +95,7 @@ namespace umbriel {
     std::optional<int> defaultWorkspace;           // 1-64
     std::optional<bool> defaultFullscreen;
     std::optional<bool> defaultMaximize;
+    std::optional<bool> focusOnActivate;
     std::optional<double> opacity; // 0.0-1.0
     std::optional<bool> blur;
     std::optional<bool> blurPopups;
@@ -114,6 +115,7 @@ namespace umbriel {
           && defaultWorkspace == other.defaultWorkspace
           && defaultFullscreen == other.defaultFullscreen
           && defaultMaximize == other.defaultMaximize
+          && focusOnActivate == other.focusOnActivate
           && opacity == other.opacity
           && blur == other.blur
           && blurPopups == other.blurPopups
@@ -131,6 +133,7 @@ namespace umbriel {
     std::optional<int> defaultWorkspace;
     std::optional<bool> defaultFullscreen;
     std::optional<bool> defaultMaximize;
+    std::optional<bool> focusOnActivate;
     std::optional<double> opacity;
     std::optional<bool> blur;
     std::optional<bool> blurPopups;
@@ -242,6 +245,8 @@ namespace umbriel {
       bool xwayland = true;
       // Show the keybinds cheatsheet overlay on startup.
       bool showCheatsheet = true;
+      // Honor activation requests by focusing and revealing the target window.
+      bool focusOnActivate = false;
       bool operator==(const General&) const = default;
     } general;
 

@@ -50,6 +50,7 @@ mapping, rules are re-evaluated once.
 | `blur_popups` | bool | Enable/disable blur for its XDG popups. |
 | `blur_ignore_alpha` | float | Skip blur where surface alpha is below this threshold (0.0-1.0). Applies to the window and its popups. |
 | `blur_optimized` | bool | Override `appearance.blur.optimized` for this window. |
+| `focus_on_activate` | bool | Override `general.focus_on_activate` for activation requests targeting this window. `false` marks it urgent without focusing or switching workspaces. |
 
 ### Examples
 

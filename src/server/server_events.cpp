@@ -24,6 +24,34 @@ namespace umbriel {
   namespace {
     constexpr Logger kLog("server");
 
+    View* viewForSurface(Server& server, wlr_surface* surface) {
+      if (surface == nullptr) {
+        return nullptr;
+      }
+      wlr_surface* root = wlr_surface_get_root_surface(surface);
+      wlr_xdg_toplevel* toplevel = wlr_xdg_toplevel_try_from_wlr_surface(root);
+      if (toplevel == nullptr) {
+        return nullptr;
+      }
+      for (const auto& entry : server.registry().all()) {
+        if (entry->toplevel() == toplevel) {
+          return entry.get();
+        }
+      }
+      return nullptr;
+    }
+
+    pid_t surfaceClientPid(wlr_surface* surface) {
+      if (surface == nullptr || surface->resource == nullptr) {
+        return -1;
+      }
+      pid_t pid = -1;
+      uid_t uid = 0;
+      gid_t gid = 0;
+      wl_client_get_credentials(wl_resource_get_client(surface->resource), &pid, &uid, &gid);
+      return pid;
+    }
+
     const char* deviceName(const wlr_input_device* device) {
       return device->name != nullptr ? device->name : "unknown";
     }
@@ -483,6 +511,42 @@ namespace umbriel {
     Server* self;
     self = wl_container_of(listener, self, m_requestActivate);
     auto* event = static_cast<wlr_xdg_activation_v1_request_activate_event*>(data);
+    wlr_xdg_activation_token_v1* token = event->token;
+    const char* tokenName = token != nullptr ? wlr_xdg_activation_token_v1_get_name(token) : nullptr;
+    const auto* watch = token != nullptr ? static_cast<ActivationTokenWatch*>(token->data) : nullptr;
+    const auto age = watch != nullptr
+        ? std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - watch->createdAt)
+              .count()
+        : -1;
+    View* source = token != nullptr ? viewForSurface(*self, token->surface) : nullptr;
+    View* target = viewForSurface(*self, event->surface);
+    Workspace* targetWorkspace = target != nullptr ? target->workspace() : nullptr;
+    const bool targetKeyboardFocused = self->m_seat != nullptr
+        && self->m_seat->wlr()->keyboard_state.focused_surface != nullptr
+        && wlr_surface_get_root_surface(self->m_seat->wlr()->keyboard_state.focused_surface)
+            == wlr_surface_get_root_surface(event->surface);
+    const bool targetPointerFocused = self->m_seat != nullptr
+        && self->m_seat->wlr()->pointer_state.focused_surface != nullptr
+        && wlr_surface_get_root_surface(self->m_seat->wlr()->pointer_state.focused_surface)
+            == wlr_surface_get_root_surface(event->surface);
+    kLog.debug(
+        "xdg-activation activate token='{}' age_ms={} serial={} seat={} source_surface={} source_pid={} "
+        "source_app_id='{}' app_id_hint='{}' target_surface={} target_pid={} target_app_id='{}' mapped={} "
+        "visible={} keyboard_focused={} pointer_focused={} workspace='{}' workspace_active={} other_workspace={} "
+        "locked={}",
+        tokenName != nullptr ? tokenName : "<unknown>", age, token != nullptr ? token->serial : 0,
+        static_cast<const void*>(token != nullptr ? token->seat : nullptr),
+        static_cast<const void*>(token != nullptr ? token->surface : nullptr),
+        surfaceClientPid(token != nullptr ? token->surface : nullptr),
+        source != nullptr && source->toplevel()->app_id != nullptr ? source->toplevel()->app_id : "",
+        token != nullptr && token->app_id != nullptr ? token->app_id : "", static_cast<const void*>(event->surface),
+        surfaceClientPid(event->surface),
+        target != nullptr && target->toplevel()->app_id != nullptr ? target->toplevel()->app_id : "",
+        target != nullptr && target->mapped(), target != nullptr && target->onActiveWorkspace(), targetKeyboardFocused,
+        targetPointerFocused, targetWorkspace != nullptr ? targetWorkspace->name() : "",
+        targetWorkspace != nullptr && targetWorkspace->active(),
+        targetWorkspace != nullptr && !targetWorkspace->active(), self->m_sessionLocked
+    );
     if (self->m_sessionLocked) {
       return;
     }
@@ -495,11 +559,66 @@ namespace umbriel {
 
     for (const auto& entry : self->m_registry.all()) {
       if (entry->toplevel() == toplevel && entry->mapped()) {
-        kLog.debug("xdg-activation focus app_id='{}'", toplevel->app_id != nullptr ? toplevel->app_id : "");
-        self->focusView(entry.get());
+        const bool focusOnActivate = entry->resolvedRules().focusOnActivate.value_or(config().general.focusOnActivate);
+        const bool alreadyFocused = entry->workspace() != nullptr
+            && entry->workspace()->active()
+            && entry->workspace()->focusedView() == entry.get();
+        kLog.debug(
+            "xdg-activation policy target_app_id='{}' focus_on_activate={} already_focused={} action={}",
+            entry->toplevel()->app_id != nullptr ? entry->toplevel()->app_id : "", focusOnActivate, alreadyFocused,
+            alreadyFocused ? "none" : (focusOnActivate ? "focus" : "urgent")
+        );
+        if (alreadyFocused) {
+          entry->setUrgent(false);
+        } else if (focusOnActivate) {
+          self->focusView(entry.get(), FocusReason::XdgActivation);
+        } else {
+          entry->setUrgent(true);
+        }
         return;
       }
     }
+  }
+
+  void Server::onNewActivationToken(wl_listener* listener, void* data) {
+    Server* self;
+    self = wl_container_of(listener, self, m_newActivationToken);
+    auto* token = static_cast<wlr_xdg_activation_token_v1*>(data);
+    auto* watch = new ActivationTokenWatch{
+        .createdAt = std::chrono::steady_clock::now(),
+    };
+    watch->destroy.notify = onActivationTokenDestroy;
+    wl_signal_add(&token->events.destroy, &watch->destroy);
+    token->data = watch;
+
+    View* source = viewForSurface(*self, token->surface);
+    const char* tokenName = wlr_xdg_activation_token_v1_get_name(token);
+    kLog.debug(
+        "xdg-activation token token='{}' serial={} seat={} source_surface={} source_pid={} source_app_id='{}' "
+        "app_id_hint='{}' source_mapped={} source_visible={} source_keyboard_focused={} source_pointer_focused={}",
+        tokenName != nullptr ? tokenName : "<unknown>", token->serial, static_cast<const void*>(token->seat),
+        static_cast<const void*>(token->surface), surfaceClientPid(token->surface),
+        source != nullptr && source->toplevel()->app_id != nullptr ? source->toplevel()->app_id : "",
+        token->app_id != nullptr ? token->app_id : "", source != nullptr && source->mapped(),
+        source != nullptr && source->onActiveWorkspace(),
+        source != nullptr
+            && self->m_seat != nullptr
+            && self->m_seat->wlr()->keyboard_state.focused_surface != nullptr
+            && wlr_surface_get_root_surface(self->m_seat->wlr()->keyboard_state.focused_surface)
+                == wlr_surface_get_root_surface(token->surface),
+        source != nullptr
+            && self->m_seat != nullptr
+            && self->m_seat->wlr()->pointer_state.focused_surface != nullptr
+            && wlr_surface_get_root_surface(self->m_seat->wlr()->pointer_state.focused_surface)
+                == wlr_surface_get_root_surface(token->surface)
+    );
+  }
+
+  void Server::onActivationTokenDestroy(wl_listener* listener, void* /*data*/) {
+    ActivationTokenWatch* watch;
+    watch = wl_container_of(listener, watch, destroy);
+    wl_list_remove(&watch->destroy.link);
+    delete watch;
   }
 
   void Server::onWorkspaceCommit(wl_listener* listener, void* data) {

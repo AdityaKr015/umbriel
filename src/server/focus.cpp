@@ -1,6 +1,7 @@
 #include "server/focus.h"
 
 #include "config/config.h"
+#include "core/log.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
 #include "output/output.h"
@@ -13,6 +14,32 @@
 #include "workspace/workspace.h"
 
 namespace umbriel {
+
+  namespace {
+    constexpr Logger kLog("focus");
+
+    constexpr std::string_view focusReasonName(FocusReason reason) {
+      switch (reason) {
+      case FocusReason::Directional:
+        return "directional";
+      case FocusReason::PointerPress:
+        return "pointer-press";
+      case FocusReason::PointerHover:
+        return "pointer-hover";
+      case FocusReason::Grab:
+        return "grab";
+      case FocusReason::DragDrop:
+        return "drag-drop";
+      case FocusReason::Startup:
+        return "startup";
+      case FocusReason::XdgActivation:
+        return "xdg-activation";
+      case FocusReason::ForeignActivation:
+        return "foreign-activation";
+      }
+      return "unknown";
+    }
+  } // namespace
 
   void FocusManager::focusView(View* view, FocusReason reason) {
     if (view == nullptr || m_server.sessionLocked()) {
@@ -34,6 +61,15 @@ namespace umbriel {
 
     if (Workspace* workspace = view->workspace()) {
       if (!view->pinned() && !workspace->active()) {
+        const char* appId = view->toplevel()->app_id != nullptr ? view->toplevel()->app_id : "";
+        const char* outputName = workspace->group()->output()->wlr()->name;
+        const std::string_view current = workspace->group()->active() != nullptr
+            ? std::string_view(workspace->group()->active()->name())
+            : std::string_view("<none>");
+        kLog.debug(
+            "workspace switch trigger=focus reason={} app_id='{}' output='{}' from='{}' to='{}'",
+            focusReasonName(reason), appId, outputName, current, workspace->name()
+        );
         workspace->group()->activate(workspace);
       }
     }
@@ -45,6 +81,7 @@ namespace umbriel {
     }
 
     m_server.registry().promote(view);
+    view->setUrgent(false);
 
     // Keep workspace focus while exclusive layer-shell holds the seat; refocus applies it later.
     // Still clear activation chrome so the previous window does not stay visually focused.
@@ -75,6 +112,8 @@ namespace umbriel {
     case FocusReason::PointerHover:
     case FocusReason::DragDrop:
     case FocusReason::Startup:
+    case FocusReason::XdgActivation:
+    case FocusReason::ForeignActivation:
       workspace->ensureFocusedVisible();
       workspace->markArrange(true);
       break;

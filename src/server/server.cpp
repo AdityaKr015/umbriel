@@ -223,6 +223,8 @@ namespace umbriel {
     wl_signal_add(&m_outputLayout->events.change, &m_outputLayoutChange);
 
     m_xdgActivation = wlr_xdg_activation_v1_create(m_display);
+    m_newActivationToken.notify = onNewActivationToken;
+    wl_signal_add(&m_xdgActivation->events.new_token, &m_newActivationToken);
     m_requestActivate.notify = onRequestActivate;
     wl_signal_add(&m_xdgActivation->events.request_activate, &m_requestActivate);
 
@@ -252,6 +254,7 @@ namespace umbriel {
     wl_list_remove(&m_newPointerConstraint.link);
     wl_list_remove(&m_newVirtualPointer.link);
     wl_list_remove(&m_newIdleInhibitor.link);
+    wl_list_remove(&m_newActivationToken.link);
     wl_list_remove(&m_requestActivate.link);
     wl_list_remove(&m_workspaceCommit.link);
     wl_list_remove(&m_setGamma.link);

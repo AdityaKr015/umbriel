@@ -42,6 +42,7 @@ struct wlr_session_lock_manager_v1;
 struct wlr_session_lock_v1;
 struct wlr_surface;
 struct wlr_xdg_activation_v1;
+struct wlr_xdg_activation_token_v1;
 struct wlr_xdg_decoration_manager_v1;
 struct wlr_xdg_shell;
 struct wlr_server_decoration_manager;
@@ -247,6 +248,8 @@ namespace umbriel {
     static void onVirtualPointerDestroy(wl_listener* listener, void* data);
     static void onNewIdleInhibitor(wl_listener* listener, void* data);
     static void onIdleInhibitorDestroy(wl_listener* listener, void* data);
+    static void onNewActivationToken(wl_listener* listener, void* data);
+    static void onActivationTokenDestroy(wl_listener* listener, void* data);
     static void onRequestActivate(wl_listener* listener, void* data);
     static void onWorkspaceCommit(wl_listener* listener, void* data);
     static void onSetGamma(wl_listener* listener, void* data);
@@ -295,6 +298,10 @@ namespace umbriel {
     struct VirtualPointerDevice {
       Server* server = nullptr;
       wlr_virtual_pointer_v1* vpointer = nullptr;
+      wl_listener destroy{};
+    };
+    struct ActivationTokenWatch {
+      std::chrono::steady_clock::time_point createdAt;
       wl_listener destroy{};
     };
 
@@ -404,6 +411,7 @@ namespace umbriel {
     wl_listener m_newPointerConstraint{};
     wl_listener m_newVirtualPointer{};
     wl_listener m_newIdleInhibitor{};
+    wl_listener m_newActivationToken{};
     wl_listener m_requestActivate{};
     wl_listener m_workspaceCommit{};
     wl_listener m_setGamma{};

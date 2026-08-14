@@ -16,7 +16,7 @@ What works today:
 - Scrolling column layout with keyboard/mouse focus, movement, width presets, and animated transitions
 - Floating windows with mouse move/resize, mod+drag tile reorder with drop-target preview
 - Pinned floating windows above fullscreen applications, toggleable with `window-toggle-pinned`
-- Window rules: per-app float, size, column width, workspace, fullscreen, and opacity via `[[window_rule]]` with regex matching on app_id and title
+- Window rules: per-app float, size, column width, workspace, fullscreen, activation focus, and opacity via `[[window_rule]]` with regex matching on app_id and title
 - Blur, shadows, rounded corners, double borders (inner + outer ring), animated position/size/fade transitions, close animation snapshots
 - Touchpad/trackpad gestures: 3-finger horizontal swipe (scroll layout), 3-finger vertical swipe (workspace switch), pinch/hold forwarding
 - Touch input: tap-to-focus, touch forwarding to clients, hot-plug support
@@ -29,7 +29,7 @@ What works today:
 - `zwp_pointer_constraints_v1` / `zwp_relative_pointer_manager_v1` (pointer lock/confine)
 - `zwp_idle_inhibit_manager_v1` (+ `ext_idle_notifier_v1` for idle timers)
 - `zwlr_screencopy_manager_v1` / `zwlr_export_dmabuf_manager_v1` (screenshots / capture)
-- `xdg_activation_v1` (token-based window activation / focus)
+- `xdg_activation_v1` (token-based window activation with configurable focus / urgency policy)
 - `wp_viewporter` / `wp_fractional_scale_v1` (viewport crop + fractional scale)
 - `ext_data_control_v1` (+ primary selection) for clipboard managers / history
 - `zwlr_gamma_control_v1` (color temperature / night light)

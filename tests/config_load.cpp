@@ -103,4 +103,26 @@ center_underfull_strip = true
   CHECK(containsDiagnostic(store, "unknown key general.prefer_no_csd"));
 }
 
+UMBRIEL_TEST(activationPolicyLoadsGloballyAndPerWindow) {
+  const TempConfig file;
+  file.write(R"(
+[general]
+focus_on_activate = true
+
+[[window_rule]]
+match.app_id = "^game$"
+focus_on_activate = false
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK(store.config().general.focusOnActivate);
+  CHECK_EQ(store.config().windowRules.size(), size_t{1});
+  CHECK(store.config().windowRules[0].focusOnActivate.has_value());
+  CHECK(!*store.config().windowRules[0].focusOnActivate);
+}
+
 int main() { return RUN_TESTS(); }

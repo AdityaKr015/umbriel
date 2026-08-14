@@ -112,12 +112,14 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   app.appIdRegex = std::regex(app.appIdPattern);
   app.opacity = 0.5;
   app.blur = true;
+  app.focusOnActivate = false;
   config.windowRules.push_back(std::move(app));
 
   WindowRule title;
   title.titlePattern = "shell";
   title.titleRegex = std::regex(title.titlePattern);
   title.opacity = 0.8;
+  title.focusOnActivate = true;
   config.windowRules.push_back(std::move(title));
 
   WindowRule unfocused;
@@ -129,6 +131,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK(resolved.opacity && *resolved.opacity == 0.8);
   CHECK(resolved.blur && *resolved.blur);
   CHECK(resolved.defaultFloating && *resolved.defaultFloating);
+  CHECK(resolved.focusOnActivate && *resolved.focusOnActivate);
 
   const auto focused = umbriel::resolveWindowRules(config, "foot", "project shell", true);
   CHECK(focused.opacity && *focused.opacity == 0.8);

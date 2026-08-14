@@ -43,6 +43,7 @@ files = [
 autostart = ["noctalia", "kitty"]
 xwayland = true
 show_cheatsheet = true
+focus_on_activate = false
 ```
 
 | Key | Type | Default | Description |
@@ -50,6 +51,7 @@ show_cheatsheet = true
 | `autostart` | string array | `[]` | Shell commands run once after startup. Never re-run on config reload. |
 | `xwayland` | bool | `true` | Spawn `xwayland-satellite` for X11 app support. The binary must be installed. Changing this requires a restart. |
 | `show_cheatsheet` | bool | `true` | Show the keybinds cheatsheet overlay on startup. Press any key or any mouse button to dismiss, or toggle at runtime via `cheatsheet-toggle`. |
+| `focus_on_activate` | bool | `false` | Focus and reveal windows that request activation. When false, activation marks the window and its workspace urgent without changing workspaces. Window rules can override this per application. |
 
 ## Environment
 

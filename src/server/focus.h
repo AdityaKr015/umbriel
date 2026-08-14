@@ -23,7 +23,9 @@ namespace umbriel {
     PointerHover, // follows_mouse enter
     Grab,         // Mod+drag / Mod+resize start
     DragDrop,     // tile/float drag finished
-    Startup,      // map, setFloating, xdg-activation, foreign activate, refocus fallback
+    Startup,      // map, setFloating, refocus fallback
+    XdgActivation,
+    ForeignActivation,
   };
 
   // Who holds keyboard focus, and everything that has to change when that moves.

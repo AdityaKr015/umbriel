@@ -121,7 +121,13 @@ namespace umbriel {
     if (!m_mapped) {
       return;
     }
-    m_server->focusView(this);
+    Workspace* workspace = m_workspace;
+    kLog.debug(
+        "foreign-toplevel activate app_id='{}' mapped={} visible={} workspace='{}' other_workspace={}",
+        m_toplevel->app_id != nullptr ? m_toplevel->app_id : "", m_mapped, m_onActiveWorkspace,
+        workspace != nullptr ? workspace->name() : "", workspace != nullptr && !workspace->active()
+    );
+    m_server->focusView(this, FocusReason::ForeignActivation);
   }
 
   void View::handleForeignClose() { wlr_xdg_toplevel_send_close(m_toplevel); }

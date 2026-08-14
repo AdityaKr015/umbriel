@@ -683,6 +683,16 @@ namespace umbriel {
     }
   }
 
+  void View::setUrgent(bool urgent) {
+    if (m_urgent == urgent) {
+      return;
+    }
+    m_urgent = urgent;
+    if (m_workspace != nullptr) {
+      m_workspace->updateUrgent();
+    }
+  }
+
   void View::applyCornerRadius() { applyCornerRadii(corner_radii_all(surfaceRadius())); }
 
   void View::applyCornerRadii(fx_corner_radii corners) {
@@ -1223,6 +1233,7 @@ namespace umbriel {
   }
 
   void View::handleUnmap() {
+    setUrgent(false);
     if (m_pinned) {
       m_pinned = false;
       if (m_workspace != nullptr) {

@@ -59,6 +59,7 @@ namespace umbriel {
     [[nodiscard]] bool isSwitchTransitionView(const View* view) const;
 
     void setActive(bool active);
+    void updateUrgent();
     void setFocusedView(View* view);
     void syncFloatingStack(View* view);
     void restackFloatingViews();

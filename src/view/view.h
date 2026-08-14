@@ -45,6 +45,7 @@ namespace umbriel {
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
     [[nodiscard]] bool pinned() const { return m_pinned; }
+    [[nodiscard]] bool urgent() const { return m_urgent; }
     [[nodiscard]] bool sizeAnimActive() const { return sizeAnimating(); }
     [[nodiscard]] int presentedWidth(const wlr_box& target) const;
     [[nodiscard]] int presentedHeight(const wlr_box& target) const;
@@ -56,6 +57,7 @@ namespace umbriel {
     // activation still update, the keyboard enter is deferred to the close.
     void applySeatFocus(bool withKeyboard = true);
     void setForeignActivated(bool activated);
+    void setUrgent(bool urgent);
     // Focus ring only. Public alongside setForeignActivated because both are
     // activation chrome the focus manager drives from outside.
     void setBorderFocused(bool focused);
@@ -256,6 +258,7 @@ namespace umbriel {
     bool m_pinned = false;
     bool m_onActiveWorkspace = false;
     bool m_scratchpadBorder = false;
+    bool m_urgent = false;
     AnimatedValue m_posX;
     AnimatedValue m_posY;
     AnimatedValue m_fade;

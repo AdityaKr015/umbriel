@@ -185,6 +185,9 @@ workspace. Use the wheel, arrow keys, or a 3-finger swipe to move through the
 workspace list. While the overview is open, each gesture moves one workspace
 at a time. A 4-finger swipe opens or closes the overview.
 
+An active client drag takes precedence. Umbriel ignores requests to open the
+overview until the pointer button that initiated the drag is released.
+
 ### Move windows
 
 Dragged windows become translucent so you can see the destination beneath

@@ -466,6 +466,14 @@ namespace umbriel {
       return;
     }
 
+    // A client data-device drag owns the seat grab. Its initiating release must
+    // reach wlroots even when the drag began from a panel over the overview.
+    // Otherwise the drag icon and both input grabs remain active indefinitely.
+    if (wlr_seat* seat = m_server->seat()->wlr(); seat->drag != nullptr) {
+      wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+      return;
+    }
+
     // Overview owns the pointer while it is up: cards are its own hit-test
     // surface and the desktop underneath is inert. Top/overlay layer surfaces
     // (panels) stay fully interactive.
@@ -804,8 +812,10 @@ namespace umbriel {
   void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY) {
     // Overview owns motion: cards follow a drag, panels keep passthrough, and
     // the inert desktop underneath never receives enter/motion or hover focus.
-    if (Overview* overview = m_server->overview();
-        overview != nullptr && overview->active() && !m_server->sessionLocked()) {
+    if (Overview* overview = m_server->overview(); overview != nullptr
+        && overview->active()
+        && !m_server->sessionLocked()
+        && m_server->seat()->wlr()->drag == nullptr) {
       overview->handleMotion(m_cursor->x, m_cursor->y);
       wlr_seat* seat = m_server->seat()->wlr();
       if (overview->dragging()) {

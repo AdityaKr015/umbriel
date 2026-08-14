@@ -93,6 +93,26 @@ layer_shell_protocol_h = custom_target(
   output: 'wlr-layer-shell-unstable-v1-protocol.h',
   command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
 )
+layer_shell_client_h = custom_target(
+  'wlr-layer-shell-unstable-v1-client-protocol.h',
+  input: 'protocols/wlr-layer-shell-unstable-v1.xml',
+  output: 'wlr-layer-shell-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+layer_shell_client_c = custom_target(
+  'wlr-layer-shell-unstable-v1-client-protocol.c',
+  input: 'protocols/wlr-layer-shell-unstable-v1.xml',
+  output: 'wlr-layer-shell-unstable-v1-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
+xdg_shell_client_c = custom_target(
+  'xdg-shell-client-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'stable/xdg-shell/xdg-shell.xml',
+  output: 'xdg-shell-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 
 output_mgmt_client_h = custom_target(
   'wlr-output-management-unstable-v1-client-protocol.h',
@@ -270,6 +290,13 @@ unit_tests = [
 executable(
   'pointer-client',
   ['tests/harness/pointer_client.cpp', virtual_pointer_client_h, virtual_pointer_client_c],
+  dependencies: [wayland_client_dep],
+)
+
+# Harness helper that owns a mapped surface and initiates a data-device drag.
+executable(
+  'drag-client',
+  ['tests/harness/drag_client.cpp', layer_shell_client_h, layer_shell_client_c, xdg_shell_client_c],
   dependencies: [wayland_client_dep],
 )
 

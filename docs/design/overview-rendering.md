@@ -39,6 +39,8 @@ The relevant checks are:
 
 - [`tests/harness/checks/100_overview.sh`](../../tests/harness/checks/100_overview.sh)
   for overview interaction and workspace navigation.
+- [`tests/harness/checks/101_external_drag.sh`](../../tests/harness/checks/101_external_drag.sh)
+  for client drag ownership during overview activation.
 - [`tests/harness/checks/107_drag_opacity.sh`](../../tests/harness/checks/107_drag_opacity.sh)
   for composed drag opacity.
 - [`tests/output_clip.cpp`](../../tests/output_clip.cpp) for output clipping in

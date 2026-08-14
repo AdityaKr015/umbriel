@@ -679,6 +679,13 @@ namespace umbriel {
     if (m_server->sessionLocked()) {
       return false;
     }
+    // A data-device drag owns wlroots' pointer and keyboard grabs until the
+    // initiating button is released. Taking overview input ownership now would
+    // hide that release from the drag and leave both grabs active.
+    if (m_server->seat()->wlr()->drag != nullptr) {
+      kLog.debug("overview open ignored during active client drag");
+      return false;
+    }
     m_server->cursor()->resetMode();
     for (const auto& output : m_server->outputs()) {
       WorkspaceGroup* group = output->workspaceGroup();

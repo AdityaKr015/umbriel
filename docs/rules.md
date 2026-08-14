@@ -2,9 +2,9 @@
 
 ## Window Rules
 
-Window rules match windows by `app_id` and/or `title` using ECMAScript regex.
-All matching `[[window_rule]]` entries are merged top-to-bottom; later rules
-override earlier ones for each field they set (last-writer-wins).
+Window rules match `app_id`, title, or focus state using ECMAScript regular
+expressions. Every matching rule contributes its settings. If two rules set
+the same field, the rule that appears later in the file takes precedence.
 
 ```toml
 [[window_rule]]
@@ -21,15 +21,17 @@ default_floating = true
 | `match.title` | regex | Match the window's title. |
 | `match.is_focused` | bool | Match the window's focused state dynamically. |
 
-All selectors are optional. Omitting every selector matches all windows.
-Matching uses regex search (partial match); use `^` and `$` to anchor.
+Every selector is optional. A rule without selectors matches every window.
+Regular expressions match any part of a value by default. Use `^` and `$` when
+you need to match the entire value.
 
-Run `umbriel windows` to list running app IDs.
+Run `umbriel windows` to list the app IDs of open windows.
 
-### One-shot effects (applied at map time)
+### Settings applied when a window opens
 
-These effects fire once when the window maps. If a window's title arrives after
-mapping, rules are re-evaluated once.
+These settings are applied once when the window opens. Some applications set
+their title shortly afterward, so Umbriel checks the rules one more time when
+that first title arrives.
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -38,10 +40,10 @@ mapping, rules are re-evaluated once.
 | `default_size` | `[w, h]` | Initial size in pixels, clamped to the client's min/max hints. Floats use both, then own their size and honor client resizes; tiled windows ignore height. |
 | `default_width` | float | Scrolling only. Column width fraction (0.1-1.0). Gap-aware: fractions that sum to 1 tile exactly. Overrides `layout.scrolling.default_width_fraction`. Dragging the column within or between scrolling workspaces retains its current width. Ignored in dwindle. |
 | `default_workspace` | int | Place on workspace N from 1 to 64. On dynamic outputs, values beyond the current count clamp to the last workspace. |
-| `default_fullscreen` | bool | Map fullscreen. |
-| `default_maximize` | bool | Map maximized. Tiled: compositor-owned column full-width; client maximize requests do not change the layout. Floating: fill usable area. |
+| `default_fullscreen` | bool | Open in fullscreen. |
+| `default_maximize` | bool | Open maximized. For tiled windows, Umbriel expands the column to full width without changing the layout when the client requests maximize. Floating windows fill the usable area. |
 
-### Continuous effects (update on title/app_id/focus changes)
+### Settings updated while a window is open
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -126,9 +128,9 @@ opacity = 1.0
 
 ## Layer Rules
 
-Layer rules match layer-shell surfaces (bars, launchers, notifications) by
-namespace using ECMAScript regex. Run `umbriel layers` to discover surface
-namespaces.
+Layer rules match layer-shell surfaces such as bars, launchers, and
+notifications. The `match.namespace` selector uses an ECMAScript regular
+expression. Run `umbriel layers` to list the namespaces currently in use.
 
 ```toml
 [[layer_rule]]
@@ -144,7 +146,8 @@ blur_popups = true
 |----------|------|-------------|
 | `match.namespace` | regex | Match the layer surface namespace. |
 
-Matching uses regex search (partial match); use `^` and `$` to anchor.
+Regular expressions match any part of a namespace. Use `^` and `$` to match
+the entire namespace.
 
 ### Effects
 
@@ -155,5 +158,5 @@ Matching uses regex search (partial match); use `^` and `$` to anchor.
 | `blur_ignore_alpha` | float | Skip blur where surface alpha is below this threshold (0.0-1.0). `0.0` blurs the entire rectangle; higher values leave transparent regions unblurred. |
 | `blur_optimized` | bool | Override `appearance.blur.optimized`. |
 
-Layer-shell blur is disabled by default. All matching rules are merged
-top-to-bottom (last-writer-wins), same as window rules.
+Layer-shell blur is off by default. As with window rules, every matching rule
+contributes its settings, and later values take precedence.

@@ -1,14 +1,15 @@
 # Configuration
 
-Umbriel reads TOML configuration from `~/.config/umbriel/config.toml`, or from a
-path passed with `umbriel -c <path>`. Changes apply immediately on save; invalid
-values keep the previous state. You can also bind `config-reload` to a key for
-manual reloads.
+Umbriel reads TOML configuration from `~/.config/umbriel/config.toml`. Pass
+`umbriel -c <path>` to use a different file.
 
-Reloads are transactional. A parse failure keeps the committed configuration
-and live compositor state, while diagnostics and include watches update so
-fixing an included file can recover automatically. Successful reloads with no
-runtime effects leave active overlays and output state untouched.
+Changes normally apply as soon as you save. If a reload fails, Umbriel keeps
+your last working configuration and continues watching included files. Save a
+corrected file to try the reload again. Options that require a restart are
+marked in the reference tables below.
+
+For the exact reload guarantees, see the
+[configuration reload design note](design/configuration-reload.md).
 
 ## Include
 
@@ -76,8 +77,8 @@ back_and_forth = true
 | `back_and_forth` | bool | `false` | Re-selecting the active workspace jumps back to the previously active workspace on that output. |
 
 Output workspaces are dynamic by default. See [Outputs](outputs.md) for dynamic
-behavior and static per-output inventories, and
-[Outputs: Workspace Rules](outputs.md#workspace-rules) for per-workspace layout
+behavior and fixed workspace lists. See
+[Workspace rules](outputs.md#workspace-rules) for per-workspace layout
 overrides.
 
 ## Appearance
@@ -174,22 +175,30 @@ background_tint = "#10101430"
 workspace_background = "#00000044"
 ```
 
-Zoomed-out view of every workspace on every output (default `Mod+O`). Windows
-stay live: click to focus, middle-click to close, drag between workspaces, or
-4-finger swipe to toggle. Move up and down the filmstrip with the wheel, the
-arrow keys, or a 3-finger swipe; because the real windows are hidden while the
-overview is up, each of those steps one workspace at a time rather than sliding
-the way a 3-finger swipe does outside. Dragged cards render at half opacity so
-the insertion preview remains visible beneath them. Client-provided alpha is
-multiplied by the drag opacity. Dwindle drags preview the directional split
-under the pointer before the window is dropped.
-Transparent windows keep their configured window-rule blur throughout the zoom
-transition. Each workspace has a rounded background behind its cards; use the
-configured alpha for anything from a subtle tint to an opaque fill.
-Cards carry the same decoration as the real windows: the inner border in its
-focus colour, the outer border ring, and the corner radius, all scaled to the
-thumbnail. A card that a workspace row pushes past the edge of its output is cut
-there, and the cut corners lose their radius, as a window spanning outputs does.
+### Open and navigate
+
+The overview shows every workspace on every output. Press `Mod+O` by default,
+or use one of the [overview actions](keybinds.md#overview-actions).
+
+Click a window to focus it, middle-click to close it, or drag it to another
+workspace. Use the wheel, arrow keys, or a 3-finger swipe to move through the
+workspace list. While the overview is open, each gesture moves one workspace
+at a time. A 4-finger swipe opens or closes the overview.
+
+### Move windows
+
+Dragged windows become translucent so you can see the destination beneath
+them. In the dwindle layout, the preview shows the direction of the new split
+before you drop the window.
+
+### Appearance
+
+Overview cards use the same borders, corner radius, transparency, and blur as
+their windows. `workspace_background` adds a rounded background behind each
+workspace. Its alpha can produce anything from a light tint to an opaque fill.
+
+See the [overview rendering design note](design/overview-rendering.md) for
+clipping, opacity, and decoration details.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -225,16 +234,13 @@ Scrolling layout options:
 | `default_width_fraction` | float | `0.5` | Initial width assigned to new scrolling columns (0.1-1.0). |
 | `center_underfull_strip` | bool | `true` | Center the complete strip whenever it is narrower than the viewport. Set to `false` to align an underfull strip at the left edge. |
 
-Horizontal resizing updates underfull-strip centering continuously.
+Resizing a column recenters an underfull strip immediately.
 
-Dragged windows render at half opacity while the grab is active, keeping the
-insertion preview visible through the window. The drag multiplier composes with
-client-provided transparency and window-rule opacity.
-
-When dragging a column, insertion previews occupy the free space beside the
-actual column edges, including centered strips. For overflowing strips, the
-extreme right edge of the output targets the end of the strip even when later
-columns are off-screen.
+Dragged windows become translucent so the insertion preview remains visible.
+Existing window transparency still applies during the drag.
+When you drag a column, the preview uses the free space beside the real column
+edges. If the strip extends beyond the output, dropping at the far right edge
+moves the column to the end, even when the last columns are off-screen.
 
 Layout fields can be overridden per-workspace; see
 [Workspace Rules](outputs.md#workspace-rules).
@@ -295,9 +301,8 @@ follows_mouse_max_scroll = 0.5  # optional, measured in viewport widths
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `follows_mouse` | bool | `false` | Focus the window under the pointer (sloppy focus). Only fires when the pointer enters a different window, then scrolls it on-screen. |
-| `follows_mouse_max_scroll` | float | (no limit) | Refuse focus when bringing the window into view would scroll further than this. Measured in viewport widths, so `1.0` is one full screen and values above that are meaningful — revealing a column three screens away is `3.0`. `0.0` allows focus only for windows already fully visible. Omit for no limit. |
+| `follows_mouse` | bool | `false` | Focus a window when the pointer enters it, then scroll it into view. |
+| `follows_mouse_max_scroll` | float | (no limit) | Do not change focus when revealing the window would scroll farther than this many viewport widths. `0.0` allows only windows that are already fully visible. Omit for no limit. |
 
-Values are clamped to `0.0`–`100.0`, and a clamp is reported. A negative limit
-would refuse focus even for a window needing no scroll at all, which switches
-hover focus off rather than limiting it.
+For example, a window three screens away requires a limit of at least `3.0`.
+Values outside `0.0` to `100.0` are clamped and reported.

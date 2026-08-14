@@ -147,6 +147,7 @@ See [`example.toml`](example.toml) for defaults and [`docs/`](docs/) for the ful
 - [Keybinds](docs/keybinds.md): chords, submaps, Noctalia integration
 - [Window and Layer Rules](docs/rules.md): matching, effects, blur
 - [Outputs](docs/outputs.md): monitors, workspaces, workspace layout overrides
+- [Maintainer design notes](docs/design/README.md): reloads, workspaces, and overview rendering
 
 ### Nix (home-manager / NixOS)
 

@@ -73,54 +73,68 @@ files = [
 ]
 ```
 
-## Workspace inventory
+## Choose a workspace model
 
-Omitting `workspaces` or setting it to `"dynamic"` enables auto-managed
-numbered workspaces. A dynamic output starts with one empty workspace named
-`"1"`. When the trailing workspace gains a window, Umbriel appends another
-empty workspace. Empty workspaces are removed after they are left, except when
-still active, and the remaining workspaces are renumbered.
+Each output can use dynamic or static workspaces.
 
-An explicit count or name list creates a fully static inventory containing
-exactly those workspaces. Static workspaces are not removed when empty.
-Numeric switch targets beyond the current dynamic workspace count clamp to the
-last workspace.
+### Dynamic workspaces
 
-Reloading the config reconciles inventories live. Existing static workspaces
-survive by name, then by position; windows from removed static workspaces move
-to the nearest survivor. Switching to dynamic mode preserves populated and
-active workspaces, renumbers them, and appends a trailing empty workspace.
+Omit `workspaces` or set it to `"dynamic"`. The output starts with one empty
+workspace named `"1"`. When the last workspace gains a window, Umbriel adds
+another empty workspace.
 
-Layout-only reloads refresh workspace geometry without reconciling the
-inventory or reapplying output mode, scale, transform, or placement. Border
-width changes also refresh workspace spacing because borders contribute to the
-resolved tile gap.
+After you leave an empty workspace, Umbriel removes it unless it is still
+active. The remaining workspaces are renumbered. If you switch to a workspace
+number beyond the current count, Umbriel uses the last workspace.
 
----
+### Static workspaces
 
-# Workspace Rules
+Set `workspaces` to a number or an ordered list of names. Umbriel creates
+exactly those workspaces and keeps them when they are empty.
 
-`[[workspace]]` entries customize the layout of static inventory entries or
-numbered dynamic workspace positions. They do not create workspaces directly.
+```toml
+[output.DP-1]
+workspaces = 5
+
+[output.DP-2]
+workspaces = ["WEB", "CHAT", "VIDEO"]
+```
+
+### Change workspaces on reload
+
+Workspace changes apply when you save a valid configuration. For static
+workspaces, Umbriel first matches existing workspaces by name and then by
+position. Windows from a removed workspace move to the nearest remaining one.
+
+Switching to dynamic workspaces keeps populated and active workspaces,
+renumbers them, and adds an empty workspace at the end.
+
+The [workspace lifecycle design note](design/workspace-lifecycle.md) records
+the exact state transitions. The
+[configuration reload design note](design/configuration-reload.md) explains
+which other output and layout settings are refreshed during a reload.
+
+## Workspace rules
+
+`[[workspace]]` entries customize static workspaces or numbered positions on a
+dynamic output. They change layout settings but do not create workspaces.
 
 Each rule selects a workspace by exactly one of `name` (string) or `index`
 (1-based integer from 1 to 64). An optional `output` restricts the rule to that
 output.
 
-## Inheritance
+### How settings are combined
 
-Layout fields inherit in this order:
+Workspace layout settings are applied in this order:
 
-```
-[layout] -> matching global [[workspace]] -> matching output [[workspace]]
-```
+1. The base `[layout]` settings.
+2. A matching `[[workspace]]` rule without an `output`.
+3. A matching `[[workspace]]` rule for the selected output.
 
-Rules without `output` apply wherever the selector matches. Output-specific
-rules apply afterward and take precedence.
-On dynamic outputs, rules match numbered positions and names as those
-workspaces exist.
+Later steps take precedence. On dynamic outputs, rules match workspace names
+and numbered positions as those workspaces are created or removed.
 
-## Available fields
+### Available fields
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -133,7 +147,7 @@ workspaces exist.
 | `layout.scrolling.default_width_fraction` | float | Initial scrolling column width (0.1-1.0). |
 | `layout.scrolling.center_underfull_strip` | bool | Center the complete strip whenever it is narrower than the viewport. Disable to left-align underfull strips. |
 
-## Examples
+### Examples
 
 ```toml
 # Dwindle layout for the VIDEO workspace on DP-2

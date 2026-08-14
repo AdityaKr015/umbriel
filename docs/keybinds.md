@@ -49,50 +49,54 @@ set.
 
 Workspace selectors use exact names, including numeric names such as `1`.
 Unique names resolve globally; duplicate names resolve on the preferred output.
-Append `/output` to target a different output explicitly. On a dynamic output,
-a numeric target resolves on the preferred output before an exact match on
-another output, then clamps to the last workspace when it exceeds the current
-dynamic inventory.
+Add `/output` to target another output explicitly. On a dynamic output, a
+numeric target first uses the preferred output. If the number is beyond the
+current workspace list, Umbriel uses the last workspace.
 
 ### Floating action
 
 `window-toggle-floating` remembers the window's floating size and position.
-The first float lands slightly down-right of the tile, clamped on-screen.
+The first time a window floats, Umbriel places it slightly below and to the
+right of its tiled position while keeping it on-screen.
 
-`window-toggle-pinned` makes the focused window floating and keeps it above
-fullscreen windows on its output. Pinned windows remain visible when switching
-workspaces; pinning a fullscreen window is ignored, and fullscreening a pinned
-window removes its pinned state.
+`window-toggle-pinned` makes the focused window float and keeps it above
+fullscreen windows on its output. Pinned windows remain visible when you
+switch workspaces. You cannot pin a fullscreen window, and making a pinned
+window fullscreen removes its pinned state.
 
 ### Overview actions
 
-`overview-toggle`, `overview-open`, `overview-close`.
+Use `overview-toggle`, `overview-open`, or `overview-close`.
 
 ### Cheatsheet actions
 
-`cheatsheet-toggle`, `cheatsheet-open`, `cheatsheet-close`.
+Use `cheatsheet-toggle`, `cheatsheet-open`, or `cheatsheet-close`.
+
+The cheatsheet lists every active keybind. It opens at startup when
+`general.show_cheatsheet` is `true`, which is the default. You can also toggle
+it through IPC with `umbriel msg cheatsheet-toggle`.
+
+Any non-modifier key or mouse button closes the cheatsheet. Bound key
+combinations still run normally. A click used to close the cheatsheet is not
+passed to the window beneath it.
 
 ### Scratchpad actions
 
-`window-move-to-scratchpad` minimizes the focused window into the current
-output's scratchpad. `scratchpad-toggle` shows or hides that output's pool.
-`window-restore-from-scratchpad` returns its focused window to its saved
-workspace, and `scratchpad-focus-next` cycles visible scratchpad windows.
-When a pool is shown again, focus returns to the scratchpad window that was
-focused when the pool was hidden.
-Append `:<output>` to any of these actions to target its per-output pool from
-anywhere, for example `scratchpad-toggle:DP-1` or
-`window-move-to-scratchpad:DP-1`.
-Scratchpad windows always remain floating; dragging them never tiles or
-restores them into the workspace underneath.
+Each output has its own scratchpad for temporarily hiding windows.
 
-The keybinds cheatsheet overlay lists every active keybind in a styled panel.
-It appears automatically on startup when `general.show_cheatsheet` is `true`
-(the default). At runtime, toggle it via IPC (`umbriel msg cheatsheet-toggle`)
-or bind one of the actions above. Any non-modifier key press dismisses the
-overlay, and so does any mouse button press; bound chords still execute
-normally. The dismissing click is swallowed, so it never reaches the window
-under the overlay, while a bound press runs its action as usual.
+| Action | What it does |
+|--------|--------------|
+| `window-move-to-scratchpad` | Move the focused window from its workspace into the scratchpad. |
+| `scratchpad-toggle` | Show or hide the output's scratchpad windows. |
+| `window-restore-from-scratchpad` | Return the focused scratchpad window to its saved workspace. |
+| `scratchpad-focus-next` | Focus the next visible scratchpad window. |
+
+When you show a scratchpad again, focus returns to the window that was focused
+when you hid it. Add `:<output>` to any scratchpad action to target another
+output, for example `scratchpad-toggle:DP-1`.
+
+Scratchpad windows always float. Dragging one does not tile it or restore it to
+the workspace beneath it.
 
 ## Repeat
 

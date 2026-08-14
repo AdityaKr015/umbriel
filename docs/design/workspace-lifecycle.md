@@ -1,0 +1,62 @@
+# Workspace lifecycle
+
+This note records the workspace state transitions behind the shorter user guide
+in [`outputs.md`](../outputs.md).
+
+## Dynamic inventory
+
+A dynamic output maintains numbered workspaces with these invariants:
+
+- It always has at least one workspace.
+- Outside a workspace slide or overview session, an occupied last workspace
+  causes Umbriel to append a new empty workspace.
+- Empty inactive workspaces are removed.
+- Remaining workspaces are renamed and reindexed from `1` in their current
+  order.
+- Workspace layout rules are resolved again after renumbering.
+
+Dynamic reconciliation waits while a workspace slide or the overview is active.
+This prevents the workspace list from changing underneath those interactions.
+
+## Static inventory
+
+A number or ordered name list defines an exact static inventory. During a
+configuration reload, Umbriel preserves workspace identity in two passes:
+
+1. Match existing workspaces to the new inventory by name.
+2. Match any remaining entries by position.
+
+Umbriel creates entries that have no match. When an old workspace is removed,
+its windows move to the surviving workspace at the same position, or to the
+last workspace when that position no longer exists. If the active workspace is
+removed, that destination becomes active.
+
+Empty static workspaces remain in the inventory.
+
+## Switching inventory type
+
+Switching from a static inventory to dynamic workspaces keeps every populated
+workspace and the active workspace. Other empty workspaces are removed. The
+survivors are renumbered, and Umbriel appends an empty workspace when needed.
+
+Switching to a static inventory follows the normal name-first, position-second
+matching process.
+
+## Workspace layout rules
+
+Layout settings resolve in this order:
+
+1. Base `[layout]` settings.
+2. A matching global `[[workspace]]` rule.
+3. A matching output-specific `[[workspace]]` rule.
+
+Dynamic rules are resolved against the workspace's current number after any
+inventory change.
+
+## Verification
+
+Configuration resolution and change classification are covered by
+[`tests/config_resolve.cpp`](../../tests/config_resolve.cpp) and
+[`tests/config_change.cpp`](../../tests/config_change.cpp). Live workspace
+selection is exercised by
+[`tests/harness/checks/050_workspace.sh`](../../tests/harness/checks/050_workspace.sh).

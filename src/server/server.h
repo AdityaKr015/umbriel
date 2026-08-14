@@ -42,7 +42,6 @@ struct wlr_session_lock_manager_v1;
 struct wlr_session_lock_v1;
 struct wlr_surface;
 struct wlr_xdg_activation_v1;
-struct wlr_xdg_activation_v1_request_activate_event;
 struct wlr_xdg_decoration_manager_v1;
 struct wlr_xdg_shell;
 struct wlr_server_decoration_manager;
@@ -273,7 +272,6 @@ namespace umbriel {
     void clearNormalFocus() { m_focus.clearNormalFocus(); }
     void setLockBlankEnabled(bool enabled);
     void updateIdleInhibit();
-    [[nodiscard]] bool xdgActivationAuthorized(const wlr_xdg_activation_v1_request_activate_event& event) const;
     void handleWorkspaceCommit(void* data);
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     void updateOutputManagerConfig();

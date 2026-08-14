@@ -495,26 +495,11 @@ namespace umbriel {
 
     for (const auto& entry : self->m_registry.all()) {
       if (entry->toplevel() == toplevel && entry->mapped()) {
-        if (!self->xdgActivationAuthorized(*event)) {
-          kLog.debug("xdg-activation ignored for app_id='{}'", toplevel->app_id != nullptr ? toplevel->app_id : "");
-          return;
-        }
         kLog.debug("xdg-activation focus app_id='{}'", toplevel->app_id != nullptr ? toplevel->app_id : "");
         self->focusView(entry.get());
         return;
       }
     }
-  }
-
-  bool Server::xdgActivationAuthorized(const wlr_xdg_activation_v1_request_activate_event& event) const {
-    const wlr_xdg_activation_token_v1* token = event.token;
-    if (token == nullptr || token->seat != m_seat->wlr() || token->surface == nullptr) {
-      return false;
-    }
-
-    wl_client* client = wl_resource_get_client(token->surface->resource);
-    wlr_seat_client* seatClient = wlr_seat_client_for_wl_client(m_seat->wlr(), client);
-    return seatClient != nullptr && wlr_seat_client_validate_event_serial(seatClient, token->serial);
   }
 
   void Server::onWorkspaceCommit(wl_listener* listener, void* data) {

@@ -4,7 +4,6 @@
 #include "scene/color.h"
 
 // clang-format off
-#include <algorithm>
 #include "wlr.h"
 // clang-format on
 
@@ -37,8 +36,6 @@ namespace umbriel {
       };
     }
 
-    [[nodiscard]] fx_corner_radii uniformRadii(int radius) { return corner_radii_new(radius, radius, radius, radius); }
-
   } // namespace
 
   // --- Borders ---
@@ -50,13 +47,11 @@ namespace umbriel {
     m_borderTree = wlr_scene_tree_create(parent);
     // Outer below, then inner on top so the focus ring stays visible.
     m_outerBorderRect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.outerBorderColor.data());
-    for (auto*& rect : m_borderRects) {
-      rect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.borderUnfocused.data());
-    }
-    for (wlr_scene_rect* rect : m_borderRects) {
-      wlr_scene_node_raise_to_top(&rect->node);
-    }
-    wlr_scene_node_lower_to_bottom(&m_borderTree->node);
+    m_borderRect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.borderUnfocused.data());
+    wlr_scene_node_raise_to_top(&m_borderRect->node);
+    // The punched hole protects client content, so keep the ring above the
+    // toplevel surface that would otherwise cover its outermost pixels.
+    wlr_scene_node_raise_to_top(&m_borderTree->node);
   }
 
   bool ViewDecoration::bordersVisible() const { return m_borderTree != nullptr && m_borderTree->node.enabled; }
@@ -71,50 +66,39 @@ namespace umbriel {
     if (m_borderTree == nullptr) {
       return;
     }
-    const auto edges =
-        makeBorderRing(contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.borderWidth);
-    for (size_t i = 0; i < edges.size(); ++i) {
-      wlr_scene_rect* rect = m_borderRects[i];
-      if (rect == nullptr) {
-        continue;
-      }
-      const BorderEdge& edge = edges[i];
-      wlr_scene_node_set_position(&rect->node, edge.box.x, edge.box.y);
-      wlr_scene_rect_set_size(rect, edge.box.width, edge.box.height);
-      wlr_scene_rect_set_corner_radii(rect, edge.outer);
-      wlr_scene_rect_set_clipped_region(
-          rect,
-          edge.hasHole ? clipped_region{.area = edge.hole, .corners = edge.holeCorners} : clipped_region_get_default()
+
+    const auto applyRing = [](wlr_scene_rect* rect, const BorderRing& ring) {
+      wlr_scene_node_set_position(&rect->node, ring.box.x, ring.box.y);
+      wlr_scene_rect_set_size(rect, ring.box.width, ring.box.height);
+      wlr_scene_rect_set_corner_radii(rect, ring.outer);
+      wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = ring.hole, .corners = ring.inner});
+    };
+
+    if (m_borderRect != nullptr) {
+      applyRing(
+          m_borderRect,
+          makeBorderRing(contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.borderWidth)
       );
     }
 
     if (m_outerBorderRect != nullptr) {
       const int outer = config().appearance.outerBorderWidth;
-      const int total = config().appearance.totalBorderWidth();
-      const int radius = config().appearance.cornerRadius;
       if (outer <= 0) {
         wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
       } else {
-        // Fill the full decoration bounds; hole is only the window surface so the
-        // outer color tucks under the inner border (no gap between the two rings).
-        wlr_scene_node_set_position(&m_outerBorderRect->node, -total, -total);
-        wlr_scene_rect_set_size(m_outerBorderRect, contentWidth + 2 * total, contentHeight + 2 * total);
-        wlr_scene_rect_set_corner_radii(m_outerBorderRect, uniformRadii(expandedRadius(radius, total)));
-        wlr_scene_rect_set_color(m_outerBorderRect, config().appearance.outerBorderColor.data());
-        wlr_scene_rect_set_clipped_region(
+        // The outer color tucks under the inner ring, leaving no gap between them.
+        applyRing(
             m_outerBorderRect,
-            clipped_region{
-                .area = {total, total, contentWidth, contentHeight},
-                .corners = uniformRadii(radius),
-            }
+            makeBorderRing(
+                contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.totalBorderWidth()
+            )
         );
+        wlr_scene_rect_set_color(m_outerBorderRect, config().appearance.outerBorderColor.data());
       }
     }
 
-    for (wlr_scene_rect* rect : m_borderRects) {
-      if (rect != nullptr) {
-        wlr_scene_node_raise_to_top(&rect->node);
-      }
+    if (m_borderRect != nullptr) {
+      wlr_scene_node_raise_to_top(&m_borderRect->node);
     }
   }
 
@@ -127,11 +111,8 @@ namespace umbriel {
         : (focused ? config().appearance.borderFocused : config().appearance.borderUnfocused);
     float color[4];
     premultiplied(color, baseColor, alpha);
-    for (wlr_scene_rect* rect : m_borderRects) {
-      if (rect == nullptr) {
-        continue;
-      }
-      wlr_scene_rect_set_color(rect, color);
+    if (m_borderRect != nullptr) {
+      wlr_scene_rect_set_color(m_borderRect, color);
     }
     if (m_outerBorderRect != nullptr) {
       float outerColor[4];
@@ -146,81 +127,46 @@ namespace umbriel {
       return;
     }
 
-    // Outer ring first: it is a single rect covering the whole decoration bounds
-    // with the surface punched out, so it clips as one box rather than four.
-    if (m_outerBorderRect != nullptr) {
-      if (config().appearance.outerBorderWidth <= 0) {
-        wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
-      } else {
-        const int total = config().appearance.totalBorderWidth();
-        const int radius = config().appearance.cornerRadius;
-        const wlr_box screenBox{
-            .x = target.x - total,
-            .y = target.y - total,
-            .width = contentWidth + 2 * total,
-            .height = contentHeight + 2 * total,
-        };
-        wlr_box visible{};
-        if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
-          wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
-        } else {
-          wlr_scene_node_set_position(&m_outerBorderRect->node, visible.x - target.x, visible.y - target.y);
-          wlr_scene_rect_set_size(m_outerBorderRect, visible.width, visible.height);
-
-          const Trim trim = trimOf(visible, screenBox);
-          wlr_scene_rect_set_corner_radii(m_outerBorderRect, trim.apply(uniformRadii(expandedRadius(radius, total))));
-          // Hole matches the window surface; inner border covers the overlap on top.
-          const wlr_box hole{
-              .x = screenBox.x + total - visible.x,
-              .y = screenBox.y + total - visible.y,
-              .width = contentWidth,
-              .height = contentHeight,
-          };
-          wlr_scene_rect_set_clipped_region(
-              m_outerBorderRect, clipped_region{.area = hole, .corners = trim.apply(uniformRadii(radius))}
-          );
-        }
-      }
-    }
-
-    const auto edges =
-        makeBorderRing(contentWidth, contentHeight, config().appearance.cornerRadius, config().appearance.borderWidth);
-    for (size_t i = 0; i < edges.size(); ++i) {
-      wlr_scene_rect* rect = m_borderRects[i];
+    const auto clipRing = [&](wlr_scene_rect* rect, int thickness) {
       if (rect == nullptr) {
-        continue;
+        return;
       }
-      const BorderEdge& edge = edges[i];
-      wlr_box screenBox = edge.box;
+      if (thickness <= 0) {
+        wlr_scene_rect_set_size(rect, 0, 0);
+        return;
+      }
+
+      const BorderRing ring = makeBorderRing(contentWidth, contentHeight, config().appearance.cornerRadius, thickness);
+      wlr_box screenBox = ring.box;
       screenBox.x += target.x;
       screenBox.y += target.y;
 
       wlr_box visible{};
       if (!wlr_box_intersection(&visible, &screenBox, &outputBox)) {
         wlr_scene_rect_set_size(rect, 0, 0);
-        continue;
+        return;
       }
 
       wlr_scene_node_set_position(&rect->node, visible.x - target.x, visible.y - target.y);
       wlr_scene_rect_set_size(rect, visible.width, visible.height);
 
       const Trim trim = trimOf(visible, screenBox);
-      wlr_scene_rect_set_corner_radii(rect, trim.apply(edge.outer));
-      if (edge.hasHole) {
-        wlr_box hole = edge.hole;
-        hole.x += screenBox.x - visible.x;
-        hole.y += screenBox.y - visible.y;
-        wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = hole, .corners = trim.apply(edge.holeCorners)});
-      } else {
-        wlr_scene_rect_set_clipped_region(rect, clipped_region_get_default());
-      }
-    }
+      wlr_scene_rect_set_corner_radii(rect, trim.apply(ring.outer));
+      wlr_box hole = ring.hole;
+      hole.x += screenBox.x - visible.x;
+      hole.y += screenBox.y - visible.y;
+      wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = hole, .corners = trim.apply(ring.inner)});
+    };
 
-    // The inner ring must stay above the outer one after both were resized.
-    for (wlr_scene_rect* rect : m_borderRects) {
-      if (rect != nullptr) {
-        wlr_scene_node_raise_to_top(&rect->node);
-      }
+    if (config().appearance.outerBorderWidth > 0) {
+      clipRing(m_outerBorderRect, config().appearance.totalBorderWidth());
+    } else if (m_outerBorderRect != nullptr) {
+      wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
+    }
+    clipRing(m_borderRect, config().appearance.borderWidth);
+
+    if (m_borderRect != nullptr) {
+      wlr_scene_node_raise_to_top(&m_borderRect->node);
     }
   }
 
@@ -228,10 +174,11 @@ namespace umbriel {
     if (m_borderTree == nullptr) {
       return false;
     }
+    const int inner = config().appearance.borderWidth;
     const int expectedOuterWidth =
         config().appearance.outerBorderWidth > 0 ? contentWidth + 2 * config().appearance.totalBorderWidth() : 0;
-    return m_borderRects[0]->width != contentWidth + 2 * config().appearance.borderWidth
-        || m_borderRects[2]->height != std::max(0, contentHeight - 2 * config().appearance.cornerRadius)
+    return (m_borderRect != nullptr
+            && (m_borderRect->width != contentWidth + 2 * inner || m_borderRect->height != contentHeight + 2 * inner))
         || (m_outerBorderRect != nullptr && m_outerBorderRect->width != expectedOuterWidth);
   }
 
@@ -255,10 +202,8 @@ namespace umbriel {
       out.emplace_back(copy, target);
     };
 
-    for (wlr_scene_rect* src : m_borderRects) {
-      if (src != nullptr) {
-        copyRect(src, focusedColor);
-      }
+    if (m_borderRect != nullptr) {
+      copyRect(m_borderRect, focusedColor);
     }
     if (m_outerBorderRect != nullptr && config().appearance.outerBorderWidth > 0) {
       copyRect(m_outerBorderRect, config().appearance.outerBorderColor);

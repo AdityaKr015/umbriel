@@ -92,8 +92,8 @@ namespace umbriel {
     [[nodiscard]] const wlr_box* shadowClip() const { return m_hasShadowOutputClip ? &m_shadowOutputClip : nullptr; }
 
     wlr_scene_tree* m_borderTree = nullptr;
-    wlr_scene_rect* m_borderRects[4] = {};       // top, bottom, left, right (inner)
-    wlr_scene_rect* m_outerBorderRect = nullptr; // single rounded ring outside the inner border
+    wlr_scene_rect* m_borderRect = nullptr;
+    wlr_scene_rect* m_outerBorderRect = nullptr;
     SurfaceBlur m_blur;
     SurfaceBlurOptions m_blurOptions;
     SurfaceBlurOptions m_popupBlurOptions;

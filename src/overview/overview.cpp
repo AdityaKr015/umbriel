@@ -428,6 +428,7 @@ namespace umbriel {
     wl_signal_add(&buffer->events.frame_done, &entry->frameDone);
     syncCardBuffer(*entry);
     card->surfaces.push_back(std::move(entry));
+    wlr_scene_node_raise_to_top(&card->border->node);
   }
 
   void Overview::syncCardSurface(wlr_surface* surface, int sx, int sy, void* data) {

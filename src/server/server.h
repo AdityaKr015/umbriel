@@ -178,6 +178,7 @@ namespace umbriel {
     [[nodiscard]] std::span<const std::unique_ptr<View>> views() const { return m_registry.all(); }
     [[nodiscard]] ViewRegistry& registry() { return m_registry; }
     [[nodiscard]] std::span<const std::unique_ptr<LayerSurface>> layerSurfaces() const { return m_layerSurfaces; }
+    [[nodiscard]] bool isXwaylandSurface(const wlr_surface* surface) const;
 
     // Runs a parsed action. Shared by the keybind path and the IPC `msg` command.
     bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);

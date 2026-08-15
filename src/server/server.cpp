@@ -51,6 +51,17 @@ namespace umbriel {
     }
 
   } // namespace
+  bool Server::isXwaylandSurface(const wlr_surface* surface) const {
+    if (m_xwayland == nullptr || surface == nullptr || surface->resource == nullptr) {
+      return false;
+    }
+
+    pid_t pid = -1;
+    uid_t uid = 0;
+    gid_t gid = 0;
+    wl_client_get_credentials(wl_resource_get_client(surface->resource), &pid, &uid, &gid);
+    return pid > 0 && pid == m_xwayland->pid();
+  }
 
   Server::Server() {
     m_nested = std::getenv("WAYLAND_DISPLAY") != nullptr

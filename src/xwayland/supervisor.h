@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <sys/types.h>
 
 struct wl_event_loop;
 struct wl_event_source;
@@ -39,6 +40,7 @@ namespace umbriel {
     // Children inherit this; when it is empty they must have DISPLAY *unset*
     // rather than inherited, or X11 clients fall back to the outer session.
     [[nodiscard]] const std::string& display() const { return m_display; }
+    [[nodiscard]] pid_t pid() const { return m_pid; }
 
   private:
     void spawn();

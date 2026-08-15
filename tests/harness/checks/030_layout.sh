@@ -55,6 +55,11 @@ if ! jq -e 'all(.[]; .floating == false)' <<< "$windows" > /dev/null; then
   echo "expected both windows tiled: $windows"
   exit 1
 fi
+if ! jq -e 'all(.[]; has("xwayland") and (.xwayland == false))' <<< "$windows" > /dev/null; then
+  echo "expected native Wayland windows to report xwayland=false: $windows"
+  exit 1
+fi
+
 
 if ! jq -e --argjson w "$EXPECT_W" 'all(.[]; .w == $w)' <<< "$windows" > /dev/null; then
   echo "expected both widths == $EXPECT_W (scrolling 0.5 fraction), got: $(jq -c '[.[].w]' <<< "$windows")"

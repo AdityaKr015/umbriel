@@ -93,7 +93,8 @@ namespace umbriel {
   } // namespace
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
-      : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
+      : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel),
+        m_xwayland(server.isXwaylandSurface(toplevel->base->surface)) {
     m_server->registerAnimatable(this);
     // Register map/unmap listeners BEFORE creating the scene tree so our
     // handlers fire before wlroots' internal unmap handler disables the

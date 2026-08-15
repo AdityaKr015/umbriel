@@ -40,6 +40,7 @@ namespace umbriel {
     [[nodiscard]] wlr_xdg_toplevel* toplevel() const { return m_toplevel; }
     [[nodiscard]] wlr_scene_tree* sceneTree() const { return m_sceneTree; }
     [[nodiscard]] bool mapped() const { return m_mapped; }
+    [[nodiscard]] bool xwayland() const { return m_xwayland; }
     [[nodiscard]] Workspace* workspace() const { return m_workspace; }
     [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
     [[nodiscard]] bool tiled() const { return m_tiled; }
@@ -251,6 +252,7 @@ namespace umbriel {
     wlr_ext_image_capture_source_v1* m_captureSource = nullptr;
     Workspace* m_workspace = nullptr;
     bool m_mapped = false;
+    bool m_xwayland = false;
     // False until the first setPosition/animateTo places the node; the initial
     // placement snaps (avoids animating from the default (0,0) world origin).
     bool m_positioned = false;

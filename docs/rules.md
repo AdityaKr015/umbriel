@@ -25,7 +25,10 @@ Every selector is optional. A rule without selectors matches every window.
 Regular expressions match any part of a value by default. Use `^` and `$` when
 you need to match the entire value.
 
-Run `umbriel windows` to list the app IDs of open windows.
+Run `umbriel windows` to list the app IDs of open windows. Windows translated
+through Umbriel's managed `xwayland-satellite` are prefixed with `[Xwayland]`.
+The JSON form, `umbriel windows --json`, reports the same distinction through
+the boolean `xwayland` field.
 
 ### Settings applied when a window opens
 

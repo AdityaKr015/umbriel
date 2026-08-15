@@ -175,7 +175,7 @@ programs.umbriel = {
     keybinds = {
       "Mod+Return" = "spawn:kitty";
       "Mod+Q" = "window-close";
-      "Mod+R" = "spawn:noctalia msg panel-toggle launcher";
+      "Mod" = "spawn:noctalia msg panel-toggle launcher";
     };
   };
 };

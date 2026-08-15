@@ -69,21 +69,28 @@ namespace umbriel {
       return 0;
     }
 
+    bool applyModifier(std::string_view token, Keybind& output) {
+      const std::string modifier = toLower(token);
+      if (modifier == "mod") {
+        output.useMod = true;
+      } else if (modifier == "shift") {
+        output.modifiers |= WLR_MODIFIER_SHIFT;
+      } else if (modifier == "ctrl" || modifier == "control") {
+        output.modifiers |= WLR_MODIFIER_CTRL;
+      } else if (modifier == "alt") {
+        output.modifiers |= WLR_MODIFIER_ALT;
+      } else if (modifier == "super" || modifier == "logo" || modifier == "win") {
+        output.modifiers |= WLR_MODIFIER_LOGO;
+      } else {
+        return false;
+      }
+      return true;
+    }
+
     // Fold every token but the last into the bind's modifier state.
     bool applyModifiers(const std::vector<std::string_view>& tokens, Keybind& output) {
       for (size_t index = 0; index + 1 < tokens.size(); ++index) {
-        const std::string modifier = toLower(tokens[index]);
-        if (modifier == "mod") {
-          output.useMod = true;
-        } else if (modifier == "shift") {
-          output.modifiers |= WLR_MODIFIER_SHIFT;
-        } else if (modifier == "ctrl" || modifier == "control") {
-          output.modifiers |= WLR_MODIFIER_CTRL;
-        } else if (modifier == "alt") {
-          output.modifiers |= WLR_MODIFIER_ALT;
-        } else if (modifier == "super" || modifier == "logo" || modifier == "win") {
-          output.modifiers |= WLR_MODIFIER_LOGO;
-        } else {
+        if (!applyModifier(tokens[index], output)) {
           return false;
         }
       }
@@ -199,6 +206,11 @@ namespace umbriel {
     std::vector<std::string_view> tokens;
     if (!splitChordTokens(chord, tokens)) {
       return false;
+    }
+    if (tokens.size() == 1 && applyModifier(tokens.front(), output)) {
+      output.modifierOnly = true;
+      output.repeat = false;
+      return true;
     }
 
     const std::string lastLower = toLower(tokens.back());

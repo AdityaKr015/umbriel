@@ -437,6 +437,9 @@ namespace umbriel {
   void Cursor::handleButton(void* data) {
     auto* event = static_cast<wlr_pointer_button_event*>(data);
     m_server->notifyIdleActivity();
+    if (event->state == WL_POINTER_BUTTON_STATE_PRESSED) {
+      m_server->cancelModifierTap();
+    }
 
     // Config mouse binds win over the overview and the built-in Mod+drag /
     // Mod+resize grabs. Presses consumed here swallow their paired release so
@@ -608,6 +611,7 @@ namespace umbriel {
   void Cursor::handleAxis(void* data) {
     auto* event = static_cast<wlr_pointer_axis_event*>(data);
     m_server->notifyIdleActivity();
+    m_server->cancelModifierTap();
 
     wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
     const uint32_t modifiers = keyboard != nullptr ? wlr_keyboard_get_modifiers(keyboard) : 0;
@@ -724,6 +728,7 @@ namespace umbriel {
   void Cursor::handleTouchDown(void* data) {
     auto* event = static_cast<wlr_touch_down_event*>(data);
     m_server->notifyIdleActivity();
+    m_server->cancelModifierTap();
 
     double lx = 0;
     double ly = 0;

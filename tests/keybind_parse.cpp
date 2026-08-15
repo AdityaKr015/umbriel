@@ -57,6 +57,27 @@ UMBRIEL_TEST(modIsDistinctFromExplicitSuper) {
   CHECK(!withSuper.useMod);
   CHECK_EQ(withSuper.modifiers, uint32_t{WLR_MODIFIER_LOGO});
 }
+UMBRIEL_TEST(parsesModifierOnlyBinds) {
+  const Keybind withMod = chord("Mod");
+  CHECK(withMod.modifierOnly);
+  CHECK(withMod.useMod);
+  CHECK_EQ(withMod.keysym, uint32_t{0});
+  CHECK(!withMod.repeat);
+
+  CHECK_EQ(chord("Shift").modifiers, uint32_t{WLR_MODIFIER_SHIFT});
+  CHECK_EQ(chord("Ctrl").modifiers, uint32_t{WLR_MODIFIER_CTRL});
+  CHECK_EQ(chord("Control").modifiers, uint32_t{WLR_MODIFIER_CTRL});
+  CHECK_EQ(chord("Alt").modifiers, uint32_t{WLR_MODIFIER_ALT});
+  CHECK_EQ(chord("Super").modifiers, uint32_t{WLR_MODIFIER_LOGO});
+  CHECK_EQ(chord("Logo").modifiers, uint32_t{WLR_MODIFIER_LOGO});
+  CHECK_EQ(chord("Win").modifiers, uint32_t{WLR_MODIFIER_LOGO});
+}
+
+UMBRIEL_TEST(rejectsModifierOnlyCombinations) {
+  Keybind bind;
+  CHECK(!parseChord("Ctrl+Alt", bind));
+  CHECK(!parseChord("Mod+Shift", bind));
+}
 
 UMBRIEL_TEST(combinesMultipleModifiers) {
   const Keybind bind = chord("Mod+Ctrl+Shift+q");
@@ -97,6 +118,7 @@ UMBRIEL_TEST(failedParseLeavesBindDefaulted) {
   CHECK_EQ(bind.modifiers, uint32_t{0});
   CHECK_EQ(bind.keysym, uint32_t{0});
   CHECK(!bind.useMod);
+  CHECK(!bind.modifierOnly);
 }
 
 // ---- parseChord: wheel and mouse ----

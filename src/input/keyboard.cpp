@@ -9,6 +9,7 @@
 #include "wlr.h"
 
 #include <algorithm>
+#include <optional>
 
 namespace umbriel {
 
@@ -104,8 +105,12 @@ namespace umbriel {
     const uint32_t rawSym = nraw > 0 ? rawSyms[0] : XKB_KEY_NoSymbol;
 
     bool handled = false;
+    std::optional<Keybind> modifierTap;
     uint32_t modifiers = wlr_keyboard_get_modifiers(m_keyboard);
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+      m_server->armModifierTap(
+          this, event->keycode, std::span<const uint32_t>(syms, nsyms > 0 ? static_cast<size_t>(nsyms) : 0), modifiers
+      );
       cancelRepeat();
       for (int i = 0; i < nsyms; ++i) {
         handled = m_server->handleVtSwitch(syms[i], modifiers) || handled;
@@ -147,6 +152,7 @@ namespace umbriel {
       if (m_repeatArmed && event->keycode == m_repeatKeycode) {
         cancelRepeat();
       }
+      modifierTap = m_server->releaseModifierTap(this, event->keycode);
     }
 
     if (!handled) {
@@ -154,12 +160,18 @@ namespace umbriel {
       // never hands keyboard focus to a view while open (focusView skips the
       // seat enter), so a non-null focus here is a layer surface that took it
       // deliberately, e.g. a launcher panel; those keep typing.
-      if (Overview* overview = m_server->overview();
-          overview != nullptr && overview->active() && seat->keyboard_state.focused_surface == nullptr) {
-        return;
+      const Overview* overview = m_server->overview();
+      const bool overviewOwnsKeyboard =
+          overview != nullptr && overview->active() && seat->keyboard_state.focused_surface == nullptr;
+      if (!overviewOwnsKeyboard) {
+        wlr_seat_set_keyboard(seat, m_keyboard);
+        wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
       }
-      wlr_seat_set_keyboard(seat, m_keyboard);
-      wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
+    }
+    // A modifier-only action runs after its release reaches the focused
+    // client, so opening a surface cannot strand the old focus with Mod held.
+    if (modifierTap.has_value()) {
+      m_server->executeKeybindAction(*modifierTap);
     }
   }
 
@@ -174,6 +186,7 @@ namespace umbriel {
     m_modifiers.link.next = nullptr;
     m_key.link.next = nullptr;
     m_destroy.link.next = nullptr;
+    m_server->cancelModifierTap();
     m_server->removeKeyboard(this);
   }
 

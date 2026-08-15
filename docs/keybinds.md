@@ -21,6 +21,19 @@ All keybinds live under `[keybinds]`. Chords are case-insensitive.
 
 Bare keys are also allowed (e.g. `XF86AudioMute`).
 
+A modifier can also be bound by itself:
+
+```toml
+"Mod" = "spawn:noctalia msg panel-toggle launcher"
+```
+
+Modifier-only binds run on release when no other discrete input occurred while
+the modifier was held. Any other key press, mouse button, scroll, touch down, or
+gesture cancels the action. Pointer motion alone does not cancel it. Both the
+left and right key for the logical modifier are accepted, and modifier-only
+binds never repeat. Combinations containing only multiple modifiers, such as
+`Ctrl+Alt`, are invalid.
+
 ## Special keys
 
 **Scroll wheel:** `WheelUp`, `WheelDown`, `WheelLeft`, `WheelRight` (require
@@ -139,7 +152,7 @@ inside a submap, as a global emergency exit:
 and widgets via `noctalia msg`. Typical bindings:
 
 ```toml
-"Mod+R" = "spawn:noctalia msg panel-toggle launcher"
+"Mod" = "spawn:noctalia msg panel-toggle launcher"
 "Mod+Z" = "spawn:noctalia msg panel-toggle launcher /emo"
 "Mod+V" = "spawn:noctalia msg panel-toggle clipboard"
 "Mod+W" = "spawn:noctalia msg panel-toggle wallpaper"

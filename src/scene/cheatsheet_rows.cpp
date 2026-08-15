@@ -114,6 +114,9 @@ namespace {
     if ((bind.modifiers & WLR_MODIFIER_SHIFT) != 0) {
       appendMod("Shift");
     }
+    if (bind.modifierOnly) {
+      return result;
+    }
 
     if (!result.empty()) {
       result += '+';

@@ -259,6 +259,7 @@ namespace umbriel {
   }
 
   void Server::handleConfigReload() {
+    cancelModifierTap();
     const ConfigReloadResult result = reloadConfig();
     if (result.success) {
       if (result.effects.invalidatesOverview()) {
@@ -698,6 +699,7 @@ namespace umbriel {
       return;
     }
 
+    cancelModifierTap();
     m_sessionLocked = true;
     m_overview->forceClose();
     if (m_cheatsheet != nullptr) {

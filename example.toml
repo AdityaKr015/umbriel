@@ -127,7 +127,7 @@ follows_mouse = false
 # "Mod+Shift+0" = "window-move-to-scratchpad:DP-1"
 # "Mod+Ctrl+0" = "window-restore-from-scratchpad:DP-1"
 # "Mod+Alt+0" = "scratchpad-focus-next:DP-1"
-"Mod+R" = "spawn:noctalia msg panel-toggle launcher"
+"Mod" = "spawn:noctalia msg panel-toggle launcher"
 "Mod+O" = "overview-toggle"
 
 # Window and layer rules (see docs/rules.md) --------------------------------

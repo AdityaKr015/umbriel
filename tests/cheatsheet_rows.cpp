@@ -67,6 +67,16 @@ UMBRIEL_TEST(bindsWithNoActionAreSkipped) {
   CHECK_EQ(rows.size(), size_t{1});
   CHECK(rows[0].actionType == KeybindAction::WindowClose);
 }
+UMBRIEL_TEST(modifierOnlyBindHasNoTrailingKeysym) {
+  Keybind modifier;
+  modifier.useMod = true;
+  modifier.modifierOnly = true;
+  modifier.action = KeybindAction::WindowClose;
+
+  const auto rows = buildCheatsheetRows(std::vector<Keybind>{modifier});
+  CHECK_EQ(rows.size(), size_t{1});
+  CHECK_EQ(rows[0].chord, std::string{"Mod"});
+}
 
 UMBRIEL_TEST(oneRowPerBindWhenActionsDiffer) {
   const std::vector<Keybind> binds = {

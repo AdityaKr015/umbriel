@@ -94,6 +94,7 @@ namespace umbriel {
     std::string submap;
     uint32_t modifiers = 0;
     bool useMod = false;
+    bool modifierOnly = false;
     uint32_t keysym = 0;
     WheelDirection wheel = WheelDirection::None;
     uint32_t mouseButton = 0; // evdev BTN_* code, 0 = not a mouse bind

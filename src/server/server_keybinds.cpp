@@ -15,6 +15,26 @@
 #include <string_view>
 
 namespace umbriel {
+  namespace {
+    uint32_t modifierMaskForKeysym(uint32_t keysym) {
+      switch (keysym) {
+      case XKB_KEY_Shift_L:
+      case XKB_KEY_Shift_R:
+        return WLR_MODIFIER_SHIFT;
+      case XKB_KEY_Control_L:
+      case XKB_KEY_Control_R:
+        return WLR_MODIFIER_CTRL;
+      case XKB_KEY_Alt_L:
+      case XKB_KEY_Alt_R:
+        return WLR_MODIFIER_ALT;
+      case XKB_KEY_Super_L:
+      case XKB_KEY_Super_R:
+        return WLR_MODIFIER_LOGO;
+      default:
+        return 0;
+      }
+    }
+  } // namespace
 
   bool Server::handleVtSwitch(uint32_t keysym, uint32_t modifiers) {
     if (m_session == nullptr) {
@@ -68,6 +88,46 @@ namespace umbriel {
     return true;
   }
 
+  void
+  Server::armModifierTap(const void* source, uint32_t keycode, std::span<const uint32_t> keysyms, uint32_t modifiers) {
+    if (m_modifierTap.cancelForKeyPress() || m_sessionLocked) {
+      return;
+    }
+
+    uint32_t pressedModifier = 0;
+    for (const uint32_t keysym : keysyms) {
+      pressedModifier |= modifierMaskForKeysym(keysym);
+    }
+    if (pressedModifier == 0) {
+      return;
+    }
+
+    const std::string_view currentSubmap = m_activeSubmaps.empty() ? std::string_view{} : m_activeSubmaps.back();
+    for (const Keybind& bind : config().keybinds) {
+      if (!bind.modifierOnly) {
+        continue;
+      }
+      if (bind.submap != currentSubmap) {
+        if (m_activeSubmaps.empty() || !bind.submap.empty() || !isSubmapResetBind(bind)) {
+          continue;
+        }
+      }
+      const uint32_t expected = bind.modifiers | (bind.useMod ? modKey() : 0);
+      if (modifierTapPressMatches(modifiers, pressedModifier, expected)) {
+        m_modifierTap.arm(bind, source, keycode);
+        return;
+      }
+    }
+  }
+
+  std::optional<Keybind> Server::releaseModifierTap(const void* source, uint32_t keycode) {
+    if (m_sessionLocked) {
+      m_modifierTap.cancel();
+      return std::nullopt;
+    }
+    return m_modifierTap.release(source, keycode);
+  }
+
   const Keybind* Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {
     if (m_sessionLocked) {
       return nullptr;
@@ -86,6 +146,9 @@ namespace umbriel {
         } else {
           continue;
         }
+      }
+      if (bind.modifierOnly) {
+        continue;
       }
       if (bind.wheel != WheelDirection::None || bind.mouseButton != 0) {
         continue;
@@ -151,9 +214,13 @@ namespace umbriel {
     return nullptr;
   }
 
-  void Server::pushSubmap(const std::string& name) { m_activeSubmaps.push_back(name); }
+  void Server::pushSubmap(const std::string& name) {
+    cancelModifierTap();
+    m_activeSubmaps.push_back(name);
+  }
 
   void Server::popSubmap() {
+    cancelModifierTap();
     if (!m_activeSubmaps.empty()) {
       m_activeSubmaps.pop_back();
     }

@@ -1,6 +1,7 @@
 #pragma once
 #include "core/animation.h"
 #include "core/dirty.h"
+#include "input/modifier_tap.h"
 #include "server/focus.h"
 #include "view/registry.h"
 
@@ -210,6 +211,9 @@ namespace umbriel {
     // ran, so the caller can tell which action consumed the press.
     const Keybind* handleMouseBind(uint32_t button, uint32_t modifiers);
     bool handleVtSwitch(uint32_t keysym, uint32_t modifiers);
+    void armModifierTap(const void* source, uint32_t keycode, std::span<const uint32_t> keysyms, uint32_t modifiers);
+    [[nodiscard]] std::optional<Keybind> releaseModifierTap(const void* source, uint32_t keycode);
+    void cancelModifierTap() { m_modifierTap.cancel(); }
     void arrangeLayers(wlr_output* output);
     [[nodiscard]] wlr_output* preferredOutput() const;
     [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
@@ -423,6 +427,7 @@ namespace umbriel {
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;
+    ModifierTapState m_modifierTap;
     std::vector<std::unique_ptr<PointerDevice>> m_pointers;
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;
     std::vector<std::unique_ptr<VirtualPointerDevice>> m_virtualPointers;

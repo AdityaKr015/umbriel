@@ -573,6 +573,7 @@ namespace umbriel {
         return left.submap == right.submap
             && left.modifiers == right.modifiers
             && left.useMod == right.useMod
+            && left.modifierOnly == right.modifierOnly
             && left.keysym == right.keysym
             && left.wheel == right.wheel
             && left.mouseButton == right.mouseButton;
@@ -616,7 +617,7 @@ namespace umbriel {
           }
           continue;
         }
-        binding.repeat = repeatBind;
+        binding.repeat = binding.modifierOnly ? false : repeatBind;
         if (!parseAction(actionStr, binding)) {
           warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, actionStr);
           continue;

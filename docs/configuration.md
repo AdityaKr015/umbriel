@@ -238,6 +238,12 @@ Scrolling layout options:
 | `default_width_fraction` | float | `0.5` | Initial width assigned to new scrolling columns (0.1-1.0). |
 | `center_underfull_strip` | bool | `true` | Center the complete strip whenever it is narrower than the viewport. Set to `false` to align an underfull strip at the left edge. |
 
+In the scrolling layout, Mod+Right-drag selects horizontal and vertical resize
+edges from the outer thirds of a window. Dragging from a corner region resizes
+both axes. Mod+Right-click in the center region starts no resize and instead
+scrolls the focused window into view. When a tiled resize ends, the focused
+scrolling column animates back into view.
+
 Resizing a column recenters an underfull strip immediately.
 
 Dragged windows become translucent so the insertion preview remains visible.

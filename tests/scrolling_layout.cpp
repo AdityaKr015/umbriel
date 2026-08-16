@@ -236,6 +236,52 @@ UMBRIEL_TEST(horizontalResizeRecentersAnUnderfullStripImmediately) {
   );
 }
 
+UMBRIEL_TEST(middleOfPartiallyOffscreenColumnGrabsNothing) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(0, 0.5));
+  CHECK(fixture.layout.setWidthFraction(1, 0.667));
+  fixture.layout.arrange(kUsable);
+
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), 1000, 360), 0U);
+}
+
+UMBRIEL_TEST(rightThirdGrabsTheRightEdgeEvenNearACorner) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(0, 0.5));
+  CHECK(fixture.layout.setWidthFraction(1, 0.667));
+  fixture.layout.arrange(kUsable);
+
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), 1210, 100), static_cast<uint32_t>(WLR_EDGE_RIGHT | WLR_EDGE_TOP));
+}
+
+UMBRIEL_TEST(resizeEdgesComeFromTileThirds) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(0, 0.5));
+  CHECK(fixture.layout.setWidthFraction(1, 0.667));
+  fixture.layout.arrange(kUsable);
+
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), 1220, 360), static_cast<uint32_t>(WLR_EDGE_RIGHT));
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), 700, 360), static_cast<uint32_t>(WLR_EDGE_LEFT));
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), 700, 650), static_cast<uint32_t>(WLR_EDGE_LEFT | WLR_EDGE_BOTTOM));
+}
+
+UMBRIEL_TEST(firstColumnLeftEdgeStaysFixedWithoutCentering) {
+  Fixture fixed;
+  fixed.config.scrolling.centerUnderfullStrip = false;
+  fixed.addColumns(1);
+  fixed.layout.arrange(kUsable);
+  CHECK_EQ(fixed.layout.resizeEdgesAt(stub(0), 60, 360), 0u);
+  CHECK_EQ(fixed.layout.resizeEdgesAt(stub(0), 60, 60), static_cast<uint32_t>(WLR_EDGE_TOP));
+
+  Fixture centered;
+  centered.addColumns(1);
+  centered.layout.arrange(kUsable);
+  CHECK_EQ(centered.layout.resizeEdgesAt(stub(0), 60, 360), static_cast<uint32_t>(WLR_EDGE_LEFT));
+}
+
 UMBRIEL_TEST(widthFractionsAreClamped) {
   Fixture fixture;
   fixture.addColumns(1);

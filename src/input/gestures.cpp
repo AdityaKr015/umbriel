@@ -473,8 +473,8 @@ namespace umbriel {
       // The viewport-center heuristic has no snap point at either strip edge.
       // With mixed column widths, the second column can remain closer to the
       // viewport center even at scroll 0, making the first column unreachable.
-      // Preserve the gesture direction at an overscrolled edge and explicitly
-      // select that endpoint, as niri does with first/last boundary snap points.
+      // Preserve the gesture direction at an overscrolled edge by explicitly
+      // selecting that endpoint.
       if (m_accumX > 0.0 && rawScroll <= 0.0) {
         best = 0;
       } else if (m_accumX < 0.0 && rawScroll >= maxScroll) {

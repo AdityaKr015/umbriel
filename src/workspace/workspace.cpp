@@ -209,10 +209,9 @@ namespace umbriel {
       m_focusedView = replacement;
     }
     // Re-anchor the strip on whatever is focused now, the way every other
-    // focus-moving operation does. niri does the same on removal: it activates
-    // an adjacent column and animates the view to fit it. Without this the
-    // scroll offset survives the removal, so a survivor can stay cut off at the
-    // left edge while empty space opens on the right.
+    // focus-moving operation does. Activating an adjacent column and fitting
+    // the view prevents the old scroll offset from leaving a survivor cut off
+    // at the left edge while empty space opens on the right.
     ensureFocusedVisible();
     markArrange();
     m_group->reconcileDynamic();
@@ -237,10 +236,8 @@ namespace umbriel {
     detachFromLayout(view);
     // The column just left the strip, so the old offset can now point past the
     // end: a survivor stays cut off at the left edge while empty space opens on
-    // the right. niri re-anchors after a removal, activating an adjacent column
-    // and fitting the view to it. Clamping to the new range is that same idea
-    // expressed through the offset, and like niri's fit it leaves the offset
-    // alone while the strip is still longer than the viewport.
+    // the right. Clamping re-anchors the remaining columns after removal while
+    // leaving the offset alone if the strip is still longer than the viewport.
     //
     // Deliberately not inside arrange(): a touchpad swipe overscrolls on
     // purpose, and it arranges on every frame of the gesture.

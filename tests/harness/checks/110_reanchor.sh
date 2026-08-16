@@ -4,7 +4,7 @@
 # Removing a column closes the space it held, so everything to its right moves
 # left by its width plus a gap. When that column sat off-screen to the left the
 # user never asked to see that happen, and the window they are actually reading
-# jumps sideways. niri re-anchors on removal for the same reason.
+# jumps sideways. Re-anchoring on removal prevents that shift.
 #
 # The geometry is pinned by unit tests in tests/scrolling_layout.cpp. What this
 # adds is that it reaches the real close path, measured in

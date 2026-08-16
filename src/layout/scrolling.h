@@ -36,11 +36,11 @@ namespace umbriel {
     // How much to subtract from the scroll offset when `columnIndex` is about
     // to lose its last view, so the columns still on screen do not slide.
     //
-    // Removing a column closes the space it held: everything to its right moves
-    // left by its width plus one gap. When that space sat off-screen to the
-    // left, the movement is not something the user asked to see — a window
-    // closing three columns back should not shift the one being read. niri
-    // re-anchors on removal for the same reason.
+    // Removing a column closes the space it held, so everything to its right
+    // moves left by its width plus one gap. When that space sat off-screen to
+    // the left, the movement is not something the user asked to see. Closing a
+    // window three columns back should not shift the one being read, so removal
+    // re-anchors the remaining columns.
     //
     // Returns the part of that span that was hidden, so it goes to zero as the
     // column comes into view rather than switching on at the edge: a column

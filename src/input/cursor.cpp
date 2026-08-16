@@ -273,6 +273,10 @@ namespace umbriel {
       Layout& layout = workspace->layout();
       const uint32_t resolvedEdges = layout.resolveResizeEdges(view, edges, m_cursor->x, m_cursor->y);
       if (resolvedEdges == 0) {
+        if (workspace->focusedView() == view) {
+          workspace->ensureFocusedVisible();
+          workspace->markArrange(true);
+        }
         refreshInteractiveCursor();
         return;
       }
@@ -518,7 +522,10 @@ namespace umbriel {
       }
       if (auto* grab = std::get_if<TiledResizeGrab>(&m_grab)) {
         if (grab->workspace != nullptr) {
-          grab->workspace->markArrange(false);
+          if (grab->workspace->focusedView() == grab->view) {
+            grab->workspace->ensureFocusedVisible();
+          }
+          grab->workspace->markArrange(true);
         }
         resetMode();
         return;
@@ -1192,18 +1199,30 @@ namespace umbriel {
     if (box.width <= 0 || box.height <= 0) {
       return 0;
     }
-    const uint32_t edges = view->workspace()->layout().resizeEdgesAt(view, m_cursor->x, m_cursor->y);
-    double dist = kHoverSlop + 1.0;
-    if ((edges & WLR_EDGE_LEFT) != 0) {
-      dist = std::abs(m_cursor->x - box.x);
-    } else if ((edges & WLR_EDGE_RIGHT) != 0) {
-      dist = std::abs(m_cursor->x - (box.x + box.width));
-    } else if ((edges & WLR_EDGE_TOP) != 0) {
-      dist = std::abs(m_cursor->y - box.y);
-    } else if ((edges & WLR_EDGE_BOTTOM) != 0) {
-      dist = std::abs(m_cursor->y - (box.y + box.height));
+    uint32_t edges = view->workspace()->layout().resizeEdgesAt(view, m_cursor->x, m_cursor->y);
+    // Advertise an edge that extends past the output from the reachable
+    // output boundary, since the pointer cannot approach the real edge.
+    wlr_box usable = box;
+    if (view->workspace()->group() != nullptr && view->workspace()->group()->output() != nullptr) {
+      usable = view->workspace()->group()->output()->usableArea();
     }
-    return dist <= kHoverSlop ? edges : 0;
+    const double left = std::max<double>(box.x, usable.x);
+    const double right = std::min<double>(box.x + box.width, usable.x + usable.width);
+    const double top = std::max<double>(box.y, usable.y);
+    const double bottom = std::min<double>(box.y + box.height, usable.y + usable.height);
+    if ((edges & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) != 0) {
+      const double dist = (edges & WLR_EDGE_LEFT) != 0 ? std::abs(m_cursor->x - left) : std::abs(m_cursor->x - right);
+      if (dist > kHoverSlop) {
+        edges &= ~(WLR_EDGE_LEFT | WLR_EDGE_RIGHT);
+      }
+    }
+    if ((edges & (WLR_EDGE_TOP | WLR_EDGE_BOTTOM)) != 0) {
+      const double dist = (edges & WLR_EDGE_TOP) != 0 ? std::abs(m_cursor->y - top) : std::abs(m_cursor->y - bottom);
+      if (dist > kHoverSlop) {
+        edges &= ~(WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
+      }
+    }
+    return edges;
   }
 
   void Cursor::setCompositorCursor(const char* name) {

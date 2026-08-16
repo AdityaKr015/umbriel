@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <ranges>
 
 // wlr_box and WLR_EDGE_* only. Layout geometry must not pull src/wlr.h, which
 // drags SceneFX and the renderer into a translation unit that does arithmetic.
@@ -797,21 +796,20 @@ namespace umbriel {
     if (box.width <= 0 || box.height <= 0) {
       return WLR_EDGE_RIGHT;
     }
-    const double distLeft = std::abs(cx - box.x);
-    const double distRight = std::abs(cx - (box.x + box.width));
-    const double distTop = std::abs(cy - box.y);
-    const double distBottom = std::abs(cy - (box.y + box.height));
-    const double nearestH = std::min(distLeft, distRight);
-    const double nearestV = std::min(distTop, distBottom);
-
-    if (nearestH <= nearestV) {
-      const bool fixedLeftEdge = columnOf(view) == 0 && !m_config->scrolling.centerUnderfullStrip;
-      if (fixedLeftEdge && distLeft <= distRight) {
-        return 0;
-      }
-      return distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
+    const double px = cx - box.x;
+    const double py = cy - box.y;
+    uint32_t edges = 0;
+    if (px < box.width / 3.0) {
+      edges |= WLR_EDGE_LEFT;
+    } else if (px > 2.0 * box.width / 3.0) {
+      edges |= WLR_EDGE_RIGHT;
     }
-    return distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+    if (py < box.height / 3.0) {
+      edges |= WLR_EDGE_TOP;
+    } else if (py > 2.0 * box.height / 3.0) {
+      edges |= WLR_EDGE_BOTTOM;
+    }
+    return sanitizeResizeEdges(view, edges);
   }
 
   uint32_t ScrollingLayout::sanitizeResizeEdges(const View* view, uint32_t edges) const {

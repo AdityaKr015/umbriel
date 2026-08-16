@@ -920,10 +920,10 @@ namespace umbriel {
     }
 
     // wlroots supports flip, slide, and resize adjustments from the client's
-    // xdg-positioner. Match niri's tiled behavior: constrain horizontally to
-    // the window geometry, so a nested menu at the right edge flips or slides
-    // left even when the tile itself is flush with the output edge. Vertically,
-    // use the output working area. Floating popups can use the whole area.
+    // xdg-positioner. For tiled views, constrain horizontally to the window
+    // geometry, so a nested menu at the right edge flips or slides left even
+    // when the tile itself is flush with the output edge. Vertically, use the
+    // output working area. Floating popups can use the whole area.
     //
     // The box is in root toplevel surface coordinates. The xdg scene root is
     // positioned at the window geometry, not at the surface origin.

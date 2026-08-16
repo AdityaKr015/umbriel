@@ -22,6 +22,7 @@ UMBRIEL_TEST(aFirstLoadReportsEverything) {
   const ConfigChange change = ConfigChange::everything();
   CHECK(change.any());
   CHECK(change.appearance);
+  CHECK(change.colors);
   CHECK(change.input);
   CHECK(change.outputs);
 }
@@ -29,6 +30,14 @@ UMBRIEL_TEST(aFirstLoadReportsEverything) {
 UMBRIEL_TEST(eachSectionIsReportedOnItsOwn) {
   const Config before;
 
+  {
+    Config after;
+    after.colors.accentPrimary[0] += 0.1F;
+    const ConfigChange change = ConfigChange::between(before, after);
+    CHECK(change.colors);
+    CHECK(!change.appearance);
+    CHECK_EQ(change.summary(), std::string("colors"));
+  }
   {
     Config after;
     after.appearance.borderWidth += 1;
@@ -97,11 +106,13 @@ UMBRIEL_TEST(nestedAppearanceChangesAreCaught) {
   CHECK(ConfigChange::between(before, focused).input);
 }
 
-UMBRIEL_TEST(colorChangesAreCaught) {
+UMBRIEL_TEST(featureSpecificColorChangesRemainAppearanceChanges) {
   const Config before;
   Config after;
   after.appearance.borderFocused[0] += 0.1F;
-  CHECK(ConfigChange::between(before, after).appearance);
+  const ConfigChange change = ConfigChange::between(before, after);
+  CHECK(change.appearance);
+  CHECK(!change.colors);
 }
 
 UMBRIEL_TEST(listSectionsAreCompared) {
@@ -191,6 +202,21 @@ UMBRIEL_TEST(firstLoadInvalidatesEveryRuntimeConsumer) {
   CHECK(effects.layerEffects);
   CHECK(effects.input);
   CHECK(effects.overviewPresentation);
+  CHECK(effects.internalUi);
+}
+
+UMBRIEL_TEST(semanticColorsRefreshOnlyInternalUi) {
+  const Config before;
+  Config after;
+  after.colors.textPrimary[0] -= 0.1F;
+
+  const ConfigEffects effects = ConfigEffects::between(before, after);
+  CHECK(effects.internalUi);
+  CHECK_EQ(effects.summary(), std::string("internal UI"));
+  CHECK(!effects.outputState);
+  CHECK(!effects.workspaceLayout);
+  CHECK(!effects.viewChrome);
+  CHECK(!effects.overviewPresentation);
 }
 
 UMBRIEL_TEST(borderWidthRefreshesChromeAndWorkspaceLayout) {

@@ -40,6 +40,7 @@ namespace umbriel {
     // found. Drives the "no config" notice on the cheatsheet.
     [[nodiscard]] bool fileMissing() const { return m_fileMissing; }
     [[nodiscard]] uint64_t generation() const { return m_generation; }
+    [[nodiscard]] bool missingIncludes() const { return m_missingIncludes; }
 
     // --- Writers, used only by the loader in config.cpp ---
     //
@@ -60,6 +61,7 @@ namespace umbriel {
     void sortDiagnostics();
     // Adopt a successfully parsed config and bump the generation.
     [[nodiscard]] ConfigReloadResult commit(Config&& config, bool fileMissing);
+    void setMissingIncludes(bool missing) { m_missingIncludes = missing; }
     void setRootPath(std::filesystem::path path, bool explicitPath);
 
   private:
@@ -69,6 +71,7 @@ namespace umbriel {
     std::filesystem::path m_rootPath;
     bool m_explicitPath = false;
     bool m_fileMissing = false;
+    bool m_missingIncludes = false;
     uint64_t m_generation = 0;
   };
 

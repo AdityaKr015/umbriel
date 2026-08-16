@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "scene/cheatsheet_rows.h"
+#include "scene/color.h"
 #include "scene/text_buffer.h"
 #include "server/server.h"
 #include "wlr.h"
@@ -24,7 +25,34 @@ namespace {
   using umbriel::groupForAction;
   using umbriel::groupTitle;
   using umbriel::renderTextBuffer;
+  using umbriel::rgbaHex;
   using umbriel::TextBufferResult;
+
+  struct CheatsheetPalette {
+    std::string textPrimary;
+    std::string textMuted;
+    std::string accentPrimary;
+    std::string accentSecondary;
+    std::string warning;
+    std::string keycapBackground;
+  };
+
+  CheatsheetPalette makeCheatsheetPalette(const umbriel::Config::Colors& colors) {
+    constexpr float kKeycapLift = 0.09F;
+    std::array<float, 4> keycapBackground{};
+    for (size_t component = 0; component < 3; ++component) {
+      keycapBackground[component] = std::lerp(colors.background[component], colors.textPrimary[component], kKeycapLift);
+    }
+    keycapBackground[3] = 1.0F;
+    return {
+        .textPrimary = rgbaHex(colors.textPrimary),
+        .textMuted = rgbaHex(colors.textMuted),
+        .accentPrimary = rgbaHex(colors.accentPrimary),
+        .accentSecondary = rgbaHex(colors.accentSecondary),
+        .warning = rgbaHex(colors.warning),
+        .keycapBackground = rgbaHex(keycapBackground),
+    };
+  }
 
   constexpr int kPad = 28;
   constexpr int kCornerRadius = 16;
@@ -38,7 +66,6 @@ namespace {
   // tried and the panel still does not fit. 9 is the floor because below it the
   // chord pills stop being readable at arm's length, which is the whole job.
   constexpr int kFontSizes[] = {11, 10, 9};
-  constexpr float kPanelColor[] = {0.078F, 0.078F, 0.098F, 0.94F};
 
   // --- Chord reconstruction helpers ---
 
@@ -66,20 +93,26 @@ namespace {
   // A group header, preceded by a blank spacer unless it opens the list. The
   // spacer carries the upcoming group's id because a column break happens
   // before it, never between it and its header.
-  void pushHeader(std::vector<DisplayLine>& lines, int groupId, std::string_view title) {
+  void
+  pushHeader(std::vector<DisplayLine>& lines, int groupId, std::string_view title, const CheatsheetPalette& palette) {
     if (!lines.empty()) {
       lines.push_back({.isHeader = false, .group = groupId, .text = ""});
     }
     lines.push_back({
         .isHeader = true,
         .group = groupId,
-        .text = std::format("<span foreground='#f5c96b' weight='bold'>{}</span>", escape(std::string(title))),
+        .text = std::format(
+            "<span foreground='{}' weight='bold'>{}</span>", palette.accentSecondary, escape(std::string(title))
+        ),
     });
   }
 
   // One bind: the chord in a pill, then the label padded out to the group's
   // widest chord so the actions line up. A ditto repeat is dimmed.
-  DisplayLine bindLine(const std::string& chord, const std::string& label, int groupId, size_t maxChordLen) {
+  DisplayLine bindLine(
+      const std::string& chord, const std::string& label, int groupId, size_t maxChordLen,
+      const CheatsheetPalette& palette
+  ) {
     const bool isDitto = label == "\xe2\x80\xb3";
     const size_t extraPad = maxChordLen > chord.size() ? maxChordLen - chord.size() : 0;
     return {
@@ -87,8 +120,9 @@ namespace {
         .isDitto = isDitto,
         .group = groupId,
         .text = std::format(
-            "<span background='#26262e' foreground='#bfd3ff'> {} </span>{}  <span foreground='{}'>{}</span>",
-            escape(chord), std::string(extraPad, ' '), isDitto ? "#8a8a92" : "#e8e8ea", escape(label)
+            "<span background='{}' foreground='{}'> {} </span>{}  <span foreground='{}'>{}</span>",
+            palette.keycapBackground, palette.accentPrimary, escape(chord), std::string(extraPad, ' '),
+            isDitto ? palette.textMuted : palette.textPrimary, escape(label)
         ),
     };
   }
@@ -98,7 +132,7 @@ namespace {
   // variants read as a set. Advances `groupId` for each section it opens.
   void pushAppsRows(
       std::vector<DisplayLine>& lines, int& groupId, const std::vector<const CheatsheetRow*>& groupRows,
-      size_t maxChordLen
+      size_t maxChordLen, const CheatsheetPalette& palette
   ) {
     // Collect unique binaries in first-seen order.
     std::vector<std::string> binOrder;
@@ -147,7 +181,7 @@ namespace {
               label = label.substr(0, 32) + "\xe2\x80\xa6";
             }
           }
-          lines.push_back(bindLine(row->chord, label, groupId, maxChordLen));
+          lines.push_back(bindLine(row->chord, label, groupId, maxChordLen, palette));
         }
       }
     }
@@ -155,9 +189,9 @@ namespace {
     // Render deferred binary groups as top-level sections.
     for (auto& dg : deferred) {
       ++groupId;
-      pushHeader(lines, groupId, dg.title);
+      pushHeader(lines, groupId, dg.title, palette);
       for (const auto* row : dg.rows) {
-        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen));
+        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen, palette));
       }
     }
   }
@@ -165,8 +199,10 @@ namespace {
   // Rows become Pango markup lines under their group headers. Lines sharing a
   // group value are never split across columns, so a header cannot be stranded
   // at the foot of one.
-  std::vector<DisplayLine>
-  buildDisplayLines(const std::vector<umbriel::CheatsheetRow>& rows, const std::vector<std::string>& submapOrder) {
+  std::vector<DisplayLine> buildDisplayLines(
+      const std::vector<umbriel::CheatsheetRow>& rows, const std::vector<std::string>& submapOrder,
+      const CheatsheetPalette& palette
+  ) {
     std::vector<DisplayLine> lines;
     int groupId = 0;
 
@@ -183,7 +219,7 @@ namespace {
         continue;
 
       ++groupId;
-      pushHeader(lines, groupId, groupTitle(grp));
+      pushHeader(lines, groupId, groupTitle(grp), palette);
 
       // Find max chord width in this group (character count, for padding).
       size_t maxChordLen = 0;
@@ -192,13 +228,13 @@ namespace {
       }
 
       if (grp == Group::Apps) {
-        pushAppsRows(lines, groupId, groupRows, maxChordLen);
+        pushAppsRows(lines, groupId, groupRows, maxChordLen, palette);
         continue;
       }
 
       // All other groups: flat row rendering.
       for (const auto* row : groupRows) {
-        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen));
+        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen, palette));
       }
     }
 
@@ -214,7 +250,7 @@ namespace {
         continue;
 
       ++groupId;
-      pushHeader(lines, groupId, "Submap: " + smName);
+      pushHeader(lines, groupId, "Submap: " + smName, palette);
 
       size_t maxChordLen = 0;
       for (const auto* row : groupRows) {
@@ -222,7 +258,7 @@ namespace {
       }
 
       for (const auto* row : groupRows) {
-        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen));
+        lines.push_back(bindLine(row->chord, row->action, groupId, maxChordLen, palette));
       }
     }
 
@@ -325,14 +361,20 @@ namespace {
 
   // The panel's fixed furniture: the title (which doubles as the "no config"
   // notice) and the footer naming the modifier key.
-  Chrome renderChrome(bool configMissing, bool nested, double scale) {
-    std::string titleMarkup = "<span size='14pt' weight='bold' foreground='#7aa3ff'>Umbriel keybinds</span>";
+  Chrome renderChrome(bool configMissing, bool nested, double scale, const CheatsheetPalette& palette) {
+    std::string titleMarkup =
+        std::format("<span size='14pt' weight='bold' foreground='{}'>Umbriel keybinds</span>", palette.accentPrimary);
     if (configMissing) {
-      titleMarkup += "\n<span foreground='#f5c96b'>no config found \xc2\xb7 showing built-in defaults</span>";
-      titleMarkup += "\n<span foreground='#8a8a92'>copy example.toml to ~/.config/umbriel/config.toml</span>";
+      titleMarkup += std::format(
+          "\n<span foreground='{}'>no config found \xc2\xb7 showing built-in defaults</span>", palette.warning
+      );
+      titleMarkup += std::format(
+          "\n<span foreground='{}'>copy example.toml to ~/.config/umbriel/config.toml</span>", palette.textMuted
+      );
     }
     const std::string footerMarkup = std::format(
-        "<span foreground='#8a8a92'>Mod = {} \xc2\xb7 press any key to close</span>", nested ? "Alt" : "Super"
+        "<span foreground='{}'>Mod = {} \xc2\xb7 press any key to close</span>", palette.textMuted,
+        nested ? "Alt" : "Super"
     );
 
     const auto render = [scale](std::string markup) {
@@ -431,13 +473,23 @@ namespace umbriel {
   Cheatsheet::~Cheatsheet() { hide(); }
 
   void Cheatsheet::show() {
+    m_showWhenConfigReady = false;
     if (m_server.sessionLocked()) {
       return;
     }
     render();
   }
 
+  void Cheatsheet::showOnStartup() {
+    if (configHasMissingIncludes()) {
+      m_showWhenConfigReady = true;
+      return;
+    }
+    show();
+  }
+
   void Cheatsheet::hide() {
+    m_showWhenConfigReady = false;
     if (m_tree == nullptr) {
       return;
     }
@@ -457,6 +509,16 @@ namespace umbriel {
   bool Cheatsheet::visible() const { return m_tree != nullptr; }
 
   void Cheatsheet::relayout() {
+    if (m_showWhenConfigReady) {
+      if (configHasMissingIncludes()) {
+        return;
+      }
+      m_showWhenConfigReady = false;
+      if (config().general.showCheatsheet && !m_server.sessionLocked()) {
+        render();
+      }
+      return;
+    }
     if (m_tree != nullptr) {
       render();
     }
@@ -484,6 +546,7 @@ namespace umbriel {
     }
 
     std::vector<CheatsheetRow> rows = buildCheatsheetRows(config().keybinds);
+    const CheatsheetPalette palette = makeCheatsheetPalette(config().colors);
 
     // --- Step 2: Group rows ---
     // Collect submaps in first-seen order.
@@ -496,20 +559,20 @@ namespace umbriel {
       }
     }
 
-    auto allLines = buildDisplayLines(rows, submapOrder);
+    auto allLines = buildDisplayLines(rows, submapOrder, palette);
 
     // --- Handle empty bind list ---
     if (allLines.empty()) {
       allLines.push_back({
           .isHeader = false,
-          .text = "<span foreground='#8a8a92'>no keybinds configured</span>",
+          .text = std::format("<span foreground='{}'>no keybinds configured</span>", palette.textMuted),
       });
     }
 
     // --- Step 4: Column layout ---
 
     // --- Step 5: Header/footer buffers ---
-    Chrome chrome = renderChrome(configFileMissing(), m_server.nested(), scale);
+    Chrome chrome = renderChrome(configFileMissing(), m_server.nested(), scale, palette);
     TextBufferResult& titleBuf = chrome.title;
     TextBufferResult& footerBuf = chrome.footer;
 
@@ -539,7 +602,9 @@ namespace umbriel {
     m_shadow.update(m_tree, panelW, panelH, 0, kCornerRadius, nullptr);
 
     // Panel rect.
-    wlr_scene_rect* panelRect = wlr_scene_rect_create(m_tree, panelW, panelH, kPanelColor);
+    float panelColor[4]{};
+    premultiplied(panelColor, config().colors.background, 1.0F);
+    wlr_scene_rect* panelRect = wlr_scene_rect_create(m_tree, panelW, panelH, panelColor);
     wlr_scene_rect_set_corner_radius(panelRect, kCornerRadius);
     (void)panelRect;
 

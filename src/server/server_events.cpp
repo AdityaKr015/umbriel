@@ -206,6 +206,9 @@ namespace umbriel {
       }
       m_cursor->applyConfig();
     }
+    if (effects.internalUi) {
+      markDirty(Dirty::Cheatsheet);
+    }
     if (effects.outputState) {
       for (const auto& output : m_outputs) {
         output->applyOutputState();

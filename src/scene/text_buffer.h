@@ -13,10 +13,10 @@ namespace umbriel {
     int padding = 14;   // logical pixels on all sides
     double scale = 1.0; // device-pixel scale (ceil of output scale)
     // Background colour.
-    double bgR = 0.10;
-    double bgG = 0.10;
-    double bgB = 0.12;
-    double bgA = 0.92;
+    double bgR = 0.0;
+    double bgG = 0.0;
+    double bgB = 0.0;
+    double bgA = 0.0;
   };
 
   struct TextBufferResult {

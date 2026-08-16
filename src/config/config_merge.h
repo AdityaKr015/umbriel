@@ -14,6 +14,7 @@ namespace umbriel::configmerge {
     std::vector<std::filesystem::path> loadedFiles;
     std::vector<ConfigDiagnostic> diagnostics;
     bool hadParseError = false;
+    bool missingIncludes = false;
   };
 
   [[nodiscard]] MergeResult mergeWithIncludes(const std::filesystem::path& rootFile);

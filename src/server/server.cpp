@@ -399,7 +399,7 @@ namespace umbriel {
     showConfigDiagnostics();
     m_cheatsheet = std::make_unique<Cheatsheet>(*this, m_cheatsheetTree);
     if (config().general.showCheatsheet) {
-      m_cheatsheet->show();
+      m_cheatsheet->showOnStartup();
     }
     return true;
   }

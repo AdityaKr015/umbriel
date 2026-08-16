@@ -266,6 +266,7 @@ namespace umbriel::configmerge {
           deepMerge(base, loadAndExpand(target, visited, result));
           continue;
         }
+        result.missingIncludes = true;
         emit(
             result, ConfigDiagnostic::Severity::Warning, &entry.source,
             std::format("include not found: {} (from {})", target.string(), path.string())

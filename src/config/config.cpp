@@ -278,6 +278,19 @@ namespace umbriel {
       }
     }
 
+    void readColors(Section& root, Config& loaded) {
+      auto& colors = loaded.colors;
+      root.sub("colors", [&](Section& s) {
+        s.color("background", colors.background)
+            .color("text_primary", colors.textPrimary)
+            .color("text_muted", colors.textMuted)
+            .color("accent_primary", colors.accentPrimary)
+            .color("accent_secondary", colors.accentSecondary)
+            .color("warning", colors.warning)
+            .color("error", colors.error);
+      });
+    }
+
     void readAppearance(Section& root, Config& loaded) {
       auto& a = loaded.appearance;
       root.sub("appearance", [&](Section& s) {
@@ -821,6 +834,7 @@ namespace umbriel {
 
       try {
         auto result = configmerge::mergeWithIncludes(store.rootPath());
+        store.setMissingIncludes(result.missingIncludes);
         for (auto& diagnostic : result.diagnostics) {
           store.addDiagnostic(std::move(diagnostic));
         }
@@ -834,6 +848,7 @@ namespace umbriel {
         Config loaded;
         {
           Section root(result.merged, "", store.mutableDiagnostics());
+          readColors(root, loaded);
           readAppearance(root, loaded);
           readOverview(root, loaded);
           readLayout(root, loaded);
@@ -880,6 +895,8 @@ namespace umbriel {
   const std::filesystem::path& configRootPath() { return configStore().rootPath(); }
 
   bool configFileMissing() { return configStore().fileMissing(); }
+
+  bool configHasMissingIncludes() { return configStore().missingIncludes(); }
 
   namespace {
     // Whether the root config actually exists on disk right now, which is not the

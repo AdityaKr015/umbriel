@@ -9,6 +9,7 @@ namespace umbriel {
   // Which source sections a reload altered. Runtime effects are derived
   // separately because one section can invalidate several subsystems.
   struct ConfigChange {
+    bool colors = false;
     bool appearance = false;
     bool overview = false;
     bool layout = false;
@@ -23,7 +24,8 @@ namespace umbriel {
     bool workspaceRules = false;
 
     [[nodiscard]] bool any() const {
-      return appearance
+      return colors
+          || appearance
           || overview
           || layout
           || workspaces
@@ -56,6 +58,7 @@ namespace umbriel {
     bool layerEffects = false;
     bool input = false;
     bool overviewPresentation = false;
+    bool internalUi = false;
 
     [[nodiscard]] bool any() const {
       return outputState
@@ -65,7 +68,8 @@ namespace umbriel {
           || viewChrome
           || layerEffects
           || input
-          || overviewPresentation;
+          || overviewPresentation
+          || internalUi;
     }
 
     [[nodiscard]] bool invalidatesOverview() const {

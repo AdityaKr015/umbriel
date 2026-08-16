@@ -61,6 +61,7 @@ namespace umbriel {
         .layerEffects = sceneBlur || before.layerRules != after.layerRules,
         .input = before.input != after.input,
         .overviewPresentation = before.overview != after.overview,
+        .internalUi = before.colors != after.colors,
     };
   }
 
@@ -74,11 +75,13 @@ namespace umbriel {
         .layerEffects = true,
         .input = true,
         .overviewPresentation = true,
+        .internalUi = true,
     };
   }
 
   ConfigChange ConfigChange::everything() {
     return {
+        .colors = true,
         .appearance = true,
         .overview = true,
         .layout = true,
@@ -96,6 +99,7 @@ namespace umbriel {
 
   ConfigChange ConfigChange::between(const Config& before, const Config& after) {
     return {
+        .colors = before.colors != after.colors,
         .appearance = before.appearance != after.appearance,
         .overview = before.overview != after.overview,
         .layout = before.layout != after.layout,
@@ -122,6 +126,7 @@ namespace umbriel {
       }
       out += name;
     };
+    add(colors, "colors");
     add(appearance, "appearance");
     add(overview, "overview");
     add(layout, "layout");
@@ -153,6 +158,7 @@ namespace umbriel {
     add(workspaceLayout, "workspace layout");
     add(sceneBlur, "scene blur");
     add(viewChrome, "view chrome");
+    add(internalUi, "internal UI");
     add(layerEffects, "layer effects");
     add(input, "input");
     add(overviewPresentation, "overview presentation");

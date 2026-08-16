@@ -25,8 +25,14 @@ namespace {
     TempConfig()
         : m_path(
               std::filesystem::temp_directory_path() / ("umbriel-config-load-" + std::to_string(getpid()) + ".toml")
-          ) {}
-    ~TempConfig() { std::filesystem::remove(m_path); }
+          ),
+          m_includePath(m_path.string() + ".include") {
+      std::filesystem::remove(m_includePath);
+    }
+    ~TempConfig() {
+      std::filesystem::remove(m_path);
+      std::filesystem::remove(m_includePath);
+    }
 
     TempConfig(const TempConfig&) = delete;
     TempConfig& operator=(const TempConfig&) = delete;
@@ -36,10 +42,17 @@ namespace {
       stream << contents;
     }
 
+    void writeInclude(const std::string& contents) const {
+      std::ofstream stream(m_includePath);
+      stream << contents;
+    }
+
     [[nodiscard]] const std::filesystem::path& path() const { return m_path; }
+    [[nodiscard]] std::string includeName() const { return m_includePath.filename().string(); }
 
   private:
     std::filesystem::path m_path;
+    std::filesystem::path m_includePath;
   };
 } // namespace
 
@@ -101,6 +114,57 @@ center_underfull_strip = true
   CHECK(containsDiagnostic(store, "output.DP-1.scale = 9"));
   CHECK(containsDiagnostic(store, "unknown key layout.scrolling.always_center_single_column"));
   CHECK(containsDiagnostic(store, "unknown key general.prefer_no_csd"));
+}
+
+UMBRIEL_TEST(semanticColorsLoadFromTheirOwnSection) {
+  const TempConfig file;
+  file.write(R"(
+[colors]
+background = "#01020304"
+text_primary = "#11121314"
+text_muted = "#21222324"
+accent_primary = "#31323334"
+accent_secondary = "#41424344"
+warning = "#51525354"
+error = "#61626364"
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+  const auto& colors = store.config().colors;
+
+  CHECK(result.success);
+  CHECK_EQ(colors.background[0], 1.0F / 255.0F);
+  CHECK_EQ(colors.background[3], 4.0F / 255.0F);
+  CHECK_EQ(colors.textPrimary[0], 17.0F / 255.0F);
+  CHECK_EQ(colors.textMuted[0], 33.0F / 255.0F);
+  CHECK_EQ(colors.accentPrimary[0], 49.0F / 255.0F);
+  CHECK_EQ(colors.accentSecondary[0], 65.0F / 255.0F);
+  CHECK_EQ(colors.warning[0], 81.0F / 255.0F);
+  CHECK_EQ(colors.error[0], 97.0F / 255.0F);
+  CHECK(!containsDiagnostic(store, "unknown key colors"));
+}
+
+UMBRIEL_TEST(missingIncludesRemainPendingUntilTheyLoad) {
+  const TempConfig file;
+  file.write("[include]\nfiles = [\"" + file.includeName() + "\"]\n");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult missing = store.reload();
+
+  CHECK(missing.success);
+  CHECK(store.missingIncludes());
+  CHECK(containsDiagnostic(store, "include not found"));
+
+  file.writeInclude("[colors]\naccent_primary = \"#123456FF\"\n");
+  const umbriel::ConfigReloadResult loaded = store.reload();
+
+  CHECK(loaded.success);
+  CHECK(!store.missingIncludes());
+  CHECK(!containsDiagnostic(store, "include not found"));
+  CHECK_EQ(store.config().colors.accentPrimary[0], 18.0F / 255.0F);
 }
 
 UMBRIEL_TEST(activationPolicyLoadsGloballyAndPerWindow) {

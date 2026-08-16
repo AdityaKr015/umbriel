@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "config/config_diag.h"
+#include "scene/color.h"
 #include "scene/text_buffer.h"
 #include "server/server.h"
 #include "wlr.h"
@@ -142,7 +143,9 @@ namespace umbriel {
       return diagnostic.severity == ConfigDiagnostic::Severity::Error;
     });
     const char* heading = hasError ? "Configuration errors" : "Configuration warnings";
-    const char* headingColor = hasError ? "#ff6b6b" : "#f5c96b";
+    const auto& colors = config().colors;
+    const std::string headingColor = rgbaHex(hasError ? colors.error : colors.warning);
+    const std::string textColor = rgbaHex(colors.textPrimary);
 
     // Build pango markup.
     const std::filesystem::path configDir = configRootPath().parent_path();
@@ -160,17 +163,17 @@ namespace umbriel {
       const std::string loc = shortPath(diagnostic, configDir);
       gchar* escapedMsg = g_markup_escape_text(diagnostic.message.c_str(), -1);
       if (loc.empty()) {
-        markup += std::format("\n<span foreground='#e8e8ea'>{}</span>", escapedMsg);
+        markup += std::format("\n<span foreground='{}'>{}</span>", textColor, escapedMsg);
       } else {
         gchar* escapedLoc = g_markup_escape_text(loc.c_str(), -1);
-        markup += std::format("\n<span foreground='#e8e8ea'>{}: {}</span>", escapedLoc, escapedMsg);
+        markup += std::format("\n<span foreground='{}'>{}: {}</span>", textColor, escapedLoc, escapedMsg);
         g_free(escapedLoc);
       }
       g_free(escapedMsg);
     }
     if (total > kMaxLines) {
       const int remaining = total - kMaxLines;
-      markup += std::format("\n<span foreground='#e8e8ea'>+{} more — run `umbriel validate`</span>", remaining);
+      markup += std::format("\n<span foreground='{}'>+{} more; run `umbriel validate`</span>", textColor, remaining);
     }
 
     // Render text into a wlr_buffer via the shared utility.
@@ -180,6 +183,10 @@ namespace umbriel {
         .maxWidth = maxTextWidth,
         .padding = kPadding,
         .scale = scale,
+        .bgR = colors.background[0],
+        .bgG = colors.background[1],
+        .bgB = colors.background[2],
+        .bgA = colors.background[3],
     });
     if (rendered.buffer == nullptr) {
       return;

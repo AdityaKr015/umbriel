@@ -18,6 +18,17 @@ focus_on_activate = false      # activation requests mark urgent without stealin
 [workspaces]
 back_and_forth = false
 
+# Colors ---------------------------------------------------------------------
+
+[colors]
+background = "#141419F0"
+text_primary = "#E8E8EAFF"
+text_muted = "#8A8A92FF"
+accent_primary = "#7AA3FFFF"
+accent_secondary = "#F5C96BFF"
+warning = "#F5C96BFF"
+error = "#FF6B6BFF"
+
 # Appearance -----------------------------------------------------------------
 
 [appearance]

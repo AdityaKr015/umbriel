@@ -8,6 +8,7 @@ namespace umbriel {
 
   void ConfigStore::beginLoad() {
     m_diagnostics.clear();
+    m_missingIncludes = false;
     m_watchPaths.clear();
     m_watchPaths.push_back(m_rootPath);
   }

@@ -51,7 +51,7 @@ focus_on_activate = false
 |-----|------|---------|-------------|
 | `autostart` | string array | `[]` | Shell commands run once after startup. Never re-run on config reload. |
 | `xwayland` | bool | `true` | Spawn `xwayland-satellite` for X11 app support. The binary must be installed. Changing this requires a restart. |
-| `show_cheatsheet` | bool | `true` | Show the keybinds cheatsheet overlay on startup. Press any key or any mouse button to dismiss, or toggle at runtime via `cheatsheet-toggle`. |
+| `show_cheatsheet` | bool | `true` | Show the keybinds cheatsheet overlay on startup. If an included file is still missing, Umbriel waits for it to load before showing the overlay. Press any key or mouse button to dismiss, or toggle at runtime via `cheatsheet-toggle`. |
 | `focus_on_activate` | bool | `false` | Focus and reveal windows that request activation. When false, activation marks the window and its workspace urgent without changing workspaces. Window rules can override this per application. |
 
 ## Environment
@@ -80,6 +80,36 @@ Output workspaces are dynamic by default. See [Outputs](outputs.md) for dynamic
 behavior and fixed workspace lists. See
 [Workspace rules](outputs.md#workspace-rules) for per-workspace layout
 overrides.
+
+## Colors
+
+```toml
+[colors]
+background = "#141419F0"
+text_primary = "#E8E8EAFF"
+text_muted = "#8A8A92FF"
+accent_primary = "#7AA3FFFF"
+accent_secondary = "#F5C96BFF"
+warning = "#F5C96BFF"
+error = "#FF6B6BFF"
+```
+
+Shared semantic colors for Umbriel-owned interface surfaces such as the keybind
+cheatsheet and configuration diagnostic banner. Colors are `#RRGGBB` or
+`#RRGGBBAA`.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `background` | color | `#141419F0` | Shared background for internal panels and banners. |
+| `text_primary` | color | `#E8E8EAFF` | Primary text. |
+| `text_muted` | color | `#8A8A92FF` | Secondary help and status text. |
+| `accent_primary` | color | `#7AA3FFFF` | Primary emphasis, including titles and key chords. |
+| `accent_secondary` | color | `#F5C96BFF` | Secondary emphasis, including group headings. |
+| `warning` | color | `#F5C96BFF` | Warning status text. |
+| `error` | color | `#FF6B6BFF` | Error status text. |
+
+Key chord backgrounds are derived from `background` and `text_primary`; they
+remain opaque so text stays legible over translucent panels.
 
 ## Appearance
 

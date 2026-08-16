@@ -16,6 +16,7 @@ namespace umbriel {
     Cheatsheet& operator=(const Cheatsheet&) = delete;
 
     void show();
+    void showOnStartup();
     void hide();
     void toggle();
     [[nodiscard]] bool visible() const;
@@ -27,6 +28,7 @@ namespace umbriel {
     Server& m_server;
     wlr_scene_tree* m_parent;
     wlr_scene_tree* m_tree = nullptr;
+    bool m_showWhenConfigReady = false;
     SurfaceShadow m_shadow;
   };
 

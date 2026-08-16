@@ -169,6 +169,17 @@ namespace umbriel {
   };
 
   struct Config {
+    struct Colors {
+      std::array<float, 4> background{0.0784314F, 0.0784314F, 0.0980392F, 0.9411765F};
+      std::array<float, 4> textPrimary{0.9098039F, 0.9098039F, 0.9176471F, 1.0F};
+      std::array<float, 4> textMuted{0.5411765F, 0.5411765F, 0.5725490F, 1.0F};
+      std::array<float, 4> accentPrimary{0.4784314F, 0.6392157F, 1.0F, 1.0F};
+      std::array<float, 4> accentSecondary{0.9607843F, 0.7882353F, 0.4196078F, 1.0F};
+      std::array<float, 4> warning{0.9607843F, 0.7882353F, 0.4196078F, 1.0F};
+      std::array<float, 4> error{1.0F, 0.4196078F, 0.4196078F, 1.0F};
+      bool operator==(const Colors&) const = default;
+    } colors;
+
     struct Appearance {
       int borderWidth = 2;
       int outerBorderWidth = 0;
@@ -307,4 +318,5 @@ namespace umbriel {
   [[nodiscard]] const std::vector<ConfigDiagnostic>& configDiagnostics();
   [[nodiscard]] const std::filesystem::path& configRootPath();
   [[nodiscard]] bool configFileMissing();
+  [[nodiscard]] bool configHasMissingIncludes();
 } // namespace umbriel

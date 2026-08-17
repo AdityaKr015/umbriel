@@ -10,6 +10,7 @@
 #include "input/gestures.h"
 #include "input/keyboard.h"
 #include "input/seat.h"
+#include "input/text_input.h"
 #include "layer/layer_surface.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
@@ -155,6 +156,7 @@ namespace umbriel {
     m_pinnedShadowTree = wlr_scene_tree_create(&m_scene->tree);
     m_pinnedTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
+    m_imPopupTree = wlr_scene_tree_create(&m_scene->tree);
     m_cheatsheetTree = wlr_scene_tree_create(&m_scene->tree);
     m_bannerTree = wlr_scene_tree_create(&m_scene->tree);
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
@@ -208,6 +210,9 @@ namespace umbriel {
     m_newPointerConstraint.notify = onNewPointerConstraint;
     wl_signal_add(&m_pointerConstraints->events.new_constraint, &m_newPointerConstraint);
     m_pointerGestures = wlr_pointer_gestures_v1_create(m_display);
+    m_virtualKeyboardManager = wlr_virtual_keyboard_manager_v1_create(m_display);
+    m_newVirtualKeyboard.notify = onNewVirtualKeyboard;
+    wl_signal_add(&m_virtualKeyboardManager->events.new_virtual_keyboard, &m_newVirtualKeyboard);
     m_virtualPointerManager = wlr_virtual_pointer_manager_v1_create(m_display);
     m_newVirtualPointer.notify = onNewVirtualPointer;
     wl_signal_add(&m_virtualPointerManager->events.new_virtual_pointer, &m_newVirtualPointer);
@@ -241,6 +246,7 @@ namespace umbriel {
 
     m_cursor = std::make_unique<Cursor>(*this);
     m_seat = std::make_unique<Seat>(*this);
+    m_inputMethodRelay = std::make_unique<InputMethodRelay>(*this);
     m_gestures = std::make_unique<Gestures>(*this);
     m_overview = std::make_unique<Overview>(*this);
     updateSeatCapabilities();
@@ -263,6 +269,7 @@ namespace umbriel {
     wl_list_remove(&m_newLayerSurface.link);
     wl_list_remove(&m_newSessionLock.link);
     wl_list_remove(&m_newPointerConstraint.link);
+    wl_list_remove(&m_newVirtualKeyboard.link);
     wl_list_remove(&m_newVirtualPointer.link);
     wl_list_remove(&m_newIdleInhibitor.link);
     wl_list_remove(&m_newActivationToken.link);
@@ -289,6 +296,7 @@ namespace umbriel {
     m_registry.clear();
     m_keyboards.clear();
     m_outputs.clear();
+    m_inputMethodRelay.reset();
     m_seat.reset();
     // Holds listeners on the wlr_cursor's gesture signals. wlr_cursor_destroy
     // asserts its signal lists are empty, so this must precede the cursor.

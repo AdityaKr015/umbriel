@@ -37,6 +37,7 @@ namespace umbriel {
 
     Server* m_server = nullptr;
     wlr_keyboard* m_keyboard = nullptr;
+    bool m_virtual = false;
     std::string m_deviceName;
 
     wl_listener m_modifiers{};

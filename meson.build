@@ -195,6 +195,7 @@ core_sources = files(
   'src/output/output.cpp',
   'src/input/seat.cpp',
   'src/input/keyboard.cpp',
+  'src/input/text_input.cpp',
   'src/input/cursor.cpp',
   'src/input/gestures.cpp',
   'src/input/cursor_constraint.cpp',

@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "input/text_input.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
 #include "server/server.h"
@@ -15,6 +16,7 @@ namespace umbriel {
 
   Keyboard::Keyboard(Server& server, wlr_input_device* device)
       : m_server(&server), m_keyboard(wlr_keyboard_from_input_device(device)),
+        m_virtual(wlr_input_device_get_virtual_keyboard(device) != nullptr),
         m_deviceName(device->name != nullptr ? device->name : "") {
     applyConfig();
 
@@ -29,6 +31,9 @@ namespace umbriel {
   }
   void Keyboard::applyConfig() {
     cancelRepeat();
+    if (m_virtual) {
+      return;
+    }
     const Config::Input& input = config().input;
     const Config::Input::Device* device = input.findDevice(m_deviceName);
     const std::string& layout = device != nullptr && device->layout ? *device->layout : input.keyboard.layout;
@@ -92,8 +97,14 @@ namespace umbriel {
     cancelRepeat();
     m_server->notifyIdleActivity();
     wlr_seat* seat = m_server->seat()->wlr();
-    wlr_seat_set_keyboard(seat, m_keyboard);
-    wlr_seat_keyboard_notify_modifiers(seat, &m_keyboard->modifiers);
+    wlr_input_method_keyboard_grab_v2* grab = m_server->inputMethodRelay()->grabForKeyboard(m_keyboard);
+    if (grab != nullptr) {
+      wlr_input_method_keyboard_grab_v2_set_keyboard(grab, m_keyboard);
+      wlr_input_method_keyboard_grab_v2_send_modifiers(grab, &m_keyboard->modifiers);
+    } else {
+      wlr_seat_set_keyboard(seat, m_keyboard);
+      wlr_seat_keyboard_notify_modifiers(seat, &m_keyboard->modifiers);
+    }
     m_server->cursor()->refreshInteractiveCursor();
   }
 
@@ -163,16 +174,22 @@ namespace umbriel {
     }
 
     if (!handled) {
-      // Overview holds the seat, so windows see no keys until it closes. It
-      // never hands keyboard focus to a view while open (focusView skips the
-      // seat enter), so a non-null focus here is a layer surface that took it
-      // deliberately, e.g. a launcher panel; those keep typing.
-      const Overview* overview = m_server->overview();
-      const bool overviewOwnsKeyboard =
-          overview != nullptr && overview->active() && seat->keyboard_state.focused_surface == nullptr;
-      if (!overviewOwnsKeyboard) {
-        wlr_seat_set_keyboard(seat, m_keyboard);
-        wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
+      wlr_input_method_keyboard_grab_v2* grab = m_server->inputMethodRelay()->grabForKeyboard(m_keyboard);
+      if (grab != nullptr) {
+        wlr_input_method_keyboard_grab_v2_set_keyboard(grab, m_keyboard);
+        wlr_input_method_keyboard_grab_v2_send_key(grab, event->time_msec, event->keycode, event->state);
+      } else {
+        // Overview holds the seat, so windows see no keys until it closes. It
+        // never hands keyboard focus to a view while open (focusView skips the
+        // seat enter), so a non-null focus here is a layer surface that took it
+        // deliberately, e.g. a launcher panel; those keep typing.
+        const Overview* overview = m_server->overview();
+        const bool overviewOwnsKeyboard =
+            overview != nullptr && overview->active() && seat->keyboard_state.focused_surface == nullptr;
+        if (!overviewOwnsKeyboard) {
+          wlr_seat_set_keyboard(seat, m_keyboard);
+          wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
+        }
       }
     }
     // A modifier-only action runs after its release reaches the focused

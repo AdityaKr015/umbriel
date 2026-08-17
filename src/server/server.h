@@ -54,6 +54,7 @@ struct wlr_gamma_control_manager_v1;
 struct wlr_output_manager_v1;
 struct wlr_output_configuration_v1;
 struct wlr_scene_tree;
+struct wlr_virtual_keyboard_manager_v1;
 struct wlr_virtual_pointer_manager_v1;
 struct wlr_virtual_pointer_v1;
 
@@ -76,6 +77,7 @@ namespace umbriel {
   class FocusManager;
   class XwaylandSupervisor;
   class ConfigWatcher;
+  class InputMethodRelay;
   class Gestures;
   class HintRect;
   class Keyboard;
@@ -130,10 +132,12 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* fullscreenTree() const { return m_fullscreenTree; }
     [[nodiscard]] wlr_scene_tree* pinnedTree() const { return m_pinnedTree; }
     [[nodiscard]] wlr_scene_tree* pinnedShadowTree() const { return m_pinnedShadowTree; }
+    [[nodiscard]] wlr_scene_tree* imPopupTree() const { return m_imPopupTree; }
     [[nodiscard]] wlr_scene_tree* lockTree() const { return m_lockTree; }
     [[nodiscard]] wlr_scene_tree* shellLayerTree(uint32_t layer) const;
     [[nodiscard]] wlr_output_layout* outputLayout() const { return m_outputLayout; }
     [[nodiscard]] wlr_scene_output_layout* sceneLayout() const { return m_sceneLayout; }
+    [[nodiscard]] InputMethodRelay* inputMethodRelay() const { return m_inputMethodRelay.get(); }
     [[nodiscard]] Seat* seat() const { return m_seat.get(); }
     [[nodiscard]] Cursor* cursor() const { return m_cursor.get(); }
     // Central animation tick: advances every registered owner once per msec and
@@ -249,6 +253,7 @@ namespace umbriel {
     static void onNewLayerSurface(wl_listener* listener, void* data);
     static void onNewSessionLock(wl_listener* listener, void* data);
     static void onNewPointerConstraint(wl_listener* listener, void* data);
+    static void onNewVirtualKeyboard(wl_listener* listener, void* data);
     static void onNewVirtualPointer(wl_listener* listener, void* data);
     static void onVirtualPointerDestroy(wl_listener* listener, void* data);
     static void onNewIdleInhibitor(wl_listener* listener, void* data);
@@ -331,6 +336,7 @@ namespace umbriel {
     wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;
     wlr_relative_pointer_manager_v1* m_relativePointerManager = nullptr;
     wlr_pointer_gestures_v1* m_pointerGestures = nullptr;
+    wlr_virtual_keyboard_manager_v1* m_virtualKeyboardManager = nullptr;
     wlr_virtual_pointer_manager_v1* m_virtualPointerManager = nullptr;
     wlr_idle_inhibit_manager_v1* m_idleInhibitManager = nullptr;
     wlr_idle_notifier_v1* m_idleNotifier = nullptr;
@@ -349,6 +355,7 @@ namespace umbriel {
     wlr_scene_tree* m_fullscreenTree = nullptr;
     wlr_scene_tree* m_pinnedShadowTree = nullptr;
     wlr_scene_tree* m_pinnedTree = nullptr;
+    wlr_scene_tree* m_imPopupTree = nullptr;
     wlr_scene_tree* m_lockTree = nullptr;
     wlr_scene_rect* m_lockBlank = nullptr;
     wlr_scene_rect* m_backdrop = nullptr;
@@ -384,6 +391,7 @@ namespace umbriel {
     std::vector<Animatable*> m_animatables;
 
     std::unique_ptr<Seat> m_seat;
+    std::unique_ptr<InputMethodRelay> m_inputMethodRelay;
     std::unique_ptr<Cursor> m_cursor;
     std::unique_ptr<Gestures> m_gestures;
     std::unique_ptr<SessionLock> m_sessionLock;
@@ -414,6 +422,7 @@ namespace umbriel {
     wl_listener m_newLayerSurface{};
     wl_listener m_newSessionLock{};
     wl_listener m_newPointerConstraint{};
+    wl_listener m_newVirtualKeyboard{};
     wl_listener m_newVirtualPointer{};
     wl_listener m_newIdleInhibitor{};
     wl_listener m_newActivationToken{};

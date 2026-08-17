@@ -467,6 +467,14 @@ namespace umbriel {
     self->m_cursor->handleNewConstraint(static_cast<wlr_pointer_constraint_v1*>(data));
   }
 
+  void Server::onNewVirtualKeyboard(wl_listener* listener, void* data) {
+    Server* self;
+    self = wl_container_of(listener, self, m_newVirtualKeyboard);
+    auto* keyboard = static_cast<wlr_virtual_keyboard_v1*>(data);
+    self->addKeyboard(&keyboard->keyboard.base);
+    self->updateSeatCapabilities();
+  }
+
   void Server::onNewVirtualPointer(wl_listener* listener, void* data) {
     Server* self;
     self = wl_container_of(listener, self, m_newVirtualPointer);

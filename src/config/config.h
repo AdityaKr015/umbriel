@@ -299,6 +299,19 @@ namespace umbriel {
         std::optional<double> followsMouseMaxScroll;
         bool operator==(const Focus&) const = default;
       } focus;
+      struct Device {
+        std::string name;
+        std::optional<std::string> layout;
+        std::optional<std::string> variant;
+        std::optional<int> repeatRate;
+        std::optional<int> repeatDelay;
+        std::optional<bool> tap;
+        std::optional<bool> naturalScroll;
+        bool operator==(const Device&) const = default;
+      };
+
+      std::vector<Device> devices;
+      [[nodiscard]] const Device* findDevice(std::string_view name) const;
       bool operator==(const Input&) const = default;
     } input;
 

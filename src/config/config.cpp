@@ -367,16 +367,16 @@ namespace umbriel {
       root.sub("environment", [&](Section& s) { s.eachString(loaded.environment.variables); });
     }
 
-    void validateKeyboardInput(Config::Input::Keyboard& keyboard, const toml::source_region& source) {
+    bool validateKeyboardInput(
+        const Config::Input::Keyboard& keyboard, const toml::source_region& source, std::string_view context
+    ) {
       if (keyboard.layout.empty() && keyboard.variant.empty()) {
-        return;
+        return true;
       }
-      xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-      if (context == nullptr) {
-        warnAt(source, "unable to validate input.keyboard XKB configuration");
-        keyboard.layout.clear();
-        keyboard.variant.clear();
-        return;
+      xkb_context* xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+      if (xkbContext == nullptr) {
+        warnAt(source, "unable to validate {} XKB configuration", context);
+        return false;
       }
       const xkb_rule_names names{
           .rules = nullptr,
@@ -385,18 +385,100 @@ namespace umbriel {
           .variant = keyboard.variant.empty() ? nullptr : keyboard.variant.c_str(),
           .options = nullptr,
       };
-      xkb_keymap* keymap = xkb_keymap_new_from_names(context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+      xkb_keymap* keymap = xkb_keymap_new_from_names(xkbContext, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
       if (keymap == nullptr) {
         warnAt(
-            source, "ignoring input.keyboard layout='{}' variant='{}' (invalid XKB configuration)", keyboard.layout,
+            source, "ignoring {} layout='{}' variant='{}' (invalid XKB configuration)", context, keyboard.layout,
             keyboard.variant
         );
-        keyboard.layout.clear();
-        keyboard.variant.clear();
-      } else {
-        xkb_keymap_unref(keymap);
+        xkb_context_unref(xkbContext);
+        return false;
       }
-      xkb_context_unref(context);
+      xkb_keymap_unref(keymap);
+      xkb_context_unref(xkbContext);
+      return true;
+    }
+
+    void readOptionalText(
+        Section& section, std::string_view key, std::optional<std::string>& target, std::string_view context
+    ) {
+      const toml::node* node = section.take(key);
+      if (node == nullptr) {
+        return;
+      }
+      if (const auto value = node->value<std::string>()) {
+        target = *value;
+      } else {
+        warnAt(node->source(), "ignoring {}.{} (expected string)", context, key);
+      }
+    }
+
+    void readInputDevices(Section& input, Config::Input& configured) {
+      const toml::node* node = input.take("device");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* devices = node->as_array();
+      if (devices == nullptr) {
+        errorAt(node->source(), "input.device must be a [[input.device]] array of tables");
+        return;
+      }
+
+      size_t index = 0;
+      for (const auto& entry : *devices) {
+        const std::string context = std::format("input.device[{}]", index++);
+        const auto* table = entry.as_table();
+        if (table == nullptr) {
+          errorAt(entry.source(), "{} must be a table", context);
+          continue;
+        }
+
+        Config::Input::Device device;
+        Section keys(*table, context, configStore().mutableDiagnostics());
+        bool validName = false;
+        if (const toml::node* nameNode = keys.take("name")) {
+          if (const auto name = nameNode->value<std::string>(); name && !name->empty()) {
+            device.name = *name;
+            validName = true;
+          } else {
+            errorAt(nameNode->source(), "{}.name must be a non-empty string", context);
+          }
+        } else {
+          errorAt(entry.source(), "{} must set name", context);
+        }
+
+        readOptionalText(keys, "layout", device.layout, context);
+        readOptionalText(keys, "variant", device.variant, context);
+        keys.integer("repeat_rate", 0, 1000, device.repeatRate)
+            .integer("repeat_delay", 0, 10000, device.repeatDelay)
+            .boolean("tap", device.tap)
+            .boolean("natural_scroll", device.naturalScroll);
+
+        if (!validName) {
+          continue;
+        }
+        if (std::ranges::any_of(configured.devices, [&](const Config::Input::Device& existing) {
+              return existing.name == device.name;
+            })) {
+          errorAt(entry.source(), "{} duplicates device '{}'", context, device.name);
+          continue;
+        }
+
+        if (device.layout || device.variant) {
+          Config::Input::Keyboard keyboard = configured.keyboard;
+          if (device.layout) {
+            keyboard.layout = *device.layout;
+          }
+          if (device.variant) {
+            keyboard.variant = *device.variant;
+          }
+          if (!validateKeyboardInput(keyboard, entry.source(), context)) {
+            device.layout.reset();
+            device.variant.reset();
+          }
+        }
+        configured.devices.push_back(std::move(device));
+      }
     }
 
     void readInput(Section& root, Config& loaded) {
@@ -408,9 +490,10 @@ namespace umbriel {
               .integer("repeat_rate", 0, 1000, in.keyboard.repeatRate)
               .integer("repeat_delay", 0, 10000, in.keyboard.repeatDelay);
         });
-        // Cross-field check, so it runs after the whole table is read.
-        if (const toml::node* keyboardNode = s.node("keyboard")) {
-          validateKeyboardInput(in.keyboard, keyboardNode->source());
+        if (const toml::node* keyboardNode = s.node("keyboard");
+            keyboardNode != nullptr && !validateKeyboardInput(in.keyboard, keyboardNode->source(), "input.keyboard")) {
+          in.keyboard.layout.clear();
+          in.keyboard.variant.clear();
         }
         s.sub("touchpad", [&](Section& t) {
           t.boolean("tap", in.touchpad.tap).boolean("natural_scroll", in.touchpad.naturalScroll);
@@ -429,6 +512,7 @@ namespace umbriel {
           f.boolean("follows_mouse", in.focus.followsMouse)
               .real("follows_mouse_max_scroll", 0.0, kMaxFollowsMouseScroll, in.focus.followsMouseMaxScroll);
         });
+        readInputDevices(s, in);
       });
     }
 
@@ -882,6 +966,10 @@ namespace umbriel {
     }
 
   } // namespace
+  const Config::Input::Device* Config::Input::findDevice(std::string_view name) const {
+    const auto found = std::ranges::find_if(devices, [name](const Device& device) { return device.name == name; });
+    return found == devices.end() ? nullptr : &*found;
+  }
 
   ConfigStore& configStore() {
     static ConfigStore store;

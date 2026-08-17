@@ -111,6 +111,12 @@ repeat_delay = 600             # 0-10000 ms
 [input.mouse]
 # natural_scroll = false
 scroll_wheel_step = 60         # 1-1000
+# Override only the listed settings for an exact, case-sensitive device name.
+# Find names with `libinput list-devices`.
+# [[input.device]]
+# name = "Acme Precision Touchpad"
+# tap = true
+# natural_scroll = false
 
 [input.cursor]
 theme = ""

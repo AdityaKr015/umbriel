@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <unistd.h>
 
@@ -187,6 +188,58 @@ focus_on_activate = false
   CHECK_EQ(store.config().windowRules.size(), size_t{1});
   CHECK(store.config().windowRules[0].focusOnActivate.has_value());
   CHECK(!*store.config().windowRules[0].focusOnActivate);
+}
+
+UMBRIEL_TEST(deviceInputOverridesLoadAndMatchExactNames) {
+  const TempConfig file;
+  file.write(R"(
+[input.keyboard]
+layout = "us"
+repeat_rate = 25
+
+[input.touchpad]
+tap = true
+natural_scroll = true
+
+[[input.device]]
+name = "Acme Split Keyboard"
+layout = ""
+variant = ""
+repeat_rate = 40
+repeat_delay = 250
+
+[[input.device]]
+name = "Acme Precision Touchpad"
+tap = false
+natural_scroll = false
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+  const auto& input = store.config().input;
+
+  CHECK(result.success);
+  CHECK_EQ(input.devices.size(), size_t{2});
+
+  const auto* keyboard = input.findDevice("Acme Split Keyboard");
+  CHECK(keyboard != nullptr);
+  if (keyboard != nullptr) {
+    CHECK(keyboard->layout == std::optional<std::string>(""));
+    CHECK(keyboard->variant == std::optional<std::string>(""));
+    CHECK(keyboard->repeatRate == std::optional<int>(40));
+    CHECK(keyboard->repeatDelay == std::optional<int>(250));
+  }
+
+  const auto* touchpad = input.findDevice("Acme Precision Touchpad");
+  CHECK(touchpad != nullptr);
+  if (touchpad != nullptr) {
+    CHECK(touchpad->tap == std::optional<bool>(false));
+    CHECK(touchpad->naturalScroll == std::optional<bool>(false));
+  }
+
+  CHECK(input.findDevice("acme split keyboard") == nullptr);
+  CHECK(input.findDevice("Acme") == nullptr);
 }
 
 int main() { return RUN_TESTS(); }

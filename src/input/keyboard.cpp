@@ -14,7 +14,8 @@
 namespace umbriel {
 
   Keyboard::Keyboard(Server& server, wlr_input_device* device)
-      : m_server(&server), m_keyboard(wlr_keyboard_from_input_device(device)) {
+      : m_server(&server), m_keyboard(wlr_keyboard_from_input_device(device)),
+        m_deviceName(device->name != nullptr ? device->name : "") {
     applyConfig();
 
     m_modifiers.notify = onModifiers;
@@ -28,13 +29,19 @@ namespace umbriel {
   }
   void Keyboard::applyConfig() {
     cancelRepeat();
-    const Config::Input::Keyboard& configured = config().input.keyboard;
+    const Config::Input& input = config().input;
+    const Config::Input::Device* device = input.findDevice(m_deviceName);
+    const std::string& layout = device != nullptr && device->layout ? *device->layout : input.keyboard.layout;
+    const std::string& variant = device != nullptr && device->variant ? *device->variant : input.keyboard.variant;
+    const int repeatRate = device != nullptr && device->repeatRate ? *device->repeatRate : input.keyboard.repeatRate;
+    const int repeatDelay =
+        device != nullptr && device->repeatDelay ? *device->repeatDelay : input.keyboard.repeatDelay;
     xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     const xkb_rule_names names{
         .rules = nullptr,
         .model = nullptr,
-        .layout = configured.layout.empty() ? nullptr : configured.layout.c_str(),
-        .variant = configured.variant.empty() ? nullptr : configured.variant.c_str(),
+        .layout = layout.empty() ? nullptr : layout.c_str(),
+        .variant = variant.empty() ? nullptr : variant.c_str(),
         .options = nullptr,
     };
     xkb_keymap* keymap =
@@ -48,7 +55,7 @@ namespace umbriel {
     if (context != nullptr) {
       xkb_context_unref(context);
     }
-    wlr_keyboard_set_repeat_info(m_keyboard, configured.repeatRate, configured.repeatDelay);
+    wlr_keyboard_set_repeat_info(m_keyboard, repeatRate, repeatDelay);
   }
 
   Keyboard::~Keyboard() {

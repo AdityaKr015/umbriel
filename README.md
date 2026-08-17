@@ -191,8 +191,9 @@ environment variables (string values) to Umbriel and its spawned children. Windo
 `blur = true` and `blur_popups = true`; `[appearance.blur].enabled` is the master switch. Rules can configure alpha
 masking with `blur_ignore_alpha` and optimized blur with `blur_optimized`. Window rules can also set floating, size,
 workspace, fullscreen, and opacity. Keyboard input supports XKB layout/variant and repeat settings; touchpads support
-tap-to-click and natural scrolling, mice support natural scrolling, and cursor theme/size are configurable. Libinput
-options are applied only when supported by the device.
+tap-to-click and natural scrolling, mice support natural scrolling, and cursor theme/size are configurable.
+`[[input.device]]` rules override supported keyboard and pointer settings for exact device names. Libinput options are
+applied only when supported by the device.
 
 ## Project layout
 

@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 
+#include <string>
 #include <wayland-server-core.h>
 
 struct wlr_input_device;
@@ -36,6 +37,7 @@ namespace umbriel {
 
     Server* m_server = nullptr;
     wlr_keyboard* m_keyboard = nullptr;
+    std::string m_deviceName;
 
     wl_listener m_modifiers{};
     wl_listener m_key{};

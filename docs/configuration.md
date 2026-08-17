@@ -320,6 +320,38 @@ Omit `natural_scroll` to preserve each device's default. `layout-scroll-left`
 and `layout-scroll-right` clamp to the strip bounds, so the columns never park
 past either edge.
 
+### Per-device overrides
+
+Use `[[input.device]]` to override settings for devices whose name exactly
+matches `name`. Matching is case-sensitive. The name is the `Device` value
+reported by `libinput list-devices`.
+
+```toml
+[[input.device]]
+name = "Acme Split Keyboard"
+layout = "us"
+variant = "colemak_dh"
+repeat_rate = 40
+repeat_delay = 250
+
+[[input.device]]
+name = "Acme Precision Touchpad"
+tap = true
+natural_scroll = false
+```
+
+Each rule inherits the matching class settings and overrides only the keys it
+contains. `layout`, `variant`, `repeat_rate`, and `repeat_delay` apply to
+keyboards. `tap` applies to touchpads. `natural_scroll` applies to touchpads and
+mice. Unsupported libinput settings are reported in the log.
+
+Rules match every attached device with the exact name. Device overrides also
+apply when a device is connected after startup and when the configuration is
+reloaded. Duplicate rules for the same name are rejected.
+
+`scroll_wheel_step`, cursor settings, and focus settings remain compositor-wide
+because they are not properties of one physical input device.
+
 ### Cursor
 
 ```toml

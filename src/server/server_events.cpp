@@ -144,17 +144,18 @@ namespace umbriel {
     }
 
     void applyNaturalScroll(
-        libinput_device* libinputDevice, const wlr_input_device* device, const std::optional<bool>& enabled,
+        libinput_device* libinputDevice, const wlr_input_device* device, const std::optional<bool>& configured,
         std::string_view setting
     ) {
-      if (!enabled) {
-        return;
-      }
       if (libinput_device_config_scroll_has_natural_scroll(libinputDevice) == 0) {
-        kLog.warn("input: '{}' does not support {}", deviceName(device), setting);
+        if (configured) {
+          kLog.warn("input: '{}' does not support {}", deviceName(device), setting);
+        }
         return;
       }
-      if (libinput_device_config_scroll_set_natural_scroll_enabled(libinputDevice, *enabled)
+      const bool enabled =
+          configured.value_or(libinput_device_config_scroll_get_default_natural_scroll_enabled(libinputDevice) != 0);
+      if (libinput_device_config_scroll_set_natural_scroll_enabled(libinputDevice, enabled)
           != LIBINPUT_CONFIG_STATUS_SUCCESS) {
         kLog.warn("input: failed to apply {} to '{}'", setting, deviceName(device));
       }
@@ -169,20 +170,38 @@ namespace umbriel {
         return;
       }
 
+      const Config::Input& input = config().input;
+      const Config::Input::Device* override = input.findDevice(device->name != nullptr ? device->name : "");
       const bool isTouchpad = libinput_device_config_tap_get_finger_count(libinputDevice) > 0;
       if (isTouchpad) {
-        const Config::Input::Touchpad& touchpad = config().input.touchpad;
-        if (touchpad.tap) {
-          const auto state = *touchpad.tap ? LIBINPUT_CONFIG_TAP_ENABLED : LIBINPUT_CONFIG_TAP_DISABLED;
-          if (libinput_device_config_tap_set_enabled(libinputDevice, state) != LIBINPUT_CONFIG_STATUS_SUCCESS) {
-            kLog.warn("input: failed to apply input.touchpad.tap to '{}'", deviceName(device));
-          }
+        const std::optional<bool>& tap = override != nullptr && override->tap ? override->tap : input.touchpad.tap;
+        const auto tapState =
+            tap.value_or(libinput_device_config_tap_get_default_enabled(libinputDevice) == LIBINPUT_CONFIG_TAP_ENABLED)
+            ? LIBINPUT_CONFIG_TAP_ENABLED
+            : LIBINPUT_CONFIG_TAP_DISABLED;
+        if (libinput_device_config_tap_set_enabled(libinputDevice, tapState) != LIBINPUT_CONFIG_STATUS_SUCCESS) {
+          kLog.warn(
+              "input: failed to apply {} to '{}'",
+              override != nullptr && override->tap ? "input.device.tap" : "input.touchpad.tap", deviceName(device)
+          );
         }
-        applyNaturalScroll(libinputDevice, device, touchpad.naturalScroll, "input.touchpad.natural_scroll");
+
+        const std::optional<bool>& naturalScroll =
+            override != nullptr && override->naturalScroll ? override->naturalScroll : input.touchpad.naturalScroll;
+        applyNaturalScroll(
+            libinputDevice, device, naturalScroll,
+            override != nullptr && override->naturalScroll ? "input.device.natural_scroll"
+                                                           : "input.touchpad.natural_scroll"
+        );
         return;
       }
 
-      applyNaturalScroll(libinputDevice, device, config().input.mouse.naturalScroll, "input.mouse.natural_scroll");
+      const std::optional<bool>& naturalScroll =
+          override != nullptr && override->naturalScroll ? override->naturalScroll : input.mouse.naturalScroll;
+      applyNaturalScroll(
+          libinputDevice, device, naturalScroll,
+          override != nullptr && override->naturalScroll ? "input.device.natural_scroll" : "input.mouse.natural_scroll"
+      );
     }
   } // namespace
   void Server::applyConfig(const ConfigEffects& effects) {

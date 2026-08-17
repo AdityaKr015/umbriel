@@ -93,6 +93,9 @@ namespace umbriel {
     std::vector<Column> m_columns;
     std::vector<Target> m_targets;
     double m_scroll = 0;
+    // Height available during the last arrange, used to preserve existing pixel
+    // heights when a drop converts an outer gap into another stacked window.
+    int m_lastAvailableHeight = 0;
   };
 
 } // namespace umbriel

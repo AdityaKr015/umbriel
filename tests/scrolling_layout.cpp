@@ -674,4 +674,42 @@ UMBRIEL_TEST(gapWeightsInsetTheStack) {
   CHECK(std::fabs(fixture.layout.topGapWeight(0) - 1.0) < 1e-9);
 }
 
+UMBRIEL_TEST(insertAtBottomConsumesTheResizedGap) {
+  Fixture fixture;
+  fixture.addColumns(1);
+  CHECK(fixture.layout.setHeightWeight(0, 0, 0.25));
+  CHECK(fixture.layout.setBottomGapWeight(0, 0.75));
+  fixture.layout.arrange(kUsable);
+  const wlr_box upperBefore = fixture.layout.targetBox(stub(0));
+
+  fixture.layout.insertViewIntoColumn(stub(1), 0, 1);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box upperAfter = fixture.layout.targetBox(stub(0));
+  const wlr_box lower = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(upperAfter.height, upperBefore.height);
+  CHECK_EQ(lower.y, upperAfter.y + upperAfter.height + fixture.config.totalGap);
+  CHECK_EQ(lower.y + lower.height, kUsable.y + kUsable.height - fixture.config.edgePad);
+  CHECK(std::fabs(fixture.layout.bottomGapWeight(0)) < 1e-9);
+}
+
+UMBRIEL_TEST(insertAtTopConsumesTheResizedGap) {
+  Fixture fixture;
+  fixture.addColumns(1);
+  CHECK(fixture.layout.setHeightWeight(0, 0, 0.25));
+  CHECK(fixture.layout.setTopGapWeight(0, 0.75));
+  fixture.layout.arrange(kUsable);
+  const wlr_box lowerBefore = fixture.layout.targetBox(stub(0));
+
+  fixture.layout.insertViewIntoColumn(stub(1), 0, 0);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box upper = fixture.layout.targetBox(stub(1));
+  const wlr_box lowerAfter = fixture.layout.targetBox(stub(0));
+  CHECK_EQ(lowerAfter.height, lowerBefore.height);
+  CHECK_EQ(upper.y, kUsable.y + fixture.config.edgePad);
+  CHECK_EQ(lowerAfter.y, upper.y + upper.height + fixture.config.totalGap);
+  CHECK(std::fabs(fixture.layout.topGapWeight(0)) < 1e-9);
+}
+
 int main() { return RUN_TESTS(); }

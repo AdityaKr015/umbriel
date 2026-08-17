@@ -282,6 +282,10 @@ When you drag a column, the preview uses the free space beside the real column
 edges. If the strip extends beyond the output, dropping at the far right edge
 moves the column to the end, even when the last columns are off-screen.
 
+Dropping a window into empty space above or below a vertically resized stack
+consumes that space. Existing windows retain their pixel heights, and the
+dropped window fills the remainder apart from the configured inter-window gap.
+
 Layout fields can be overridden per-workspace; see
 [Workspace Rules](outputs.md#workspace-rules).
 

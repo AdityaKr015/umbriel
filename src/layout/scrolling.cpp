@@ -183,9 +183,43 @@ namespace umbriel {
     }
     Column& column = m_columns[static_cast<size_t>(columnIndex)];
     ensureWeightCount(column);
-    const int row = std::clamp(rowIndex, 0, static_cast<int>(column.views.size()));
+    const int existingRows = static_cast<int>(column.views.size());
+    const int row = std::clamp(rowIndex, 0, existingRows);
+
+    double insertedWeight = 1.0;
+    double edgeGapWeight = 0.0;
+    bool consumesTopGap = false;
+    bool consumesBottomGap = false;
+    if (row == 0 && column.topGapWeight > 0.0) {
+      edgeGapWeight = column.topGapWeight;
+      consumesTopGap = true;
+    } else if (row == existingRows && column.bottomGapWeight > 0.0) {
+      edgeGapWeight = column.bottomGapWeight;
+      consumesBottomGap = true;
+    }
+
+    if (edgeGapWeight > 0.0) {
+      insertedWeight = edgeGapWeight;
+      if (m_lastAvailableHeight > 0) {
+        const int gap = m_config->totalGap;
+        const int oldStackHeight = std::max(existingRows, m_lastAvailableHeight - std::max(0, existingRows - 1) * gap);
+        const int newStackHeight = std::max(existingRows + 1, m_lastAvailableHeight - existingRows * gap);
+        const double oldTotalWeight = columnTotalWeight(column);
+        const double unchangedWeight = oldTotalWeight - edgeGapWeight;
+        const double newTotalWeight =
+            oldTotalWeight * static_cast<double>(newStackHeight) / static_cast<double>(oldStackHeight);
+        insertedWeight = std::max(kMinHeightWeight, newTotalWeight - unchangedWeight);
+      }
+      if (consumesTopGap) {
+        column.topGapWeight = 0.0;
+      }
+      if (consumesBottomGap) {
+        column.bottomGapWeight = 0.0;
+      }
+    }
+
     column.views.insert(column.views.begin() + row, view);
-    column.heightWeights.insert(column.heightWeights.begin() + row, 1.0);
+    column.heightWeights.insert(column.heightWeights.begin() + row, insertedWeight);
   }
 
   bool ScrollingLayout::consumeLeft(View* view) {
@@ -364,6 +398,7 @@ namespace umbriel {
     const int edgePad = m_config->edgePad;
     const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
     const int availableHeight = std::max(1, usable.height - 2 * edgePad);
+    m_lastAvailableHeight = availableHeight;
     const double maxScroll = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
     // Allow overscroll past both edges so gesture spring-back is visible.
     // Left: column-0 resize may also use slightly negative scroll.

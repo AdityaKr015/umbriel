@@ -34,7 +34,8 @@ the boolean `xwayland` field.
 
 These settings are applied once when the window opens. Some applications set
 their title shortly afterward, so Umbriel checks the rules one more time when
-that first title arrives.
+that first title arrives. Only newly resolved settings are applied: unchanged
+opening settings do not overwrite user changes made in the meantime.
 
 | Key | Type | Description |
 |-----|------|-------------|

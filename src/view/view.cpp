@@ -31,6 +31,11 @@ namespace umbriel {
       return toplevel->parent == nullptr && !fixedWidth && !fixedHeight;
     }
 
+    template <typename T>
+    bool changedInitialRule(const std::optional<T>& current, const std::optional<T>& initiallyApplied) {
+      return current.has_value() && current != initiallyApplied;
+    }
+
     bool sceneNodeShowsSurface(wlr_scene_node* node, wlr_surface* surface) {
       switch (node->type) {
       case WLR_SCENE_NODE_BUFFER: {
@@ -1175,6 +1180,7 @@ namespace umbriel {
     // re-resolve into the same cache slot, which would change this value
     // underneath the code still using it.
     const ResolvedWindowRule rule = resolvedRules();
+    m_initialRules = rule;
     if (rule.defaultFloating) {
       m_tiled = !*rule.defaultFloating;
     }
@@ -1283,6 +1289,7 @@ namespace umbriel {
       m_server->cursor()->resetMode();
     }
     m_initialRulesSettled = false;
+    m_initialRules = {};
     m_ruleOpacity = 1.0F;
     m_hasMaximizeRestoreBox = false;
     m_floating.clearSizeRequest();
@@ -1798,7 +1805,7 @@ namespace umbriel {
     updateForeignState();
   }
 
-  void View::applyWindowRules(bool allowDisruptive) {
+  void View::applyWindowRules(const ResolvedWindowRule& initiallyApplied) {
     if (!m_mapped) {
       return;
     }
@@ -1807,52 +1814,51 @@ namespace umbriel {
     // underneath the code still using it.
     const ResolvedWindowRule rule = resolvedRules();
 
-    if (allowDisruptive) {
-      // Float/tile override.
-      if (rule.defaultFloating) {
-        const bool wantFloat = *rule.defaultFloating;
-        if (wantFloat != !m_tiled) {
-          setFloating(wantFloat);
-        }
+    // Identity can arrive after map. Apply a newly selected one-shot value, but
+    // never replay a value already applied at map over the user's later state.
+    if (changedInitialRule(rule.defaultFloating, initiallyApplied.defaultFloating)) {
+      const bool wantFloat = *rule.defaultFloating;
+      if (wantFloat != !m_tiled) {
+        setFloating(wantFloat);
       }
+    }
 
-      // Workspace redirect.
-      if (m_workspace != nullptr) {
-        WorkspaceGroup* targetGroup = windowRuleWorkspaceGroup(*m_server, rule, m_workspace->group());
-        Workspace* target = windowRuleWorkspace(targetGroup, rule);
-        if (target != nullptr && target != m_workspace) {
-          setWorkspace(target);
-        }
+    const bool placementChanged = (rule.defaultOutput.has_value() || rule.defaultWorkspace.has_value())
+        && (rule.defaultOutput != initiallyApplied.defaultOutput
+            || rule.defaultWorkspace != initiallyApplied.defaultWorkspace);
+    if (placementChanged && m_workspace != nullptr) {
+      WorkspaceGroup* targetGroup = windowRuleWorkspaceGroup(*m_server, rule, m_workspace->group());
+      Workspace* target = windowRuleWorkspace(targetGroup, rule);
+      if (target != nullptr && target != m_workspace) {
+        setWorkspace(target);
       }
+    }
 
-      // Column width.
-      ScrollingLayout* scrolling = m_workspace != nullptr ? m_workspace->scrollingLayout() : nullptr;
-      if (rule.defaultWidth && m_tiled && scrolling != nullptr) {
-        const int column = scrolling->columnOf(this);
-        if (column >= 0) {
-          scrolling->setWidthFraction(column, *rule.defaultWidth);
-          m_workspace->markArrange();
-        }
+    ScrollingLayout* scrolling = m_workspace != nullptr ? m_workspace->scrollingLayout() : nullptr;
+    if (changedInitialRule(rule.defaultWidth, initiallyApplied.defaultWidth) && m_tiled && scrolling != nullptr) {
+      const int column = scrolling->columnOf(this);
+      if (column >= 0) {
+        scrolling->setWidthFraction(column, *rule.defaultWidth);
+        m_workspace->markArrange();
       }
+    }
 
-      // Float size.
-      if (rule.defaultSize && !m_tiled) {
-        const XdgSizeHints hints = xdgSizeHints(m_toplevel);
-        requestFloatingSize(
-            clampXdgWidth((*rule.defaultSize)[0], hints), clampXdgHeight((*rule.defaultSize)[1], hints)
-        );
-        placeInUsableArea();
-      }
+    if (changedInitialRule(rule.defaultSize, initiallyApplied.defaultSize) && !m_tiled) {
+      const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+      requestFloatingSize(clampXdgWidth((*rule.defaultSize)[0], hints), clampXdgHeight((*rule.defaultSize)[1], hints));
+      placeInUsableArea();
+    }
 
-      // Fullscreen.
-      if (rule.defaultFullscreen && *rule.defaultFullscreen && !m_toplevel->scheduled.fullscreen) {
-        setFullscreen(true);
-      }
+    if (changedInitialRule(rule.defaultFullscreen, initiallyApplied.defaultFullscreen)
+        && *rule.defaultFullscreen
+        && !m_toplevel->scheduled.fullscreen) {
+      setFullscreen(true);
+    }
 
-      // Maximize.
-      if (rule.defaultMaximize && *rule.defaultMaximize && !m_toplevel->scheduled.maximized) {
-        setMaximized(true);
-      }
+    if (changedInitialRule(rule.defaultMaximize, initiallyApplied.defaultMaximize)
+        && *rule.defaultMaximize
+        && !m_toplevel->scheduled.maximized) {
+      setMaximized(true);
     }
 
     // Dynamic effects are always safe to update. Reuse the resolution above

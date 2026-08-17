@@ -219,9 +219,9 @@ namespace umbriel {
     void updateForeignState();
     void enterForeignOutput();
     void leaveForeignOutput();
-    void applyWindowRules(bool allowDisruptive);
+    void applyWindowRules(const ResolvedWindowRule& initiallyApplied);
     // `resolved` lets a caller that already resolved the rules pass them in.
-    // Rule resolution runs every regex in the config, and applyWindowRules is
+    // Rule resolution runs every regex in the config, and applyDynamicRules is
     // reached on focus changes and on every title change, so resolving twice per
     // pass is work a terminal that retitles per command pays repeatedly.
     void applyDynamicRules(const ResolvedWindowRule* resolved = nullptr);
@@ -240,6 +240,9 @@ namespace umbriel {
     std::string m_rulesAppId;
     std::string m_rulesTitle;
     bool m_rulesFocused = false;
+    // One-shot effects already applied at map. Late identity resolution only
+    // reapplies a field when its resolved value changes.
+    ResolvedWindowRule m_initialRules;
 
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;

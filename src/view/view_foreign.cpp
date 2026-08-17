@@ -88,9 +88,9 @@ namespace umbriel {
     if (!m_initialRulesSettled) {
       const bool titlePresent = m_toplevel->title != nullptr && m_toplevel->title[0] != '\0';
       if (titlePresent) {
-        // Real title just arrived: settle and do the full disruptive re-apply.
+        // Real title just arrived: settle and apply newly selected one-shot effects.
         m_initialRulesSettled = true;
-        applyWindowRules(true);
+        applyWindowRules(m_initialRules);
       } else {
         // Still empty title; refresh non-disruptive effects with whatever matches now.
         applyDynamicRules();
@@ -108,7 +108,7 @@ namespace umbriel {
       // Otherwise only update non-disruptive effects; disruptive rules wait for the title.
       if (!anyWindowRuleHasTitlePattern(config())) {
         m_initialRulesSettled = true;
-        applyWindowRules(true);
+        applyWindowRules(m_initialRules);
       } else {
         applyDynamicRules();
       }

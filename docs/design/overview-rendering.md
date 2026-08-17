@@ -30,8 +30,10 @@ A dragged card renders at half opacity. This multiplier combines with the
 client's own surface alpha rather than replacing it, which keeps the insertion
 preview visible through the card.
 
-The scrolling layout previews insertion beside the actual column edges. The
-dwindle layout previews the direction of the split before the card is dropped.
+The scrolling layout previews insertion beside the actual column edges. For an
+overflowing strip, prepend and append previews remain visible at the output
+edges. The dwindle layout previews the direction of the split before the card
+is dropped.
 
 ## Verification
 
@@ -43,5 +45,7 @@ The relevant checks are:
   for client drag ownership during overview activation.
 - [`tests/harness/checks/107_drag_opacity.sh`](../../tests/harness/checks/107_drag_opacity.sh)
   for composed drag opacity.
+- [`tests/harness/checks/111_drag_left_hint.sh`](../../tests/harness/checks/111_drag_left_hint.sh)
+  for the visible prepend target on an overflowing scrolling strip.
 - [`tests/output_clip.cpp`](../../tests/output_clip.cpp) for output clipping in
   logical coordinates.

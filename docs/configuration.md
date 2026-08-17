@@ -279,8 +279,9 @@ Resizing a column recenters an underfull strip immediately.
 Dragged windows become translucent so the insertion preview remains visible.
 Existing window transparency still applies during the drag.
 When you drag a column, the preview uses the free space beside the real column
-edges. If the strip extends beyond the output, dropping at the far right edge
-moves the column to the end, even when the last columns are off-screen.
+edges. If the strip extends beyond the output, its far left and right edges
+remain visible prepend and append targets, even when the corresponding end
+columns are off-screen.
 
 Dropping a window into empty space above or below a vertically resized stack
 consumes that space. Existing windows retain their pixel heights, and the

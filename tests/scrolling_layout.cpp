@@ -273,7 +273,7 @@ UMBRIEL_TEST(firstColumnLeftEdgeStaysFixedWithoutCentering) {
   fixed.config.scrolling.centerUnderfullStrip = false;
   fixed.addColumns(1);
   fixed.layout.arrange(kUsable);
-  CHECK_EQ(fixed.layout.resizeEdgesAt(stub(0), 60, 360), 0u);
+  CHECK_EQ(fixed.layout.resizeEdgesAt(stub(0), 60, 360), 0U);
   CHECK_EQ(fixed.layout.resizeEdgesAt(stub(0), 60, 60), static_cast<uint32_t>(WLR_EDGE_TOP));
 
   Fixture centered;

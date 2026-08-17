@@ -49,17 +49,17 @@ release: (build "release")
 install: (build "release")
     meson install -C build-release
 
-run m=mode: (build m)
+run m=mode startup="": (build m)
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ -z "${TERMINAL:-}" ]]; then
-        echo "error: set TERMINAL to your terminal (ghostty, kitty, alacritty, ...)" >&2
-        exit 1
-    fi
     if [[ "{{m}}" == "asan" ]]; then
         export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:detect_leaks=0:halt_on_error=1}"
     fi
-    ./build-{{m}}/umbriel -s "$TERMINAL"
+    args=()
+    if [[ -n "${2:-}" ]]; then
+        args=(-s "$2")
+    fi
+    exec ./build-{{m}}/umbriel "${args[@]}"
 
 test m=mode: (_ensure-configured m)
     meson test -C build-{{m}} --print-errorlogs

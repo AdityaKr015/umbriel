@@ -140,6 +140,19 @@ virtual_pointer_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+virtual_keyboard_client_h = custom_target(
+  'virtual-keyboard-unstable-v1-client-protocol.h',
+  input: 'protocols/virtual-keyboard-unstable-v1.xml',
+  output: 'virtual-keyboard-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+virtual_keyboard_client_c = custom_target(
+  'virtual-keyboard-unstable-v1-protocol.c',
+  input: 'protocols/virtual-keyboard-unstable-v1.xml',
+  output: 'virtual-keyboard-unstable-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 # Logic with no dependency on the compositor: string parsing and layout geometry.
 # Built once and linked by both the compositor and the tests, so a test never
 # recompiles a translation unit and two tests cannot drift in what they cover.
@@ -287,13 +300,19 @@ unit_tests = [
   ['config-resolve', ['tests/config_resolve.cpp'], []],
 ]
 
-# Harness helper, not a unit test: drives a virtual pointer against a running
-# compositor. The headless backend has no input devices, so this is the only way
-# to exercise pointer hit-testing without a physical mouse.
+# Harness helper, not a unit test: drives virtual pointer and modifier input
+# against a running compositor. The headless backend has no input devices, so
+# protocol input is the only way to exercise pointer hit-testing and grabs.
 executable(
   'pointer-client',
-  ['tests/harness/pointer_client.cpp', virtual_pointer_client_h, virtual_pointer_client_c],
-  dependencies: [wayland_client_dep],
+  [
+    'tests/harness/pointer_client.cpp',
+    virtual_pointer_client_h,
+    virtual_pointer_client_c,
+    virtual_keyboard_client_h,
+    virtual_keyboard_client_c,
+  ],
+  dependencies: [wayland_client_dep, xkbcommon_dep],
 )
 
 # Harness helper that owns a mapped surface and initiates a data-device drag.

@@ -695,7 +695,11 @@ namespace umbriel {
       } else {
         direction = acc < 0 ? WheelDirection::Left : WheelDirection::Right;
       }
-      m_server->handleWheelBind(direction, modifiers);
+      if (m_server->handleWheelBind(direction, modifiers)) {
+        // A wheel action can move the strip without pointer motion. Recompute
+        // the active target so release drops where the pointer now points.
+        updateDropTarget();
+      }
       acc -= std::copysign(1.0, acc);
     }
   }

@@ -45,6 +45,12 @@ at least one modifier).
 **Defaults:** `Mod+WheelUp` = `window-focus-left`, `Mod+WheelDown` =
 `window-focus-right`.
 
+During an active tiled `Mod+MouseLeft` drag, `window-focus-left` and
+`window-focus-right` wheel binds scroll the strip instead of trying to move
+focus away from the detached window. Wheel-driven strip scrolling uses twice
+the configured step while dragging. The insertion hint and drop target follow
+the newly exposed columns without requiring additional pointer motion.
+
 ## Actions
 
 Run `umbriel actions` for the full list. Default keybinds are only loaded when

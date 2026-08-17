@@ -1,6 +1,7 @@
 #include "server/actions.h"
 
 #include "config/config.h"
+#include "input/cursor.h"
 #include "layout/scrolling.h"
 #include "output/output.h"
 #include "overview/overview.h"
@@ -180,7 +181,31 @@ namespace umbriel {
       return true;
     }
 
-    template <int Direction> bool actionFocusAdjacent(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+    bool tiledDragActive(Server& server) {
+      Cursor* cursor = server.cursor();
+      View* moving = cursor != nullptr ? cursor->grabbedView() : nullptr;
+      return moving != nullptr && moving->tiled() && cursor->isDraggingView(moving);
+    }
+
+    template <int Sign> void scrollActiveLayout(Server& server, int multiplier = 1) {
+      Workspace* workspace = activeWorkspace(server);
+      ScrollingLayout* scrolling = workspace != nullptr ? workspace->scrollingLayout() : nullptr;
+      if (scrolling == nullptr || workspace->group()->output() == nullptr) {
+        return;
+      }
+      const auto step = static_cast<double>(config().input.mouse.scrollWheelStep * multiplier);
+      const int viewportWidth =
+          std::max(1, workspace->group()->output()->usableArea().width - 2 * workspace->layoutConfig().edgePad);
+      const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportWidth));
+      scrolling->setScroll(std::clamp(scrolling->scroll() + Sign * step, 0.0, maxScroll));
+      workspace->markArrange();
+    }
+
+    template <int Direction> bool actionFocusAdjacent(Server& server, const Keybind& bind, std::string* /*error*/) {
+      if (bind.wheel != WheelDirection::None && tiledDragActive(server)) {
+        scrollActiveLayout<Direction>(server, 2);
+        return true;
+      }
       if (Workspace* workspace = activeWorkspace(server)) {
         if (View* target = workspace->focusAdjacent(Direction)) {
           server.focusView(target, FocusReason::Directional);
@@ -306,21 +331,9 @@ namespace umbriel {
       return true;
     }
 
-    template <int Sign> bool actionLayoutScroll(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
-      Workspace* workspace = activeWorkspace(server);
-      ScrollingLayout* scrolling = workspace != nullptr ? workspace->scrollingLayout() : nullptr;
-      if (scrolling == nullptr || workspace->group()->output() == nullptr) {
-        return true;
-      }
-      const auto step = static_cast<double>(config().input.mouse.scrollWheelStep);
-      const double delta = Sign * step;
-      // Clamp to the real scroll range: overscroll here would park the strip
-      // past an edge and seed sub-pixel scroll residue.
-      const int viewportWidth =
-          std::max(1, workspace->group()->output()->usableArea().width - 2 * workspace->layoutConfig().edgePad);
-      const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportWidth));
-      scrolling->setScroll(std::clamp(scrolling->scroll() + delta, 0.0, maxScroll));
-      workspace->markArrange();
+    template <int Sign> bool actionLayoutScroll(Server& server, const Keybind& bind, std::string* /*error*/) {
+      const int multiplier = bind.wheel != WheelDirection::None && tiledDragActive(server) ? 2 : 1;
+      scrollActiveLayout<Sign>(server, multiplier);
       return true;
     }
 

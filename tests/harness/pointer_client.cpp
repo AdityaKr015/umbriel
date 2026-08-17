@@ -13,15 +13,19 @@
 //   press <button>
 //   release <button>
 //   notch <dir>         one vertical wheel notch, -1 up / 1 down
+//   mod <name|none>     hold one modifier (shift, control, alt, or logo)
 //   pause <ms>          keep the pointer connection and current button state
 //
 // Commands run in order, each followed by a frame and a roundtrip so the
 // compositor has processed one before the next is sent.
 
+#include "virtual-keyboard-unstable-v1-client-protocol.h"
 #include "wlr-virtual-pointer-unstable-v1-client-protocol.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <print>
@@ -29,12 +33,14 @@
 #include <thread>
 #include <vector>
 #include <wayland-client.h>
+#include <xkbcommon/xkbcommon.h>
 
 namespace {
 
   struct State {
     wl_seat* seat = nullptr;
-    zwlr_virtual_pointer_manager_v1* manager = nullptr;
+    zwlr_virtual_pointer_manager_v1* pointerManager = nullptr;
+    zwp_virtual_keyboard_manager_v1* keyboardManager = nullptr;
   };
 
   void handleGlobal(void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
@@ -42,8 +48,12 @@ namespace {
     if (std::strcmp(interface, wl_seat_interface.name) == 0) {
       state->seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, 1));
     } else if (std::strcmp(interface, zwlr_virtual_pointer_manager_v1_interface.name) == 0) {
-      state->manager = static_cast<zwlr_virtual_pointer_manager_v1*>(
+      state->pointerManager = static_cast<zwlr_virtual_pointer_manager_v1*>(
           wl_registry_bind(registry, name, &zwlr_virtual_pointer_manager_v1_interface, version < 2 ? version : 2)
+      );
+    } else if (std::strcmp(interface, zwp_virtual_keyboard_manager_v1_interface.name) == 0) {
+      state->keyboardManager = static_cast<zwp_virtual_keyboard_manager_v1*>(
+          wl_registry_bind(registry, name, &zwp_virtual_keyboard_manager_v1_interface, 1)
       );
     }
   }
@@ -54,6 +64,95 @@ namespace {
       .global = handleGlobal,
       .global_remove = handleGlobalRemove,
   };
+
+  struct VirtualKeyboard {
+    zwp_virtual_keyboard_v1* protocol = nullptr;
+    xkb_context* context = nullptr;
+    xkb_keymap* keymap = nullptr;
+  };
+
+  bool initializeKeyboard(VirtualKeyboard& keyboard, const State& state, wl_display* display) {
+    if (state.keyboardManager == nullptr || state.seat == nullptr) {
+      std::println(stderr, "pointer-client: compositor does not offer virtual keyboard input");
+      return false;
+    }
+    keyboard.context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    keyboard.keymap = keyboard.context != nullptr
+        ? xkb_keymap_new_from_names(keyboard.context, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS)
+        : nullptr;
+    if (keyboard.keymap == nullptr) {
+      std::println(stderr, "pointer-client: failed to compile the default XKB keymap");
+      return false;
+    }
+
+    char* text = xkb_keymap_get_as_string(keyboard.keymap, XKB_KEYMAP_FORMAT_TEXT_V1);
+    FILE* file = std::tmpfile();
+    if (text == nullptr || file == nullptr) {
+      std::println(stderr, "pointer-client: failed to create the virtual keyboard keymap");
+      std::free(text);
+      if (file != nullptr) {
+        std::fclose(file);
+      }
+      return false;
+    }
+    const size_t size = std::strlen(text) + 1;
+    const bool wroteKeymap = std::fwrite(text, 1, size, file) == size && std::fflush(file) == 0;
+    std::free(text);
+    if (!wroteKeymap) {
+      std::println(stderr, "pointer-client: failed to write the virtual keyboard keymap");
+      std::fclose(file);
+      return false;
+    }
+    std::rewind(file);
+
+    keyboard.protocol = zwp_virtual_keyboard_manager_v1_create_virtual_keyboard(state.keyboardManager, state.seat);
+    zwp_virtual_keyboard_v1_keymap(
+        keyboard.protocol, WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, fileno(file), static_cast<uint32_t>(size)
+    );
+    const bool ready = wl_display_roundtrip(display) >= 0;
+    std::fclose(file);
+    if (!ready) {
+      std::println(stderr, "pointer-client: connection lost while creating the virtual keyboard");
+    }
+    return ready;
+  }
+
+  uint32_t modifierMask(const VirtualKeyboard& keyboard, const std::string& name) {
+    const char* xkbName = nullptr;
+    if (name == "shift") {
+      xkbName = XKB_MOD_NAME_SHIFT;
+    } else if (name == "control" || name == "ctrl") {
+      xkbName = XKB_MOD_NAME_CTRL;
+    } else if (name == "alt") {
+      xkbName = XKB_MOD_NAME_ALT;
+    } else if (name == "logo" || name == "super") {
+      xkbName = XKB_MOD_NAME_LOGO;
+    } else if (name == "none") {
+      return 0;
+    } else {
+      std::println(stderr, "pointer-client: unknown modifier '{}'", name);
+      std::exit(EXIT_FAILURE);
+    }
+
+    const xkb_mod_index_t index = xkb_keymap_mod_get_index(keyboard.keymap, xkbName);
+    if (index == XKB_MOD_INVALID || index >= 32) {
+      std::println(stderr, "pointer-client: keymap has no usable '{}' modifier", name);
+      std::exit(EXIT_FAILURE);
+    }
+    return uint32_t{1} << index;
+  }
+
+  void destroyKeyboard(VirtualKeyboard& keyboard) {
+    if (keyboard.protocol != nullptr) {
+      zwp_virtual_keyboard_v1_destroy(keyboard.protocol);
+    }
+    if (keyboard.keymap != nullptr) {
+      xkb_keymap_unref(keyboard.keymap);
+    }
+    if (keyboard.context != nullptr) {
+      xkb_context_unref(keyboard.context);
+    }
+  }
 
   // The compositor only reads time_msec for event ordering, so a monotonically
   // increasing counter is enough and keeps runs reproducible.
@@ -84,18 +183,24 @@ int main(int argc, char** argv) {
   wl_registry_add_listener(registry, &kRegistryListener, &state);
   wl_display_roundtrip(display);
 
-  if (state.manager == nullptr) {
+  if (state.pointerManager == nullptr) {
     std::println(stderr, "pointer-client: compositor does not offer zwlr_virtual_pointer_manager_v1");
     return EXIT_FAILURE;
   }
 
-  zwlr_virtual_pointer_v1* pointer = zwlr_virtual_pointer_manager_v1_create_virtual_pointer(state.manager, state.seat);
+  zwlr_virtual_pointer_v1* pointer =
+      zwlr_virtual_pointer_manager_v1_create_virtual_pointer(state.pointerManager, state.seat);
   if (pointer == nullptr) {
     std::println(stderr, "pointer-client: failed to create a virtual pointer");
     return EXIT_FAILURE;
   }
 
   const std::vector<std::string> args(argv + 3, argv + argc);
+  const bool needsKeyboard = std::ranges::find(args, "mod") != args.end();
+  VirtualKeyboard keyboard;
+  if (needsKeyboard && !initializeKeyboard(keyboard, state, display)) {
+    return EXIT_FAILURE;
+  }
   for (size_t i = 0; i < args.size(); ++i) {
     const std::string& command = args[i];
     auto needs = [&](size_t count) {
@@ -135,6 +240,11 @@ int main(int argc, char** argv) {
       zwlr_virtual_pointer_v1_axis_discrete(
           pointer, nextTime(), WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(dir * 15.0), dir
       );
+    } else if (command == "mod") {
+      needs(1);
+      const uint32_t depressed = modifierMask(keyboard, args[i + 1]);
+      i += 1;
+      zwp_virtual_keyboard_v1_modifiers(keyboard.protocol, depressed, 0, 0, 0);
     } else if (command == "pause") {
       needs(1);
       const auto duration = std::chrono::milliseconds(std::atoi(args[i + 1].c_str()));
@@ -153,6 +263,7 @@ int main(int argc, char** argv) {
   }
 
   zwlr_virtual_pointer_v1_destroy(pointer);
+  destroyKeyboard(keyboard);
   wl_display_roundtrip(display);
   wl_display_disconnect(display);
   return EXIT_SUCCESS;

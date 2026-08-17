@@ -322,7 +322,8 @@ scroll_wheel_step = 60  # 1-1000, pixels per step for layout-scroll-left/right
 
 Omit `natural_scroll` to preserve each device's default. `layout-scroll-left`
 and `layout-scroll-right` clamp to the strip bounds, so the columns never park
-past either edge.
+past either edge. Wheel-triggered scrolling uses twice `scroll_wheel_step`
+during an active tiled window drag.
 
 ### Per-device overrides
 

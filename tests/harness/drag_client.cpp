@@ -9,6 +9,7 @@
 #undef namespace
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -89,7 +90,18 @@ namespace {
 
   void sourceSend(void*, wl_data_source*, const char*, int32_t fd) {
     constexpr std::string_view payload = "umbriel drag regression";
-    static_cast<void>(write(fd, payload.data(), payload.size()));
+    size_t offset = 0;
+    while (offset < payload.size()) {
+      const ssize_t size = write(fd, payload.data() + offset, payload.size() - offset);
+      if (size > 0) {
+        offset += static_cast<size_t>(size);
+        continue;
+      }
+      if (size < 0 && errno == EINTR) {
+        continue;
+      }
+      break;
+    }
     close(fd);
   }
 
@@ -143,6 +155,9 @@ namespace {
   void pointerAxisDiscrete(void*, wl_pointer*, uint32_t, int32_t) {}
   void pointerAxisValue120(void*, wl_pointer*, uint32_t, int32_t) {}
   void pointerAxisRelativeDirection(void*, wl_pointer*, uint32_t, uint32_t) {}
+#ifdef WL_POINTER_WARP_SINCE_VERSION
+  void pointerWarp(void*, wl_pointer*, wl_fixed_t, wl_fixed_t) {}
+#endif
 
   constexpr wl_pointer_listener kPointerListener = {
       .enter = pointerEnter,
@@ -156,6 +171,9 @@ namespace {
       .axis_discrete = pointerAxisDiscrete,
       .axis_value120 = pointerAxisValue120,
       .axis_relative_direction = pointerAxisRelativeDirection,
+#ifdef WL_POINTER_WARP_SINCE_VERSION
+      .warp = pointerWarp,
+#endif
   };
 
   void seatCapabilities(void* data, wl_seat* seat, uint32_t capabilities) {

@@ -8,7 +8,6 @@ namespace umbriel {
   class Server;
 
   struct IpcCommands {
-    static nlohmann::json colors(Server& server, std::string_view arg);
     static nlohmann::json windows(Server& server, std::string_view arg);
     static nlohmann::json layers(Server& server, std::string_view arg);
     static nlohmann::json msg(Server& server, std::string_view arg);

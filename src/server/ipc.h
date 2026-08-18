@@ -21,6 +21,8 @@ namespace umbriel {
     Ipc(const Ipc&) = delete;
     Ipc& operator=(const Ipc&) = delete;
 
+    void notifyThemeChanged();
+
   private:
     struct Connection {
       Ipc* owner = nullptr;
@@ -31,6 +33,7 @@ namespace umbriel {
       wl_event_source* fdSource = nullptr;
       wl_event_source* deadline = nullptr;
       bool responding = false;
+      bool subscribedToTheme = false;
     };
 
     static int onListenReadable(int fd, uint32_t mask, void* data);
@@ -44,7 +47,7 @@ namespace umbriel {
     void prepareResponse(Connection& connection, std::string response);
     void removeConnection(Connection* connection);
     static void closeConnection(Connection& connection);
-    std::string handleRequest(std::string_view line);
+    std::string handleRequest(Connection& connection, std::string_view line);
 
     Server* m_server;
     std::string m_socketPath;

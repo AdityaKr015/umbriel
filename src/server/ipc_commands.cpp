@@ -2,7 +2,6 @@
 
 #include "config/config.h"
 #include "layer/layer_surface.h"
-#include "scene/color.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -55,28 +54,7 @@ namespace umbriel {
       }
     }
 
-    void printColors(const nlohmann::json& ok) {
-      for (const auto& [name, value] : ok.items()) {
-        std::println("{}: {}", name, value.get<std::string>());
-      }
-    }
   } // namespace
-
-  nlohmann::json IpcCommands::colors(Server& /*server*/, std::string_view /*arg*/) {
-    const auto& colors = config().colors;
-    return nlohmann::json{
-        {"ok",
-         {
-             {"background", rgbaHex(colors.background)},
-             {"text_primary", rgbaHex(colors.textPrimary)},
-             {"text_muted", rgbaHex(colors.textMuted)},
-             {"accent_primary", rgbaHex(colors.accentPrimary)},
-             {"accent_secondary", rgbaHex(colors.accentSecondary)},
-             {"warning", rgbaHex(colors.warning)},
-             {"error", rgbaHex(colors.error)},
-         }},
-    };
-  }
 
   nlohmann::json IpcCommands::windows(Server& server, std::string_view /*arg*/) {
     nlohmann::json windows = nlohmann::json::array();
@@ -130,7 +108,6 @@ namespace umbriel {
   }
 
   static constexpr IpcCommandSpec kIpcCommands[] = {
-      {"colors", "", "print the resolved semantic color palette", false, &IpcCommands::colors, &printColors},
       {"layers", "", "list layer-shell surfaces", false, &IpcCommands::layers, &printLayers},
       {"msg", "<action> [args...]", "send an action to the compositor", true, &IpcCommands::msg, nullptr},
       {"windows", "", "list windows (app id and title)", false, &IpcCommands::windows, &printWindows},

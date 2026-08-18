@@ -66,13 +66,13 @@ From an existing Wayland or X11 session, Umbriel opens a nested window (mod = Al
 From a TTY it takes over the seat (mod = Super).
 
 ```sh
-just run debug ghostty
+just run debug kitty
 ```
 
 Or run the binary directly:
 
 ```sh
-./build-debug/umbriel -s ghostty
+./build-debug/umbriel -s kitty
 ```
 
 Inside the session:
@@ -90,7 +90,7 @@ Inside the session:
 | mod+1..9 | Switch workspace on focused monitor |
 | mod+Shift+1..9 | Move focused window to workspace and follow |
 
-`ghostty` is an optional startup command. Replace it with another command, or omit it by running `just run debug`
+`kitty` is an optional startup command. Replace it with another command, or omit it by running `just run debug`
 or `./build-debug/umbriel`.
 
 Stop with mod+Escape or `Ctrl+C` from the parent terminal.
@@ -127,7 +127,7 @@ programs.umbriel = {
   enable = true;
   settings = {
     general = {
-      terminal = "ghostty";
+      terminal = "kitty";
       autostart = [ "noctalia" ];
     };
     layout.gap = 5;

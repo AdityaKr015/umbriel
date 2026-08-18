@@ -1,6 +1,8 @@
 #include "server/ipc.h"
 
+#include "config/config.h"
 #include "core/log.h"
+#include "scene/color.h"
 #include "server/ipc_commands.h"
 #include "server/server.h"
 
@@ -12,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <utility>
 #include <wayland-server-core.h>
 
 namespace umbriel {
@@ -20,6 +23,25 @@ namespace umbriel {
     constexpr Logger kLog("ipc");
     constexpr size_t kMaxRequestSize = 65536;
     constexpr int kConnectionTimeoutMs = 1000;
+
+    nlohmann::json themeEvent() {
+      const auto& current = config();
+      const auto& colors = current.colors;
+      return nlohmann::json{
+          {"event", "theme"},
+          {"data",
+           {
+               {"background", rgbaHex(colors.background)},
+               {"text_primary", rgbaHex(colors.textPrimary)},
+               {"text_muted", rgbaHex(colors.textMuted)},
+               {"accent_primary", rgbaHex(colors.accentPrimary)},
+               {"accent_secondary", rgbaHex(colors.accentSecondary)},
+               {"warning", rgbaHex(colors.warning)},
+               {"error", rgbaHex(colors.error)},
+               {"corner_radius", current.appearance.cornerRadius},
+           }},
+      };
+    }
   } // namespace
 
   Ipc::Ipc(Server& server, const std::string& waylandSocketName) : m_server(&server) {
@@ -168,7 +190,9 @@ namespace umbriel {
         }
         if (connection.input.contains('\n')) {
           const size_t newline = connection.input.find('\n');
-          prepareResponse(connection, handleRequest(std::string_view(connection.input).substr(0, newline)));
+          const std::string line = connection.input.substr(0, newline);
+          connection.input.erase(0, newline + 1);
+          prepareResponse(connection, handleRequest(connection, line));
           return true;
         }
         continue;
@@ -177,7 +201,9 @@ namespace umbriel {
         if (connection.input.empty()) {
           return false;
         }
-        prepareResponse(connection, handleRequest(connection.input));
+        const std::string line = std::move(connection.input);
+        connection.input.clear();
+        prepareResponse(connection, handleRequest(connection, line));
         return true;
       }
       if (errno == EINTR) {
@@ -210,6 +236,12 @@ namespace umbriel {
         return wl_event_source_fd_update(connection.fdSource, WL_EVENT_WRITABLE) >= 0;
       }
       return false;
+    }
+    if (connection.subscribedToTheme) {
+      connection.output.clear();
+      connection.writeOffset = 0;
+      connection.responding = false;
+      return wl_event_source_fd_update(connection.fdSource, WL_EVENT_READABLE) >= 0;
     }
     return false;
   }
@@ -246,12 +278,31 @@ namespace umbriel {
     }
   }
 
-  std::string Ipc::handleRequest(std::string_view line) {
+  std::string Ipc::handleRequest(Connection& connection, std::string_view line) {
     auto req = nlohmann::json::parse(line, nullptr, false);
     if (req.is_discarded() || !req.is_object() || !req.contains("cmd") || !req["cmd"].is_string()) {
       return R"({"err":"malformed request"})";
     }
     const std::string cmd = req["cmd"].get<std::string>();
+    if (cmd == "subscribe") {
+      if (!req.contains("events") || !req["events"].is_array() || req["events"].empty()) {
+        return R"({"err":"malformed request"})";
+      }
+      for (const auto& event : req["events"]) {
+        if (!event.is_string()) {
+          return R"({"err":"malformed request"})";
+        }
+        if (event.get_ref<const std::string&>() != "theme") {
+          return nlohmann::json{{"err", "unknown subscription event: " + event.get<std::string>()}}.dump();
+        }
+      }
+      connection.subscribedToTheme = true;
+      if (connection.deadline != nullptr) {
+        wl_event_source_remove(connection.deadline);
+        connection.deadline = nullptr;
+      }
+      return themeEvent().dump();
+    }
     const IpcCommandSpec* spec = findIpcCommand(cmd);
     if (spec == nullptr) {
       return nlohmann::json{{"err", "unknown command: " + cmd}}.dump();
@@ -264,6 +315,23 @@ namespace umbriel {
       arg = req["arg"].get<std::string>();
     }
     return spec->handle(*m_server, arg).dump();
+  }
+
+  void Ipc::notifyThemeChanged() {
+    const std::string update = themeEvent().dump() + '\n';
+    for (const auto& connection : m_connections) {
+      if (!connection->subscribedToTheme) {
+        continue;
+      }
+      if (connection->responding) {
+        connection->output += update;
+      } else {
+        connection->output = update;
+        connection->writeOffset = 0;
+        connection->responding = true;
+      }
+      wl_event_source_fd_update(connection->fdSource, WL_EVENT_READABLE | WL_EVENT_WRITABLE);
+    }
   }
 
 } // namespace umbriel

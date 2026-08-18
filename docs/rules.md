@@ -74,7 +74,7 @@ blur = true
 
 # Narrow columns for terminals and file managers
 [[window_rule]]
-match.app_id = "^(Alacritty|kitty|com\\.mitchellh\\.ghostty|org\\.gnome\\.Nautilus)$"
+match.app_id = "^(Alacritty|kitty|org\\.gnome\\.Nautilus)$"
 default_width = 0.33
 
 # Wide columns for browsers

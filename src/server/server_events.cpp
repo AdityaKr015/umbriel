@@ -12,6 +12,7 @@
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
 #include "scene/hint_rect.h"
+#include "server/ipc.h"
 #include "server/server.h"
 #include "view/popup.h"
 #include "view/view.h"
@@ -288,6 +289,9 @@ namespace umbriel {
         m_overview->forceClose();
       }
       applyConfig(result.effects);
+      if ((result.change.colors || result.change.appearance) && m_ipc != nullptr) {
+        m_ipc->notifyThemeChanged();
+      }
       const std::string changed = result.change.summary();
       const std::string effects = result.effects.summary();
       kLog.info(

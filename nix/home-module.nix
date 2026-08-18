@@ -50,7 +50,7 @@ in
       '';
       example = lib.literalExpression ''
         general = {
-          terminal = "ghostty";
+          terminal = "kitty";
           autostart = [ "noctalia" ];
         };
 

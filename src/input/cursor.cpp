@@ -1,6 +1,7 @@
 #include "input/cursor.h"
 
 #include "config/config.h"
+#include "core/log.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
 #include "layout/drop_target.h"
@@ -25,6 +26,8 @@
 namespace umbriel {
 
   namespace {
+    constexpr Logger kLog("cursor");
+
     // Panels (top/overlay) keep working inside the overview. Wallpaper and
     // bottom-layer widgets are part of the inert desktop behind the filmstrip,
     // so their clicks belong to the overview instead.
@@ -786,7 +789,12 @@ namespace umbriel {
 
     wlr_seat* seat = m_server->seat()->wlr();
     wlr_touch_point* point = wlr_seat_touch_get_point(seat, event->touch_id);
-    if (point == nullptr || point->focus_surface == nullptr) {
+    if (point == nullptr) {
+      kLog.warn("touch motion id={} has no active seat point", event->touch_id);
+      return;
+    }
+    if (point->surface == nullptr) {
+      kLog.warn("touch motion id={} has no target surface", event->touch_id);
       return;
     }
 
@@ -796,7 +804,11 @@ namespace umbriel {
 
     double sx = 0;
     double sy = 0;
-    if (!surfaceLocalCoordinates(m_server->scene(), point->focus_surface, lx, ly, &sx, &sy)) {
+    if (!surfaceLocalCoordinates(m_server->scene(), point->surface, lx, ly, &sx, &sy)) {
+      kLog.warn(
+          "touch motion id={} could not map target surface {} at layout=({}, {})", event->touch_id,
+          static_cast<void*>(point->surface), lx, ly
+      );
       return;
     }
     wlr_seat_touch_notify_motion(seat, event->time_msec, event->touch_id, sx, sy);

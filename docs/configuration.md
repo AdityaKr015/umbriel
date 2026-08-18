@@ -298,9 +298,28 @@ Layout fields can be overridden per-workspace; see
 [input.keyboard]
 layout = ""       # XKB layout, empty = system default
 variant = ""      # XKB variant
+options = ""      # XKB options, comma-separated
 repeat_rate = 25  # 0-1000 Hz, 0 disables
 repeat_delay = 600 # 0-10000 ms
 ```
+
+`layout` takes a comma-separated list to load several layouts at once
+(`layout = "us,de"`, optionally with a matching `variant = ",nodeadkeys"`). The
+first entry is active at startup. Switch between them with the
+`keyboard-layout-next` keybind or `umbriel msg keyboard-layout-next`, or put a
+toggle in `options`:
+
+```toml
+[input.keyboard]
+layout = "us,de"
+options = "grp:alt_shift_toggle"
+```
+
+`options` is passed to XKB verbatim, so anything `xkbcli list` reports under
+options works (`grp:win_space_toggle`, `caps:escape`, `compose:ralt`, …). An
+`options` value XKB does not recognize is ignored silently, the same as with
+`setxkbmap`; a `layout` or `variant` that fails to compile is reported in the
+log and the whole keyboard block falls back to the system default.
 
 ### Touchpad
 
@@ -347,9 +366,9 @@ natural_scroll = false
 ```
 
 Each rule inherits the matching class settings and overrides only the keys it
-contains. `layout`, `variant`, `repeat_rate`, and `repeat_delay` apply to
-keyboards. `tap` applies to touchpads. `natural_scroll` applies to touchpads and
-mice. Unsupported libinput settings are reported in the log.
+contains. `layout`, `variant`, `options`, `repeat_rate`, and `repeat_delay`
+apply to keyboards. `tap` applies to touchpads. `natural_scroll` applies to
+touchpads and mice. Unsupported libinput settings are reported in the log.
 
 Rules match every attached device with the exact name. Device overrides also
 apply when a device is connected after startup and when the configuration is

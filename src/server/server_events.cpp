@@ -813,6 +813,14 @@ namespace umbriel {
     m_keyboards.push_back(std::make_unique<Keyboard>(*this, device));
   }
 
+  bool Server::cycleKeyboardLayout() {
+    bool switched = false;
+    for (const auto& keyboard : m_keyboards) {
+      switched = keyboard->cycleLayout() || switched;
+    }
+    return switched;
+  }
+
   void Server::addPointer(wlr_input_device* device) {
     auto pointer = std::make_unique<PointerDevice>();
     pointer->server = this;

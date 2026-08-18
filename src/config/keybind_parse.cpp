@@ -157,6 +157,7 @@ namespace umbriel {
         {"column-move-left", "", KeybindAction::ColumnMoveLeft},
         {"column-move-right", "", KeybindAction::ColumnMoveRight},
         {"config-reload", "", KeybindAction::ConfigReload},
+        {"keyboard-layout-next", "", KeybindAction::KeyboardLayoutNext},
         {"layout-scroll-left", "", KeybindAction::LayoutScrollLeft},
         {"layout-scroll-right", "", KeybindAction::LayoutScrollRight},
         {"overview-close", "", KeybindAction::OverviewClose},

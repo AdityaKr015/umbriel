@@ -99,8 +99,9 @@ center_underfull_strip = true  # center the strip whenever it is narrower than t
 # Input ----------------------------------------------------------------------
 
 [input.keyboard]
-layout = ""
+layout = ""                    # "us,de" loads both; switch with keyboard-layout-next
 variant = ""
+options = ""                   # XKB options, e.g. "grp:alt_shift_toggle"
 repeat_rate = 25               # 0-1000 Hz
 repeat_delay = 600             # 0-10000 ms
 
@@ -146,6 +147,8 @@ follows_mouse = false
 # "Mod+Alt+0" = "scratchpad-focus-next:DP-1"
 "Mod" = "spawn:noctalia msg panel-toggle launcher"
 "Mod+O" = "overview-toggle"
+# "Mod+Space" is taken above; pick a free chord for layout switching.
+# "Mod+Shift+K" = "keyboard-layout-next"
 
 # Window and layer rules (see docs/rules.md) --------------------------------
 

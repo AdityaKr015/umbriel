@@ -269,8 +269,14 @@ namespace umbriel {
 
     struct Input {
       struct Keyboard {
+        // Comma-separated XKB layout list ("us,de"); the first entry is active
+        // at startup. `options` carries XKB option names such as
+        // `grp:alt_shift_toggle`, which is what makes a second layout reachable
+        // from the keyboard itself rather than only through the
+        // `keyboard-layout-next` action.
         std::string layout;
         std::string variant;
+        std::string options;
         int repeatRate = 25;
         int repeatDelay = 600;
         bool operator==(const Keyboard&) const = default;
@@ -303,6 +309,7 @@ namespace umbriel {
         std::string name;
         std::optional<std::string> layout;
         std::optional<std::string> variant;
+        std::optional<std::string> options;
         std::optional<int> repeatRate;
         std::optional<int> repeatDelay;
         std::optional<bool> tap;

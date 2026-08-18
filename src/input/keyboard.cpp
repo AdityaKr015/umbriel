@@ -1,6 +1,7 @@
 #include "input/keyboard.h"
 
 #include "config/config.h"
+#include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "input/text_input.h"
@@ -13,6 +14,10 @@
 #include <optional>
 
 namespace umbriel {
+
+  namespace {
+    constexpr Logger kLog("keyboard");
+  } // namespace
 
   Keyboard::Keyboard(Server& server, wlr_input_device* device)
       : m_server(&server), m_keyboard(wlr_keyboard_from_input_device(device)),
@@ -38,6 +43,7 @@ namespace umbriel {
     const Config::Input::Device* device = input.findDevice(m_deviceName);
     const std::string& layout = device != nullptr && device->layout ? *device->layout : input.keyboard.layout;
     const std::string& variant = device != nullptr && device->variant ? *device->variant : input.keyboard.variant;
+    const std::string& options = device != nullptr && device->options ? *device->options : input.keyboard.options;
     const int repeatRate = device != nullptr && device->repeatRate ? *device->repeatRate : input.keyboard.repeatRate;
     const int repeatDelay =
         device != nullptr && device->repeatDelay ? *device->repeatDelay : input.keyboard.repeatDelay;
@@ -47,7 +53,7 @@ namespace umbriel {
         .model = nullptr,
         .layout = layout.empty() ? nullptr : layout.c_str(),
         .variant = variant.empty() ? nullptr : variant.c_str(),
-        .options = nullptr,
+        .options = options.empty() ? nullptr : options.c_str(),
     };
     xkb_keymap* keymap =
         context == nullptr ? nullptr : xkb_keymap_new_from_names(context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
@@ -61,6 +67,32 @@ namespace umbriel {
       xkb_context_unref(context);
     }
     wlr_keyboard_set_repeat_info(m_keyboard, repeatRate, repeatDelay);
+  }
+
+  bool Keyboard::cycleLayout() {
+    // A virtual keyboard's keymap belongs to its client, so its groups are not
+    // ours to rotate. Same reason applyConfig leaves them alone.
+    if (m_virtual || m_keyboard->keymap == nullptr || m_keyboard->xkb_state == nullptr) {
+      return false;
+    }
+    const xkb_layout_index_t count = xkb_keymap_num_layouts(m_keyboard->keymap);
+    if (count < 2) {
+      return false;
+    }
+    const xkb_layout_index_t current = xkb_state_serialize_layout(m_keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
+    const xkb_layout_index_t next = (current + 1) % count;
+    // Locking the group through wlroots rather than xkbcommon directly is what
+    // gets the new group out to clients: it refreshes wlr_keyboard::modifiers
+    // and emits the modifiers event the seat forwards.
+    wlr_keyboard_notify_modifiers(
+        m_keyboard, m_keyboard->modifiers.depressed, m_keyboard->modifiers.latched, m_keyboard->modifiers.locked, next
+    );
+    const xkb_layout_index_t effective = xkb_state_serialize_layout(m_keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
+    const char* name = xkb_keymap_layout_get_name(m_keyboard->keymap, effective);
+    kLog.info(
+        "'{}' switched to layout {}/{} ({})", m_deviceName, effective + 1, count, name != nullptr ? name : "unnamed"
+    );
+    return effective == next;
   }
 
   Keyboard::~Keyboard() {

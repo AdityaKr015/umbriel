@@ -242,4 +242,36 @@ natural_scroll = false
   CHECK(input.findDevice("Acme") == nullptr);
 }
 
+UMBRIEL_TEST(keyboardOptionsLoadGloballyAndPerDevice) {
+  const TempConfig file;
+  file.write(R"(
+[input.keyboard]
+layout = "us,de"
+options = "grp:alt_shift_toggle"
+
+[[input.device]]
+name = "Acme Split Keyboard"
+layout = "us,fr"
+options = "grp:win_space_toggle"
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+  const auto& input = store.config().input;
+
+  CHECK(result.success);
+  CHECK(!containsDiagnostic(store, "unknown key input.keyboard.options"));
+  CHECK(!containsDiagnostic(store, "invalid XKB configuration"));
+  CHECK_EQ(input.keyboard.layout, std::string{"us,de"});
+  CHECK_EQ(input.keyboard.options, std::string{"grp:alt_shift_toggle"});
+
+  const auto* device = input.findDevice("Acme Split Keyboard");
+  CHECK(device != nullptr);
+  if (device != nullptr) {
+    CHECK(device->layout == std::optional<std::string>("us,fr"));
+    CHECK(device->options == std::optional<std::string>("grp:win_space_toggle"));
+  }
+}
+
 int main() { return RUN_TESTS(); }

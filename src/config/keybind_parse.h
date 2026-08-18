@@ -45,6 +45,7 @@ namespace umbriel {
     WorkspaceSwitch,
     WindowMoveToWorkspace,
     ConfigReload,
+    KeyboardLayoutNext,
     LayoutScrollLeft,
     LayoutScrollRight,
     OverviewToggle,

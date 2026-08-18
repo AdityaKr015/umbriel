@@ -146,6 +146,10 @@ namespace umbriel {
       return true;
     }
 
+    bool actionKeyboardLayoutNext(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      return server.cycleKeyboardLayout();
+    }
+
     bool actionSubmap(Server& server, const Keybind& bind, std::string* /*error*/) {
       const auto* arg = payloadIf<SubmapArg>(bind);
       if (arg == nullptr) {
@@ -441,6 +445,7 @@ namespace umbriel {
         &actionWorkspace,
         &actionWorkspace,
         &actionConfigReload,
+        &actionKeyboardLayoutNext,
         &actionLayoutScroll<-1>,
         &actionLayoutScroll<1>,
         &actionOverviewToggle,

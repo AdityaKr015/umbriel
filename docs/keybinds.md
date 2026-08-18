@@ -99,6 +99,24 @@ Any non-modifier key or mouse button closes the cheatsheet. Bound key
 combinations still run normally. A click used to close the cheatsheet is not
 passed to the window beneath it.
 
+### Keyboard layout action
+
+`keyboard-layout-next` activates the next layout in `input.keyboard.layout` and
+wraps at the end, on every physical keyboard. It is inert when only one layout
+is configured, and virtual keyboards keep the keymap their client supplied.
+
+```toml
+[input.keyboard]
+layout = "us,de"
+
+[keybinds]
+"Mod+Shift+K" = "keyboard-layout-next"
+```
+
+`umbriel msg keyboard-layout-next` does the same from a script or panel. An XKB
+toggle such as `options = "grp:alt_shift_toggle"` is an alternative that lives
+in the keymap itself; the two can coexist.
+
 ### Scratchpad actions
 
 Each output has its own scratchpad for temporarily hiding windows.

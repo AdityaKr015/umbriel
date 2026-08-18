@@ -370,7 +370,7 @@ namespace umbriel {
     bool validateKeyboardInput(
         const Config::Input::Keyboard& keyboard, const toml::source_region& source, std::string_view context
     ) {
-      if (keyboard.layout.empty() && keyboard.variant.empty()) {
+      if (keyboard.layout.empty() && keyboard.variant.empty() && keyboard.options.empty()) {
         return true;
       }
       xkb_context* xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
@@ -383,13 +383,13 @@ namespace umbriel {
           .model = nullptr,
           .layout = keyboard.layout.empty() ? nullptr : keyboard.layout.c_str(),
           .variant = keyboard.variant.empty() ? nullptr : keyboard.variant.c_str(),
-          .options = nullptr,
+          .options = keyboard.options.empty() ? nullptr : keyboard.options.c_str(),
       };
       xkb_keymap* keymap = xkb_keymap_new_from_names(xkbContext, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
       if (keymap == nullptr) {
         warnAt(
-            source, "ignoring {} layout='{}' variant='{}' (invalid XKB configuration)", context, keyboard.layout,
-            keyboard.variant
+            source, "ignoring {} layout='{}' variant='{}' options='{}' (invalid XKB configuration)", context,
+            keyboard.layout, keyboard.variant, keyboard.options
         );
         xkb_context_unref(xkbContext);
         return false;
@@ -449,6 +449,7 @@ namespace umbriel {
 
         readOptionalText(keys, "layout", device.layout, context);
         readOptionalText(keys, "variant", device.variant, context);
+        readOptionalText(keys, "options", device.options, context);
         keys.integer("repeat_rate", 0, 1000, device.repeatRate)
             .integer("repeat_delay", 0, 10000, device.repeatDelay)
             .boolean("tap", device.tap)
@@ -464,7 +465,7 @@ namespace umbriel {
           continue;
         }
 
-        if (device.layout || device.variant) {
+        if (device.layout || device.variant || device.options) {
           Config::Input::Keyboard keyboard = configured.keyboard;
           if (device.layout) {
             keyboard.layout = *device.layout;
@@ -472,9 +473,13 @@ namespace umbriel {
           if (device.variant) {
             keyboard.variant = *device.variant;
           }
+          if (device.options) {
+            keyboard.options = *device.options;
+          }
           if (!validateKeyboardInput(keyboard, entry.source(), context)) {
             device.layout.reset();
             device.variant.reset();
+            device.options.reset();
           }
         }
         configured.devices.push_back(std::move(device));
@@ -487,6 +492,7 @@ namespace umbriel {
         s.sub("keyboard", [&](Section& k) {
           k.text("layout", in.keyboard.layout)
               .text("variant", in.keyboard.variant)
+              .text("options", in.keyboard.options)
               .integer("repeat_rate", 0, 1000, in.keyboard.repeatRate)
               .integer("repeat_delay", 0, 10000, in.keyboard.repeatDelay);
         });
@@ -494,6 +500,7 @@ namespace umbriel {
             keyboardNode != nullptr && !validateKeyboardInput(in.keyboard, keyboardNode->source(), "input.keyboard")) {
           in.keyboard.layout.clear();
           in.keyboard.variant.clear();
+          in.keyboard.options.clear();
         }
         s.sub("touchpad", [&](Section& t) {
           t.boolean("tap", in.touchpad.tap).boolean("natural_scroll", in.touchpad.naturalScroll);

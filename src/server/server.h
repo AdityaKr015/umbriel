@@ -203,6 +203,9 @@ namespace umbriel {
     // Rotate the view registry until the front is a mapped view on the active
     // workspace, and focus it. Repeated calls walk the list.
     bool focusNextWindow();
+    // Lock the next XKB group on every physical keyboard. False when no keyboard
+    // has a second layout to switch to.
+    bool cycleKeyboardLayout();
 
     // Focus lives in FocusManager; these forward so call sites that already
     // hold a Server do not need a second reference.

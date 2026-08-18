@@ -22,6 +22,9 @@ namespace umbriel {
 
     [[nodiscard]] wlr_keyboard* wlr() const { return m_keyboard; }
     void applyConfig();
+    // Lock the next XKB group in the keymap, wrapping at the end. False when the
+    // keyboard has nothing to switch to (single-layout keymap, virtual keyboard).
+    bool cycleLayout();
 
   private:
     static void onModifiers(wl_listener* listener, void* data);

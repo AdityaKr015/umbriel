@@ -14,6 +14,7 @@ Xwayland support provided by [xwayland-satellite](https://github.com/Supreeeme/x
   resizing and tiled reordering
 - Independent workspaces per output, with hotplug support and configurable modes, positions, scales, and transforms
 - Floating, pinned, and fullscreen windows with configurable placement, focus, sizing, opacity, and visual effects
+- Per-output scratchpads for temporarily hiding windows, with toggle, move, restore, and focus-next actions targetable at any output
 - An animated overview, directional focus, configurable keybinds, submaps, and activation policy
 - Blur, shadows, rounded corners, double borders, opacity, and animated position, size, and fade transitions
 - Keyboard, pointer, touch, touchpad gestures, XKB configuration, and fcitx5-compatible input method support

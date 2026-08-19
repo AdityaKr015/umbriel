@@ -65,6 +65,7 @@ stdenv.mkDerivation {
     libxcb
     libxcb-wm
     lcms2
+    jemalloc
     cairo
     pango
   ];

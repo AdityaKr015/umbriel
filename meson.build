@@ -33,6 +33,26 @@ wlroots_dep = dependency('wlroots-0.20')
 cpp = meson.get_compiler('cpp')
 fs = import('fs')
 pkgconfig = find_program('pkg-config', required: false)
+
+# jemalloc keeps a long-running compositor's heap compact: fewer arenas and
+# fast page decay bound RSS. It interposes malloc only on glibc, so other libc
+# builds skip it (auto) or fail (enabled).
+jemalloc_option = get_option('jemalloc')
+is_glibc = cpp.get_define('__GLIBC__', prefix: '#include <features.h>') != ''
+jemalloc_deps = []
+jemalloc_cpp_args = []
+
+if jemalloc_option.enabled() and not is_glibc
+  error('jemalloc support requires glibc')
+endif
+
+if is_glibc
+  jemalloc_dep = dependency('jemalloc', required: jemalloc_option)
+  if jemalloc_dep.found()
+    jemalloc_deps += [jemalloc_dep]
+    jemalloc_cpp_args += ['-DUMBRIEL_USE_JEMALLOC=1']
+  endif
+endif
 use_system_scenefx = false
 if pkgconfig.found()
   scenefx_exists = run_command(pkgconfig, '--exists', 'scenefx-0.5', check: false)
@@ -275,7 +295,8 @@ umbriel_core_dep = declare_dependency(
 umbriel = executable(
   'umbriel',
   'src/main.cpp',
-  dependencies: [umbriel_core_dep],
+  cpp_args: jemalloc_cpp_args,
+  dependencies: [umbriel_core_dep] + jemalloc_deps,
   install: true,
 )
 

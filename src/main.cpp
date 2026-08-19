@@ -17,6 +17,14 @@
 #include <string>
 #include <vector>
 
+#ifdef __GLIBC__
+#ifdef UMBRIEL_USE_JEMALLOC
+#include <jemalloc/jemalloc.h>
+#else
+#include <malloc.h>
+#endif
+#endif
+
 #ifndef UMBRIEL_VERSION
 #define UMBRIEL_VERSION "unknown"
 #endif
@@ -95,7 +103,23 @@ namespace {
   }
 } // namespace
 
+#ifdef UMBRIEL_USE_JEMALLOC
+// Read by jemalloc before its first allocation. Few arenas and fast dirty/muzzy
+// decay bound fragmentation and return freed pages to the OS promptly. The
+// background thread runs decay even while the compositor is idle, otherwise
+// pages freed by a burst would wait for the next allocation to be returned.
+const char* malloc_conf = "background_thread:true,narenas:2,dirty_decay_ms:1000,muzzy_decay_ms:5000,lg_tcache_max:12";
+
+#define UMBRIEL_STRINGIFY_HELPER(x) #x
+#define UMBRIEL_STRINGIFY(x) UMBRIEL_STRINGIFY_HELPER(x)
+#endif
+
 int main(int argc, char** argv) {
+#if defined(__GLIBC__) && !defined(UMBRIEL_USE_JEMALLOC)
+  // glibc fallback when jemalloc is unavailable: a bounded arena count keeps a
+  // long-running compositor from fragmenting across per-thread arenas.
+  mallopt(M_ARENA_MAX, 2);
+#endif
   if (argc >= 2) {
     if (std::strcmp(argv[1], "validate") == 0) {
       return validateConfig(argc, argv);
@@ -246,6 +270,29 @@ int main(int argc, char** argv) {
       kLog.error("failed to start server");
       return EXIT_FAILURE;
     }
+
+    // Startup allocates heavily (config, scene tree, xwayland, banners) and
+    // none of that peak is needed once the session is up. Purge the excess
+    // pages so steady-state RSS tracks what the session actually uses.
+#ifdef UMBRIEL_USE_JEMALLOC
+    // Log the effective configuration once so a wrong malloc_conf shows up in
+    // the startup log instead of silently degrading allocator behavior.
+    unsigned narenas = 0;
+    size_t size = sizeof(narenas);
+    mallctl("opt.narenas", &narenas, &size, nullptr, 0);
+    size_t dirtyDecayMs = 0;
+    size = sizeof(dirtyDecayMs);
+    mallctl("opt.dirty_decay_ms", &dirtyDecayMs, &size, nullptr, 0);
+    kLog.info("jemalloc: narenas={} dirty_decay_ms={}ms", narenas, dirtyDecayMs);
+
+    const int purgeResult =
+        mallctl("arena." UMBRIEL_STRINGIFY(MALLCTL_ARENAS_ALL) ".purge", nullptr, nullptr, nullptr, 0);
+    if (purgeResult != 0) {
+      kLog.warn("failed to purge jemalloc arenas: {}", std::strerror(purgeResult));
+    }
+#elif defined(__GLIBC__)
+    malloc_trim(0);
+#endif
 
     server.run();
     kLog.info("shutting down");

@@ -41,6 +41,11 @@ just debug
 just release
 ```
 
+`jemalloc` is optional but recommended on glibc: it returns freed memory to the OS promptly and bounds heap
+fragmentation in long-running sessions. Meson's `-Djemalloc=enabled` or `-Djemalloc=disabled` forces the choice; the
+default (`auto`) uses it when the development package is installed and skips it otherwise (non-glibc libc builds
+always skip it).
+
 The binaries are written to `build-debug/umbriel` and `build-release/umbriel`. Meson uses a system `scenefx-0.5`
 only when its headers provide the required APIs; otherwise it builds the initialized submodule.
 

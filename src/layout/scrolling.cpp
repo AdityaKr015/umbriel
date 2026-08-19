@@ -325,6 +325,14 @@ namespace umbriel {
     }
     const int x = columnX(columnIndex, viewportWidth);
     const int width = columnWidth(columnIndex, viewportWidth);
+    // Already fully on screen: never move the strip. The neighbor-peek bounds
+    // below describe the landing spot when a scroll is actually required;
+    // enforcing them on a visible column shifts the strip for no reason (e.g.
+    // a column flush against the right edge would jump to reveal a sliver of
+    // the next one).
+    if (m_scroll <= static_cast<double>(x) && m_scroll >= static_cast<double>(x + width - viewportWidth)) {
+      return m_scroll;
+    }
     // Full-width (Super+F) fills the viewport: no neighbor peek, so sloppy focus
     // cannot land on a peek strip of another column.
     if (isFullWidth(columnIndex) || width >= viewportWidth) {

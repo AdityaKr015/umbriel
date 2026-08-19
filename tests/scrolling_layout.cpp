@@ -566,6 +566,32 @@ UMBRIEL_TEST(ensureVisibleIsANoOpForAnAlreadyVisibleColumn) {
   CHECK_EQ(fixture.layout.scrollAmountToEnsureVisible(0, kViewport), 0.0);
 }
 
+UMBRIEL_TEST(ensureVisibleKeepsAFlushRightColumnInPlace) {
+  // Two half-width columns plus a third: the second column is fully visible
+  // flush against the viewport edge, so focusing it must not nudge the strip
+  // to reveal a sliver of the third column.
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.layout.setScroll(0);
+  CHECK_EQ(fixture.layout.columnX(1, kViewport) + fixture.layout.columnWidth(1, kViewport), kViewport);
+  fixture.layout.ensureVisible(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), 0.0);
+  CHECK_EQ(fixture.layout.scrollAmountToEnsureVisible(1, kViewport), 0.0);
+}
+
+UMBRIEL_TEST(ensureVisibleKeepsAFlushLeftColumnInPlace) {
+  // Mirrors the flush-right case at the other end: at max scroll the second
+  // column sits flush against the left edge, still fully visible.
+  Fixture fixture;
+  fixture.addColumns(3);
+  const double maxScroll = fixture.layout.maxScroll(kViewport);
+  fixture.layout.setScroll(maxScroll);
+  CHECK_EQ(fixture.layout.columnX(1, kViewport), static_cast<int>(maxScroll));
+  fixture.layout.ensureVisible(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), maxScroll);
+  CHECK_EQ(fixture.layout.scrollAmountToEnsureVisible(1, kViewport), 0.0);
+}
+
 // ---- arrange and targetBox ----
 
 UMBRIEL_TEST(arrangePlacesColumnsSideBySide) {

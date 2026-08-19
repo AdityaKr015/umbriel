@@ -825,6 +825,55 @@ namespace umbriel {
     return switched;
   }
 
+  std::optional<Server::KeyboardLayoutState> Server::keyboardLayoutState() const {
+    for (const auto& keyboard : m_keyboards) {
+      wlr_keyboard* wlrKeyboard = keyboard->wlr();
+      if (keyboard->virtualDevice() || wlrKeyboard->keymap == nullptr || wlrKeyboard->xkb_state == nullptr) {
+        continue;
+      }
+      KeyboardLayoutState state;
+      const xkb_layout_index_t count = xkb_keymap_num_layouts(wlrKeyboard->keymap);
+      state.names.reserve(count);
+      for (xkb_layout_index_t i = 0; i < count; ++i) {
+        const char* name = xkb_keymap_layout_get_name(wlrKeyboard->keymap, i);
+        state.names.emplace_back(name != nullptr ? name : "");
+      }
+      state.currentIndex = xkb_state_serialize_layout(wlrKeyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
+      return state;
+    }
+    return std::nullopt;
+  }
+
+  void Server::notifyKeyboardLayoutIpc() {
+    if (m_ipc != nullptr) {
+      m_ipc->notifyKeyboardLayoutChanged();
+    }
+  }
+
+  void Server::notifyOverviewChanged() {
+    if (m_ipc != nullptr) {
+      m_ipc->notifyOverviewChanged();
+    }
+  }
+
+  void Server::scheduleIpcWindowsEvent() {
+    if (m_ipc == nullptr || m_ipcWindowsIdle != nullptr) {
+      return;
+    }
+    m_ipcWindowsIdle = wl_event_loop_add_idle(wl_display_get_event_loop(m_display), onIpcWindowsIdle, this);
+    if (m_ipcWindowsIdle == nullptr) {
+      kLog.error("failed to register IPC windows idle source");
+    }
+  }
+
+  void Server::onIpcWindowsIdle(void* data) {
+    Server* server = static_cast<Server*>(data);
+    server->m_ipcWindowsIdle = nullptr;
+    if (server->m_ipc != nullptr) {
+      server->m_ipc->notifyWindowsChanged();
+    }
+  }
+
   void Server::addPointer(wlr_input_device* device) {
     auto pointer = std::make_unique<PointerDevice>();
     pointer->server = this;

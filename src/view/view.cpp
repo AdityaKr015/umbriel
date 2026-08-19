@@ -219,6 +219,9 @@ namespace umbriel {
     if (m_mapped && m_onActiveWorkspace) {
       enterForeignOutput();
     }
+    if (m_mapped) {
+      m_server->scheduleIpcWindowsEvent();
+    }
   }
 
   void View::detachWorkspace() {
@@ -724,6 +727,7 @@ namespace umbriel {
     if (m_workspace != nullptr) {
       m_workspace->updateUrgent();
     }
+    m_server->scheduleIpcWindowsEvent();
   }
 
   void View::applyCornerRadius() { applyCornerRadii(corner_radii_all(surfaceRadius())); }
@@ -1170,6 +1174,7 @@ namespace umbriel {
 
   void View::handleMap() {
     m_mapped = true;
+    m_server->scheduleIpcWindowsEvent();
     m_tiled = looksTiled(m_toplevel);
     const wlr_box& mapGeo = m_toplevel->base->geometry;
     m_presentation.setSize(mapGeo.width, mapGeo.height);
@@ -1279,6 +1284,7 @@ namespace umbriel {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
     }
     m_mapped = false;
+    m_server->scheduleIpcWindowsEvent();
     m_positioned = false;
     if (m_workspace != nullptr) {
       m_workspace->layoutDetach(this, m_workspace->scrollingLayout() != nullptr);

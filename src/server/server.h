@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <sys/types.h>
@@ -207,6 +208,23 @@ namespace umbriel {
     // has a second layout to switch to.
     bool cycleKeyboardLayout();
 
+    struct KeyboardLayoutState {
+      std::vector<std::string> names;
+      uint32_t currentIndex = 0;
+    };
+    // The layout names and effective group index of the first physical
+    // keyboard, the same device keyboardLayoutState callers observe cycling.
+    // Nullopt when no physical keyboard exists.
+    [[nodiscard]] std::optional<KeyboardLayoutState> keyboardLayoutState() const;
+    // Fires the IPC keyboard-layout event when the effective group of a
+    // physical keyboard actually changed. Config reloads re-send the current
+    // state even when the group did not move.
+    void notifyKeyboardLayoutIpc();
+    void notifyOverviewChanged();
+    // Coalesced windows-event notification: at most one idle callback per frame
+    // regardless of how many window-list-relevant changes happened.
+    void scheduleIpcWindowsEvent();
+
     // Focus lives in FocusManager; these forward so call sites that already
     // hold a Server do not need a second reference.
     void focusView(View* view, FocusReason reason = FocusReason::Startup) { m_focus.focusView(view, reason); }
@@ -275,6 +293,7 @@ namespace umbriel {
     static void onRendererLost(wl_listener* listener, void* data);
     static int onBackgroundFrameTimer(void* data);
     static int onTerminateSignal(int signal, void* data);
+    static void onIpcWindowsIdle(void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -413,6 +432,9 @@ namespace umbriel {
 
     std::unique_ptr<XwaylandSupervisor> m_xwayland;
     wl_event_source* m_backgroundFrameTimer = nullptr;
+    // Non-null while a windows-event idle callback is pending. The idle source
+    // removes itself when it runs, so a non-null pointer means "already queued".
+    wl_event_source* m_ipcWindowsIdle = nullptr;
     // SIGINT / SIGTERM, delivered on the event loop rather than in a signal
     // handler, so shutdown runs ordinary code instead of async-signal-safe code.
     wl_event_source* m_signalSources[2]{};

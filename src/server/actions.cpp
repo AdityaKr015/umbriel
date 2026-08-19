@@ -168,7 +168,33 @@ namespace umbriel {
 
     // ---- Window ----
 
-    bool actionWindowClose(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+    // Window ids are the ext-foreign-toplevel identifiers, the same strings
+    // clients receive from the protocol and the IPC surface reuses.
+    View* viewByForeignIdentifier(Server& server, std::string_view id) {
+      for (const auto& view : server.views()) {
+        if (!view->mapped()) {
+          continue;
+        }
+        const char* identifier = view->extForeignIdentifier();
+        if (identifier != nullptr && id == identifier) {
+          return view.get();
+        }
+      }
+      return nullptr;
+    }
+
+    bool actionWindowClose(Server& server, const Keybind& bind, std::string* error) {
+      if (const auto* arg = payloadIf<WindowIdArg>(bind); arg != nullptr && !arg->id.empty()) {
+        View* view = viewByForeignIdentifier(server, arg->id);
+        if (view == nullptr) {
+          if (error != nullptr) {
+            *error = "unknown window: " + arg->id;
+          }
+          return false;
+        }
+        wlr_xdg_toplevel_send_close(view->toplevel());
+        return true;
+      }
       if (ScratchpadManager* scratchpad = server.scratchpadManager()) {
         if (Output* output = server.outputFromWlr(server.preferredOutput())) {
           if (View* view = scratchpad->focused(output)) {
@@ -309,6 +335,25 @@ namespace umbriel {
 
     bool actionFocusNext(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       server.focusNextWindow();
+      return true;
+    }
+
+    bool actionWindowFocusId(Server& server, const Keybind& bind, std::string* error) {
+      const auto* arg = payloadIf<WindowIdArg>(bind);
+      if (arg == nullptr || arg->id.empty()) {
+        if (error != nullptr) {
+          *error = "window-focus requires a window id";
+        }
+        return false;
+      }
+      View* view = viewByForeignIdentifier(server, arg->id);
+      if (view == nullptr) {
+        if (error != nullptr) {
+          *error = "unknown window: " + arg->id;
+        }
+        return false;
+      }
+      server.focusView(view, FocusReason::ForeignActivation);
       return true;
     }
 
@@ -459,6 +504,7 @@ namespace umbriel {
         &actionRestoreFromScratchpad,
         &actionScratchpadFocusNext,
         &actionSubmap,
+        &actionWindowFocusId,
     };
 
     consteval bool everyActionHasHandler() {

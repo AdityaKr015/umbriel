@@ -168,10 +168,11 @@ namespace umbriel {
         {"session-quit", "", KeybindAction::SessionQuit},
         {"spawn", "<cmd>", KeybindAction::Spawn, ActionArgKind::Command},
         {"submap", "<name>", KeybindAction::Submap, ActionArgKind::Command},
-        {"window-close", "", KeybindAction::WindowClose},
+        {"window-close", "[<window-id>]", KeybindAction::WindowClose, ActionArgKind::OptionalWindowId},
         {"window-consume-left", "", KeybindAction::WindowConsumeLeft},
         {"window-cycle-width", "", KeybindAction::WindowCycleWidth},
         {"window-expel-right", "", KeybindAction::WindowExpelRight},
+        {"window-focus", "<window-id>", KeybindAction::WindowFocusId, ActionArgKind::WindowId},
         {"window-focus-down", "", KeybindAction::WindowFocusDown},
         {"window-focus-left", "", KeybindAction::WindowFocusLeft},
         {"window-focus-next", "", KeybindAction::WindowFocusNext},
@@ -319,6 +320,25 @@ namespace umbriel {
         if (takeActionArg(value, spec, arg)) {
           output.action = spec.action;
           output.payload = OutputArg{.output = std::string(arg)};
+          return true;
+        }
+        break;
+      case ActionArgKind::WindowId:
+        if (takeActionArg(value, spec, arg)) {
+          output.action = spec.action;
+          output.payload = WindowIdArg{.id = std::string(arg)};
+          return true;
+        }
+        break;
+      case ActionArgKind::OptionalWindowId:
+        if (value == spec.name) {
+          output.action = spec.action;
+          output.payload = WindowIdArg{};
+          return true;
+        }
+        if (takeActionArg(value, spec, arg)) {
+          output.action = spec.action;
+          output.payload = WindowIdArg{.id = std::string(arg)};
           return true;
         }
         break;

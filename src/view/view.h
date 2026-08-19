@@ -47,6 +47,15 @@ namespace umbriel {
     [[nodiscard]] bool floating() const { return !m_tiled; }
     [[nodiscard]] bool pinned() const { return m_pinned; }
     [[nodiscard]] bool urgent() const { return m_urgent; }
+    // The window id the ext-foreign-toplevel protocol hands to clients, which
+    // the IPC surface reuses verbatim for its own window identity. Null only
+    // while no ext handle exists (the handle lives for the whole map lifetime).
+    [[nodiscard]] const char* extForeignIdentifier() const {
+      return m_extForeign != nullptr ? m_extForeign->identifier : nullptr;
+    }
+    // Seat-global activation, tracked independently of the per-workspace focus
+    // state the IPC `focused` field reports.
+    [[nodiscard]] bool activated() const { return m_activated; }
     [[nodiscard]] bool sizeAnimActive() const { return sizeAnimating(); }
     [[nodiscard]] int presentedWidth(const wlr_box& target) const;
     [[nodiscard]] int presentedHeight(const wlr_box& target) const;
@@ -264,6 +273,7 @@ namespace umbriel {
     bool m_onActiveWorkspace = false;
     bool m_scratchpadBorder = false;
     bool m_urgent = false;
+    bool m_activated = false;
     AnimatedValue m_posX;
     AnimatedValue m_posY;
     AnimatedValue m_fade;

@@ -67,6 +67,9 @@ namespace umbriel {
       xkb_context_unref(context);
     }
     wlr_keyboard_set_repeat_info(m_keyboard, repeatRate, repeatDelay);
+    // The name list or keymap changed; resend the current state so consumers
+    // observe the reload even when the effective group did not move.
+    notifyLayoutIfChanged();
   }
 
   bool Keyboard::cycleLayout() {
@@ -93,6 +96,18 @@ namespace umbriel {
         "'{}' switched to layout {}/{} ({})", m_deviceName, effective + 1, count, name != nullptr ? name : "unnamed"
     );
     return effective == next;
+  }
+
+  void Keyboard::notifyLayoutIfChanged() {
+    if (m_virtual || m_keyboard->keymap == nullptr || m_keyboard->xkb_state == nullptr) {
+      return;
+    }
+    const xkb_layout_index_t effective = xkb_state_serialize_layout(m_keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
+    if (effective == m_lastNotifiedLayout) {
+      return;
+    }
+    m_lastNotifiedLayout = effective;
+    m_server->notifyKeyboardLayoutIpc();
   }
 
   Keyboard::~Keyboard() {
@@ -138,6 +153,7 @@ namespace umbriel {
       wlr_seat_keyboard_notify_modifiers(seat, &m_keyboard->modifiers);
     }
     m_server->cursor()->refreshInteractiveCursor();
+    notifyLayoutIfChanged();
   }
 
   void Keyboard::handleKey(void* data) {

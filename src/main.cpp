@@ -68,8 +68,6 @@ namespace {
     };
     std::println(stream, "umbriel {} — a wayland compositor\n", UMBRIEL_VERSION);
     row("Usage: ", "[-s <command>] [-c <config>]", "run the compositor");
-    row("       ", "validate [-c <config>]", "check the config file");
-    row("       ", "outputs", "list outputs and modes");
     for (const auto& spec : umbriel::ipcCommands()) {
       std::string cmd{spec.name};
       if (!spec.argSpec.empty()) {
@@ -78,7 +76,8 @@ namespace {
       }
       row("       ", cmd, spec.description);
     }
-    row("       ", "actions", "list available actions");
+    row("       ", "outputs", "list outputs and modes");
+    row("       ", "validate [-c <config>]", "check the config file");
     row("       ", "help | -h | --help", "show this help");
     row("       ", "--version", "print version");
     std::println(
@@ -87,19 +86,8 @@ namespace {
         "  -s <command>   spawn <command> once the compositor starts\n"
         "  -c <config>    use <config> instead of the default config path\n"
         "\n"
-        "Run `umbriel actions` to list all available actions for `msg` and keybinds."
+        "Run `umbriel msg --help` to list all available actions for `msg` and keybinds."
     );
-  }
-
-  int printActions() {
-    for (const auto& spec : umbriel::actionSpecs()) {
-      if (spec.param.empty()) {
-        std::println("{}", spec.name);
-      } else {
-        std::println("{}:{}", spec.name, spec.param);
-      }
-    }
-    return EXIT_SUCCESS;
   }
 } // namespace
 
@@ -126,9 +114,6 @@ int main(int argc, char** argv) {
     }
     if (std::strcmp(argv[1], "outputs") == 0) {
       return umbriel::runOutputsCommand();
-    }
-    if (std::strcmp(argv[1], "actions") == 0) {
-      return printActions();
     }
     if (std::strcmp(argv[1], "help") == 0 || std::strcmp(argv[1], "-h") == 0 || std::strcmp(argv[1], "--help") == 0) {
       printHelp(stdout);

@@ -144,7 +144,7 @@ umbriel validate [-c <config>]   # check a config file without starting
 umbriel outputs                  # list connectors and modes
 umbriel windows                  # list windows (focused *, urgent !)
 umbriel layers                   # list layer-shell surfaces
-umbriel actions                  # list actions available to `msg` and keybinds
+umbriel msg --help              # list actions available to `msg` and keybinds
 umbriel msg <action> [args...]   # send an action to the running compositor
 ```
 

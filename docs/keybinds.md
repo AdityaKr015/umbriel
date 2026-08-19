@@ -53,7 +53,7 @@ the newly exposed columns without requiring additional pointer motion.
 
 ## Actions
 
-Run `umbriel actions` for the full list. Default keybinds are only loaded when
+Run `umbriel msg --help` for the full list. Default keybinds are only loaded when
 no config file exists; once you provide a config, `[keybinds]` is the complete
 set.
 
@@ -65,6 +65,8 @@ set.
 | `workspace-switch:<ws>` | Workspace name, optionally `/<output>` | `"workspace-switch:3"`, `"workspace-switch:CHAT/HDMI-A-1"` |
 | `window-move-to-workspace:<ws>` | Same as above | `"window-move-to-workspace:2"` |
 | `window-set-width:<frac>` | Fraction 0.1-1.0 | `"window-set-width:0.667"` |
+| `window-focus:<window-id>` | Window id from `umbriel windows` | `"window-focus:0123abcd"` |
+| `window-close[:<window-id>]` | Optional window id; bare form closes the focused window | `"window-close"` |
 
 Workspace selectors use exact names, including numeric names such as `1`.
 Unique names resolve globally; duplicate names resolve on the preferred output.

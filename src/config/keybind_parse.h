@@ -59,6 +59,7 @@ namespace umbriel {
     WindowRestoreFromScratchpad,
     ScratchpadFocusNext,
     Submap,
+    WindowFocusId,
     Count,
   };
 
@@ -87,8 +88,13 @@ namespace umbriel {
     std::string output; // empty = the focused output
     bool operator==(const OutputArg&) const = default;
   };
+  struct WindowIdArg {
+    std::string id; // empty = the focused window
+    bool operator==(const WindowIdArg&) const = default;
+  };
 
-  using KeybindPayload = std::variant<std::monostate, SpawnArg, SubmapArg, WidthArg, WorkspaceArg, OutputArg>;
+  using KeybindPayload =
+      std::variant<std::monostate, SpawnArg, SubmapArg, WidthArg, WorkspaceArg, OutputArg, WindowIdArg>;
 
   struct Keybind {
     // What triggers the bind.
@@ -130,7 +136,15 @@ namespace umbriel {
         || action == KeybindAction::CheatsheetClose;
   }
 
-  enum class ActionArgKind : uint8_t { None, Command, WidthFraction, Workspace, OptionalOutput };
+  enum class ActionArgKind : uint8_t {
+    None,
+    Command,
+    WidthFraction,
+    Workspace,
+    OptionalOutput,
+    WindowId,
+    OptionalWindowId
+  };
 
   struct ActionSpec {
     std::string_view name;  // e.g. "spawn", "workspace-switch", "window-close"

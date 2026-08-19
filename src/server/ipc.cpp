@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "core/log.h"
+#include "overview/overview.h"
 #include "scene/color.h"
 #include "server/ipc_commands.h"
 #include "server/server.h"
@@ -10,6 +11,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string_view>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -41,6 +43,33 @@ namespace umbriel {
                {"corner_radius", current.appearance.cornerRadius},
            }},
       };
+    }
+
+    nlohmann::json overviewEvent(Server& server) {
+      const Overview* overview = server.overview();
+      return nlohmann::json{
+          {"event", "overview"},
+          {"data", {{"open", overview != nullptr && overview->active()}}},
+      };
+    }
+
+    // Nullopt when no physical keyboard exists; the caller then skips the send
+    // entirely so the event stream simply starts when a keyboard arrives.
+    std::optional<nlohmann::json> keyboardLayoutEvent(Server& server) {
+      const auto state = server.keyboardLayoutState();
+      if (!state.has_value()) {
+        return std::nullopt;
+      }
+      return nlohmann::json{
+          {"event", "keyboard_layout"},
+          {"data", {{"names", state->names}, {"current_index", state->currentIndex}}},
+      };
+    }
+
+    nlohmann::json windowsEvent(Server& server) {
+      // Reuses the command handler so the event payload can never diverge from
+      // what `umbriel windows` reports.
+      return nlohmann::json{{"event", "windows"}, {"data", IpcCommands::windows(server, {}).at("ok")}};
     }
   } // namespace
 
@@ -237,7 +266,7 @@ namespace umbriel {
       }
       return false;
     }
-    if (connection.subscribedToTheme) {
+    if (connection.subscribedEvents != 0) {
       connection.output.clear();
       connection.writeOffset = 0;
       connection.responding = false;
@@ -288,20 +317,54 @@ namespace umbriel {
       if (!req.contains("events") || !req["events"].is_array() || req["events"].empty()) {
         return R"({"err":"malformed request"})";
       }
+      uint8_t requested = 0;
       for (const auto& event : req["events"]) {
         if (!event.is_string()) {
           return R"({"err":"malformed request"})";
         }
-        if (event.get_ref<const std::string&>() != "theme") {
-          return nlohmann::json{{"err", "unknown subscription event: " + event.get<std::string>()}}.dump();
+        const std::string& name = event.get_ref<const std::string&>();
+        if (name == "theme") {
+          requested |= Ipc::kEventTheme;
+        } else if (name == "overview") {
+          requested |= Ipc::kEventOverview;
+        } else if (name == "keyboard_layout") {
+          requested |= Ipc::kEventKeyboardLayout;
+        } else if (name == "windows") {
+          requested |= Ipc::kEventWindows;
+        } else {
+          return nlohmann::json{{"err", "unknown subscription event: " + name}}.dump();
         }
       }
-      connection.subscribedToTheme = true;
+      connection.subscribedEvents |= requested;
       if (connection.deadline != nullptr) {
         wl_event_source_remove(connection.deadline);
         connection.deadline = nullptr;
       }
-      return themeEvent().dump();
+      // Initial-state lines in a fixed order; prepareResponse appends the
+      // final newline. A keyboard_layout line with no keyboard is skipped, so
+      // that stream simply starts when a keyboard arrives.
+      std::string response;
+      auto append = [&response](const nlohmann::json& event) {
+        if (!response.empty()) {
+          response += '\n';
+        }
+        response += event.dump();
+      };
+      if ((requested & Ipc::kEventTheme) != 0) {
+        append(themeEvent());
+      }
+      if ((requested & Ipc::kEventOverview) != 0) {
+        append(overviewEvent(*m_server));
+      }
+      if ((requested & Ipc::kEventKeyboardLayout) != 0) {
+        if (const auto event = keyboardLayoutEvent(*m_server)) {
+          append(*event);
+        }
+      }
+      if ((requested & Ipc::kEventWindows) != 0) {
+        append(windowsEvent(*m_server));
+      }
+      return response;
     }
     const IpcCommandSpec* spec = findIpcCommand(cmd);
     if (spec == nullptr) {
@@ -317,10 +380,10 @@ namespace umbriel {
     return spec->handle(*m_server, arg).dump();
   }
 
-  void Ipc::notifyThemeChanged() {
-    const std::string update = themeEvent().dump() + '\n';
+  void Ipc::broadcastEvent(uint8_t event, const nlohmann::json& payload) {
+    const std::string update = payload.dump() + '\n';
     for (const auto& connection : m_connections) {
-      if (!connection->subscribedToTheme) {
+      if ((connection->subscribedEvents & event) == 0) {
         continue;
       }
       if (connection->responding) {
@@ -333,5 +396,17 @@ namespace umbriel {
       wl_event_source_fd_update(connection->fdSource, WL_EVENT_READABLE | WL_EVENT_WRITABLE);
     }
   }
+
+  void Ipc::notifyThemeChanged() { broadcastEvent(kEventTheme, themeEvent()); }
+
+  void Ipc::notifyOverviewChanged() { broadcastEvent(kEventOverview, overviewEvent(*m_server)); }
+
+  void Ipc::notifyKeyboardLayoutChanged() {
+    if (const auto event = keyboardLayoutEvent(*m_server)) {
+      broadcastEvent(kEventKeyboardLayout, *event);
+    }
+  }
+
+  void Ipc::notifyWindowsChanged() { broadcastEvent(kEventWindows, windowsEvent(*m_server)); }
 
 } // namespace umbriel

@@ -63,6 +63,9 @@ namespace umbriel {
         continue;
       }
       nlohmann::json entry;
+      entry["id"] = v->extForeignIdentifier() != nullptr ? v->extForeignIdentifier() : "";
+      entry["workspace"] = v->workspace() != nullptr ? v->workspace()->id() : "";
+      entry["active"] = v->activated();
       entry["app_id"] = v->toplevel()->app_id != nullptr ? v->toplevel()->app_id : "";
       entry["title"] = v->toplevel()->title != nullptr ? v->toplevel()->title : "";
       entry["floating"] = v->floating();
@@ -94,6 +97,14 @@ namespace umbriel {
     return nlohmann::json{{"ok", layers}};
   }
 
+  nlohmann::json IpcCommands::keyboardLayouts(Server& server, std::string_view /*arg*/) {
+    const auto state = server.keyboardLayoutState();
+    if (!state.has_value()) {
+      return nlohmann::json{{"err", "no keyboard"}};
+    }
+    return nlohmann::json{{"ok", {{"names", state->names}, {"current_index", state->currentIndex}}}};
+  }
+
   nlohmann::json IpcCommands::msg(Server& server, std::string_view arg) {
     Keybind bind{};
     if (!parseAction(std::string(arg), bind)) {
@@ -108,9 +119,10 @@ namespace umbriel {
   }
 
   static constexpr IpcCommandSpec kIpcCommands[] = {
-      {"layers", "", "list layer-shell surfaces", false, &IpcCommands::layers, &printLayers},
       {"msg", "<action> [args...]", "send an action to the compositor", true, &IpcCommands::msg, nullptr},
       {"windows", "", "list windows (app id and title)", false, &IpcCommands::windows, &printWindows},
+      {"layers", "", "list layer-shell surfaces", false, &IpcCommands::layers, &printLayers},
+      {"keyboard-layouts", "", "list keyboard layouts", false, &IpcCommands::keyboardLayouts, nullptr},
   };
 
   std::span<const IpcCommandSpec> ipcCommands() { return kIpcCommands; }

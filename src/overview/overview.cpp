@@ -710,6 +710,7 @@ namespace umbriel {
     m_progress = 0.0;
     m_targetProgress = 0.0;
     m_pendingFocus = nullptr;
+    m_server->notifyOverviewChanged();
     wlr_scene_node_set_enabled(&m_server->xdgTree()->node, false);
     wlr_scene_node_set_enabled(&m_server->fullscreenTree()->node, false);
     wlr_scene_node_set_enabled(&m_tree->node, true);
@@ -876,6 +877,7 @@ namespace umbriel {
     m_closing = false;
     m_progress = 0.0;
     m_targetProgress = 0.0;
+    m_server->notifyOverviewChanged();
     m_pressCard = nullptr;
     m_pressWorkspace = nullptr;
     m_dragCard = nullptr;

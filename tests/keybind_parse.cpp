@@ -292,6 +292,18 @@ UMBRIEL_TEST(parsesOptionalOutputActions) {
   CHECK(parseAction("scratchpad-focus-next", bind));
 }
 
+UMBRIEL_TEST(parsesWindowIdActions) {
+  Keybind bind;
+  CHECK(parseAction("window-close", bind));
+  CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{});
+  CHECK(parseAction("window-close:abc123", bind));
+  CHECK(bind.action == KeybindAction::WindowClose);
+  CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{"abc123"});
+  CHECK(parseAction("window-focus:abc123", bind));
+  CHECK(bind.action == KeybindAction::WindowFocusId);
+  CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{"abc123"});
+}
+
 UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
   // The whole point of the variant: the spec's argKind and the payload the
   // parser produces cannot drift apart.
@@ -301,6 +313,7 @@ UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
     switch (spec.argKind) {
     case ActionArgKind::None:
     case ActionArgKind::OptionalOutput:
+    case ActionArgKind::OptionalWindowId:
       break;
     case ActionArgKind::Command:
       input += ":value";
@@ -310,6 +323,9 @@ UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
       break;
     case ActionArgKind::Workspace:
       input += ":1";
+      break;
+    case ActionArgKind::WindowId:
+      input += ":abc";
       break;
     }
     CHECK(parseAction(input, bind));
@@ -333,6 +349,10 @@ UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
     case ActionArgKind::OptionalOutput:
       CHECK(umbriel::payloadIf<umbriel::OutputArg>(bind) != nullptr);
       break;
+    case ActionArgKind::WindowId:
+    case ActionArgKind::OptionalWindowId:
+      CHECK(umbriel::payloadIf<umbriel::WindowIdArg>(bind) != nullptr);
+      break;
     }
   }
 }
@@ -343,7 +363,9 @@ UMBRIEL_TEST(rejectsUnknownActions) {
   CHECK(!parseAction("not-an-action", bind));
   CHECK(!parseAction("window-clos", bind));        // truncated
   CHECK(!parseAction("window-close-extra", bind)); // superstring
-  CHECK(!parseAction("window-close:arg", bind));   // takes no argument
+  CHECK(!parseAction("overview-open:arg", bind));  // takes no argument
+  CHECK(!parseAction("window-focus", bind));       // requires an argument
+  CHECK(!parseAction("window-focus:", bind));      // requires a non-empty argument
   CHECK(!parseAction("spawn", bind));              // requires an argument
   CHECK(!parseAction("spawn:", bind));             // requires a non-empty argument
 }
@@ -359,6 +381,7 @@ UMBRIEL_TEST(everyActionSpecRoundTripsThroughParseAction) {
     switch (spec.argKind) {
     case ActionArgKind::None:
     case ActionArgKind::OptionalOutput:
+    case ActionArgKind::OptionalWindowId:
       break;
     case ActionArgKind::Command:
       input += ":true";
@@ -368,6 +391,9 @@ UMBRIEL_TEST(everyActionSpecRoundTripsThroughParseAction) {
       break;
     case ActionArgKind::Workspace:
       input += ":1";
+      break;
+    case ActionArgKind::WindowId:
+      input += ":abc";
       break;
     }
     if (!parseAction(input, bind)) {

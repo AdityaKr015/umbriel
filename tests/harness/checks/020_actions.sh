@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Every action `umbriel actions` advertises is parseable and accepted by `msg`.
+# Every action `umbriel msg --help` advertises is parseable and accepted by `msg`.
 #
 # This is the regression net for the action registry. The action list is spread
 # across the KeybindAction enum, the kActionSpecs table, and the dispatch switch,
@@ -13,6 +13,7 @@ skip_action() {
   case $1 in
     session-quit) return 0 ;;  # would kill the instance mid-run
     spawn)        return 0 ;;  # would start a process outside the container
+    window-focus) return 0 ;;  # needs a live window id; the round trip is covered by 010_ipc
     *)            return 1 ;;
   esac
 }
@@ -25,6 +26,7 @@ sample_arg() {
     '<workspace>[/<output>]')    echo '1' ;;
     '<name>')                    echo 'harness' ;;
     '[<output>]')                echo '' ;;
+    '[<window-id>]')             echo '' ;;
     *)                           echo '' ;;
   esac
 }
@@ -48,7 +50,7 @@ while read -r spec; do
     echo "rejected: $action -> $out"
     failures=$((failures + 1))
   fi
-done < <("$UMBRIEL" actions)
+done < <("$UMBRIEL" msg --help | sed -n 's/^  //p')
 
 if [[ $count -eq 0 ]]; then
   echo "no actions were exercised"

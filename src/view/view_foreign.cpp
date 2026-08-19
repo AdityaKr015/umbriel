@@ -14,9 +14,14 @@ namespace umbriel {
   } // namespace
 
   void View::setForeignActivated(bool activated) {
+    if (m_activated == activated) {
+      return;
+    }
+    m_activated = activated;
     if (m_foreign != nullptr) {
       wlr_foreign_toplevel_handle_v1_set_activated(m_foreign, activated);
     }
+    m_server->scheduleIpcWindowsEvent();
   }
 
   void View::updateForeignIdentity() {
@@ -31,6 +36,7 @@ namespace umbriel {
       };
       wlr_ext_foreign_toplevel_handle_v1_update_state(m_extForeign, &state);
     }
+    m_server->scheduleIpcWindowsEvent();
   }
 
   void View::updateForeignState() {

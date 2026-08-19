@@ -210,6 +210,13 @@ namespace {
           return name + ": " + output->output;
         }
         return name;
+      case umbriel::ActionArgKind::WindowId:
+      case umbriel::ActionArgKind::OptionalWindowId:
+        if (const auto* window = umbriel::payloadIf<umbriel::WindowIdArg>(bind);
+            window != nullptr && !window->id.empty()) {
+          return name + ": " + window->id;
+        }
+        return name;
       }
       return name;
     }
@@ -249,6 +256,7 @@ namespace {
     case A::WindowFocusUp:
     case A::WindowFocusDown:
     case A::WindowFocusNext:
+    case A::WindowFocusId:
       return Group::Focus;
     case A::ColumnMoveLeft:
     case A::ColumnMoveRight:

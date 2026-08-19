@@ -26,7 +26,7 @@ namespace umbriel {
   class Workspace {
   public:
     Workspace(
-        WorkspaceGroup& group, wlr_ext_workspace_handle_v1* handle, std::string name, size_t index,
+        WorkspaceGroup& group, wlr_ext_workspace_handle_v1* handle, std::string id, std::string name, size_t index,
         ResolvedLayoutConfig layoutConfig
     );
     ~Workspace();
@@ -36,6 +36,10 @@ namespace umbriel {
 
     [[nodiscard]] wlr_ext_workspace_handle_v1* handle() const { return m_handle; }
     [[nodiscard]] WorkspaceGroup* group() const { return m_group; }
+    // The canonical workspace id: the "<output>:<serial>" string handed to
+    // wlr_ext_workspace_handle_v1_create, identical across the ext protocol and
+    // the IPC surface.
+    [[nodiscard]] const std::string& id() const { return m_id; }
     [[nodiscard]] const std::string& name() const { return m_name; }
     [[nodiscard]] size_t index() const { return m_index; }
     [[nodiscard]] bool active() const { return m_active; }
@@ -119,6 +123,7 @@ namespace umbriel {
     void detachFromLayout(View* view);
     WorkspaceGroup* m_group = nullptr;
     wlr_ext_workspace_handle_v1* m_handle = nullptr;
+    std::string m_id;
     std::string m_name;
     size_t m_index = 0;
     bool m_active = false;

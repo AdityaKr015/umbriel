@@ -128,7 +128,7 @@ namespace umbriel {
     return m_modifierTap.release(source, keycode);
   }
 
-  const Keybind* Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {
+  const Keybind* Server::matchKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) const {
     if (m_sessionLocked) {
       return nullptr;
     }
@@ -157,10 +157,18 @@ namespace umbriel {
       if (effective != expected || (lowered != bind.keysym && rawKeysym != bind.keysym)) {
         continue;
       }
-      return executeKeybindAction(bind) ? &bind : nullptr;
+      return &bind;
     }
 
     return nullptr;
+  }
+
+  const Keybind* Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {
+    const Keybind* bind = matchKeybind(keysym, rawKeysym, modifiers);
+    if (bind == nullptr) {
+      return nullptr;
+    }
+    return executeKeybindAction(*bind) ? bind : nullptr;
   }
 
   bool Server::handleWheelBind(WheelDirection direction, uint32_t modifiers) {

@@ -341,6 +341,9 @@ namespace umbriel {
     if (has(pending, Dirty::Cheatsheet)) {
       m_server->relayoutCheatsheet();
     }
+    if (has(pending, Dirty::QuitConfirm)) {
+      m_server->relayoutQuitConfirm();
+    }
   }
 
   void Output::handleFrame() {

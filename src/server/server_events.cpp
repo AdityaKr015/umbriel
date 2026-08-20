@@ -12,6 +12,7 @@
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
 #include "scene/hint_rect.h"
+#include "scene/quit_confirm.h"
 #include "server/ipc.h"
 #include "server/server.h"
 #include "view/popup.h"
@@ -739,6 +740,9 @@ namespace umbriel {
     if (m_cheatsheet != nullptr) {
       m_cheatsheet->hide();
     }
+    if (m_quitConfirm != nullptr) {
+      m_quitConfirm->hide();
+    }
     m_cursor->resetMode();
     m_cursor->clearConstraint();
     clearNormalFocus();
@@ -805,7 +809,7 @@ namespace umbriel {
 
   void Server::addOutput(wlr_output* output) {
     m_outputs.push_back(std::make_unique<Output>(*this, output));
-    markDirty(Dirty::Backdrop | Dirty::Banner | Dirty::Cheatsheet);
+    markDirty(Dirty::Backdrop | Dirty::Banner | Dirty::Cheatsheet | Dirty::QuitConfirm);
     if (m_sessionLocked) {
       updateLockBlank();
       raiseLockTree();
@@ -967,7 +971,7 @@ namespace umbriel {
     }
 
     std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) { return entry.get() == output; });
-    markDirty(Dirty::Banner | Dirty::Cheatsheet);
+    markDirty(Dirty::Banner | Dirty::Cheatsheet | Dirty::QuitConfirm);
     if (m_sessionLocked) {
       updateLockBlank();
     }
@@ -1081,7 +1085,7 @@ namespace umbriel {
           out->handleExternalConfigChange();
         }
       }
-      markDirty(Dirty::Banner | Dirty::Cheatsheet);
+      markDirty(Dirty::Banner | Dirty::Cheatsheet | Dirty::QuitConfirm);
       if (m_sessionLocked) {
         updateLockBlank();
       }

@@ -6,6 +6,7 @@
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
+#include "scene/quit_confirm.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -199,7 +200,16 @@ namespace umbriel {
       return true;
     }
 
-    bool actionSessionQuit(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+    bool actionSessionQuit(Server& server, const Keybind& bind, std::string* /*error*/) {
+      const auto* arg = payloadIf<QuitArg>(bind);
+      const bool skip = arg != nullptr && arg->skipConfirmation;
+      QuitConfirm* confirm = server.quitConfirm();
+      // While locked the dialog would be hidden behind the lock surface, so quit
+      // directly; the lock client's own UI is the confirmation there.
+      if (!skip && !server.sessionLocked() && confirm != nullptr && !confirm->visible()) {
+        confirm->show();
+        return true;
+      }
       server.stop();
       return true;
     }

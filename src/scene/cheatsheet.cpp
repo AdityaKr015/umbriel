@@ -55,7 +55,6 @@ namespace {
   }
 
   constexpr int kPad = 28;
-  constexpr int kCornerRadius = 16;
   constexpr int kColumnGap = 32;
   constexpr int kTitleBodyGap = 12;
   constexpr int kBodyFooterGap = 12;
@@ -598,14 +597,15 @@ namespace umbriel {
     int panelW = std::max({titleBuf.logicalWidth, footerBuf.logicalWidth, totalColW}) + 2 * kPad;
     int panelH = body.totalHeight;
 
-    // Shadow.
-    m_shadow.update(m_tree, panelW, panelH, 0, kCornerRadius, nullptr);
+    // Shadow and panel use the configured corner radius.
+    const int cornerRadius = config().appearance.cornerRadius;
+    m_shadow.update(m_tree, panelW, panelH, 0, cornerRadius, nullptr);
 
     // Panel rect.
     float panelColor[4]{};
     premultiplied(panelColor, config().colors.background, 1.0F);
     wlr_scene_rect* panelRect = wlr_scene_rect_create(m_tree, panelW, panelH, panelColor);
-    wlr_scene_rect_set_corner_radius(panelRect, kCornerRadius);
+    wlr_scene_rect_set_corner_radius(panelRect, cornerRadius);
     (void)panelRect;
 
     // Helper to add a text buffer to the scene tree.

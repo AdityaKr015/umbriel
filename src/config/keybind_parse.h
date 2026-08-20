@@ -119,9 +119,13 @@ namespace umbriel {
     std::optional<LayoutMode> mode; // nullopt = toggle between scrolling and dwindle
     bool operator==(const LayoutModeArg&) const = default;
   };
+  struct QuitArg {
+    bool skipConfirmation = false;
+    bool operator==(const QuitArg&) const = default;
+  };
 
-  using KeybindPayload =
-      std::variant<std::monostate, SpawnArg, SubmapArg, WidthArg, WorkspaceArg, OutputArg, WindowIdArg, LayoutModeArg>;
+  using KeybindPayload = std::variant<
+      std::monostate, SpawnArg, SubmapArg, WidthArg, WorkspaceArg, OutputArg, WindowIdArg, LayoutModeArg, QuitArg>;
 
   struct Keybind {
     // What triggers the bind.
@@ -172,7 +176,8 @@ namespace umbriel {
     WindowId,
     OptionalWindowId,
     WidthDelta,
-    LayoutMode
+    LayoutMode,
+    SkipConfirmation
   };
 
   struct ActionSpec {

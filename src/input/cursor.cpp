@@ -11,6 +11,7 @@
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
 #include "scene/hint_rect.h"
+#include "scene/quit_confirm.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "view/xdg_size.h"
@@ -459,6 +460,11 @@ namespace umbriel {
     m_server->notifyIdleActivity();
     if (event->state == WL_POINTER_BUTTON_STATE_PRESSED) {
       m_server->cancelModifierTap();
+      // Any pointer press cancels the confirmation without being consumed; the
+      // click still reaches whatever it hit.
+      if (QuitConfirm* confirm = m_server->quitConfirm(); confirm != nullptr && confirm->visible()) {
+        confirm->hide();
+      }
     }
 
     // Config mouse binds win over the overview and the built-in Mod+drag /

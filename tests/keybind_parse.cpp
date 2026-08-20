@@ -176,6 +176,23 @@ UMBRIEL_TEST(parsesSimpleActions) {
   CHECK(bind.action == KeybindAction::SessionQuit);
 }
 
+UMBRIEL_TEST(parsesSessionQuitConfirmation) {
+  Keybind bind;
+  CHECK(parseAction("session-quit", bind));
+  CHECK(bind.action == KeybindAction::SessionQuit);
+  const auto* plain = umbriel::payloadIf<umbriel::QuitArg>(bind);
+  CHECK(plain != nullptr);
+  CHECK(plain == nullptr || !plain->skipConfirmation);
+
+  CHECK(parseAction("session-quit:skip-confirmation", bind));
+  const auto* skip = umbriel::payloadIf<umbriel::QuitArg>(bind);
+  CHECK(skip != nullptr);
+  CHECK(skip == nullptr || skip->skipConfirmation);
+
+  CHECK(!parseAction("session-quit:bogus", bind));
+  CHECK(!parseAction("session-quit:", bind));
+}
+
 UMBRIEL_TEST(parsesCommandActions) {
   Keybind bind;
   CHECK(parseAction("spawn:foot -e htop", bind));
@@ -393,6 +410,7 @@ UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
     case ActionArgKind::None:
     case ActionArgKind::OptionalOutput:
     case ActionArgKind::OptionalWindowId:
+    case ActionArgKind::SkipConfirmation:
       break;
     case ActionArgKind::Command:
       input += ":value";
@@ -442,6 +460,9 @@ UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
     case ActionArgKind::OptionalWindowId:
       CHECK(umbriel::payloadIf<umbriel::WindowIdArg>(bind) != nullptr);
       break;
+    case ActionArgKind::SkipConfirmation:
+      CHECK(umbriel::payloadIf<umbriel::QuitArg>(bind) != nullptr);
+      break;
     }
   }
 }
@@ -471,6 +492,7 @@ UMBRIEL_TEST(everyActionSpecRoundTripsThroughParseAction) {
     case ActionArgKind::None:
     case ActionArgKind::OptionalOutput:
     case ActionArgKind::OptionalWindowId:
+    case ActionArgKind::SkipConfirmation:
       break;
     case ActionArgKind::Command:
       input += ":true";

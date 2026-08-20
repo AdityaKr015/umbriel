@@ -112,7 +112,7 @@ Inside the session:
 
 | Shortcut | Action |
 |----------|--------|
-| mod+Escape | Quit |
+| mod+Escape | Quit (asks for confirmation) |
 | mod+Return | Spawn the configured terminal |
 | mod+F1 | Cycle window focus |
 | mod+H/J/K/L or arrows | Focus adjacent window |

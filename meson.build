@@ -247,6 +247,7 @@ core_sources = files(
   'src/scene/border_rect.cpp',
   'src/scene/surface_shadow.cpp',
   'src/scene/config_banner.cpp',
+  'src/scene/quit_confirm.cpp',
   'src/scene/cheatsheet.cpp',
   'src/scene/text_buffer.cpp',
   'src/lock/session_lock.cpp',

@@ -173,7 +173,7 @@ namespace umbriel {
         {"overview-toggle", "", KeybindAction::OverviewToggle},
         {"scratchpad-focus-next", "[<output>]", KeybindAction::ScratchpadFocusNext, ActionArgKind::OptionalOutput},
         {"scratchpad-toggle", "[<output>]", KeybindAction::ScratchpadToggle, ActionArgKind::OptionalOutput},
-        {"session-quit", "", KeybindAction::SessionQuit},
+        {"session-quit", "[skip-confirmation]", KeybindAction::SessionQuit, ActionArgKind::SkipConfirmation},
         {"spawn", "<cmd>", KeybindAction::Spawn, ActionArgKind::Command},
         {"submap", "<name>", KeybindAction::Submap, ActionArgKind::Command},
         {"window-center", "", KeybindAction::WindowCenter},
@@ -382,6 +382,18 @@ namespace umbriel {
         if (takeActionArg(value, spec, arg)) {
           output.action = spec.action;
           output.payload = WindowIdArg{.id = std::string(arg)};
+          return true;
+        }
+        break;
+      case ActionArgKind::SkipConfirmation:
+        if (value == spec.name) {
+          output.action = spec.action;
+          output.payload = QuitArg{};
+          return true;
+        }
+        if (takeActionArg(value, spec, arg) && arg == "skip-confirmation") {
+          output.action = spec.action;
+          output.payload = QuitArg{.skipConfirmation = true};
           return true;
         }
         break;

@@ -24,10 +24,11 @@ namespace umbriel {
     // This bit is the part that belongs here: where the work sits in the order.
     Layout = 1U << 1,
     // Chrome that sits over the layout: the config-error banner, the desktop
-    // backdrop, the keybind cheatsheet.
+    // backdrop, the keybind cheatsheet, the session-quit confirmation.
     Banner = 1U << 2,
     Backdrop = 1U << 3,
     Cheatsheet = 1U << 4,
+    QuitConfirm = 1U << 5,
   };
 
   // Deliberately not here: the session-lock blanking rect. Everything above can

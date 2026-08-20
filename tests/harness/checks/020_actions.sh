@@ -11,7 +11,7 @@ set -euo pipefail
 # on compositor state.
 skip_action() {
   case $1 in
-    session-quit) return 0 ;;  # would kill the instance mid-run
+    session-quit) return 0 ;;  # opens the confirm dialog; a repeat call would kill the instance mid-run
     spawn)        return 0 ;;  # would start a process outside the container
     window-focus) return 0 ;;  # needs a live window id; the round trip is covered by 010_ipc
     # These require a second output; single-output rejection paths are covered by 055.

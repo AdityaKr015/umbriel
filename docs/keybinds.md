@@ -69,6 +69,10 @@ set.
 | `workspace-set-layout:<scrolling\|dwindle\|toggle>` | Switch the active workspace's layout at runtime; sticky until a config reload reasserts the configured mode | `"workspace-set-layout:toggle"` |
 | `window-focus:<window-id>` | Window id from `umbriel windows` | `"window-focus:0123abcd"` |
 | `window-close[:<window-id>]` | Optional window id; bare form closes the focused window | `"window-close"` |
+| `session-quit[:skip-confirmation]` | Bare form opens an on-screen confirmation (Enter or the quit bind confirms; any other key or click cancels); `skip-confirmation` quits immediately | `"session-quit:skip-confirmation"` |
+
+A second `session-quit` while the confirmation is open also quits. While the
+session is locked, `session-quit` quits without the dialog.
 
 Workspace selectors use exact names, including numeric names such as `1`.
 Unique names resolve globally; duplicate names resolve on the preferred output.

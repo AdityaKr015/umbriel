@@ -19,6 +19,7 @@
 #include "scene/color.h"
 #include "scene/config_banner.h"
 #include "scene/hint_rect.h"
+#include "scene/quit_confirm.h"
 #include "server/ipc.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -159,6 +160,7 @@ namespace umbriel {
     m_imPopupTree = wlr_scene_tree_create(&m_scene->tree);
     m_cheatsheetTree = wlr_scene_tree_create(&m_scene->tree);
     m_bannerTree = wlr_scene_tree_create(&m_scene->tree);
+    m_quitConfirmTree = wlr_scene_tree_create(&m_scene->tree);
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
     m_lockBlank = wlr_scene_rect_create(m_lockTree, 0, 0, config().appearance.backdropColor.data());
     wlr_scene_rect_set_corner_radius(m_lockBlank, 0);
@@ -316,6 +318,12 @@ namespace umbriel {
       }
     }
     wl_display_destroy_clients(m_display);
+    // Chrome components destroy scene nodes in their destructors, so they must
+    // go before the scene tree does; otherwise the destructor body frees the
+    // nodes and the member destructors touch already-freed memory.
+    m_quitConfirm.reset();
+    m_cheatsheet.reset();
+    m_configBanner.reset();
     wlr_scene_node_destroy(&m_scene->tree.node);
     wlr_allocator_destroy(m_allocator);
     wlr_renderer_destroy(m_renderer);
@@ -409,6 +417,7 @@ namespace umbriel {
     if (config().general.showCheatsheet) {
       m_cheatsheet->showOnStartup();
     }
+    m_quitConfirm = std::make_unique<QuitConfirm>(*this, m_quitConfirmTree);
     return true;
   }
 
@@ -434,6 +443,12 @@ namespace umbriel {
   void Server::relayoutCheatsheet() {
     if (m_cheatsheet != nullptr) {
       m_cheatsheet->relayout();
+    }
+  }
+
+  void Server::relayoutQuitConfirm() {
+    if (m_quitConfirm != nullptr) {
+      m_quitConfirm->relayout();
     }
   }
 

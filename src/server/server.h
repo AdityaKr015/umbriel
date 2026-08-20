@@ -93,6 +93,7 @@ namespace umbriel {
   class ScratchpadManager;
   class ConfigBanner;
   class Cheatsheet;
+  class QuitConfirm;
   class Ipc;
 
   class Server {
@@ -124,6 +125,7 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* overviewTree() const { return m_overviewTree; }
     [[nodiscard]] Overview* overview() const { return m_overview.get(); }
     [[nodiscard]] Cheatsheet* cheatsheet() const { return m_cheatsheet.get(); }
+    [[nodiscard]] QuitConfirm* quitConfirm() const { return m_quitConfirm.get(); }
     [[nodiscard]] wlr_scene_tree* dragShadowTree() const { return m_dragShadowTree; }
     // Above xdg windows, below layer-shell top/overlay (drag/drop insert hint).
     [[nodiscard]] wlr_scene_tree* dragTree() const { return m_dragTree; }
@@ -199,6 +201,7 @@ namespace umbriel {
     }
     void relayoutBanner();
     void relayoutCheatsheet();
+    void relayoutQuitConfirm();
     void spawn(const char* command);
     void handleConfigReload();
     // Rotate the view registry until the front is a mapped view on the active
@@ -232,6 +235,9 @@ namespace umbriel {
       return m_focus.viewAt(lx, ly, surface, sx, sy, layer);
     }
     const Keybind* handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
+    // The bind this press would fire, without running it. Null when nothing
+    // matches (locked sessions match nothing, matching handleKeybind).
+    [[nodiscard]] const Keybind* matchKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) const;
     bool handleWheelBind(WheelDirection direction, uint32_t modifiers);
     // Null when no bind matched or its action declined; otherwise the bind that
     // ran, so the caller can tell which action consumed the press.
@@ -426,6 +432,8 @@ namespace umbriel {
     std::unique_ptr<ConfigBanner> m_configBanner;
     wlr_scene_tree* m_cheatsheetTree = nullptr;
     std::unique_ptr<Cheatsheet> m_cheatsheet;
+    wlr_scene_tree* m_quitConfirmTree = nullptr;
+    std::unique_ptr<QuitConfirm> m_quitConfirm;
 
     bool m_nested = false;
     std::string m_socketName;

@@ -230,6 +230,11 @@ namespace {
           return name + ": " + window->id;
         }
         return name;
+      case umbriel::ActionArgKind::SkipConfirmation:
+        if (const auto* quit = umbriel::payloadIf<umbriel::QuitArg>(bind); quit != nullptr && quit->skipConfirmation) {
+          return name + ": skip-confirmation";
+        }
+        return name;
       }
       return name;
     }

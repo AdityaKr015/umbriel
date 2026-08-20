@@ -7,6 +7,7 @@
 #include "input/text_input.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
+#include "scene/quit_confirm.h"
 #include "server/server.h"
 #include "wlr.h"
 
@@ -181,13 +182,46 @@ namespace umbriel {
       for (int i = 0; i < nsyms; ++i) {
         handled = m_server->handleVtSwitch(syms[i], modifiers) || handled;
       }
-      const Keybind* matched = nullptr;
-      for (int i = 0; i < nsyms; ++i) {
-        const Keybind* result = m_server->handleKeybind(syms[i], rawSym, modifiers);
-        if (result != nullptr) {
-          matched = result;
+      // Modal quit confirmation: Enter or the session-quit bind confirms, any
+      // other non-modifier key cancels. The press is consumed either way,
+      // reaching neither binds nor clients. Modifier-only presses pass through
+      // so held chords stay intact.
+      bool quitConfirmConsumed = false;
+      if (QuitConfirm* confirm = m_server->quitConfirm(); confirm != nullptr && confirm->visible()) {
+        const bool modifierOnly = nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R;
+        if (!modifierOnly) {
+          bool confirmed = false;
+          for (int i = 0; i < nsyms; ++i) {
+            confirmed = confirmed || syms[i] == XKB_KEY_Return || syms[i] == XKB_KEY_KP_Enter;
+          }
+          // Pressing the quit bind again confirms. matchKeybind
+          // mirrors handleKeybind without running the action, so a press that
+          // would fire session-quit quits; any other matched or unbound press
+          // dismisses.
+          for (int i = 0; i < nsyms && !confirmed; ++i) {
+            const Keybind* matched = m_server->matchKeybind(syms[i], rawSym, modifiers);
+            if (matched != nullptr && matched->action == KeybindAction::SessionQuit) {
+              confirmed = true;
+            }
+          }
+          if (confirmed) {
+            m_server->stop();
+          } else {
+            confirm->hide();
+          }
           handled = true;
-          break;
+          quitConfirmConsumed = true;
+        }
+      }
+      const Keybind* matched = nullptr;
+      if (!quitConfirmConsumed) {
+        for (int i = 0; i < nsyms; ++i) {
+          const Keybind* result = m_server->handleKeybind(syms[i], rawSym, modifiers);
+          if (result != nullptr) {
+            matched = result;
+            handled = true;
+            break;
+          }
         }
       }
       if (matched != nullptr) {

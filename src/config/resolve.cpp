@@ -131,6 +131,9 @@ namespace umbriel {
       if (rule.defaultSize) {
         resolved.defaultSize = rule.defaultSize;
       }
+      if (rule.defaultPosition) {
+        resolved.defaultPosition = rule.defaultPosition;
+      }
       if (rule.defaultWidth) {
         resolved.defaultWidth = rule.defaultWidth;
       }

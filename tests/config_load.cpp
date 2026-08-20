@@ -223,6 +223,11 @@ focus_on_activate = true
 [[window_rule]]
 match.app_id = "^game$"
 focus_on_activate = false
+default_position = { x = 32, y = 48, anchor = "bottom_left" }
+
+[[window_rule]]
+match.app_id = "^centered$"
+default_position = { x = 0, y = 0 }
 )");
 
   ConfigStore& store = umbriel::configStore();
@@ -231,9 +236,15 @@ focus_on_activate = false
 
   CHECK(result.success);
   CHECK(store.config().general.focusOnActivate);
-  CHECK_EQ(store.config().windowRules.size(), size_t{1});
+  CHECK_EQ(store.config().windowRules.size(), size_t{2});
   CHECK(store.config().windowRules[0].focusOnActivate.has_value());
   CHECK(!*store.config().windowRules[0].focusOnActivate);
+  CHECK(store.config().windowRules[0].defaultPosition.has_value());
+  CHECK_EQ(store.config().windowRules[0].defaultPosition->x, 32);
+  CHECK_EQ(store.config().windowRules[0].defaultPosition->y, 48);
+  CHECK(store.config().windowRules[0].defaultPosition->anchor == umbriel::WindowPositionAnchor::BottomLeft);
+  CHECK(store.config().windowRules[1].defaultPosition.has_value());
+  CHECK(store.config().windowRules[1].defaultPosition->anchor == umbriel::WindowPositionAnchor::Center);
 }
 
 UMBRIEL_TEST(deviceInputOverridesLoadAndMatchExactNames) {

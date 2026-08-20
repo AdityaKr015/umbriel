@@ -135,6 +135,11 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   app.opacity = 0.5;
   app.blur = true;
   app.focusOnActivate = false;
+  app.defaultPosition = umbriel::WindowPosition{
+      .x = 12,
+      .y = 24,
+      .anchor = umbriel::WindowPositionAnchor::TopRight,
+  };
   config.windowRules.push_back(std::move(app));
 
   WindowRule title;
@@ -153,6 +158,10 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK(resolved.opacity && *resolved.opacity == 0.8);
   CHECK(resolved.blur && *resolved.blur);
   CHECK(resolved.defaultFloating && *resolved.defaultFloating);
+  CHECK(resolved.defaultPosition.has_value());
+  CHECK_EQ(resolved.defaultPosition->x, 12);
+  CHECK_EQ(resolved.defaultPosition->y, 24);
+  CHECK(resolved.defaultPosition->anchor == umbriel::WindowPositionAnchor::TopRight);
   CHECK(resolved.focusOnActivate && *resolved.focusOnActivate);
 
   const auto focused = umbriel::resolveWindowRules(config, "foot", "project shell", true);

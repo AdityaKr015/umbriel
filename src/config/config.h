@@ -100,6 +100,25 @@ namespace umbriel {
     bool operator==(const OutputRule&) const = default;
   };
 
+  enum class WindowPositionAnchor {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    Top,
+    Bottom,
+    Left,
+    Right,
+    Center,
+  };
+
+  struct WindowPosition {
+    int x = 0;
+    int y = 0;
+    WindowPositionAnchor anchor = WindowPositionAnchor::Center;
+    bool operator==(const WindowPosition&) const = default;
+  };
+
   struct WindowRule {
     std::string appIdPattern;
     std::string titlePattern;
@@ -109,8 +128,9 @@ namespace umbriel {
     std::optional<std::string> defaultOutput;
     std::optional<bool> defaultFloating;
     std::optional<std::array<int, 2>> defaultSize; // [width, height]
-    std::optional<double> defaultWidth;            // column width fraction override
-    std::optional<int> defaultWorkspace;           // 1-64
+    std::optional<WindowPosition> defaultPosition;
+    std::optional<double> defaultWidth;  // column width fraction override
+    std::optional<int> defaultWorkspace; // 1-64
     std::optional<bool> defaultFullscreen;
     std::optional<bool> defaultMaximize;
     std::optional<bool> focusOnActivate;
@@ -129,6 +149,7 @@ namespace umbriel {
           && defaultOutput == other.defaultOutput
           && defaultFloating == other.defaultFloating
           && defaultSize == other.defaultSize
+          && defaultPosition == other.defaultPosition
           && defaultWidth == other.defaultWidth
           && defaultWorkspace == other.defaultWorkspace
           && defaultFullscreen == other.defaultFullscreen
@@ -147,6 +168,7 @@ namespace umbriel {
     std::optional<std::string> defaultOutput;
     std::optional<bool> defaultFloating;
     std::optional<std::array<int, 2>> defaultSize;
+    std::optional<WindowPosition> defaultPosition;
     std::optional<double> defaultWidth;
     std::optional<int> defaultWorkspace;
     std::optional<bool> defaultFullscreen;

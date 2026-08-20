@@ -237,7 +237,7 @@ namespace umbriel {
     void syncFloatingResizePosition();
     void adoptFloatingClientSize();
     [[nodiscard]] wlr_box floatingUsableArea() const;
-    void placeInUsableArea();
+    void placeInUsableArea(const std::optional<WindowPosition>& position = std::nullopt);
     void updateForeignIdentity();
     void updateForeignState();
     void enterForeignOutput();

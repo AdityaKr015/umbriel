@@ -144,6 +144,8 @@ namespace umbriel {
       if ((profile == "flat" || profile == "adaptive") && tokens.size() == 1) {
         return AccelProfile{
             .kind = profile == "flat" ? AccelProfile::Kind::Flat : AccelProfile::Kind::Adaptive,
+            .step = 0.0,
+            .points = {},
         };
       }
       if (profile != "custom" || tokens.size() < 4) {
@@ -946,6 +948,62 @@ namespace umbriel {
             warnAt(n->source(), "ignoring window_rule.default_size (expected [width, height] positive integers)");
           } else {
             rule.defaultSize = parsed;
+          }
+        }
+
+        if (const toml::node* n = keys.take("default_position")) {
+          const auto* table = n->as_table();
+          if (table == nullptr) {
+            warnAt(
+                n->source(),
+                "ignoring window_rule.default_position (expected {{ x = integer, y = integer, anchor = string }})"
+            );
+          } else {
+            Section position(*table, "window_rule.default_position", configStore().mutableDiagnostics());
+            std::optional<int> x;
+            std::optional<int> y;
+            position.integer("x", -100000, 100000, x).integer("y", -100000, 100000, y);
+
+            WindowPositionAnchor anchor = WindowPositionAnchor::Center;
+            bool validAnchor = true;
+            if (const toml::node* anchorNode = position.take("anchor")) {
+              const auto configuredAnchor = anchorNode->value<std::string>();
+              if (!configuredAnchor) {
+                warnAt(anchorNode->source(), "window_rule.default_position.anchor must be a string");
+                validAnchor = false;
+              } else {
+                const std::string value = lowercase(*configuredAnchor);
+                if (value == "top_left") {
+                  anchor = WindowPositionAnchor::TopLeft;
+                } else if (value == "top_right") {
+                  anchor = WindowPositionAnchor::TopRight;
+                } else if (value == "bottom_left") {
+                  anchor = WindowPositionAnchor::BottomLeft;
+                } else if (value == "bottom_right") {
+                  anchor = WindowPositionAnchor::BottomRight;
+                } else if (value == "top") {
+                  anchor = WindowPositionAnchor::Top;
+                } else if (value == "bottom") {
+                  anchor = WindowPositionAnchor::Bottom;
+                } else if (value == "left") {
+                  anchor = WindowPositionAnchor::Left;
+                } else if (value == "right") {
+                  anchor = WindowPositionAnchor::Right;
+                } else if (value == "center") {
+                  anchor = WindowPositionAnchor::Center;
+                } else {
+                  warnAt(
+                      anchorNode->source(), R"(unknown window_rule.default_position.anchor "{}")", *configuredAnchor
+                  );
+                  validAnchor = false;
+                }
+              }
+            }
+            if (!x || !y) {
+              warnAt(n->source(), "ignoring window_rule.default_position (x and y are required integers)");
+            } else if (validAnchor) {
+              rule.defaultPosition = WindowPosition{.x = *x, .y = *y, .anchor = anchor};
+            }
           }
         }
 

@@ -731,16 +731,54 @@ namespace umbriel {
     return true;
   }
 
-  void View::placeInUsableArea() {
-    wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+  void View::placeInUsableArea(const std::optional<WindowPosition>& position) {
+    const wlr_box usable = floatingUsableArea();
     if (usable.width <= 0 || usable.height <= 0) {
       return;
     }
 
     // Floats keep their own size; only center within the usable area.
     const wlr_box& geo = m_toplevel->base->geometry;
-    const FloatingPoint origin =
-        centeredOrigin(usable, geo.width > 0 ? geo.width : usable.width, geo.height > 0 ? geo.height : usable.height);
+    const int width = geo.width > 0 ? geo.width : usable.width;
+    const int height = geo.height > 0 ? geo.height : usable.height;
+    FloatingPoint origin = centeredOrigin(usable, width, height);
+    if (position) {
+      origin = {.x = usable.x + position->x, .y = usable.y + position->y};
+      switch (position->anchor) {
+      case WindowPositionAnchor::TopLeft:
+        break;
+      case WindowPositionAnchor::TopRight:
+        origin.x = usable.x + usable.width - width - position->x;
+        break;
+      case WindowPositionAnchor::BottomLeft:
+        origin.y = usable.y + usable.height - height - position->y;
+        break;
+      case WindowPositionAnchor::BottomRight:
+        origin.x = usable.x + usable.width - width - position->x;
+        origin.y = usable.y + usable.height - height - position->y;
+        break;
+      case WindowPositionAnchor::Top:
+        origin.x = usable.x + (usable.width - width) / 2 + position->x;
+        break;
+      case WindowPositionAnchor::Bottom:
+        origin.x = usable.x + (usable.width - width) / 2 + position->x;
+        origin.y = usable.y + usable.height - height - position->y;
+        break;
+      case WindowPositionAnchor::Left:
+        origin.y = usable.y + (usable.height - height) / 2 + position->y;
+        break;
+      case WindowPositionAnchor::Right:
+        origin.x = usable.x + usable.width - width - position->x;
+        origin.y = usable.y + (usable.height - height) / 2 + position->y;
+        break;
+      case WindowPositionAnchor::Center:
+        origin.x = usable.x + (usable.width - width) / 2 + position->x;
+        origin.y = usable.y + (usable.height - height) / 2 + position->y;
+        break;
+      }
+      origin = clampFloatingOrigin(origin, {.x = 0, .y = 0, .width = width, .height = height}, usable);
+      m_floating.rememberPositionFraction(origin, usable);
+    }
     m_positioned = true;
     wlr_scene_node_set_position(&m_sceneTree->node, origin.x, origin.y);
     m_decoration.setShadowPosition(origin.x, origin.y);
@@ -1256,7 +1294,7 @@ namespace umbriel {
     if (!m_tiled) {
       // The initial commit already applied default_size. Re-requesting it here
       // races the client's first content-driven resize.
-      placeInUsableArea();
+      placeInUsableArea(rule.defaultPosition);
       // Enable + clip the float against its home output now that per-output
       // visibility is resolved data-side (no per-render-pass pass to do it).
       if (m_workspace != nullptr) {
@@ -1897,6 +1935,10 @@ namespace umbriel {
       const XdgSizeHints hints = xdgSizeHints(m_toplevel);
       requestFloatingSize(clampXdgWidth((*rule.defaultSize)[0], hints), clampXdgHeight((*rule.defaultSize)[1], hints));
       placeInUsableArea();
+    }
+
+    if (changedInitialRule(rule.defaultPosition, initiallyApplied.defaultPosition) && !m_tiled) {
+      placeInUsableArea(rule.defaultPosition);
     }
 
     if (changedInitialRule(rule.defaultFullscreen, initiallyApplied.defaultFullscreen)

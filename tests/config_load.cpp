@@ -168,6 +168,32 @@ UMBRIEL_TEST(missingIncludesRemainPendingUntilTheyLoad) {
   CHECK_EQ(store.config().colors.accentPrimary[0], 18.0F / 255.0F);
 }
 
+UMBRIEL_TEST(mainFileOverridesIncludedFiles) {
+  // Noctalia's rendered theme lands in an include file; the user's root
+  // config must win on conflicts while still picking up keys the include
+  // alone provides. This is what lets users override generated theme colors.
+  const TempConfig file;
+  file.write(
+      R"(
+[colors]
+accent_primary = "#ABCDEF00"
+[include]
+files = [")"
+      + file.includeName()
+      + R"("]
+)"
+  );
+  file.writeInclude("[colors]\naccent_primary = \"#123456FF\"\nbackground = \"#222222FF\"\n");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult loaded = store.reload();
+
+  CHECK(loaded.success);
+  CHECK_EQ(store.config().colors.accentPrimary[0], 171.0F / 255.0F);
+  CHECK_EQ(store.config().colors.background[0], 34.0F / 255.0F);
+}
+
 UMBRIEL_TEST(activationPolicyLoadsGloballyAndPerWindow) {
   const TempConfig file;
   file.write(R"(

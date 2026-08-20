@@ -1,6 +1,12 @@
 # Umbriel example config
 # Copy to ~/.config/umbriel/config.toml or pass with `umbriel -c example.toml`.
 # Changes apply on save. See docs/ for the full reference.
+#
+# [include] merges extra files into this one. Included files are parsed first,
+# in list order (later files override earlier ones), then everything in this
+# file overrides all of them. That is why Noctalia's dynamic theming can render
+# its palette into a separate noctalia.toml and still let you override the
+# generated colors here.
 
 [include]
 files = []

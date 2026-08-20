@@ -705,6 +705,12 @@ namespace umbriel {
   }
 
   void Workspace::endSwitchTransition() {
+    // Refresh every view at its resting position while transition visibility is
+    // still active. Once m_inSwitchTransition is cleared, an inactive workspace
+    // deliberately skips presentation sync and could retain an off-surface clip
+    // from the final slide frame. Its border tree would then reappear without
+    // window content the next time the workspace becomes visible.
+    setSlideOffset(0);
     m_inSwitchTransition = false;
     for (View* view : m_switchViews) {
       view->setFadeAlpha(1.0F);
@@ -1073,15 +1079,12 @@ namespace umbriel {
     m_slideAnim.snap(0.0);
     if (m_slide.base != nullptr) {
       m_slide.base->endSwitchTransition();
-      m_slide.base->setSlideOffset(0);
     }
     if (m_slide.up != nullptr) {
       m_slide.up->endSwitchTransition();
-      m_slide.up->setSlideOffset(0);
     }
     if (m_slide.down != nullptr) {
       m_slide.down->endSwitchTransition();
-      m_slide.down->setSlideOffset(0);
     }
     if (m_active != nullptr && m_active->switchTransitionActive()) {
       m_active->endSwitchTransition();
@@ -1155,7 +1158,6 @@ namespace umbriel {
       Workspace* unused = (delta > 0) ? m_slide.up : m_slide.down;
       if (unused != nullptr) {
         unused->endSwitchTransition();
-        unused->setSlideOffset(0);
       }
     }
     kLog.debug("slide workspace {} → {} on {}", m_slide.base->name(), target->name(), m_output->wlr()->name);

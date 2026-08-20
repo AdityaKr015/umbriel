@@ -360,7 +360,7 @@ namespace {
 
   // The panel's fixed furniture: the title (which doubles as the "no config"
   // notice) and the footer naming the modifier key.
-  Chrome renderChrome(bool configMissing, bool nested, double scale, const CheatsheetPalette& palette) {
+  Chrome renderChrome(bool configMissing, std::string_view modKeyName, double scale, const CheatsheetPalette& palette) {
     std::string titleMarkup =
         std::format("<span size='14pt' weight='bold' foreground='{}'>Umbriel keybinds</span>", palette.accentPrimary);
     if (configMissing) {
@@ -372,8 +372,7 @@ namespace {
       );
     }
     const std::string footerMarkup = std::format(
-        "<span foreground='{}'>Mod = {} \xc2\xb7 press any key to close</span>", palette.textMuted,
-        nested ? "Alt" : "Super"
+        "<span foreground='{}'>Mod = {} \xc2\xb7 press any key to close</span>", palette.textMuted, modKeyName
     );
 
     const auto render = [scale](std::string markup) {
@@ -571,7 +570,7 @@ namespace umbriel {
     // --- Step 4: Column layout ---
 
     // --- Step 5: Header/footer buffers ---
-    Chrome chrome = renderChrome(configFileMissing(), m_server.nested(), scale, palette);
+    Chrome chrome = renderChrome(configFileMissing(), m_server.modKeyName(), scale, palette);
     TextBufferResult& titleBuf = chrome.title;
     TextBufferResult& footerBuf = chrome.footer;
 

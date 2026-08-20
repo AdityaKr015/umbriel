@@ -462,7 +462,39 @@ namespace umbriel {
 
   void Server::stop() { wl_display_terminate(m_display); }
 
-  uint32_t Server::modKey() const { return m_nested ? WLR_MODIFIER_ALT : WLR_MODIFIER_LOGO; }
+  uint32_t Server::modKey() const {
+    if (!config().general.modKey) {
+      return m_nested ? WLR_MODIFIER_ALT : WLR_MODIFIER_LOGO;
+    }
+    switch (*config().general.modKey) {
+    case ModifierKey::Super:
+      return WLR_MODIFIER_LOGO;
+    case ModifierKey::Alt:
+      return WLR_MODIFIER_ALT;
+    case ModifierKey::Control:
+      return WLR_MODIFIER_CTRL;
+    case ModifierKey::Shift:
+      return WLR_MODIFIER_SHIFT;
+    }
+    return WLR_MODIFIER_LOGO;
+  }
+
+  std::string_view Server::modKeyName() const {
+    if (!config().general.modKey) {
+      return m_nested ? "Alt" : "Super";
+    }
+    switch (*config().general.modKey) {
+    case ModifierKey::Super:
+      return "Super";
+    case ModifierKey::Alt:
+      return "Alt";
+    case ModifierKey::Control:
+      return "Ctrl";
+    case ModifierKey::Shift:
+      return "Shift";
+    }
+    return "Super";
+  }
 
   HintRect& Server::insertHint() {
     if (m_insertHint == nullptr) {

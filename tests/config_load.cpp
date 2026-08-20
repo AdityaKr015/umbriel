@@ -10,6 +10,7 @@
 using umbriel::ConfigDiagnostic;
 using umbriel::ConfigStore;
 using umbriel::LayoutMode;
+using umbriel::ModifierKey;
 
 namespace {
   bool containsDiagnostic(const ConfigStore& store, const std::string& text) {
@@ -115,6 +116,25 @@ center_underfull_strip = true
   CHECK(containsDiagnostic(store, "output.DP-1.scale = 9"));
   CHECK(containsDiagnostic(store, "unknown key layout.scrolling.always_center_single_column"));
   CHECK(containsDiagnostic(store, "unknown key general.prefer_no_csd"));
+}
+
+UMBRIEL_TEST(modKeyIsUserConfigurable) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[general]\nmod_key = \"Ctrl\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().general.modKey == ModifierKey::Control);
+
+  file.write("[general]\nmod_key = \"win\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().general.modKey == ModifierKey::Super);
+
+  file.write("[general]\nmod_key = \"Meta\"\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().general.modKey.has_value());
+  CHECK(containsDiagnostic(store, "unknown general.mod_key"));
 }
 
 UMBRIEL_TEST(semanticColorsLoadFromTheirOwnSection) {

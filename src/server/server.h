@@ -177,6 +177,7 @@ namespace umbriel {
     [[nodiscard]] Gestures* gestures() const { return m_gestures.get(); }
     [[nodiscard]] bool nested() const { return m_nested; }
     [[nodiscard]] uint32_t modKey() const;
+    [[nodiscard]] std::string_view modKeyName() const;
 
     // Read-only iteration over the registries. These replace the friend list:
     // callers can walk the registry without reaching into Server's internals or

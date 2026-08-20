@@ -61,7 +61,7 @@ namespace umbriel {
         .layerEffects = sceneBlur || before.layerRules != after.layerRules,
         .input = before.input != after.input,
         .overviewPresentation = before.overview != after.overview,
-        .internalUi = before.colors != after.colors,
+        .internalUi = before.colors != after.colors || before.general.modKey != after.general.modKey,
     };
   }
 

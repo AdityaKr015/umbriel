@@ -13,6 +13,7 @@ files = []
 
 [general]
 autostart = []
+# mod_key = "Super"            # Mod in keybinds; defaults to Super (Alt when nested)
 xwayland = true                # requires restart to change
 show_cheatsheet = true         # show keybinds overlay on startup
 focus_on_activate = false      # activation requests mark urgent without stealing focus

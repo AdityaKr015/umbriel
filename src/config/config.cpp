@@ -15,6 +15,7 @@
 // clang-format on
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -32,6 +33,14 @@ namespace umbriel {
 
     // Well past any real layout: a value this large already means "no limit".
     constexpr double kMaxFollowsMouseScroll = 100.0;
+
+    std::string lowercase(std::string_view text) {
+      std::string lowered(text);
+      std::ranges::transform(lowered, lowered.begin(), [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+      });
+      return lowered;
+    }
 
     void emitDiag(ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
       ConfigDiagnostic diag;
@@ -356,6 +365,28 @@ namespace umbriel {
 
     void readGeneral(Section& root, Config& loaded) {
       root.sub("general", [&](Section& s) {
+        if (const toml::node* node = s.take("mod_key")) {
+          const auto value = node->value<std::string>();
+          if (!value) {
+            warnAt(node->source(), "general.mod_key must be a string");
+          } else {
+            const std::string modifier = lowercase(*value);
+            if (modifier == "super" || modifier == "logo" || modifier == "win") {
+              loaded.general.modKey = ModifierKey::Super;
+            } else if (modifier == "alt") {
+              loaded.general.modKey = ModifierKey::Alt;
+            } else if (modifier == "ctrl" || modifier == "control") {
+              loaded.general.modKey = ModifierKey::Control;
+            } else if (modifier == "shift") {
+              loaded.general.modKey = ModifierKey::Shift;
+            } else {
+              warnAt(
+                  node->source(), R"(unknown general.mod_key "{}" (expected "Super", "Alt", "Ctrl", or "Shift"))",
+                  *value
+              );
+            }
+          }
+        }
         s.boolean("xwayland", loaded.general.xwayland)
             .boolean("show_cheatsheet", loaded.general.showCheatsheet)
             .boolean("focus_on_activate", loaded.general.focusOnActivate)

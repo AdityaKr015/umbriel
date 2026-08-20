@@ -6,6 +6,7 @@ using umbriel::ConfigChange;
 using umbriel::ConfigEffects;
 using umbriel::Keybind;
 using umbriel::LayerRule;
+using umbriel::ModifierKey;
 using umbriel::OutputRule;
 using umbriel::WindowRule;
 
@@ -320,6 +321,19 @@ UMBRIEL_TEST(overviewInvalidationExcludesIrrelevantRuntimeEffects) {
   const ConfigEffects inputEffects = ConfigEffects::between(before, inputChanged);
   CHECK(inputEffects.any());
   CHECK(!inputEffects.invalidatesOverview());
+}
+
+UMBRIEL_TEST(modKeyReloadRefreshesOnlyInternalUi) {
+  const Config before;
+  Config after;
+  after.general.modKey = ModifierKey::Control;
+
+  const ConfigEffects effects = ConfigEffects::between(before, after);
+  CHECK(effects.internalUi);
+  CHECK(!effects.input);
+  CHECK(!effects.outputState);
+  CHECK(!effects.workspaceLayout);
+  CHECK(!effects.viewChrome);
 }
 
 UMBRIEL_TEST(aFailedReloadResultCarriesNoChangesOrEffects) {

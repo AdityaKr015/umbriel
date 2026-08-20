@@ -21,6 +21,13 @@ namespace umbriel {
   inline constexpr size_t kMaxWorkspaces = 64;
   struct ConfigReloadResult;
 
+  enum class ModifierKey {
+    Super,
+    Alt,
+    Control,
+    Shift,
+  };
+
   // Per-workspace layout overrides (all optional → inherit Config::Layout).
   struct WorkspaceLayoutOverrides {
     std::optional<LayoutMode> mode;
@@ -252,6 +259,9 @@ namespace umbriel {
 
     struct General {
       std::vector<std::string> autostart;
+      // Symbolic `Mod` in keybinds. Unset preserves the runtime default:
+      // Super on DRM, Alt when running nested.
+      std::optional<ModifierKey> modKey;
       // Spawn and manage xwayland-satellite for X11 app support. Requires restart.
       bool xwayland = true;
       // Show the keybinds cheatsheet overlay on startup.

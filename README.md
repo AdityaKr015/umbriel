@@ -8,6 +8,33 @@ first-class desktop shell experience for Umbriel. Umbriel is built in C++23 on
 [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) and [SceneFX](https://github.com/wlrfx/scenefx), with
 Xwayland support provided by [xwayland-satellite](https://github.com/Supreeeme/xwayland-satellite).
 
+> [!IMPORTANT]
+> Umbriel is young. It is usable for daily use today, but it is still finding its shape: configuration keys, keybinds,
+> and behavior can change between releases, and you may hit rough edges. We would rather change what feels wrong than
+> promise stability we cannot back yet, so treat current defaults as opinions, not contracts.
+
+<p align="center">
+  <img src="https://assets.noctalia.dev/?file=umbriel.svg" alt="Umbriel Logo" style="width: 192px" />
+</p>
+
+<p align="center">
+  <a href="https://docs.noctalia.dev/umbriel/">
+    <img src="https://img.shields.io/badge/docs-fbf099?style=for-the-badge&logo=gitbook&logoColor=110f3d&labelColor=fbf099" alt="Documentation" />
+  </a>
+  <a href="https://discord.noctalia.dev">
+    <img src="https://img.shields.io/badge/discord-fbf099?style=for-the-badge&logo=discord&logoColor=110f3d&labelColor=fbf099" alt="Discord" />
+  </a>
+</p>
+
+## Why Umbriel?
+
+When people ask what Umbriel's selling point is, the honest answer is that there is no single killer feature. We were
+simply disappointed with the choices available to us, so we built the compositor we wanted to live in. The plan is
+not to conquer the world or take over the big names; it is to feel at home with something we have a say in, with less
+friction. That is exactly how Noctalia came to life, and Umbriel is its compositor side.
+
+To understand the values and philosophy guiding the project, read our [ethos](https://noctalia.dev/ethos).
+
 ## Features
 
 - Scrolling and dwindle layouts with per-workspace selection, width presets, animated navigation, and mouse-driven
@@ -153,4 +180,9 @@ programs.umbriel = {
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, naming conventions, the dependency stack, and debugging
-helpers. Umbriel shares its conventions with [noctalia](https://github.com/noctalia-dev/noctalia).
+helpers. Umbriel shares its conventions with [noctalia](https://github.com/noctalia-dev/noctalia). For general help
+and design discussion, join the community on [Discord](https://discord.noctalia.dev).
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.

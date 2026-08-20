@@ -101,6 +101,18 @@ UMBRIEL_TEST(parsesNamedAndBareKeys) {
   CHECK_EQ(chord("Mod+KP_1").keysym, uint32_t{XKB_KEY_KP_1});
 }
 
+UMBRIEL_TEST(parsesXf86KeysWithModifiers) {
+  CHECK_EQ(chord("XF86AudioMute").keysym, uint32_t{XKB_KEY_XF86AudioMute});
+
+  const Keybind modMute = chord("Mod+XF86AudioMute");
+  CHECK(modMute.useMod);
+  CHECK_EQ(modMute.keysym, uint32_t{XKB_KEY_XF86AudioMute});
+
+  const Keybind modifiedPlay = chord("Ctrl+Shift+XF86AudioPlay");
+  CHECK_EQ(modifiedPlay.modifiers, uint32_t{WLR_MODIFIER_CTRL | WLR_MODIFIER_SHIFT});
+  CHECK_EQ(modifiedPlay.keysym, uint32_t{XKB_KEY_XF86AudioPlay});
+}
+
 UMBRIEL_TEST(rejectsUnknownKeysyms) {
   Keybind bind;
   CHECK(!parseChord("Mod+NotAKey", bind));

@@ -239,6 +239,9 @@ namespace umbriel {
     // The bind this press would fire, without running it. Null when nothing
     // matches (locked sessions match nothing, matching handleKeybind).
     [[nodiscard]] const Keybind* matchKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) const;
+    // Combined state across keyboard devices. Media and brightness keys are
+    // commonly exposed by a separate device from the held modifier keys.
+    [[nodiscard]] uint32_t keyboardModifiers() const;
     bool handleWheelBind(WheelDirection direction, uint32_t modifiers);
     // Null when no bind matched or its action declined; otherwise the bind that
     // ran, so the caller can tell which action consumed the press.

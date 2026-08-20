@@ -1,5 +1,6 @@
 #include "config/config.h"
 #include "input/cursor.h"
+#include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
 #include "output/output.h"
@@ -161,6 +162,16 @@ namespace umbriel {
     }
 
     return nullptr;
+  }
+
+  uint32_t Server::keyboardModifiers() const {
+    uint32_t modifiers = 0;
+    for (const auto& keyboard : m_keyboards) {
+      if (keyboard != nullptr && keyboard->wlr() != nullptr) {
+        modifiers |= wlr_keyboard_get_modifiers(keyboard->wlr());
+      }
+    }
+    return modifiers;
   }
 
   const Keybind* Server::handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers) {

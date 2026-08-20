@@ -173,7 +173,10 @@ namespace umbriel {
 
     bool handled = false;
     std::optional<Keybind> modifierTap;
-    uint32_t modifiers = wlr_keyboard_get_modifiers(m_keyboard);
+    // An XF86 key can arrive from a dedicated hotkey device while its
+    // modifiers are held on the main keyboard. Match against the combined
+    // seat-wide state so those chords behave like keys on one device.
+    uint32_t modifiers = m_server->keyboardModifiers();
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
       m_server->armModifierTap(
           this, event->keycode, std::span<const uint32_t>(syms, nsyms > 0 ? static_cast<size_t>(nsyms) : 0), modifiers

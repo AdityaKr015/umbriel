@@ -265,6 +265,7 @@ and widgets via `noctalia msg`. Typical bindings:
 # Volume (via Noctalia OSD)
 "XF86AudioRaiseVolume" = "spawn:noctalia msg volume-up 2%"
 "XF86AudioLowerVolume" = "spawn:noctalia msg volume-down 2%"
+"Mod+XF86AudioMute" = "spawn:wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
 
 # Media playback (playerctl)
 "XF86AudioPlay" = "spawn:playerctl play-pause"
@@ -275,3 +276,7 @@ and widgets via `noctalia msg`. Typical bindings:
 "XF86MonBrightnessUp" = "spawn:brightnessctl set +5%"
 "XF86MonBrightnessDown" = "spawn:brightnessctl set 5%-"
 ```
+
+XF86 keys accept the same `Mod`, `Ctrl`, `Alt`, `Shift`, and `Super`
+combinations as other keys. Modifier chords also work when the XF86 key is
+reported by a separate laptop hotkey device.

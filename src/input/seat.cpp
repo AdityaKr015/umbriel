@@ -1,5 +1,6 @@
 #include "input/seat.h"
 
+#include "config/config.h"
 #include "input/cursor.h"
 #include "server/server.h"
 #include "wlr.h"
@@ -8,6 +9,7 @@ namespace umbriel {
 
   Seat::Seat(Server& server) : m_server(&server) {
     m_seat = wlr_seat_create(m_server->display(), "seat0");
+    m_primarySelectionEnabled = config().input.middleClickPaste;
 
     m_cursorShapeManager = wlr_cursor_shape_manager_v1_create(m_server->display(), 2);
     m_requestSetShape.notify = onRequestSetShape;
@@ -131,6 +133,9 @@ namespace umbriel {
 
   void Seat::handleRequestSetPrimarySelection(void* data) {
     auto* event = static_cast<wlr_seat_request_set_primary_selection_event*>(data);
+    if (!m_primarySelectionEnabled) {
+      return;
+    }
     wlr_seat_set_primary_selection(m_seat, event->source, event->serial);
   }
 

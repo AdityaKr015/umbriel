@@ -66,6 +66,13 @@ UMBRIEL_TEST(eachSectionIsReportedOnItsOwn) {
   }
   {
     Config after;
+    after.input.middleClickPaste = !after.input.middleClickPaste;
+    const ConfigChange change = ConfigChange::between(before, after);
+    CHECK(change.input);
+    CHECK(!change.general);
+  }
+  {
+    Config after;
     after.layout.gap += 1;
     const ConfigChange change = ConfigChange::between(before, after);
     CHECK(change.layout);

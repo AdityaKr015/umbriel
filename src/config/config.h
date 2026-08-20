@@ -320,6 +320,10 @@ namespace umbriel {
     } environment;
 
     struct Input {
+      // Advertise and accept the primary-selection clipboard used for
+      // middle-click paste. Requires restart.
+      bool middleClickPaste = true;
+
       struct Keyboard {
         // Comma-separated XKB layout list ("us,de"); the first entry is active
         // at startup. `options` carries XKB option names such as

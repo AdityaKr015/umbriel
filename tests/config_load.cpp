@@ -138,6 +138,24 @@ UMBRIEL_TEST(modKeyIsUserConfigurable) {
   CHECK(containsDiagnostic(store, "unknown general.mod_key"));
 }
 
+UMBRIEL_TEST(middleClickPasteLoadsAndDefaultsEnabled) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[input]\nmiddle_click_paste = false\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().input.middleClickPaste);
+
+  file.write("[input]\nmiddle_click_paste = true\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.middleClickPaste);
+
+  file.write("[input]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.middleClickPaste);
+}
+
 UMBRIEL_TEST(outputVrrPolicyLoadsAndDefaultsDisabled) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

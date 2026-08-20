@@ -599,6 +599,7 @@ namespace umbriel {
     void readInput(Section& root, Config& loaded) {
       auto& in = loaded.input;
       root.sub("input", [&](Section& s) {
+        s.boolean("middle_click_paste", in.middleClickPaste);
         s.sub("keyboard", [&](Section& k) {
           k.text("layout", in.keyboard.layout)
               .text("variant", in.keyboard.variant)

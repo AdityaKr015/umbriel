@@ -41,6 +41,7 @@ namespace umbriel {
     Server* m_server = nullptr;
     wlr_seat* m_seat = nullptr;
     wlr_cursor_shape_manager_v1* m_cursorShapeManager = nullptr;
+    bool m_primarySelectionEnabled = true;
 
     wl_listener m_requestCursor{};
     wl_listener m_requestSetShape{};

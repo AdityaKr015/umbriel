@@ -89,7 +89,6 @@ namespace umbriel {
   }
 
   void View::handleSetTitle() {
-    kLog.debug("title='{}'", m_toplevel->title != nullptr ? m_toplevel->title : "");
     updateForeignIdentity();
     if (!m_initialRulesSettled) {
       const bool titlePresent = m_toplevel->title != nullptr && m_toplevel->title[0] != '\0';

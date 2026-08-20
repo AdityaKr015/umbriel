@@ -612,7 +612,7 @@ namespace umbriel {
     const bool fullWidth = m_layout->toggleFullWidth(column);
     wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), fullWidth);
     ensureFocusedVisible();
-    markArrange(false);
+    markArrange();
     return true;
   }
 

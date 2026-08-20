@@ -19,6 +19,7 @@ namespace umbriel {
 
     [[nodiscard]] wlr_seat* wlr() const { return m_seat; }
 
+    void applyConfig();
     void updateCapabilities(bool hasKeyboard, bool hasTouch);
 
   private:

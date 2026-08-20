@@ -107,7 +107,7 @@ center_underfull_strip = true  # center the strip whenever it is narrower than t
 # Input ----------------------------------------------------------------------
 
 [input]
-middle_click_paste = true      # primary-selection clipboard, requires restart
+middle_click_paste = true      # primary-selection clipboard, applies on reload
 
 [input.keyboard]
 layout = ""                    # "us,de" loads both; switch with keyboard-layout-next

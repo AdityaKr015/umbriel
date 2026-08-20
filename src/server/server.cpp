@@ -33,6 +33,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unistd.h>
 
 namespace umbriel {
@@ -40,6 +41,14 @@ namespace umbriel {
   namespace {
 
     constexpr Logger kLog("server");
+
+    bool filterGlobal(const wl_client*, const wl_global* global, void*) {
+      const wl_interface* interface = wl_global_get_interface(global);
+      if (interface != nullptr && std::string_view(interface->name) == "zwp_primary_selection_device_manager_v1") {
+        return config().input.middleClickPaste;
+      }
+      return true;
+    }
 
     void applyConfiguredEnvironment() {
       for (const auto& [name, value] : config().environment.variables) {
@@ -118,9 +127,10 @@ namespace umbriel {
     m_compositor = wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
     wlr_data_device_manager_create(m_display);
-    if (config().input.middleClickPaste && wlr_primary_selection_v1_device_manager_create(m_display) == nullptr) {
+    if (wlr_primary_selection_v1_device_manager_create(m_display) == nullptr) {
       throw std::runtime_error("failed to create primary-selection manager");
     }
+    wl_display_set_global_filter(m_display, filterGlobal, nullptr);
     wlr_viewporter_create(m_display);
     wlr_fractional_scale_manager_v1_create(m_display, 1);
     wlr_ext_data_control_manager_v1_create(m_display, 1);

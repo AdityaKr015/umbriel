@@ -321,7 +321,7 @@ namespace umbriel {
 
     struct Input {
       // Advertise and accept the primary-selection clipboard used for
-      // middle-click paste. Requires restart.
+      // middle-click paste.
       bool middleClickPaste = true;
 
       struct Keyboard {

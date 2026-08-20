@@ -344,6 +344,14 @@ executable(
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper that checks whether a Wayland global is visible to a newly
+# connected client.
+executable(
+  'global-client',
+  'tests/harness/global_client.cpp',
+  dependencies: [wayland_client_dep],
+)
+
 foreach unit_test : unit_tests
   test_exe = executable(
     unit_test[0] + '-test',

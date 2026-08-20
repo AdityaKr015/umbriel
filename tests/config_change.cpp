@@ -70,6 +70,7 @@ UMBRIEL_TEST(eachSectionIsReportedOnItsOwn) {
     const ConfigChange change = ConfigChange::between(before, after);
     CHECK(change.input);
     CHECK(!change.general);
+    CHECK(ConfigEffects::between(before, after).input);
   }
   {
     Config after;

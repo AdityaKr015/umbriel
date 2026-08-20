@@ -44,6 +44,18 @@ namespace umbriel {
     wl_list_remove(&m_startDrag.link);
   }
 
+  void Seat::applyConfig() {
+    const bool enabled = config().input.middleClickPaste;
+    if (enabled == m_primarySelectionEnabled) {
+      return;
+    }
+
+    m_primarySelectionEnabled = enabled;
+    if (!enabled && m_seat->primary_selection_source != nullptr) {
+      wlr_seat_set_primary_selection(m_seat, nullptr, wl_display_next_serial(m_server->display()));
+    }
+  }
+
   void Seat::updateCapabilities(bool hasKeyboard, bool hasTouch) {
     uint32_t caps = WL_SEAT_CAPABILITY_POINTER;
     if (hasKeyboard) {

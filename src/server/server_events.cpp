@@ -287,6 +287,7 @@ namespace umbriel {
       for (const auto& pointer : m_pointers) {
         applyPointerConfig(pointer->device);
       }
+      m_seat->applyConfig();
       m_cursor->applyConfig();
     }
     if (effects.internalUi) {

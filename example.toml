@@ -149,6 +149,7 @@ enabled = true                 # false disables the tablet and its pads
 [input.cursor]
 theme = ""
 size = 24                      # 1-512
+hardware_cursor = true         # false forces software cursor composition
 
 [input.focus]
 follows_mouse = false

@@ -329,6 +329,10 @@ UMBRIEL_TEST(blurRulesAndInputReachOnlyTheirConsumers) {
   CHECK(!inputEffects.outputState);
   CHECK(!inputEffects.workspaceLayout);
   CHECK(!inputEffects.viewChrome);
+
+  Config cursorChanged;
+  cursorChanged.input.cursor.hardwareCursor = false;
+  CHECK(ConfigEffects::between(before, cursorChanged).input);
 }
 
 UMBRIEL_TEST(overviewInvalidationExcludesIrrelevantRuntimeEffects) {

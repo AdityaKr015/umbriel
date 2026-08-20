@@ -295,6 +295,9 @@ namespace umbriel {
       }
       m_seat->applyConfig();
       m_cursor->applyConfig();
+      for (const auto& output : m_outputs) {
+        output->applyCursorConfig();
+      }
     }
     if (effects.internalUi) {
       markDirty(Dirty::Cheatsheet);

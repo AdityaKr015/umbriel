@@ -373,6 +373,22 @@ UMBRIEL_TEST(mouseAccelerationDefaultsToFlat) {
   CHECK_EQ(defaults.input.mouse.sensitivity, 0.0);
 }
 
+UMBRIEL_TEST(hardwareCursorCanBeDisabled) {
+  const TempConfig file;
+  file.write(R"(
+[input.cursor]
+hardware_cursor = false
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK(!store.config().input.cursor.hardwareCursor);
+  CHECK(!containsDiagnostic(store, "unknown key input.cursor.hardware_cursor"));
+}
+
 UMBRIEL_TEST(invalidCustomAccelerationCurveIsRejected) {
   const TempConfig file;
   file.write(R"(

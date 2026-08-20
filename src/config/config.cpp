@@ -654,7 +654,11 @@ namespace umbriel {
               .boolean("left_handed", in.tablet.leftHanded);
           in.tablet.calibrationMatrix = readCalibrationMatrix(t, "input.tablet");
         });
-        s.sub("cursor", [&](Section& c) { c.text("theme", in.cursor.theme).integer("size", 1, 512, in.cursor.size); });
+        s.sub("cursor", [&](Section& c) {
+          c.text("theme", in.cursor.theme)
+              .integer("size", 1, 512, in.cursor.size)
+              .boolean("hardware_cursor", in.cursor.hardwareCursor);
+        });
         s.sub("focus", [&](Section& f) {
           // The limit is measured in viewport widths and the quantity it is
           // compared against is unbounded: revealing a column three screens away

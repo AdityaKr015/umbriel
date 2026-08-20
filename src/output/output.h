@@ -46,6 +46,7 @@ namespace umbriel {
     void markDirty(Dirty what);
     void onGammaChanged(wlr_gamma_control_v1* control);
     void applyOutputState();
+    void applyCursorConfig();
     // Re-evaluate fullscreen-controlled VRR after a view or workspace changes.
     void updateVrr();
     void markBlurBackgroundDirty();
@@ -85,6 +86,7 @@ namespace umbriel {
     bool m_inFrame = false;
     bool m_hasDeferredMode = false;
     bool m_gammaDirty = false;
+    bool m_softwareCursorLocked = false;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;
 

@@ -69,6 +69,7 @@ verify m=mode filter="": (build m)
     set -euo pipefail
     # The harness drives the cursor through a virtual-pointer client.
     meson compile -C build-{{m}} pointer-client
+    meson compile -C build-{{m}} unmap-client
     bash tests/harness/verify.sh ./build-{{m}}/umbriel "{{filter}}"
 
 format:

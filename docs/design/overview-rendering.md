@@ -24,6 +24,11 @@ matching the treatment of a window clipped between outputs.
 Each workspace has a rounded background behind its cards. The configured alpha
 controls whether this is a light tint, a translucent panel, or an opaque fill.
 
+The focused border tracks the workspace's focused view, so each row shows where
+it will land when zoomed into. Closing the focused window reassigns focus to a
+remaining window on that workspace while the overview stays open; the border
+moves with it.
+
 ## Dragging
 
 A dragged card renders at 0.75 opacity (`View::kDragOpacity`). This multiplier
@@ -47,5 +52,7 @@ The relevant checks are:
   for composed drag opacity.
 - [`tests/harness/checks/111_drag_left_hint.sh`](../../tests/harness/checks/111_drag_left_hint.sh)
   for the visible prepend target on an overflowing scrolling strip.
+- [`tests/harness/checks/112_overview_refocus.sh`](../../tests/harness/checks/112_overview_refocus.sh)
+  for focus reassignment when the focused window closes in the overview.
 - [`tests/output_clip.cpp`](../../tests/output_clip.cpp) for output clipping in
   logical coordinates.

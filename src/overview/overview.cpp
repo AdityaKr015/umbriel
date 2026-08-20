@@ -937,6 +937,7 @@ namespace umbriel {
     m_dragSourceWorkspace = nullptr;
     m_dragSourceWidth.reset();
     m_drop = {};
+    m_dropWorkspaceGroup = nullptr;
     m_horizontalWorkspace = nullptr;
     m_gestureOpenedHere = false;
     m_server->reconcileDynamicWorkspaces();
@@ -1006,6 +1007,7 @@ namespace umbriel {
       m_dragCard = nullptr;
       m_dragSourceWorkspace = nullptr;
       m_drop = {};
+      m_dropWorkspaceGroup = nullptr;
       m_server->cursor()->overrideCursor(nullptr);
     }
     OutputState* state = stateForWorkspace(view->workspace());
@@ -1062,6 +1064,28 @@ namespace umbriel {
     }
   }
 
+  void Overview::onWorkspaceInventoryChanged(WorkspaceGroup* group) {
+    if (!m_active || group == nullptr) {
+      return;
+    }
+    OutputState* state = stateFor(group->output());
+    if (state == nullptr) {
+      return;
+    }
+    // Renumbering rows on one side of the active workspace must shift the
+    // filmstrip scroll by the same amount, otherwise every surviving card
+    // visibly jumps even though its workspace identity did not move.
+    if (Workspace* active = group->active()) {
+      const double delta = static_cast<double>(active->index()) - state->rowTo;
+      state->rowScroll += delta;
+      state->rowFrom += delta;
+      state->rowTo += delta;
+    }
+    syncWorkspaceRows(*state, *group);
+    layoutOutput(*state);
+    wlr_output_schedule_frame(state->output->wlr());
+  }
+
   void Overview::onFocusChanged() {
     if (m_active) {
       applyProgress();
@@ -1082,11 +1106,16 @@ namespace umbriel {
       hideDropHint();
       m_drop = {};
     }
+    if (m_dropWorkspaceGroup != nullptr && m_dropWorkspaceGroup->output() == output) {
+      hideDropHint();
+      m_dropWorkspaceGroup = nullptr;
+    }
     if (m_dragCard != nullptr && m_dragCard->owner == it->get()) {
       hideDropHint();
       m_dragCard = nullptr;
       m_dragSourceWorkspace = nullptr;
       m_drop = {};
+      m_dropWorkspaceGroup = nullptr;
       m_server->cursor()->overrideCursor(nullptr);
     }
     if (m_pressCard != nullptr && m_pressCard->owner == it->get()) {
@@ -1145,6 +1174,50 @@ namespace umbriel {
           *outRow = row;
         }
         return workspace;
+      }
+    }
+    return nullptr;
+  }
+
+  WorkspaceGroup*
+  Overview::workspaceGapAt(double lx, double ly, OutputState** outState, size_t* outIndex, wlr_box* outHintBox) {
+    for (const auto& state : m_outputs) {
+      RowMetrics metrics{};
+      if (!rowMetrics(*state, *m_server, zoom(), metrics)) {
+        continue;
+      }
+      WorkspaceGroup* group = state->output->workspaceGroup();
+      if (group == nullptr || !group->dynamic()) {
+        continue;
+      }
+      const size_t rowCount = std::min(group->workspaceCount(), state->workspaceBackgrounds.size());
+      for (size_t index = 1; index < rowCount; ++index) {
+        const int upperBottom = rowTop(metrics, state->rowScroll, index - 1) + metrics.rowH;
+        const int lowerTop = rowTop(metrics, state->rowScroll, index);
+        if (lowerTop <= upperBottom) {
+          continue;
+        }
+        const wlr_box gap{metrics.rowX, upperBottom, metrics.rowW, lowerTop - upperBottom};
+        wlr_box visible{};
+        if (!wlr_box_intersection(&visible, &gap, &metrics.outputBox) || !boxContains(visible, lx, ly)) {
+          continue;
+        }
+        if (outState != nullptr) {
+          *outState = state.get();
+        }
+        if (outIndex != nullptr) {
+          *outIndex = index;
+        }
+        if (outHintBox != nullptr) {
+          const int height = std::clamp(visible.height / 3, 4, 18);
+          *outHintBox = {
+              .x = visible.x,
+              .y = visible.y + (visible.height - height) / 2,
+              .width = visible.width,
+              .height = height,
+          };
+        }
+        return group;
       }
     }
     return nullptr;
@@ -1321,6 +1394,7 @@ namespace umbriel {
     m_dragSourceRow = -1;
     m_dragSourceWidth.reset();
     m_drop = {};
+    m_dropWorkspaceGroup = nullptr;
 
     if (m_dragSourceWorkspace != nullptr && view->tiled()) {
       m_dragSourceColumn = m_dragSourceWorkspace->layout().columnOf(view);
@@ -1348,6 +1422,18 @@ namespace umbriel {
     wlr_scene_node_set_position(&card->tree->node, card->box.x, card->box.y);
 
     OutputState* state = nullptr;
+    size_t workspaceIndex = 0;
+    wlr_box workspaceHint{};
+    if (WorkspaceGroup* group = workspaceGapAt(lx, ly, &state, &workspaceIndex, &workspaceHint)) {
+      m_drop = {};
+      m_dropWorkspaceGroup = group;
+      m_dropWorkspaceIndex = workspaceIndex;
+      showWorkspaceInsertHint(state->output, workspaceHint);
+      scheduleFrames();
+      return;
+    }
+    m_dropWorkspaceGroup = nullptr;
+
     size_t row = 0;
     Workspace* workspace = rowAt(lx, ly, &state, &row);
     m_drop = {.workspace = workspace};
@@ -1388,13 +1474,15 @@ namespace umbriel {
       return;
     }
     View* view = card->view;
+    WorkspaceGroup* insertionGroup = drop ? m_dropWorkspaceGroup : nullptr;
     Workspace* target = drop ? m_drop.workspace : nullptr;
-    const DropTarget targetDrop = m_drop;
+    DropTarget targetDrop = m_drop;
     const wlr_box cardBox = card->box;
     OutputState* dropState = target != nullptr ? stateForWorkspace(target) : nullptr;
 
     m_dragCard = nullptr;
     m_drop = {};
+    m_dropWorkspaceGroup = nullptr;
     hideDropHint();
     m_server->cursor()->overrideCursor(nullptr);
 
@@ -1402,11 +1490,31 @@ namespace umbriel {
       return;
     }
 
+    bool insertedWorkspace = false;
+    if (insertionGroup != nullptr) {
+      target = insertionGroup->insertDynamicWorkspace(m_dropWorkspaceIndex);
+      dropState = target != nullptr ? stateForWorkspace(target) : nullptr;
+      if (target != nullptr && dropState != nullptr) {
+        targetDrop = {
+            .workspace = target,
+            .column = 0,
+        };
+        insertedWorkspace = true;
+      }
+    }
+
     if (target != nullptr && view->tiled()) {
       applyDrop(
           *m_server, *view, *target, targetDrop, m_dragSourceWidth.has_value() ? &*m_dragSourceWidth : nullptr,
           /*animate=*/false
       );
+    } else if (target != nullptr && dropState != nullptr && insertedWorkspace) {
+      view->rememberFloatingPosition();
+      if (view->workspace() != target) {
+        view->setWorkspace(target, /*attachToLayout=*/false);
+      }
+      view->restoreFloatingPosition();
+      m_server->focusView(view, FocusReason::DragDrop);
     } else if (target != nullptr && dropState != nullptr) {
       // Floating: map the card origin back out of the thumbnail.
       RowMetrics metrics{};
@@ -1450,6 +1558,31 @@ namespace umbriel {
     applyProgress();
   }
 
+  void Overview::syncWorkspaceRows(OutputState& state, WorkspaceGroup& group) {
+    while (state.workspaceBackgrounds.size() > group.workspaceCount()) {
+      wlr_scene_rect* background = state.workspaceBackgrounds.back();
+      state.workspaceBackgrounds.pop_back();
+      if (background != nullptr) {
+        wlr_scene_node_destroy(&background->node);
+      }
+    }
+    while (state.workspaceBackgrounds.size() < group.workspaceCount()) {
+      const std::array<float, 4> color = tint(config().overview.workspaceBackground, m_progress);
+      wlr_scene_rect* background = wlr_scene_rect_create(state.tree, 1, 1, color.data());
+      if (background != nullptr) {
+        // Backgrounds stay below every card even when created after the
+        // overview scene was populated.
+        wlr_scene_node_place_above(&background->node, &state.backgroundTint->node);
+      }
+      state.workspaceBackgrounds.push_back(background);
+    }
+    for (const auto& card : state.cards) {
+      if (card->view != nullptr && card->view->workspace() != nullptr) {
+        card->row = card->view->workspace()->index();
+      }
+    }
+  }
+
   void Overview::showDropHint(
       const wlr_box& worldBox, const RowMetrics& metrics, double rowScroll, size_t row, Output* output
   ) {
@@ -1468,6 +1601,20 @@ namespace umbriel {
       m_dropHint = std::make_unique<HintRect>(*m_server, m_tree);
     }
     m_dropHint->show(output, mappedBox, static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom)));
+    if (m_dragCard != nullptr && m_dragCard->tree != nullptr) {
+      wlr_scene_node_raise_to_top(&m_dragCard->tree->node);
+    }
+  }
+
+  void Overview::showWorkspaceInsertHint(Output* output, const wlr_box& box) {
+    if (output == nullptr || box.width <= 0 || box.height <= 0) {
+      hideDropHint();
+      return;
+    }
+    if (m_dropHint == nullptr) {
+      m_dropHint = std::make_unique<HintRect>(*m_server, m_tree);
+    }
+    m_dropHint->show(output, box, box.height / 2);
     if (m_dragCard != nullptr && m_dragCard->tree != nullptr) {
       wlr_scene_node_raise_to_top(&m_dragCard->tree->node);
     }

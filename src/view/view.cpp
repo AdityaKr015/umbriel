@@ -208,7 +208,9 @@ namespace umbriel {
       return;
     }
     if (m_workspace != nullptr) {
-      m_workspace->removeView(this);
+      Workspace* previous = m_workspace;
+      m_workspace = nullptr;
+      previous->removeView(this);
     }
     m_workspace = workspace;
     if (m_workspace != nullptr) {

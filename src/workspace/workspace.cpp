@@ -824,6 +824,47 @@ namespace umbriel {
     return result;
   }
 
+  void WorkspaceGroup::refreshDynamicWorkspaceMetadata() {
+    const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
+    for (size_t index = 0; index < m_workspaces.size(); ++index) {
+      const std::string name = std::to_string(index + 1);
+      ResolvedLayoutConfig layout = resolveWorkspaceLayout(config(), outputName, name, index);
+      Workspace* workspace = m_workspaces[index].get();
+      // Keep a runtime layout switch across structural changes to a dynamic
+      // group, while allowing numeric workspace rules to follow the new index.
+      if (const std::optional<LayoutMode> overrideMode = workspace->layoutModeOverride()) {
+        layout.mode = *overrideMode;
+      }
+      if (workspace->layoutConfig() != layout) {
+        workspace->applyLayoutConfig(std::move(layout));
+      }
+      if (workspace->name() != name || workspace->index() != index) {
+        workspace->rename(name, index);
+      }
+    }
+    if (m_previous == m_active) {
+      m_previous = nullptr;
+    }
+  }
+
+  Workspace* WorkspaceGroup::insertDynamicWorkspace(size_t index) {
+    if (!m_dynamic || m_output == nullptr || m_output->wlr() == nullptr) {
+      return nullptr;
+    }
+    index = std::min(index, m_workspaces.size());
+    const std::string name = std::to_string(index + 1);
+    const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
+    ResolvedLayoutConfig layout = resolveWorkspaceLayout(config(), outputName, name, index);
+    auto workspace = createConfiguredWorkspace({name, std::move(layout)}, index);
+    Workspace* result = workspace.get();
+    m_workspaces.insert(m_workspaces.begin() + static_cast<std::ptrdiff_t>(index), std::move(workspace));
+    refreshDynamicWorkspaceMetadata();
+    if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+      overview->onWorkspaceInventoryChanged(this);
+    }
+    return result;
+  }
+
   void WorkspaceGroup::reconcileInventory() {
     slideFinish();
     const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
@@ -950,45 +991,31 @@ namespace umbriel {
     if (!m_dynamic || slideActive()) {
       return;
     }
-    Overview* overview = m_server->overview();
-    if (overview != nullptr && overview->active()) {
-      return;
-    }
 
-    if (m_workspaces.size() > 1) {
-      for (size_t index = m_workspaces.size() - 1; index-- > 0;) {
-        Workspace* workspace = m_workspaces[index].get();
-        if (!workspace->hasViews() && workspace != m_active) {
-          if (m_previous == workspace) {
-            m_previous = nullptr;
-          }
-          m_workspaces.erase(m_workspaces.begin() + static_cast<std::ptrdiff_t>(index));
+    // Dynamic groups keep exactly one empty workspace. Prefer an empty active
+    // workspace so closing its last window does not destroy the workspace the
+    // user is currently viewing; otherwise retain the last existing empty one
+    // to avoid replacing its protocol identity on every reconciliation.
+    Workspace* emptyKeeper = m_active != nullptr && !m_active->hasViews() ? m_active : nullptr;
+    if (emptyKeeper == nullptr && !m_workspaces.empty() && !m_workspaces.back()->hasViews()) {
+      emptyKeeper = m_workspaces.back().get();
+    }
+    for (size_t index = m_workspaces.size(); index-- > 0;) {
+      Workspace* workspace = m_workspaces[index].get();
+      if (!workspace->hasViews() && workspace != emptyKeeper) {
+        if (m_previous == workspace) {
+          m_previous = nullptr;
         }
+        m_workspaces.erase(m_workspaces.begin() + static_cast<std::ptrdiff_t>(index));
       }
     }
-    if (m_workspaces.empty() || m_workspaces.back()->hasViews()) {
+    if (emptyKeeper == nullptr) {
       appendDynamicWorkspace();
     }
 
-    const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
-    for (size_t index = 0; index < m_workspaces.size(); ++index) {
-      const std::string name = std::to_string(index + 1);
-      ResolvedLayoutConfig layout = resolveWorkspaceLayout(config(), outputName, name, index);
-      Workspace* workspace = m_workspaces[index].get();
-      // Keep a runtime layout switch across window open/close: dynamic
-      // reconcile re-resolves the configured layout here.
-      if (const std::optional<LayoutMode> overrideMode = workspace->layoutModeOverride()) {
-        layout.mode = *overrideMode;
-      }
-      if (workspace->layoutConfig() != layout) {
-        workspace->applyLayoutConfig(std::move(layout));
-      }
-      if (workspace->name() != name || workspace->index() != index) {
-        workspace->rename(name, index);
-      }
-    }
-    if (m_previous == m_active) {
-      m_previous = nullptr;
+    refreshDynamicWorkspaceMetadata();
+    if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+      overview->onWorkspaceInventoryChanged(this);
     }
   }
 

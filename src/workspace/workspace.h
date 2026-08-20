@@ -180,6 +180,10 @@ namespace umbriel {
     void select(Workspace* workspace);
     void deactivate(Workspace* workspace);
     Workspace* createWorkspace(const char* name);
+    // Insert an empty numbered workspace into a dynamic group and renumber the
+    // following workspaces. Static configured groups cannot be extended this
+    // way and return null.
+    Workspace* insertDynamicWorkspace(size_t index);
     void reconcileInventory();
     void refreshLayouts();
     void reconcileDynamic();
@@ -202,6 +206,7 @@ namespace umbriel {
   private:
     std::unique_ptr<Workspace> createConfiguredWorkspace(ResolvedWorkspace workspace, size_t index);
     Workspace* appendDynamicWorkspace();
+    void refreshDynamicWorkspaceMetadata();
 
     struct Slide {
       Workspace* base = nullptr;

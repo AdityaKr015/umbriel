@@ -139,6 +139,13 @@ dwindle output flattens into single-window columns, the same as drag-and-drop.
 
 Use `overview-toggle`, `overview-open`, or `overview-close`.
 
+Windows can be dragged onto another workspace preview. With dynamic numbered
+workspaces, dropping a window into the gap between two previews creates a new
+workspace at that position and shifts the following workspace numbers down.
+Umbriel keeps one empty dynamic workspace, so other previews disappear as soon
+as their last window is moved or closed, including while the overview is open.
+Static configured workspace lists only accept drops onto existing previews.
+
 ### Cheatsheet actions
 
 Use `cheatsheet-toggle`, `cheatsheet-open`, or `cheatsheet-close`.

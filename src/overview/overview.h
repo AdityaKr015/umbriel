@@ -72,6 +72,7 @@ namespace umbriel {
     void onViewUnmapped(View* view);
     void onWorkspaceActivated(WorkspaceGroup* group);
     void onWorkspaceArranged(Workspace* workspace);
+    void onWorkspaceInventoryChanged(WorkspaceGroup* group);
     void onFocusChanged();
     void onOutputRemoved(Output* output);
 
@@ -186,12 +187,16 @@ namespace umbriel {
 
     [[nodiscard]] Card* cardAt(double lx, double ly);
     [[nodiscard]] Workspace* rowAt(double lx, double ly, OutputState** outState, size_t* outRow);
+    [[nodiscard]] WorkspaceGroup*
+    workspaceGapAt(double lx, double ly, OutputState** outState, size_t* outIndex, wlr_box* outHintBox);
     [[nodiscard]] Workspace* preferredWorkspace() const;
 
     void beginDrag();
     void updateDrag(double lx, double ly);
     void endDrag(bool drop);
+    void syncWorkspaceRows(OutputState& state, WorkspaceGroup& group);
     void showDropHint(const wlr_box& worldBox, const RowMetrics& metrics, double rowScroll, size_t row, Output* output);
+    void showWorkspaceInsertHint(Output* output, const wlr_box& box);
     void hideDropHint();
 
     Server* m_server = nullptr;
@@ -222,6 +227,8 @@ namespace umbriel {
     int m_dragSourceRow = -1;
     std::optional<DropColumnWidth> m_dragSourceWidth;
     DropTarget m_drop{};
+    WorkspaceGroup* m_dropWorkspaceGroup = nullptr;
+    size_t m_dropWorkspaceIndex = 0;
   };
 
 } // namespace umbriel

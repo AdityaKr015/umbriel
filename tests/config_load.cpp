@@ -247,6 +247,10 @@ repeat_rate = 25
 tap = true
 natural_scroll = true
 
+[input.mouse]
+accel_profile = "custom 0.2 0.0 0.5 1.0 2.0"
+sensitivity = 0.25
+
 [[input.device]]
 name = "Acme Split Keyboard"
 layout = ""
@@ -258,6 +262,11 @@ repeat_delay = 250
 name = "Acme Precision Touchpad"
 tap = false
 natural_scroll = false
+
+[[input.device]]
+name = "Acme Gaming Mouse"
+accel_profile = "flat"
+sensitivity = -0.5
 )");
 
   ConfigStore& store = umbriel::configStore();
@@ -266,7 +275,11 @@ natural_scroll = false
   const auto& input = store.config().input;
 
   CHECK(result.success);
-  CHECK_EQ(input.devices.size(), size_t{2});
+  CHECK(input.mouse.accelProfile.kind == umbriel::AccelProfile::Kind::Custom);
+  CHECK_EQ(input.mouse.accelProfile.step, 0.2);
+  CHECK_EQ(input.mouse.accelProfile.points, std::vector<double>({0.0, 0.5, 1.0, 2.0}));
+  CHECK_EQ(input.mouse.sensitivity, 0.25);
+  CHECK_EQ(input.devices.size(), size_t{3});
 
   const auto* keyboard = input.findDevice("Acme Split Keyboard");
   CHECK(keyboard != nullptr);
@@ -284,8 +297,38 @@ natural_scroll = false
     CHECK(touchpad->naturalScroll == std::optional<bool>(false));
   }
 
+  const auto* mouse = input.findDevice("Acme Gaming Mouse");
+  CHECK(mouse != nullptr);
+  if (mouse != nullptr) {
+    CHECK(mouse->accelProfile.has_value());
+    CHECK(mouse->accelProfile->kind == umbriel::AccelProfile::Kind::Flat);
+    CHECK(mouse->sensitivity == std::optional<double>(-0.5));
+  }
+
   CHECK(input.findDevice("acme split keyboard") == nullptr);
   CHECK(input.findDevice("Acme") == nullptr);
+}
+
+UMBRIEL_TEST(mouseAccelerationDefaultsToFlat) {
+  const umbriel::Config defaults;
+  CHECK(defaults.input.mouse.accelProfile.kind == umbriel::AccelProfile::Kind::Flat);
+  CHECK_EQ(defaults.input.mouse.sensitivity, 0.0);
+}
+
+UMBRIEL_TEST(invalidCustomAccelerationCurveIsRejected) {
+  const TempConfig file;
+  file.write(R"(
+[input.mouse]
+accel_profile = "custom 0.2 1.0"
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK(store.config().input.mouse.accelProfile.kind == umbriel::AccelProfile::Kind::Flat);
+  CHECK(containsDiagnostic(store, "custom <step> <points...>"));
 }
 
 UMBRIEL_TEST(keyboardOptionsLoadGloballyAndPerDevice) {

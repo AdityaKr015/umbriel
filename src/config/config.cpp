@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -104,6 +105,80 @@ namespace umbriel {
       }
       warnAt(node->source(), R"(unknown {}.mode "{}" (expected "scrolling" or "dwindle"))", context, mode);
       return std::nullopt;
+    }
+
+    std::vector<std::string_view> splitWhitespace(std::string_view text) {
+      std::vector<std::string_view> tokens;
+      size_t offset = 0;
+      while (offset < text.size()) {
+        while (offset < text.size() && std::isspace(static_cast<unsigned char>(text[offset])) != 0) {
+          ++offset;
+        }
+        const size_t start = offset;
+        while (offset < text.size() && std::isspace(static_cast<unsigned char>(text[offset])) == 0) {
+          ++offset;
+        }
+        if (start != offset) {
+          tokens.push_back(text.substr(start, offset - start));
+        }
+      }
+      return tokens;
+    }
+
+    std::optional<AccelProfile> readAccelProfile(Section& section, std::string_view key, std::string_view context) {
+      const toml::node* node = section.take(key);
+      if (node == nullptr) {
+        return std::nullopt;
+      }
+      const auto* value = node->as_string();
+      if (value == nullptr) {
+        warnAt(node->source(), R"({}.{} must be a string)", context, key);
+        return std::nullopt;
+      }
+      const std::vector<std::string_view> tokens = splitWhitespace(value->get());
+      if (tokens.empty()) {
+        warnAt(node->source(), "{}.{} cannot be empty", context, key);
+        return std::nullopt;
+      }
+      const std::string profile = lowercase(tokens.front());
+      if ((profile == "flat" || profile == "adaptive") && tokens.size() == 1) {
+        return AccelProfile{
+            .kind = profile == "flat" ? AccelProfile::Kind::Flat : AccelProfile::Kind::Adaptive,
+        };
+      }
+      if (profile != "custom" || tokens.size() < 4) {
+        warnAt(
+            node->source(), R"(invalid {}.{} "{}" (expected "flat", "adaptive", or "custom <step> <points...>"))",
+            context, key, value->get()
+        );
+        return std::nullopt;
+      }
+
+      std::vector<double> values;
+      values.reserve(tokens.size() - 1);
+      for (size_t index = 1; index < tokens.size(); ++index) {
+        const std::string_view token = tokens[index];
+        double number = 0.0;
+        const auto [end, error] = std::from_chars(token.data(), token.data() + token.size(), number);
+        if (error != std::errc{} || end != token.data() + token.size() || !std::isfinite(number)) {
+          warnAt(node->source(), R"(invalid number "{}" in {}.{})", token, context, key);
+          return std::nullopt;
+        }
+        values.push_back(number);
+      }
+      if (values.front() <= 0.0) {
+        warnAt(node->source(), "{}.{} custom step must be greater than zero", context, key);
+        return std::nullopt;
+      }
+      if (std::ranges::any_of(values.begin() + 1, values.end(), [](double point) { return point < 0.0; })) {
+        warnAt(node->source(), "{}.{} custom points must be non-negative", context, key);
+        return std::nullopt;
+      }
+      return AccelProfile{
+          .kind = AccelProfile::Kind::Custom,
+          .step = values.front(),
+          .points = std::vector<double>(values.begin() + 1, values.end()),
+      };
     }
 
     std::optional<std::vector<double>> readWidthPresets(Section& section, std::string_view context) {
@@ -484,7 +559,9 @@ namespace umbriel {
         keys.integer("repeat_rate", 0, 1000, device.repeatRate)
             .integer("repeat_delay", 0, 10000, device.repeatDelay)
             .boolean("tap", device.tap)
-            .boolean("natural_scroll", device.naturalScroll);
+            .boolean("natural_scroll", device.naturalScroll)
+            .real("sensitivity", -1.0, 1.0, device.sensitivity);
+        device.accelProfile = readAccelProfile(keys, "accel_profile", "input.device");
 
         if (!validName) {
           continue;
@@ -538,7 +615,11 @@ namespace umbriel {
         });
         s.sub("mouse", [&](Section& m) {
           m.boolean("natural_scroll", in.mouse.naturalScroll)
+              .real("sensitivity", -1.0, 1.0, in.mouse.sensitivity)
               .integer("scroll_wheel_step", 1, 1000, in.mouse.scrollWheelStep);
+          if (const auto profile = readAccelProfile(m, "accel_profile", "input.mouse")) {
+            in.mouse.accelProfile = *profile;
+          }
         });
         s.sub("cursor", [&](Section& c) { c.text("theme", in.cursor.theme).integer("size", 1, 512, in.cursor.size); });
         s.sub("focus", [&](Section& f) {

@@ -28,6 +28,17 @@ namespace umbriel {
     Shift,
   };
 
+  struct AccelProfile {
+    enum class Kind {
+      Flat,
+      Adaptive,
+      Custom,
+    } kind = Kind::Flat;
+    double step = 0.0;
+    std::vector<double> points;
+    bool operator==(const AccelProfile&) const = default;
+  };
+
   // Per-workspace layout overrides (all optional → inherit Config::Layout).
   struct WorkspaceLayoutOverrides {
     std::optional<LayoutMode> mode;
@@ -300,6 +311,8 @@ namespace umbriel {
 
       struct Mouse {
         std::optional<bool> naturalScroll;
+        AccelProfile accelProfile;
+        double sensitivity = 0.0;
         int scrollWheelStep = 60;
         bool operator==(const Mouse&) const = default;
       } mouse;
@@ -324,6 +337,8 @@ namespace umbriel {
         std::optional<int> repeatDelay;
         std::optional<bool> tap;
         std::optional<bool> naturalScroll;
+        std::optional<AccelProfile> accelProfile;
+        std::optional<double> sensitivity;
         bool operator==(const Device&) const = default;
       };
 

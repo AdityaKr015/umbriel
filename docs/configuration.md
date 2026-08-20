@@ -50,13 +50,13 @@ show_cheatsheet = true
 focus_on_activate = false
 ```
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `autostart` | string array | `[]` | Shell commands run once after startup. Never re-run on config reload. |
-| `mod_key` | string | Super (Alt when nested) | Modifier represented by `Mod` in keybinds. Accepts `Super`, `Alt`, `Ctrl`, or `Shift`; aliases `Logo`, `Win`, and `Control` are also accepted. Applies on reload. |
-| `xwayland` | bool | `true` | Spawn `xwayland-satellite` for X11 app support. The binary must be installed. Changing this requires a restart. |
-| `show_cheatsheet` | bool | `true` | Show the keybinds cheatsheet overlay on startup. If an included file is still missing, Umbriel waits for it to load before showing the overlay. Press any key or mouse button to dismiss, or toggle at runtime via `cheatsheet-toggle`. |
-| `focus_on_activate` | bool | `false` | Focus and reveal windows that request activation. When false, activation marks the window and its workspace urgent without changing workspaces. Window rules can override this per application. |
+| Key                 | Type         | Default                 | Description                                                                                                                                                                                                                             |
+| ------------------- | ------------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `autostart`         | string array | `[]`                    | Shell commands run once after startup. Never re-run on config reload.                                                                                                                                                                   |
+| `mod_key`           | string       | Super (Alt when nested) | Modifier represented by `Mod` in keybinds. Accepts `Super`, `Alt`, `Ctrl`, or `Shift`; aliases `Logo`, `Win`, and `Control` are also accepted. Applies on reload.                                                                       |
+| `xwayland`          | bool         | `true`                  | Spawn `xwayland-satellite` for X11 app support. The binary must be installed. Changing this requires a restart.                                                                                                                         |
+| `show_cheatsheet`   | bool         | `true`                  | Show the keybinds cheatsheet overlay on startup. If an included file is still missing, Umbriel waits for it to load before showing the overlay. Press any key or mouse button to dismiss, or toggle at runtime via `cheatsheet-toggle`. |
+| `focus_on_activate` | bool         | `false`                 | Focus and reveal windows that request activation. When false, activation marks the window and its workspace urgent without changing workspaces. Window rules can override this per application.                                         |
 
 ## Environment
 
@@ -77,8 +77,8 @@ requires a restart.
 back_and_forth = true
 ```
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| Key              | Type | Default | Description                                                                                     |
+| ---------------- | ---- | ------- | ----------------------------------------------------------------------------------------------- |
 | `back_and_forth` | bool | `false` | Re-selecting the active workspace jumps back to the previously active workspace on that output. |
 
 Output workspaces are dynamic by default. See [Outputs](outputs.md) for dynamic
@@ -103,15 +103,15 @@ Shared semantic colors for Umbriel-owned interface surfaces such as the keybind
 cheatsheet and configuration diagnostic banner. Colors are `#RRGGBB` or
 `#RRGGBBAA`.
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `background` | color | `#141419F0` | Shared background for internal panels and banners. |
-| `text_primary` | color | `#E8E8EAFF` | Primary text. |
-| `text_muted` | color | `#8A8A92FF` | Secondary help and status text. |
-| `accent_primary` | color | `#7AA3FFFF` | Primary emphasis, including titles and key chords. |
-| `accent_secondary` | color | `#F5C96BFF` | Secondary emphasis, including group headings. |
-| `warning` | color | `#F5C96BFF` | Warning status text. |
-| `error` | color | `#FF6B6BFF` | Error status text. |
+| Key                | Type  | Default     | Description                                        |
+| ------------------ | ----- | ----------- | -------------------------------------------------- |
+| `background`       | color | `#141419F0` | Shared background for internal panels and banners. |
+| `text_primary`     | color | `#E8E8EAFF` | Primary text.                                      |
+| `text_muted`       | color | `#8A8A92FF` | Secondary help and status text.                    |
+| `accent_primary`   | color | `#7AA3FFFF` | Primary emphasis, including titles and key chords. |
+| `accent_secondary` | color | `#F5C96BFF` | Secondary emphasis, including group headings.      |
+| `warning`          | color | `#F5C96BFF` | Warning status text.                               |
+| `error`            | color | `#FF6B6BFF` | Error status text.                                 |
 
 Key chord backgrounds are derived from `background` and `text_primary`; they
 remain opaque so text stays legible over translucent panels.
@@ -134,20 +134,20 @@ backdrop_color = "#000000FF"
 animation_ms = 250             # 1-10000
 ```
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `prefer_no_csd` | bool | `true` | Ask clients to omit client-side decorations (xdg-decoration). Clients that explicitly request CSD are still honored. Restart apps after changing. |
-| `border_width` | int | `2` | Inner border width in logical pixels (0-100), including around rounded corners. |
-| `outer_border_width` | int | `0` | Ring outside the inner border in logical pixels (0-100). |
-| `corner_radius` | int | `10` | Rounded corner radius (0-500). 0 disables. |
-| `border_focused` | color | `#7AA3FFFF` | Border color for the focused window. |
-| `border_unfocused` | color | `#292933FF` | Border color for unfocused windows. |
-| `scratchpad_border_focused` | color | `#E5C07BFF` | Border color for the focused scratchpad window. |
-| `scratchpad_border_unfocused` | color | `#5C4A2AFF` | Border color for unfocused scratchpad windows. |
-| `outer_border_color` | color | `#1A1A1FFF` | Outer border color (no focus variant). |
-| `insert_hint_color` | color | `#7FC8FF80` | Drop-target preview during drag. |
-| `backdrop_color` | color | `#000000FF` | Background for fullscreen gaps and lock screen. |
-| `animation_ms` | int | `250` | Animation duration in milliseconds (1-10000). |
+| Key                           | Type  | Default     | Description                                                                                                                                       |
+| ----------------------------- | ----- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prefer_no_csd`               | bool  | `true`      | Ask clients to omit client-side decorations (xdg-decoration). Clients that explicitly request CSD are still honored. Restart apps after changing. |
+| `border_width`                | int   | `2`         | Inner border width in logical pixels (0-100), including around rounded corners.                                                                   |
+| `outer_border_width`          | int   | `0`         | Ring outside the inner border in logical pixels (0-100).                                                                                          |
+| `corner_radius`               | int   | `10`        | Rounded corner radius (0-500). 0 disables.                                                                                                        |
+| `border_focused`              | color | `#7AA3FFFF` | Border color for the focused window.                                                                                                              |
+| `border_unfocused`            | color | `#292933FF` | Border color for unfocused windows.                                                                                                               |
+| `scratchpad_border_focused`   | color | `#E5C07BFF` | Border color for the focused scratchpad window.                                                                                                   |
+| `scratchpad_border_unfocused` | color | `#5C4A2AFF` | Border color for unfocused scratchpad windows.                                                                                                    |
+| `outer_border_color`          | color | `#1A1A1FFF` | Outer border color (no focus variant).                                                                                                            |
+| `insert_hint_color`           | color | `#7FC8FF80` | Drop-target preview during drag.                                                                                                                  |
+| `backdrop_color`              | color | `#000000FF` | Background for fullscreen gaps and lock screen.                                                                                                   |
+| `animation_ms`                | int   | `250`       | Animation duration in milliseconds (1-10000).                                                                                                     |
 
 Colors are `#RRGGBB` or `#RRGGBBAA`.
 
@@ -170,16 +170,16 @@ saturation = 1.1  # 0.0-2.0
 Blur only renders where a surface is transparent. Sampling remains confined to
 the surface's owning output when a window overflows into a neighbouring output.
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `enabled` | bool | `true` | Master blur switch. |
-| `optimized` | bool | `true` | Cache one background blur per output instead of recomputing per surface. |
-| `passes` | int | `3` | Blur passes (0-8). 0 disables. |
-| `radius` | int | `5` | Blur radius (0-100). 0 disables. |
-| `noise` | float | `0.02` | Noise overlay (0.0-1.0). |
-| `brightness` | float | `0.9` | Brightness adjustment (0.0-2.0). |
-| `contrast` | float | `0.9` | Contrast adjustment (0.0-2.0). |
-| `saturation` | float | `1.1` | Saturation adjustment (0.0-2.0). |
+| Key          | Type  | Default | Description                                                              |
+| ------------ | ----- | ------- | ------------------------------------------------------------------------ |
+| `enabled`    | bool  | `true`  | Master blur switch.                                                      |
+| `optimized`  | bool  | `true`  | Cache one background blur per output instead of recomputing per surface. |
+| `passes`     | int   | `3`     | Blur passes (0-8). 0 disables.                                           |
+| `radius`     | int   | `5`     | Blur radius (0-100). 0 disables.                                         |
+| `noise`      | float | `0.02`  | Noise overlay (0.0-1.0).                                                 |
+| `brightness` | float | `0.9`   | Brightness adjustment (0.0-2.0).                                         |
+| `contrast`   | float | `0.9`   | Contrast adjustment (0.0-2.0).                                           |
+| `saturation` | float | `1.1`   | Saturation adjustment (0.0-2.0).                                         |
 
 ### Shadow
 
@@ -194,13 +194,13 @@ color = "#0000008C"
 
 Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `enabled` | bool | `true` | Enable drop shadows. |
-| `softness` | int | `10` | Gaussian blur sigma in pixels (0-200). 0 produces a hard-edged shadow. |
-| `offset_x` | int | `2` | Horizontal shadow offset (-200 to 200). |
-| `offset_y` | int | `2` | Vertical shadow offset (-200 to 200). |
-| `color` | color | `#0000008C` | Shadow color. |
+| Key        | Type  | Default     | Description                                                            |
+| ---------- | ----- | ----------- | ---------------------------------------------------------------------- |
+| `enabled`  | bool  | `true`      | Enable drop shadows.                                                   |
+| `softness` | int   | `10`        | Gaussian blur sigma in pixels (0-200). 0 produces a hard-edged shadow. |
+| `offset_x` | int   | `2`         | Horizontal shadow offset (-200 to 200).                                |
+| `offset_y` | int   | `2`         | Vertical shadow offset (-200 to 200).                                  |
+| `color`    | color | `#0000008C` | Shadow color.                                                          |
 
 ## Overview
 
@@ -239,10 +239,10 @@ workspace. Its alpha can produce anything from a light tint to an opaque fill.
 See the [overview rendering design note](design/overview-rendering.md) for
 clipping, opacity, and decoration details.
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `zoom` | float | `0.5` | Workspace scale when fully zoomed out (0.1-0.75). |
-| `background_tint` | color | `#10101430` | Tint composited over the desktop background. Alpha `00` leaves it untouched; `FF` hides it. |
+| Key                    | Type  | Default     | Description                                                                                    |
+| ---------------------- | ----- | ----------- | ---------------------------------------------------------------------------------------------- |
+| `zoom`                 | float | `0.5`       | Workspace scale when fully zoomed out (0.1-0.75).                                              |
+| `background_tint`      | color | `#10101430` | Tint composited over the desktop background. Alpha `00` leaves it untouched; `FF` hides it.    |
 | `workspace_background` | color | `#00000044` | Rounded background behind each workspace. Alpha `00` makes it invisible; `FF` makes it opaque. |
 
 ## Layout
@@ -260,18 +260,18 @@ center_underfull_strip = true
 
 Shared layout options:
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `mode` | string | `"scrolling"` | Layout algorithm: `"scrolling"` or `"dwindle"`. |
-| `gap` | int | `8` | Gap between windows in pixels (0-500). |
+| Key             | Type        | Default               | Description                                                        |
+| --------------- | ----------- | --------------------- | ------------------------------------------------------------------ |
+| `mode`          | string      | `"scrolling"`         | Layout algorithm: `"scrolling"` or `"dwindle"`.                    |
+| `gap`           | int         | `8`                   | Gap between windows in pixels (0-500).                             |
 | `width_presets` | float array | `[0.333, 0.5, 0.667]` | Widths visited by the `window-cycle-width` action in both layouts. |
 
 Scrolling layout options:
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `default_width_fraction` | float | `0.5` | Initial width assigned to new scrolling columns (0.1-1.0). |
-| `center_underfull_strip` | bool | `true` | Center the complete strip whenever it is narrower than the viewport. Set to `false` to align an underfull strip at the left edge. |
+| Key                      | Type  | Default | Description                                                                                                                       |
+| ------------------------ | ----- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `default_width_fraction` | float | `0.5`   | Initial width assigned to new scrolling columns (0.1-1.0).                                                                        |
+| `center_underfull_strip` | bool  | `true`  | Center the complete strip whenever it is narrower than the viewport. Set to `false` to align an underfull strip at the left edge. |
 
 In the scrolling layout, Mod+Right-drag selects horizontal and vertical resize
 edges from the outer thirds of a window. Dragging from a corner region resizes
@@ -342,9 +342,23 @@ preserve each device's defaults.
 ```toml
 [input.mouse]
 natural_scroll = false
+accel_profile = "flat"  # "flat", "adaptive", or a custom curve
+sensitivity = 0.0        # -1.0 to 1.0
 scroll_wheel_step = 60  # 1-1000, pixels per step for layout-scroll-left/right
 ```
 
+Mouse acceleration is disabled by default by selecting libinput's `flat`
+profile. Set `accel_profile = "adaptive"` to enable acceleration. `sensitivity`
+controls pointer speed independently of the selected profile. A custom curve can
+be supplied with thise syntax:
+
+```toml
+accel_profile = "custom 0.2 0.0 0.5 1.0 2.0"
+```
+
+The first number is the positive input-speed step, followed by at least two
+non-negative output-speed points. Libinput interpolates between them.
+`sensitivity` has no effect when a custom profile is selected.
 Omit `natural_scroll` to preserve each device's default. `layout-scroll-left`
 and `layout-scroll-right` clamp to the strip bounds, so the columns never park
 past either edge. Wheel-triggered scrolling uses twice `scroll_wheel_step`
@@ -368,12 +382,18 @@ repeat_delay = 250
 name = "Acme Precision Touchpad"
 tap = true
 natural_scroll = false
+
+[[input.device]]
+name = "Acme Gaming Mouse"
+accel_profile = "flat"
+sensitivity = 0.0
 ```
 
 Each rule inherits the matching class settings and overrides only the keys it
 contains. `layout`, `variant`, `options`, `repeat_rate`, and `repeat_delay`
 apply to keyboards. `tap` applies to touchpads. `natural_scroll` applies to
-touchpads and mice. Unsupported libinput settings are reported in the log.
+touchpads and mice. `accel_profile` and `sensitivity` apply to mice.
+Unsupported libinput settings are reported in the log.
 
 Rules match every attached device with the exact name. Device overrides also
 apply when a device is connected after startup and when the configuration is
@@ -401,9 +421,9 @@ follows_mouse = false
 follows_mouse_max_scroll = 0.5  # optional, measured in viewport widths
 ```
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `follows_mouse` | bool | `false` | Focus a window when the pointer enters it, then scroll it into view. |
+| Key                        | Type  | Default    | Description                                                                                                                                                                     |
+| -------------------------- | ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `follows_mouse`            | bool  | `false`    | Focus a window when the pointer enters it, then scroll it into view.                                                                                                            |
 | `follows_mouse_max_scroll` | float | (no limit) | Do not change focus when revealing the window would scroll farther than this many viewport widths. `0.0` allows only windows that are already fully visible. Omit for no limit. |
 
 For example, a window three screens away requires a limit of at least `3.0`.

@@ -1,6 +1,7 @@
 #include "check.h"
 #include "config/change.h"
 
+using umbriel::AccelProfile;
 using umbriel::Config;
 using umbriel::ConfigChange;
 using umbriel::ConfigEffects;
@@ -52,6 +53,13 @@ UMBRIEL_TEST(eachSectionIsReportedOnItsOwn) {
   {
     Config after;
     after.input.keyboard.repeatRate += 1;
+    const ConfigChange change = ConfigChange::between(before, after);
+    CHECK(change.input);
+    CHECK(!change.appearance);
+  }
+  {
+    Config after;
+    after.input.mouse.accelProfile.kind = AccelProfile::Kind::Adaptive;
     const ConfigChange change = ConfigChange::between(before, after);
     CHECK(change.input);
     CHECK(!change.appearance);

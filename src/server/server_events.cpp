@@ -163,6 +163,63 @@ namespace umbriel {
       }
     }
 
+    void applyMouseAcceleration(
+        libinput_device* libinputDevice, const wlr_input_device* device, const AccelProfile& configuredProfile,
+        double sensitivity
+    ) {
+      if (libinput_device_config_accel_is_available(libinputDevice) == 0) {
+        return;
+      }
+
+      enum libinput_config_accel_profile profile = LIBINPUT_CONFIG_ACCEL_PROFILE_FLAT;
+      const char* profileName = "flat";
+      switch (configuredProfile.kind) {
+      case AccelProfile::Kind::Flat:
+        break;
+      case AccelProfile::Kind::Adaptive:
+        profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+        profileName = "adaptive";
+        break;
+      case AccelProfile::Kind::Custom:
+        profile = LIBINPUT_CONFIG_ACCEL_PROFILE_CUSTOM;
+        profileName = "custom";
+        break;
+      }
+      if ((libinput_device_config_accel_get_profiles(libinputDevice) & profile) == 0) {
+        kLog.warn("input: '{}' does not support the {} acceleration profile", deviceName(device), profileName);
+        return;
+      }
+
+      if (configuredProfile.kind == AccelProfile::Kind::Custom) {
+        libinput_config_accel* acceleration = libinput_config_accel_create(profile);
+        if (acceleration == nullptr) {
+          kLog.warn("input: failed to create custom acceleration profile for '{}'", deviceName(device));
+          return;
+        }
+        const auto pointsStatus = libinput_config_accel_set_points(
+            acceleration, LIBINPUT_ACCEL_TYPE_MOTION, configuredProfile.step, configuredProfile.points.size(),
+            configuredProfile.points.data()
+        );
+        const auto applyStatus = pointsStatus == LIBINPUT_CONFIG_STATUS_SUCCESS
+            ? libinput_device_config_accel_apply(libinputDevice, acceleration)
+            : pointsStatus;
+        libinput_config_accel_destroy(acceleration);
+        if (applyStatus != LIBINPUT_CONFIG_STATUS_SUCCESS) {
+          kLog.warn("input: failed to apply input.mouse.accel_profile to '{}'", deviceName(device));
+        }
+        return;
+      }
+
+      if (libinput_device_config_accel_set_profile(libinputDevice, profile) != LIBINPUT_CONFIG_STATUS_SUCCESS) {
+        kLog.warn("input: failed to apply input.mouse.accel_profile to '{}'", deviceName(device));
+        return;
+      }
+
+      if (libinput_device_config_accel_set_speed(libinputDevice, sensitivity) != LIBINPUT_CONFIG_STATUS_SUCCESS) {
+        kLog.warn("input: failed to apply input.mouse.sensitivity to '{}'", deviceName(device));
+      }
+    }
+
     void applyPointerConfig(wlr_input_device* device) {
       if (!wlr_input_device_is_libinput(device)) {
         return;
@@ -204,6 +261,11 @@ namespace umbriel {
           libinputDevice, device, naturalScroll,
           override != nullptr && override->naturalScroll ? "input.device.natural_scroll" : "input.mouse.natural_scroll"
       );
+      const AccelProfile& accelProfile =
+          override != nullptr && override->accelProfile ? *override->accelProfile : input.mouse.accelProfile;
+      const double sensitivity =
+          override != nullptr && override->sensitivity ? *override->sensitivity : input.mouse.sensitivity;
+      applyMouseAcceleration(libinputDevice, device, accelProfile, sensitivity);
     }
   } // namespace
   void Server::applyConfig(const ConfigEffects& effects) {

@@ -89,7 +89,7 @@ else
 endif
 
 xkbcommon_dep = dependency('xkbcommon')
-libinput_dep = dependency('libinput')
+libinput_dep = dependency('libinput', version: '>=1.23')
 pixman_dep = dependency('pixman-1')
 tomlplusplus_dep = dependency('tomlplusplus')
 nlohmann_json_dep = dependency('nlohmann_json')

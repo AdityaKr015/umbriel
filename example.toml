@@ -118,15 +118,21 @@ repeat_delay = 600             # 0-10000 ms
 
 [input.mouse]
 # natural_scroll = false
+accel_profile = "flat"         # "flat", "adaptive", or "custom <step> <points...>"
+sensitivity = 0.0              # pointer speed, -1.0 to 1.0
 scroll_wheel_step = 60         # 1-1000
 # Override only the listed settings for an exact, case-sensitive device name.
 # Applies per device kind: layout, variant, options, repeat_rate, and
 # repeat_delay to keyboards; tap to touchpads; natural_scroll to touchpads
-# and mice. Find names with `libinput list-devices`.
+# and mice; acceleration settings to mice. Find names with `libinput list-devices`.
 # [[input.device]]
 # name = "Acme Precision Touchpad"
 # tap = true
 # natural_scroll = false
+# [[input.device]]
+# name = "Gaming Mouse"
+# accel_profile = "flat"
+# sensitivity = 0.0
 
 [input.cursor]
 theme = ""

@@ -64,9 +64,7 @@ namespace umbriel {
     [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Overlays; }
     // Advances the zoom animation; returns true while it is still running.
     bool tickAnimations(uint64_t nowMsec) override;
-    [[nodiscard]] bool hasActiveAnimations() const override {
-      return m_anim.animating() || (m_dropHint != nullptr && m_dropHint->hasActiveAnimations());
-    }
+    [[nodiscard]] bool hasActiveAnimations() const override;
     // The overview zooms every output at once.
     [[nodiscard]] bool animatesOn(const Output* /*output*/) const override { return true; }
 
@@ -121,6 +119,10 @@ namespace umbriel {
       SurfaceBlur blur;
       std::vector<std::unique_ptr<CardSurface>> surfaces;
       wlr_box box{}; // content box in layout coordinates
+      // Overview-only presentation position. Layout targets still update
+      // immediately, while this follows them with the regular window motion.
+      AnimatedValue worldX;
+      bool worldXInitialized = false;
     };
 
     struct OutputState {
@@ -201,6 +203,7 @@ namespace umbriel {
     double m_progressFrom = 0;
     AnimatedValue m_anim;
     View* m_pendingFocus = nullptr;
+    Workspace* m_horizontalWorkspace = nullptr;
     bool m_gestureOpenedHere = false;
 
     Card* m_pressCard = nullptr;

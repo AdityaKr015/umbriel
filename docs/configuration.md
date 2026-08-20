@@ -350,7 +350,7 @@ scroll_wheel_step = 60  # 1-1000, pixels per step for layout-scroll-left/right
 Mouse acceleration is disabled by default by selecting libinput's `flat`
 profile. Set `accel_profile = "adaptive"` to enable acceleration. `sensitivity`
 controls pointer speed independently of the selected profile. A custom curve can
-be supplied with thise syntax:
+be supplied with this syntax:
 
 ```toml
 accel_profile = "custom 0.2 0.0 0.5 1.0 2.0"

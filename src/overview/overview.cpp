@@ -182,8 +182,14 @@ namespace umbriel {
       card.box.height = contentH;
     } else {
       const wlr_box world = worldBoxOf(view, metrics.outputBox);
+      if (!card.worldXInitialized) {
+        card.worldX.snap(world.x);
+        card.worldXInitialized = true;
+      } else if (!card.worldX.animating()) {
+        card.worldX.snap(world.x);
+      }
       card.box = {
-          .x = metrics.rowX + static_cast<int>(std::lround((world.x - metrics.outputBox.x) * z)),
+          .x = metrics.rowX + static_cast<int>(std::lround((card.worldX.current() - metrics.outputBox.x) * z)),
           .y =
               rowTop(metrics, rowScroll, card.row) + static_cast<int>(std::lround((world.y - metrics.outputBox.y) * z)),
           .width = contentW,
@@ -809,6 +815,15 @@ namespace umbriel {
 
   bool Overview::tickAnimations(uint64_t nowMsec) {
     bool active = m_dropHint != nullptr && m_dropHint->tickAnimations(nowMsec);
+    bool cardsChanged = false;
+    for (const auto& state : m_outputs) {
+      for (const auto& card : state->cards) {
+        if (card->worldX.tick(nowMsec)) {
+          cardsChanged = true;
+          active = card->worldX.animating() || active;
+        }
+      }
+    }
     if (m_anim.tick(nowMsec)) {
       const double value = m_anim.current();
       m_progress = m_progressFrom + (m_targetProgress - m_progressFrom) * value;
@@ -821,8 +836,24 @@ namespace umbriel {
         finishAnimation();
       }
       active = m_anim.animating() || active;
+    } else if (cardsChanged) {
+      applyProgress();
     }
     return active;
+  }
+
+  bool Overview::hasActiveAnimations() const {
+    if (m_anim.animating() || (m_dropHint != nullptr && m_dropHint->hasActiveAnimations())) {
+      return true;
+    }
+    for (const auto& state : m_outputs) {
+      for (const auto& card : state->cards) {
+        if (card->worldX.animating()) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   void Overview::finishAnimation() {
@@ -832,6 +863,7 @@ namespace umbriel {
     }
     View* focus = m_pendingFocus;
     m_pendingFocus = nullptr;
+    m_horizontalWorkspace = nullptr;
     teardown();
     // Real trees are visible again: settle each active workspace so window
     // positions match where the cards landed.
@@ -884,6 +916,7 @@ namespace umbriel {
     m_dragSourceWorkspace = nullptr;
     m_dragSourceWidth.reset();
     m_drop = {};
+    m_horizontalWorkspace = nullptr;
     m_gestureOpenedHere = false;
     m_server->reconcileDynamicWorkspaces();
   }
@@ -987,6 +1020,22 @@ namespace umbriel {
       return;
     }
     if (OutputState* state = stateForWorkspace(workspace)) {
+      if (m_horizontalWorkspace == workspace) {
+        const int duration = std::max(1, config().appearance.animationMs);
+        RowMetrics metrics{};
+        if (rowMetrics(*state, *m_server, zoom(), metrics)) {
+          for (const auto& card : state->cards) {
+            if (card->view->workspace() != workspace || workspace->layout().columnOf(card->view) < 0) {
+              continue;
+            }
+            const double target = worldBoxOf(card->view, metrics.outputBox).x;
+            if (card->worldXInitialized && std::abs(card->worldX.current() - target) >= 0.5) {
+              card->worldX.retarget(target, duration, Easing::EaseOutCubic);
+            }
+          }
+        }
+        m_horizontalWorkspace = nullptr;
+      }
       layoutOutput(*state);
       wlr_output_schedule_frame(state->output->wlr());
     }
@@ -1207,6 +1256,7 @@ namespace umbriel {
     case XKB_KEY_Right:
       if (Workspace* workspace = preferredWorkspace()) {
         if (View* target = workspace->focusAdjacent(keysym == XKB_KEY_Left ? -1 : 1)) {
+          m_horizontalWorkspace = workspace;
           m_server->focusView(target, FocusReason::Directional);
         }
       }

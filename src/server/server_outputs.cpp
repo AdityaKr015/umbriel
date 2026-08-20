@@ -1,8 +1,10 @@
 #include "core/dirty.h"
 #include "input/cursor.h"
+#include "input/seat.h"
 #include "layer/layer_surface.h"
 #include "output/output.h"
 #include "server/server.h"
+#include "view/view.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
 
@@ -44,6 +46,24 @@ namespace umbriel {
     for (const auto& entry : m_outputs) {
       if (entry->wlr()->name != nullptr && name == entry->wlr()->name) {
         return entry.get();
+      }
+    }
+    return nullptr;
+  }
+
+  Output* Server::focusedOutput() const {
+    wlr_surface* surface = m_seat->wlr()->keyboard_state.focused_surface;
+    if (surface == nullptr) {
+      return nullptr;
+    }
+    if (View* view = View::fromSurface(surface);
+        view != nullptr && view->workspace() != nullptr && view->workspace()->group() != nullptr) {
+      return view->workspace()->group()->output();
+    }
+    const wlr_surface* root = wlr_surface_get_root_surface(surface);
+    for (const auto& entry : m_layerSurfaces) {
+      if (entry->layerSurface()->surface == root) {
+        return outputFromWlr(entry->layerSurface()->output);
       }
     }
     return nullptr;

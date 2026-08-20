@@ -10,29 +10,6 @@
 namespace umbriel {
 
   namespace {
-    View* toplevelViewFromSurface(wlr_surface* surface) {
-      wlr_surface* walk = surface;
-      while (walk != nullptr) {
-        if (wlr_xdg_toplevel* toplevel = wlr_xdg_toplevel_try_from_wlr_surface(walk)) {
-          auto* tree = static_cast<wlr_scene_tree*>(toplevel->base->data);
-          if (tree == nullptr) {
-            return nullptr;
-          }
-          SceneNode* node = sceneNodeFrom(tree->node.data);
-          if (node == nullptr || node->kind != SceneNodeKind::View) {
-            return nullptr;
-          }
-          return static_cast<View*>(node);
-        }
-        if (wlr_xdg_popup* popup = wlr_xdg_popup_try_from_wlr_surface(walk)) {
-          walk = popup->parent;
-          continue;
-        }
-        break;
-      }
-      return nullptr;
-    }
-
     LayerSurface* layerSurfaceFromSurface(wlr_surface* surface) {
       wlr_surface* walk = surface;
       while (walk != nullptr) {
@@ -101,7 +78,7 @@ namespace umbriel {
     SurfaceBlurOptions blurOptions;
     if (LayerSurface* layer = layerSurfaceFromSurface(m_popup->parent)) {
       blurOptions = layer->popupBlurOptions();
-    } else if (View* view = toplevelViewFromSurface(m_popup->parent)) {
+    } else if (View* view = View::fromSurface(m_popup->parent)) {
       blurOptions = view->popupBlurOptions();
     }
     m_blur.update(
@@ -118,7 +95,7 @@ namespace umbriel {
   void Popup::unconstrain() {
     if (LayerSurface* layer = layerSurfaceFromSurface(m_popup->parent)) {
       layer->unconstrainPopup(m_popup);
-    } else if (View* view = toplevelViewFromSurface(m_popup->parent)) {
+    } else if (View* view = View::fromSurface(m_popup->parent)) {
       view->unconstrainPopup(m_popup);
     } else {
       wlr_xdg_surface_schedule_configure(m_popup->base);

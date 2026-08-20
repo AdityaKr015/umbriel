@@ -14,10 +14,14 @@ struct wlr_input_device;
 struct wlr_output;
 struct wlr_pointer_constraint_v1;
 struct wlr_surface;
+struct wlr_tablet;
+struct wlr_tablet_tool;
+struct wlr_tablet_v2_tablet_tool;
 struct wlr_xcursor_manager;
 
 namespace umbriel {
 
+  class LayerSurface;
   class Server;
   class View;
   class Workspace;
@@ -62,6 +66,23 @@ namespace umbriel {
     };
     using GrabState =
         std::variant<PassthroughGrab, FloatingMoveGrab, TiledMoveGrab, FloatingResizeGrab, TiledResizeGrab>;
+
+    struct TabletToolState {
+      Cursor* cursor = nullptr;
+      wlr_tablet_tool* tool = nullptr;
+      wlr_tablet_v2_tablet_tool* v2 = nullptr;
+      // Deliver via wl_pointer instead of tablet-v2.
+      bool emulating = false;
+      bool tipDown = false;
+      // Last absolute position, 0..1.
+      double x = 0;
+      double y = 0;
+      // Last tilt pair.
+      double tiltX = 0;
+      double tiltY = 0;
+      wl_listener destroy{};
+      wl_listener setCursor{};
+    };
 
   public:
     explicit Cursor(Server& server);
@@ -115,6 +136,12 @@ namespace umbriel {
     static void onTouchMotion(wl_listener* listener, void* data);
     static void onTouchCancel(wl_listener* listener, void* data);
     static void onTouchFrame(wl_listener* listener, void* data);
+    static void onTabletToolAxis(wl_listener* listener, void* data);
+    static void onTabletToolProximity(wl_listener* listener, void* data);
+    static void onTabletToolTip(wl_listener* listener, void* data);
+    static void onTabletToolButton(wl_listener* listener, void* data);
+    static void onToolDestroy(wl_listener* listener, void* data);
+    static void onToolSetCursor(wl_listener* listener, void* data);
 
     void handleMotion(void* data);
     void handleMotionAbsolute(void* data);
@@ -127,8 +154,17 @@ namespace umbriel {
     void handleTouchMotion(void* data);
     void handleTouchCancel(void* data);
     void handleTouchFrame();
+    void handleTabletToolAxis(void* data);
+    void handleTabletToolProximity(void* data);
+    void handleTabletToolTip(void* data);
+    void handleTabletToolButton(void* data);
 
     void processMotion(uint32_t timeMsec, double oldX, double oldY);
+    void processButton(uint32_t timeMsec, uint32_t button, wl_pointer_button_state state);
+    void updatePointerOutput();
+    View* hoverFocus(
+        View* view, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer, double oldX, double oldY
+    );
     void processMove();
     void presentGrabbedViewSpanning();
     void updateDropTarget();
@@ -146,6 +182,9 @@ namespace umbriel {
     [[nodiscard]] bool constraintSurfaceActive() const;
     void warpToConstraintHint(wlr_pointer_constraint_v1* constraint);
     [[nodiscard]] bool confineDelta(double* dx, double* dy) const;
+    TabletToolState* toolState(wlr_tablet_tool* tool);
+    void setToolEmulating(TabletToolState* state, bool emulating);
+    void processTabletMotion(uint32_t timeMsec, double oldX, double oldY, TabletToolState* state, wlr_tablet* tablet);
 
     Server* m_server = nullptr;
     wlr_cursor* m_cursor = nullptr;
@@ -162,6 +201,7 @@ namespace umbriel {
     double m_wheelAccum[2]{};
     // Presses consumed by config mouse binds; their release is swallowed too.
     std::vector<uint32_t> m_swallowedButtons;
+    std::vector<std::unique_ptr<TabletToolState>> m_tools;
     bool m_compositorOwnsCursor = false;
     std::string m_compositorCursorName;
 
@@ -176,6 +216,10 @@ namespace umbriel {
     wl_listener m_touchMotion{};
     wl_listener m_touchCancel{};
     wl_listener m_touchFrame{};
+    wl_listener m_tabletToolAxis{};
+    wl_listener m_tabletToolProximity{};
+    wl_listener m_tabletToolTip{};
+    wl_listener m_tabletToolButton{};
   };
 
 } // namespace umbriel

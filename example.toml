@@ -138,6 +138,14 @@ scroll_wheel_step = 60         # 1-1000
 # accel_profile = "flat"
 # sensitivity = 0.0
 
+[input.tablet]
+enabled = true                 # false disables the tablet and its pads
+# map_to_output = "DP-1"       # confine the tablet area to one monitor
+# map_to_focused_output = false
+# map_to_focused_window = false  # pen area = focused window; wins over the output mappings
+# left_handed = false
+# calibration_matrix = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]  # libinput calibration, 6 numbers
+
 [input.cursor]
 theme = ""
 size = 24                      # 1-512

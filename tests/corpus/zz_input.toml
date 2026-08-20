@@ -14,3 +14,10 @@ them = "Adwaita"                     # typo
 [input.focus]
 follows_mouse = true
 follows_mouse_max_scroll = "half"    # wrong type, bespoke message
+[input.tablet]
+enabled = false
+map_to_output = "DP-1"
+map_to_focused_output = true
+map_to_focused_window = true
+left_handed = true
+calibration_matrix = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]

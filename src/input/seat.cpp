@@ -114,13 +114,22 @@ namespace umbriel {
 
   void Seat::handleRequestSetShape(void* data) {
     auto* event = static_cast<wlr_cursor_shape_manager_v1_request_set_shape_event*>(data);
-    if (event->device_type != WLR_CURSOR_SHAPE_MANAGER_V1_DEVICE_TYPE_POINTER) {
-      return;
-    }
     if (m_server->cursor()->compositorOwnsCursor()) {
       return;
     }
-    if (m_seat->pointer_state.focused_client != event->seat_client) {
+    if (event->device_type == WLR_CURSOR_SHAPE_MANAGER_V1_DEVICE_TYPE_POINTER) {
+      if (m_seat->pointer_state.focused_client != event->seat_client) {
+        return;
+      }
+    } else if (event->device_type == WLR_CURSOR_SHAPE_MANAGER_V1_DEVICE_TYPE_TABLET_TOOL) {
+      // The tool's focused surface is the acceptance check; there is no
+      // pointer-focus client for a tablet cursor.
+      if (event->tablet_tool == nullptr
+          || event->tablet_tool->focused_surface == nullptr
+          || wl_resource_get_client(event->tablet_tool->focused_surface->resource) != event->seat_client->client) {
+        return;
+      }
+    } else {
       return;
     }
 

@@ -287,6 +287,12 @@ namespace umbriel {
       for (const auto& pointer : m_pointers) {
         applyPointerConfig(pointer->device);
       }
+      for (const auto& tablet : m_tabletDevices) {
+        applyTabletConfig(*tablet);
+      }
+      for (const auto& pad : m_tabletPads) {
+        applyTabletPadConfig(*pad);
+      }
       m_seat->applyConfig();
       m_cursor->applyConfig();
     }
@@ -476,6 +482,12 @@ namespace umbriel {
       break;
     case WLR_INPUT_DEVICE_TOUCH:
       self->addTouch(device);
+      break;
+    case WLR_INPUT_DEVICE_TABLET:
+      self->addTablet(device);
+      break;
+    case WLR_INPUT_DEVICE_TABLET_PAD:
+      self->addTabletPad(device);
       break;
     default:
       break;
@@ -972,6 +984,251 @@ namespace umbriel {
       return entry.get() == watch;
     });
     server->updateSeatCapabilities();
+  }
+
+  void Server::addTablet(wlr_input_device* device) {
+    auto tablet = std::make_unique<TabletDevice>();
+    tablet->server = this;
+    tablet->device = device;
+    tablet->v2 = wlr_tablet_create(m_tabletManager, m_seat->wlr(), device);
+    tablet->destroy.notify = onTabletDestroy;
+    wl_signal_add(&device->events.destroy, &tablet->destroy);
+    m_cursor->attachInputDevice(device);
+    applyTabletConfig(*tablet);
+    m_tabletDevices.push_back(std::move(tablet));
+    pairTabletPads();
+    kLog.info("input: added tablet '{}'", deviceName(device));
+  }
+
+  void Server::applyTabletConfig(TabletDevice& tablet) {
+    if (wlr_input_device_is_libinput(tablet.device) == 0) {
+      kLog.debug("input: tablet '{}' is not a libinput device; tablet settings skipped", deviceName(tablet.device));
+      return;
+    }
+    libinput_device* libinputDevice = wlr_libinput_get_device_handle(tablet.device);
+    if (libinputDevice == nullptr) {
+      return;
+    }
+    const Config::Input::Tablet& cfg = config().input.tablet;
+    if ((libinput_device_config_send_events_get_modes(libinputDevice) & LIBINPUT_CONFIG_SEND_EVENTS_DISABLED) != 0) {
+      libinput_device_config_send_events_set_mode(
+          libinputDevice, cfg.enabled ? LIBINPUT_CONFIG_SEND_EVENTS_ENABLED : LIBINPUT_CONFIG_SEND_EVENTS_DISABLED
+      );
+    } else if (!cfg.enabled) {
+      kLog.warn("input: '{}' cannot be disabled", deviceName(tablet.device));
+    }
+    if (libinput_device_config_left_handed_is_available(libinputDevice) != 0
+        && libinput_device_config_left_handed_set(libinputDevice, cfg.leftHanded) != LIBINPUT_CONFIG_STATUS_SUCCESS) {
+      kLog.warn("input: failed to apply input.tablet.left_handed to '{}'", deviceName(tablet.device));
+    }
+    if (libinput_device_config_calibration_has_matrix(libinputDevice) != 0) {
+      if (cfg.calibrationMatrix.has_value()) {
+        libinput_device_config_calibration_set_matrix(libinputDevice, cfg.calibrationMatrix->data());
+      } else {
+        // Removing the key on reload restores the device default.
+        float matrix[6] = {};
+        libinput_device_config_calibration_get_default_matrix(libinputDevice, matrix);
+        libinput_device_config_calibration_set_matrix(libinputDevice, matrix);
+      }
+    }
+    remapTablets();
+  }
+
+  void Server::addTabletPad(wlr_input_device* device) {
+    auto pad = std::make_unique<TabletPadDevice>();
+    pad->server = this;
+    pad->device = device;
+    pad->v2 = wlr_tablet_pad_create(m_tabletManager, m_seat->wlr(), device);
+    wlr_tablet_pad* wlrPad = wlr_tablet_pad_from_input_device(device);
+    pad->destroy.notify = onTabletPadDestroy;
+    wl_signal_add(&device->events.destroy, &pad->destroy);
+    pad->button.notify = onTabletPadButton;
+    wl_signal_add(&wlrPad->events.button, &pad->button);
+    pad->ring.notify = onTabletPadRing;
+    wl_signal_add(&wlrPad->events.ring, &pad->ring);
+    pad->strip.notify = onTabletPadStrip;
+    wl_signal_add(&wlrPad->events.strip, &pad->strip);
+    applyTabletPadConfig(*pad);
+    m_tabletPads.push_back(std::move(pad));
+    pairTabletPads();
+    // Deliver an initial enter to the keyboard-focused surface so a client
+    // already holding focus gets the pad without a focus change.
+    if (wlr_surface* focused = m_seat->wlr()->keyboard_state.focused_surface;
+        focused != nullptr && m_tabletPads.back()->tablet != nullptr) {
+      TabletPadDevice* entry = m_tabletPads.back().get();
+      entry->enteredSurface = focused;
+      wlr_tablet_v2_tablet_pad_notify_enter(entry->v2, entry->tablet->v2, focused);
+    }
+    kLog.info("input: added tablet pad '{}'", deviceName(device));
+  }
+
+  void Server::applyTabletPadConfig(TabletPadDevice& pad) {
+    if (wlr_input_device_is_libinput(pad.device) == 0) {
+      return;
+    }
+    libinput_device* libinputDevice = wlr_libinput_get_device_handle(pad.device);
+    if (libinputDevice == nullptr) {
+      return;
+    }
+    const bool enabled = config().input.tablet.enabled;
+    if ((libinput_device_config_send_events_get_modes(libinputDevice) & LIBINPUT_CONFIG_SEND_EVENTS_DISABLED) != 0) {
+      libinput_device_config_send_events_set_mode(
+          libinputDevice, enabled ? LIBINPUT_CONFIG_SEND_EVENTS_ENABLED : LIBINPUT_CONFIG_SEND_EVENTS_DISABLED
+      );
+    } else if (!enabled) {
+      kLog.warn("input: '{}' cannot be disabled", deviceName(pad.device));
+    }
+  }
+
+  void Server::pairTabletPads() {
+    for (const auto& pad : m_tabletPads) {
+      TabletDevice* match = nullptr;
+      for (const auto& candidate : m_tabletDevices) {
+        if (wlr_input_device_is_libinput(pad->device) != 0 && wlr_input_device_is_libinput(candidate->device) != 0) {
+          libinput_device* padHandle = wlr_libinput_get_device_handle(pad->device);
+          libinput_device* tabletHandle = wlr_libinput_get_device_handle(candidate->device);
+          if (padHandle != nullptr
+              && tabletHandle != nullptr
+              && libinput_device_get_device_group(padHandle) == libinput_device_get_device_group(tabletHandle)) {
+            match = candidate.get();
+            break;
+          }
+        }
+      }
+      if (match == nullptr && m_tabletDevices.size() == 1) {
+        match = m_tabletDevices.front().get();
+      }
+      pad->tablet = match;
+    }
+  }
+
+  void Server::remapTablets() {
+    const Config::Input::Tablet& cfg = config().input.tablet;
+    for (const auto& tablet : m_tabletDevices) {
+      wlr_box region{};
+      wlr_output* output = nullptr;
+      if (cfg.mapToFocusedWindow) {
+        if (View* view = View::fromSurface(m_seat->wlr()->keyboard_state.focused_surface)) {
+          const wlr_box geo = view->toplevel()->base->geometry;
+          if (geo.width > 0 && geo.height > 0) {
+            region = {view->layoutTargetX(), view->layoutTargetY(), geo.width, geo.height};
+          }
+        }
+      }
+      if (wlr_box_empty(&region) && (cfg.mapToFocusedWindow || cfg.mapToFocusedOutput)) {
+        if (Output* out = focusedOutput()) {
+          output = out->wlr();
+        }
+      }
+      if (wlr_box_empty(&region) && output == nullptr && !cfg.mapToOutput.empty()) {
+        if (Output* out = outputFromName(cfg.mapToOutput)) {
+          output = out->wlr();
+        }
+      }
+      wlr_cursor_map_input_to_region(m_cursor->wlr(), tablet->device, &region);
+      wlr_cursor_map_input_to_output(m_cursor->wlr(), tablet->device, output);
+    }
+  }
+
+  wlr_tablet_v2_tablet* Server::tabletV2FromWlr(const wlr_tablet* tablet) const {
+    if (tablet == nullptr) {
+      return nullptr;
+    }
+    for (const auto& entry : m_tabletDevices) {
+      if (&tablet->base == entry->device) {
+        return entry->v2;
+      }
+    }
+    return nullptr;
+  }
+
+  void Server::onTabletDestroy(wl_listener* listener, void* /*data*/) {
+    TabletDevice* watch;
+    watch = wl_container_of(listener, watch, destroy);
+    Server* server = watch->server;
+    wl_list_remove(&watch->destroy.link);
+    for (const auto& pad : server->m_tabletPads) {
+      if (pad->tablet != watch) {
+        continue;
+      }
+      if (pad->enteredSurface != nullptr) {
+        wlr_tablet_v2_tablet_pad_notify_leave(pad->v2, pad->enteredSurface);
+        pad->enteredSurface = nullptr;
+      }
+      pad->tablet = nullptr;
+    }
+    std::erase_if(server->m_tabletDevices, [watch](const std::unique_ptr<TabletDevice>& entry) {
+      return entry.get() == watch;
+    });
+    server->pairTabletPads();
+  }
+
+  void Server::onTabletPadButton(wl_listener* listener, void* data) {
+    TabletPadDevice* watch;
+    watch = wl_container_of(listener, watch, button);
+    auto* event = static_cast<wlr_tablet_pad_button_event*>(data);
+    watch->server->notifyIdleActivity();
+    wlr_tablet_v2_tablet_pad_notify_button(
+        watch->v2, event->button, event->time_msec,
+        event->state == WLR_BUTTON_PRESSED ? ZWP_TABLET_PAD_V2_BUTTON_STATE_PRESSED
+                                           : ZWP_TABLET_PAD_V2_BUTTON_STATE_RELEASED
+    );
+  }
+
+  void Server::onTabletPadRing(wl_listener* listener, void* data) {
+    TabletPadDevice* watch;
+    watch = wl_container_of(listener, watch, ring);
+    auto* event = static_cast<wlr_tablet_pad_ring_event*>(data);
+    watch->server->notifyIdleActivity();
+    wlr_tablet_v2_tablet_pad_notify_ring(
+        watch->v2, event->ring, event->position, event->source == WLR_TABLET_PAD_RING_SOURCE_FINGER, event->time_msec
+    );
+  }
+
+  void Server::onTabletPadStrip(wl_listener* listener, void* data) {
+    TabletPadDevice* watch;
+    watch = wl_container_of(listener, watch, strip);
+    auto* event = static_cast<wlr_tablet_pad_strip_event*>(data);
+    watch->server->notifyIdleActivity();
+    wlr_tablet_v2_tablet_pad_notify_strip(
+        watch->v2, event->strip, event->position, event->source == WLR_TABLET_PAD_STRIP_SOURCE_FINGER, event->time_msec
+    );
+  }
+
+  void Server::onPadKeyboardFocusChange(wl_listener* listener, void* data) {
+    Server* self;
+    self = wl_container_of(listener, self, m_padKeyboardFocusChange);
+    auto* event = static_cast<wlr_seat_keyboard_focus_change_event*>(data);
+    for (const auto& pad : self->m_tabletPads) {
+      if (pad->tablet == nullptr) {
+        continue;
+      }
+      if (pad->enteredSurface != nullptr) {
+        wlr_tablet_v2_tablet_pad_notify_leave(pad->v2, pad->enteredSurface);
+        pad->enteredSurface = nullptr;
+      }
+      if (event->new_surface != nullptr) {
+        pad->enteredSurface = event->new_surface;
+        wlr_tablet_v2_tablet_pad_notify_enter(pad->v2, pad->tablet->v2, event->new_surface);
+      }
+    }
+  }
+
+  void Server::onTabletPadDestroy(wl_listener* listener, void* /*data*/) {
+    TabletPadDevice* watch;
+    watch = wl_container_of(listener, watch, destroy);
+    Server* server = watch->server;
+    wl_list_remove(&watch->destroy.link);
+    wl_list_remove(&watch->button.link);
+    wl_list_remove(&watch->ring.link);
+    wl_list_remove(&watch->strip.link);
+    if (watch->enteredSurface != nullptr) {
+      wlr_tablet_v2_tablet_pad_notify_leave(watch->v2, watch->enteredSurface);
+    }
+    std::erase_if(server->m_tabletPads, [watch](const std::unique_ptr<TabletPadDevice>& entry) {
+      return entry.get() == watch;
+    });
+    server->pairTabletPads();
   }
 
   void Server::removeOutput(Output* output) {

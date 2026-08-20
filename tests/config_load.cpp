@@ -421,4 +421,73 @@ options = "grp:win_space_toggle"
   }
 }
 
+UMBRIEL_TEST(tabletConfigLoads) {
+  const TempConfig file;
+  file.write(R"(
+[input.tablet]
+enabled = false
+map_to_output = "DP-1"
+map_to_focused_output = true
+map_to_focused_window = true
+left_handed = true
+calibration_matrix = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+  const auto& tablet = store.config().input.tablet;
+
+  CHECK(result.success);
+  CHECK(!tablet.enabled);
+  CHECK_EQ(tablet.mapToOutput, std::string{"DP-1"});
+  CHECK(tablet.mapToFocusedOutput);
+  CHECK(tablet.mapToFocusedWindow);
+  CHECK(tablet.leftHanded);
+  CHECK(tablet.calibrationMatrix.has_value());
+  if (tablet.calibrationMatrix.has_value()) {
+    CHECK_EQ(*tablet.calibrationMatrix, (std::array<float, 6>{1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F}));
+  }
+}
+
+UMBRIEL_TEST(tabletCalibrationMatrixRejectsWrongShape) {
+  const TempConfig file;
+  file.write(R"(
+[input.tablet]
+calibration_matrix = [1.0, 2.0, 3.0, 4.0, 5.0]
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK(!store.config().input.tablet.calibrationMatrix.has_value());
+  CHECK(containsDiagnostic(store, "calibration_matrix"));
+
+  const TempConfig stringElement;
+  stringElement.write(R"(
+[input.tablet]
+calibration_matrix = [1.0, 2.0, 3.0, "x", 5.0, 6.0]
+)");
+
+  store.setRootPath(stringElement.path(), true);
+  const umbriel::ConfigReloadResult second = store.reload();
+
+  CHECK(second.success);
+  CHECK(!store.config().input.tablet.calibrationMatrix.has_value());
+  CHECK(containsDiagnostic(store, "calibration_matrix"));
+}
+
+UMBRIEL_TEST(tabletConfigDefaults) {
+  const umbriel::Config defaults;
+  const auto& tablet = defaults.input.tablet;
+  CHECK(tablet.enabled);
+  CHECK_EQ(tablet.mapToOutput, std::string{});
+  CHECK(!tablet.mapToFocusedOutput);
+  CHECK(!tablet.mapToFocusedWindow);
+  CHECK(!tablet.leftHanded);
+  CHECK(!tablet.calibrationMatrix.has_value());
+}
+
 int main() { return RUN_TESTS(); }

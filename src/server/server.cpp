@@ -230,6 +230,7 @@ namespace umbriel {
     m_virtualPointerManager = wlr_virtual_pointer_manager_v1_create(m_display);
     m_newVirtualPointer.notify = onNewVirtualPointer;
     wl_signal_add(&m_virtualPointerManager->events.new_virtual_pointer, &m_newVirtualPointer);
+    m_tabletManager = wlr_tablet_v2_create(m_display);
 
     m_idleNotifier = wlr_idle_notifier_v1_create(m_display);
     m_idleInhibitManager = wlr_idle_inhibit_v1_create(m_display);
@@ -260,6 +261,8 @@ namespace umbriel {
 
     m_cursor = std::make_unique<Cursor>(*this);
     m_seat = std::make_unique<Seat>(*this);
+    m_padKeyboardFocusChange.notify = onPadKeyboardFocusChange;
+    wl_signal_add(&m_seat->wlr()->keyboard_state.events.focus_change, &m_padKeyboardFocusChange);
     m_inputMethodRelay = std::make_unique<InputMethodRelay>(*this);
     m_gestures = std::make_unique<Gestures>(*this);
     m_overview = std::make_unique<Overview>(*this);
@@ -295,6 +298,7 @@ namespace umbriel {
     wl_list_remove(&m_outputLayoutChange.link);
     wl_list_remove(&m_rendererLost.link);
     wl_list_remove(&m_toplevelCaptureRequest.link);
+    wl_list_remove(&m_padKeyboardFocusChange.link);
     m_configWatcher.reset();
     m_ipc.reset();
 

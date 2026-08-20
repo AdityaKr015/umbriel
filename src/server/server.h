@@ -43,6 +43,11 @@ struct wlr_session;
 struct wlr_session_lock_manager_v1;
 struct wlr_session_lock_v1;
 struct wlr_surface;
+struct wlr_tablet;
+struct wlr_tablet_manager_v2;
+struct wlr_tablet_pad;
+struct wlr_tablet_v2_tablet;
+struct wlr_tablet_v2_tablet_pad;
 struct wlr_xdg_activation_v1;
 struct wlr_xdg_activation_token_v1;
 struct wlr_xdg_decoration_manager_v1;
@@ -174,6 +179,7 @@ namespace umbriel {
     [[nodiscard]] wlr_relative_pointer_manager_v1* relativePointerManager() const { return m_relativePointerManager; }
     [[nodiscard]] wlr_pointer_gestures_v1* pointerGestures() const { return m_pointerGestures; }
     [[nodiscard]] wlr_virtual_pointer_manager_v1* virtualPointerManager() const { return m_virtualPointerManager; }
+    [[nodiscard]] wlr_tablet_manager_v2* tabletManager() const { return m_tabletManager; }
     [[nodiscard]] Gestures* gestures() const { return m_gestures.get(); }
     [[nodiscard]] bool nested() const { return m_nested; }
     [[nodiscard]] uint32_t modKey() const;
@@ -256,6 +262,12 @@ namespace umbriel {
     [[nodiscard]] Output* outputFromName(const std::string& name) const;
     [[nodiscard]] wlr_box usableAreaAt(double lx, double ly) const;
     void updateOutputManagerConfig();
+    // Recompute the mapping for every tablet: focused window, focused output,
+    // named output, or full layout. Called at the start of every tablet event so
+    // dynamic targets reflect current focus without signal hooks.
+    void remapTablets();
+    // The tablet-v2 handle for a wlroots tablet, or nullptr when unknown.
+    [[nodiscard]] wlr_tablet_v2_tablet* tabletV2FromWlr(const wlr_tablet* tablet) const;
 
     void removeOutput(Output* output);
     void removeKeyboard(Keyboard* keyboard);
@@ -297,6 +309,12 @@ namespace umbriel {
     static void onSetGamma(wl_listener* listener, void* data);
     static void onPointerDestroy(wl_listener* listener, void* data);
     static void onTouchDestroy(wl_listener* listener, void* data);
+    static void onTabletDestroy(wl_listener* listener, void* data);
+    static void onTabletPadDestroy(wl_listener* listener, void* data);
+    static void onTabletPadButton(wl_listener* listener, void* data);
+    static void onTabletPadRing(wl_listener* listener, void* data);
+    static void onTabletPadStrip(wl_listener* listener, void* data);
+    static void onPadKeyboardFocusChange(wl_listener* listener, void* data);
     static void onOutputManagerApply(wl_listener* listener, void* data);
     static void onOutputManagerTest(wl_listener* listener, void* data);
     static void onOutputLayoutChange(wl_listener* listener, void* data);
@@ -310,6 +328,33 @@ namespace umbriel {
     void addKeyboard(wlr_input_device* device);
     void addPointer(wlr_input_device* device);
     void addTouch(wlr_input_device* device);
+    struct TabletDevice {
+      Server* server = nullptr;
+      wlr_input_device* device = nullptr;
+      wlr_tablet_v2_tablet* v2 = nullptr;
+      wl_listener destroy{};
+    };
+    struct TabletPadDevice {
+      Server* server = nullptr;
+      wlr_input_device* device = nullptr;
+      wlr_tablet_v2_tablet_pad* v2 = nullptr;
+      // The tablet this pad is paired with for enter/leave delivery; may be null.
+      TabletDevice* tablet = nullptr;
+      // Surface currently sent pad enter; the paired tablet's focused surface.
+      wlr_surface* enteredSurface = nullptr;
+      wl_listener destroy{};
+      wl_listener button{};
+      wl_listener ring{};
+      wl_listener strip{};
+    };
+    void addTablet(wlr_input_device* device);
+    void addTabletPad(wlr_input_device* device);
+    void applyTabletConfig(TabletDevice& tablet);
+    void applyTabletPadConfig(TabletPadDevice& pad);
+    void pairTabletPads();
+    // The output holding keyboard focus, or nullptr when focus is not on any
+    // output (no surface, or an unmapped workspace).
+    [[nodiscard]] Output* focusedOutput() const;
     void updateSeatCapabilities();
     void beginSessionLock(wlr_session_lock_v1* lock);
     void recreateRenderer();
@@ -370,6 +415,7 @@ namespace umbriel {
     wlr_pointer_gestures_v1* m_pointerGestures = nullptr;
     wlr_virtual_keyboard_manager_v1* m_virtualKeyboardManager = nullptr;
     wlr_virtual_pointer_manager_v1* m_virtualPointerManager = nullptr;
+    wlr_tablet_manager_v2* m_tabletManager = nullptr;
     wlr_idle_inhibit_manager_v1* m_idleInhibitManager = nullptr;
     wlr_idle_notifier_v1* m_idleNotifier = nullptr;
     wlr_xdg_activation_v1* m_xdgActivation = nullptr;
@@ -471,12 +517,15 @@ namespace umbriel {
     wl_listener m_outputLayoutChange{};
     wl_listener m_toplevelCaptureRequest{};
     wl_listener m_rendererLost{};
+    wl_listener m_padKeyboardFocusChange{};
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;
     ModifierTapState m_modifierTap;
     std::vector<std::unique_ptr<PointerDevice>> m_pointers;
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;
+    std::vector<std::unique_ptr<TabletDevice>> m_tabletDevices;
+    std::vector<std::unique_ptr<TabletPadDevice>> m_tabletPads;
     std::vector<std::unique_ptr<VirtualPointerDevice>> m_virtualPointers;
     Dirty m_dirty = Dirty::None;
     ViewRegistry m_registry;

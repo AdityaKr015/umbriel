@@ -416,8 +416,44 @@ Rules match every attached device with the exact name. Device overrides also
 apply when a device is connected after startup and when the configuration is
 reloaded. Duplicate rules for the same name are rejected.
 
-`scroll_wheel_step`, cursor settings, and focus settings remain compositor-wide
-because they are not properties of one physical input device.
+`scroll_wheel_step`, cursor settings, tablet settings, and focus settings remain
+compositor-wide because they are not properties of one physical input device.
+
+### Tablet
+
+```toml
+[input.tablet]
+enabled = true                 # false disables the tablet and its pads
+map_to_output = "DP-1"         # confine the tablet area to one monitor
+map_to_focused_output = false
+map_to_focused_window = false  # pen area = focused window
+left_handed = false
+calibration_matrix = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]  # libinput calibration, 6 numbers
+```
+
+Stylus and pad input is delivered over the tablet-v2 protocol to clients that
+support it (pressure, tilt, eraser as a distinct tool, pad buttons, rings, and
+strips). Every other client receives pointer emulation instead: the tip acts as
+the left button, `BTN_STYLUS` as the right button, and `BTN_STYLUS2` as the
+middle button.
+
+| Key                      | Type  | Default | Description                                                                                                        |
+| ------------------------ | ----- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `enabled`                | bool  | `true`  | Silences the tablet and its pads at the libinput level. Has no effect on devices libinput cannot disable.          |
+| `map_to_output`          | str   | (none)  | Confines the tablet area to the named output, using the same names as `[output.NAME]`.                             |
+| `map_to_focused_output`  | bool  | `false` | Pen area follows the output holding keyboard focus.                                                                |
+| `map_to_focused_window`  | bool  | `false` | Pen area tracks the focused window.                                                                                |
+| `left_handed`            | bool  | `false` | Flips the tablet orientation via libinput.                                                                         |
+| `calibration_matrix`     | array | (none)  | Six finite numbers passed to libinput; omitting the key restores the device default.                               |
+
+The mapping options form a cascade. `map_to_focused_window` wins while a window
+is focused; otherwise `map_to_focused_output` applies while an output holds
+keyboard focus; otherwise `map_to_output` applies while that output is
+connected; otherwise the pen covers the full output layout. Each level falls
+through to the next when its target is unavailable, so combining options is
+harmless. The tablet area is stretched to the target box without aspect-ratio
+correction. `enabled`, `left_handed`, and `calibration_matrix` changes apply on
+config reload, as do the mapping options for the next pen event.
 
 ### Cursor
 

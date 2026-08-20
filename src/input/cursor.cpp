@@ -115,6 +115,15 @@ namespace umbriel {
     m_touchFrame.notify = onTouchFrame;
     wl_signal_add(&m_cursor->events.touch_frame, &m_touchFrame);
 
+    m_tabletToolAxis.notify = onTabletToolAxis;
+    wl_signal_add(&m_cursor->events.tablet_tool_axis, &m_tabletToolAxis);
+    m_tabletToolProximity.notify = onTabletToolProximity;
+    wl_signal_add(&m_cursor->events.tablet_tool_proximity, &m_tabletToolProximity);
+    m_tabletToolTip.notify = onTabletToolTip;
+    wl_signal_add(&m_cursor->events.tablet_tool_tip, &m_tabletToolTip);
+    m_tabletToolButton.notify = onTabletToolButton;
+    wl_signal_add(&m_cursor->events.tablet_tool_button, &m_tabletToolButton);
+
     m_constraintDestroy.link.next = nullptr;
   }
 
@@ -132,6 +141,10 @@ namespace umbriel {
     wl_list_remove(&m_touchMotion.link);
     wl_list_remove(&m_touchCancel.link);
     wl_list_remove(&m_touchFrame.link);
+    wl_list_remove(&m_tabletToolAxis.link);
+    wl_list_remove(&m_tabletToolProximity.link);
+    wl_list_remove(&m_tabletToolTip.link);
+    wl_list_remove(&m_tabletToolButton.link);
     wlr_cursor_destroy(m_cursor);
     wlr_xcursor_manager_destroy(m_xcursorManager);
   }
@@ -461,8 +474,12 @@ namespace umbriel {
 
   void Cursor::handleButton(void* data) {
     auto* event = static_cast<wlr_pointer_button_event*>(data);
+    processButton(event->time_msec, event->button, event->state);
+  }
+
+  void Cursor::processButton(uint32_t timeMsec, uint32_t button, wl_pointer_button_state state) {
     m_server->notifyIdleActivity();
-    if (event->state == WL_POINTER_BUTTON_STATE_PRESSED) {
+    if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
       m_server->cancelModifierTap();
       // Any pointer press cancels the confirmation without being consumed; the
       // click still reaches whatever it hit.
@@ -474,10 +491,10 @@ namespace umbriel {
     // Config mouse binds win over the overview and the built-in Mod+drag /
     // Mod+resize grabs. Presses consumed here swallow their paired release so
     // clients never see an unmatched release.
-    if (event->state == WL_POINTER_BUTTON_STATE_PRESSED && !m_server->sessionLocked() && isPassthrough()) {
+    if (state == WL_POINTER_BUTTON_STATE_PRESSED && !m_server->sessionLocked() && isPassthrough()) {
       wlr_keyboard* kb = wlr_seat_get_keyboard(m_server->seat()->wlr());
       const uint32_t modifiers = kb != nullptr ? wlr_keyboard_get_modifiers(kb) : 0;
-      const Keybind* bound = m_server->handleMouseBind(event->button, modifiers);
+      const Keybind* bound = m_server->handleMouseBind(button, modifiers);
       // Any press dismisses the cheatsheet, as any key press does, except one
       // that just ran a cheatsheet action. Unlike a key press, an unbound press
       // is consumed: the overlay hides whatever sits under the cursor, so the
@@ -486,16 +503,16 @@ namespace umbriel {
           sheet != nullptr && sheet->visible() && !(bound != nullptr && isCheatsheetAction(bound->action))) {
         sheet->hide();
         if (bound == nullptr) {
-          m_swallowedButtons.push_back(event->button);
+          m_swallowedButtons.push_back(button);
           return;
         }
       }
       if (bound != nullptr) {
-        m_swallowedButtons.push_back(event->button);
+        m_swallowedButtons.push_back(button);
         return;
       }
     }
-    if (event->state == WL_POINTER_BUTTON_STATE_RELEASED && std::erase(m_swallowedButtons, event->button) > 0) {
+    if (state == WL_POINTER_BUTTON_STATE_RELEASED && std::erase(m_swallowedButtons, button) > 0) {
       return;
     }
 
@@ -503,7 +520,7 @@ namespace umbriel {
     // reach wlroots even when the drag began from a panel over the overview.
     // Otherwise the drag icon and both input grabs remain active indefinitely.
     if (wlr_seat* seat = m_server->seat()->wlr(); seat->drag != nullptr) {
-      wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+      wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
       return;
     }
 
@@ -512,7 +529,7 @@ namespace umbriel {
     // (panels) stay fully interactive.
     if (Overview* overview = m_server->overview();
         overview != nullptr && overview->active() && !m_server->sessionLocked()) {
-      const bool pressed = event->state == WL_POINTER_BUTTON_STATE_PRESSED;
+      const bool pressed = state == WL_POINTER_BUTTON_STATE_PRESSED;
       double sx = 0;
       double sy = 0;
       wlr_surface* surface = nullptr;
@@ -523,7 +540,7 @@ namespace umbriel {
         if (surface != nullptr) {
           wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
         }
-        wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+        wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
         // The popup's xdg-shell grab already owns focus. Refocusing its parent
         // layer would end the keyboard grab, whose wlroots cancel handler also
         // ends the pointer grab before the menu receives the matching release.
@@ -532,11 +549,11 @@ namespace umbriel {
         }
         return;
       }
-      overview->handleButton(event->button, pressed, m_cursor->x, m_cursor->y);
+      overview->handleButton(button, pressed, m_cursor->x, m_cursor->y);
       return;
     }
 
-    if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+    if (state == WL_POINTER_BUTTON_STATE_RELEASED) {
       if (auto* grab = std::get_if<TiledMoveGrab>(&m_grab)) {
         if (grab->pending) {
           resetMode();
@@ -559,7 +576,7 @@ namespace umbriel {
         resetMode();
         return;
       }
-      wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
+      wlr_seat_pointer_notify_button(m_server->seat()->wlr(), timeMsec, button, state);
 
       // After the final release, refresh pointer focus so it matches the
       // surface actually under the cursor.  The implicit-grab guard in
@@ -587,7 +604,7 @@ namespace umbriel {
     if (wlr_seat* seat = m_server->seat()->wlr(); seat->drag == nullptr
         && seat->pointer_state.button_count > 0
         && seat->pointer_state.focused_surface != nullptr) {
-      wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+      wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
       return;
     }
 
@@ -598,7 +615,7 @@ namespace umbriel {
     View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
 
     if (m_server->sessionLocked()) {
-      wlr_seat_pointer_notify_button(m_server->seat()->wlr(), event->time_msec, event->button, event->state);
+      wlr_seat_pointer_notify_button(m_server->seat()->wlr(), timeMsec, button, state);
       if (surface != nullptr) {
         if (wlr_session_lock_surface_v1* lockSurface = wlr_session_lock_surface_v1_try_from_wlr_surface(surface)) {
           if (auto* node = static_cast<LockSurface*>(lockSurface->data)) {
@@ -611,12 +628,12 @@ namespace umbriel {
 
     wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
     const bool modHeld = keyboard != nullptr && (wlr_keyboard_get_modifiers(keyboard) & m_server->modKey()) != 0;
-    if (event->button == BTN_LEFT && modHeld && view != nullptr) {
+    if (button == BTN_LEFT && modHeld && view != nullptr) {
       m_server->focusView(view, FocusReason::Grab);
       beginMove(view);
       return;
     }
-    if (event->button == BTN_RIGHT && modHeld && view != nullptr) {
+    if (button == BTN_RIGHT && modHeld && view != nullptr) {
       m_server->focusView(view, FocusReason::Grab);
       beginResize(view, view->tiled() ? 0 : floatResizeEdges(view));
       return;
@@ -631,7 +648,7 @@ namespace umbriel {
       wlr_seat_pointer_clear_focus(seat);
     }
 
-    wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+    wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
     if (layer != nullptr) {
       if (!isXdgPopupSurface(surface)) {
         layer->focus();
@@ -958,17 +975,7 @@ namespace umbriel {
       updateConstraintForSurface(seat->pointer_state.focused_surface);
       return;
     }
-    // Crossing outputs updates keyboard / foreign-toplevel focus so clients that follow the
-    // focused screen match preferredOutput() / workspace-switch behavior.
-    wlr_output* pointerOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
-    if (pointerOutput != m_pointerOutput) {
-      m_pointerOutput = pointerOutput;
-      if (config().input.focus.followsMouse
-          && !m_server->sessionLocked()
-          && m_server->exclusiveKeyboardLayer() == nullptr) {
-        m_server->refocus(m_server->outputFromWlr(pointerOutput));
-      }
-    }
+    updatePointerOutput();
 
     double sx = 0;
     double sy = 0;
@@ -976,27 +983,8 @@ namespace umbriel {
     LayerSurface* layer = nullptr;
     View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
 
-    if (config().input.focus.followsMouse
-        && seat->drag == nullptr
-        && !m_server->sessionLocked()
-        && layer == nullptr
-        && view != nullptr
-        && view->mapped()) {
-      // Only activate when the pointer enters a different window (under old pos
-      // != under new pos). Do not warp the pointer with scroll: that re-arms enters
-      // during a swipe and cascades across columns.
-      wlr_surface* oldSurface = nullptr;
-      double oldSx = 0;
-      double oldSy = 0;
-      View* oldView = m_server->viewAt(oldX, oldY, &oldSurface, &oldSx, &oldSy);
-      const bool entered = view != oldView;
-      const bool alreadyFocused = view->workspace() != nullptr && view->workspace()->focusedView() == view;
-      if (entered && !alreadyFocused) {
-        m_server->focusView(view, FocusReason::PointerHover);
-        // Scroll may have moved another surface under the cursor; refresh hit-test for
-        // pointer notify only. Keyboard focus stays on the entered view until a real enter.
-        view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
-      }
+    if (config().input.focus.followsMouse && layer == nullptr && view != nullptr && view->mapped()) {
+      view = hoverFocus(view, &surface, &sx, &sy, &layer, oldX, oldY);
     }
 
     if (surface != nullptr) {
@@ -1018,6 +1006,333 @@ namespace umbriel {
 
     updateConstraintForSurface(surface);
     updateInteractiveCursor(view);
+  }
+
+  void Cursor::updatePointerOutput() {
+    // Crossing outputs updates keyboard / foreign-toplevel focus so clients that follow the
+    // focused screen match preferredOutput() / workspace-switch behavior.
+    wlr_output* pointerOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
+    if (pointerOutput != m_pointerOutput) {
+      m_pointerOutput = pointerOutput;
+      if (config().input.focus.followsMouse
+          && !m_server->sessionLocked()
+          && m_server->exclusiveKeyboardLayer() == nullptr) {
+        m_server->refocus(m_server->outputFromWlr(pointerOutput));
+      }
+    }
+  }
+
+  View* Cursor::hoverFocus(
+      View* view, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer, double oldX, double oldY
+  ) {
+    // Only activate when the pointer enters a different window (under old pos
+    // != under new pos). Do not warp the pointer with scroll: that re-arms enters
+    // during a swipe and cascades across columns.
+    if (m_server->seat()->wlr()->drag != nullptr
+        || m_server->sessionLocked()
+        || *layer != nullptr
+        || view == nullptr
+        || !view->mapped()) {
+      return view;
+    }
+    wlr_surface* oldSurface = nullptr;
+    double oldSx = 0;
+    double oldSy = 0;
+    View* oldView = m_server->viewAt(oldX, oldY, &oldSurface, &oldSx, &oldSy);
+    const bool entered = view != oldView;
+    const bool alreadyFocused = view->workspace() != nullptr && view->workspace()->focusedView() == view;
+    if (entered && !alreadyFocused) {
+      m_server->focusView(view, FocusReason::PointerHover);
+      // Scroll may have moved another surface under the cursor; refresh hit-test for
+      // pointer notify only. Keyboard focus stays on the entered view until a real enter.
+      view = m_server->viewAt(m_cursor->x, m_cursor->y, surface, sx, sy, layer);
+    }
+    return view;
+  }
+
+  void Cursor::onTabletToolAxis(wl_listener* listener, void* data) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_tabletToolAxis);
+    self->handleTabletToolAxis(data);
+  }
+
+  void Cursor::onTabletToolProximity(wl_listener* listener, void* data) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_tabletToolProximity);
+    self->handleTabletToolProximity(data);
+  }
+
+  void Cursor::onTabletToolTip(wl_listener* listener, void* data) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_tabletToolTip);
+    self->handleTabletToolTip(data);
+  }
+
+  void Cursor::onTabletToolButton(wl_listener* listener, void* data) {
+    Cursor* self;
+    self = wl_container_of(listener, self, m_tabletToolButton);
+    self->handleTabletToolButton(data);
+  }
+
+  void Cursor::onToolDestroy(wl_listener* listener, void* /*data*/) {
+    TabletToolState* watch;
+    watch = wl_container_of(listener, watch, destroy);
+    Cursor* cursor = watch->cursor;
+    wl_list_remove(&watch->destroy.link);
+    wl_list_remove(&watch->setCursor.link);
+    std::erase_if(cursor->m_tools, [watch](const std::unique_ptr<TabletToolState>& entry) {
+      return entry.get() == watch;
+    });
+  }
+
+  void Cursor::onToolSetCursor(wl_listener* listener, void* data) {
+    TabletToolState* watch;
+    watch = wl_container_of(listener, watch, setCursor);
+    auto* event = static_cast<wlr_tablet_v2_event_cursor*>(data);
+    if (watch->cursor->compositorOwnsCursor()) {
+      return;
+    }
+    if (watch->v2->focused_surface == nullptr
+        || event->seat_client == nullptr
+        || wl_resource_get_client(watch->v2->focused_surface->resource) != event->seat_client->client) {
+      return;
+    }
+    watch->cursor->setCursorSurface(event->surface, event->hotspot_x, event->hotspot_y);
+  }
+
+  Cursor::TabletToolState* Cursor::toolState(wlr_tablet_tool* tool) {
+    for (const auto& entry : m_tools) {
+      if (entry->tool == tool) {
+        return entry.get();
+      }
+    }
+    auto state = std::make_unique<TabletToolState>();
+    state->cursor = this;
+    state->tool = tool;
+    state->v2 = wlr_tablet_tool_create(m_server->tabletManager(), m_server->seat()->wlr(), tool);
+    state->destroy.notify = onToolDestroy;
+    wl_signal_add(&tool->events.destroy, &state->destroy);
+    state->setCursor.notify = onToolSetCursor;
+    wl_signal_add(&state->v2->events.set_cursor, &state->setCursor);
+    m_tools.push_back(std::move(state));
+    return m_tools.back().get();
+  }
+
+  void Cursor::setToolEmulating(TabletToolState* state, bool emulating) {
+    if (state->emulating == emulating) {
+      return;
+    }
+    if (emulating) {
+      // Native → emulating: end the client's stroke cleanly.
+      if (state->v2->focused_surface != nullptr) {
+        wlr_tablet_v2_tablet_tool_notify_proximity_out(state->v2);
+      }
+    } else {
+      // Emulating → native: the surface must never receive doubled pointer and
+      // tablet input for the same stroke.
+      wlr_seat_pointer_clear_focus(m_server->seat()->wlr());
+    }
+    state->emulating = emulating;
+  }
+
+  void
+  Cursor::processTabletMotion(uint32_t timeMsec, double oldX, double oldY, TabletToolState* state, wlr_tablet* tablet) {
+    wlr_tablet_v2_tablet* v2tablet = m_server->tabletV2FromWlr(tablet);
+    wlr_seat* seat = m_server->seat()->wlr();
+    // Emulation wholesale: no tablet-v2 handle for this device, or a
+    // compositor state (overview, grab, lock, drag) that must see a plain
+    // pointer. A stroke already being emulated stays emulated for its whole
+    // tip-down so a mid-stroke bind of tablet-v2 cannot split it.
+    const bool emulate = v2tablet == nullptr
+        || m_server->overview()->active()
+        || !isPassthrough()
+        || m_server->sessionLocked()
+        || seat->drag != nullptr
+        || (state->emulating && state->tipDown);
+    if (emulate) {
+      setToolEmulating(state, true);
+      processMotion(timeMsec, oldX, oldY);
+      wlr_seat_pointer_notify_frame(seat);
+      return;
+    }
+
+    // Native implicit grab: tip or a button is held on the focused surface, so
+    // motion belongs to that surface's coordinate space even when the cursor
+    // leaves it.
+    if (state->v2->focused_surface != nullptr && (state->tipDown || wlr_tablet_tool_v2_has_implicit_grab(state->v2))) {
+      double sx = 0;
+      double sy = 0;
+      surfaceLocalCoordinates(m_server->scene(), state->v2->focused_surface, m_cursor->x, m_cursor->y, &sx, &sy);
+      wlr_tablet_v2_tablet_tool_notify_motion(state->v2, sx, sy);
+      return;
+    }
+
+    double sx = 0;
+    double sy = 0;
+    wlr_surface* surface = nullptr;
+    LayerSurface* layer = nullptr;
+    View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+    if (surface == nullptr || !wlr_surface_accepts_tablet_v2(surface, v2tablet)) {
+      setToolEmulating(state, true);
+      processMotion(timeMsec, oldX, oldY);
+      wlr_seat_pointer_notify_frame(seat);
+      return;
+    }
+
+    // Native hover.
+    setToolEmulating(state, false);
+    updatePointerOutput();
+    if (config().input.focus.followsMouse && layer == nullptr && view != nullptr && view->mapped()) {
+      view = hoverFocus(view, &surface, &sx, &sy, &layer, oldX, oldY);
+      if (surface == nullptr) {
+        setToolEmulating(state, true);
+        processMotion(timeMsec, oldX, oldY);
+        wlr_seat_pointer_notify_frame(seat);
+        return;
+      }
+    }
+    wlr_tablet_v2_tablet_tool_notify_proximity_in(state->v2, v2tablet, surface);
+    wlr_tablet_v2_tablet_tool_notify_motion(state->v2, sx, sy);
+  }
+
+  void Cursor::handleTabletToolAxis(void* data) {
+    auto* event = static_cast<wlr_tablet_tool_axis_event*>(data);
+    m_server->notifyIdleActivity();
+    TabletToolState* state = toolState(event->tool);
+    const double oldX = m_cursor->x;
+    const double oldY = m_cursor->y;
+    m_server->remapTablets();
+    if (event->tool->type == WLR_TABLET_TOOL_TYPE_MOUSE || event->tool->type == WLR_TABLET_TOOL_TYPE_LENS) {
+      wlr_cursor_move(m_cursor, &event->tablet->base, event->dx, event->dy);
+    } else {
+      if ((event->updated_axes & WLR_TABLET_TOOL_AXIS_X) != 0) {
+        state->x = event->x;
+      }
+      if ((event->updated_axes & WLR_TABLET_TOOL_AXIS_Y) != 0) {
+        state->y = event->y;
+      }
+      wlr_cursor_warp_absolute(m_cursor, &event->tablet->base, state->x, state->y);
+    }
+    processTabletMotion(event->time_msec, oldX, oldY, state, event->tablet);
+    if (state->emulating) {
+      return;
+    }
+    if ((event->updated_axes & WLR_TABLET_TOOL_AXIS_PRESSURE) != 0) {
+      wlr_tablet_v2_tablet_tool_notify_pressure(state->v2, event->pressure);
+    }
+    if ((event->updated_axes & WLR_TABLET_TOOL_AXIS_TILT_X) != 0) {
+      state->tiltX = event->tilt_x;
+    }
+    if ((event->updated_axes & WLR_TABLET_TOOL_AXIS_TILT_Y) != 0) {
+      state->tiltY = event->tilt_y;
+    }
+    if ((event->updated_axes & (WLR_TABLET_TOOL_AXIS_TILT_X | WLR_TABLET_TOOL_AXIS_TILT_Y)) != 0) {
+      wlr_tablet_v2_tablet_tool_notify_tilt(state->v2, state->tiltX, state->tiltY);
+    }
+    if ((event->updated_axes & WLR_TABLET_TOOL_AXIS_DISTANCE) != 0) {
+      wlr_tablet_v2_tablet_tool_notify_distance(state->v2, event->distance);
+    }
+  }
+
+  void Cursor::handleTabletToolProximity(void* data) {
+    auto* event = static_cast<wlr_tablet_tool_proximity_event*>(data);
+    m_server->notifyIdleActivity();
+    if (event->state == WLR_TABLET_TOOL_PROXIMITY_IN) {
+      TabletToolState* state = toolState(event->tool);
+      state->x = event->x;
+      state->y = event->y;
+      const double oldX = m_cursor->x;
+      const double oldY = m_cursor->y;
+      m_server->remapTablets();
+      wlr_cursor_warp_absolute(m_cursor, &event->tablet->base, event->x, event->y);
+      processTabletMotion(event->time_msec, oldX, oldY, state, event->tablet);
+      return;
+    }
+    // Proximity out: look up without creating; an unknown tool never produced events.
+    TabletToolState* state = nullptr;
+    for (const auto& entry : m_tools) {
+      if (entry->tool == event->tool) {
+        state = entry.get();
+        break;
+      }
+    }
+    if (state == nullptr) {
+      return;
+    }
+    // Release a tip that was left down through emulation.
+    if (state->emulating && state->tipDown) {
+      processButton(event->time_msec, BTN_LEFT, WL_POINTER_BUTTON_STATE_RELEASED);
+      wlr_seat_pointer_notify_frame(m_server->seat()->wlr());
+    }
+    if (!state->emulating && state->v2->focused_surface != nullptr) {
+      wlr_tablet_v2_tablet_tool_notify_proximity_out(state->v2);
+    }
+    state->tipDown = false;
+  }
+
+  void Cursor::handleTabletToolTip(void* data) {
+    auto* event = static_cast<wlr_tablet_tool_tip_event*>(data);
+    m_server->notifyIdleActivity();
+    if (event->state == WLR_TABLET_TOOL_TIP_DOWN) {
+      m_server->cancelModifierTap();
+    }
+    TabletToolState* state = toolState(event->tool);
+    const bool down = event->state == WLR_TABLET_TOOL_TIP_DOWN;
+    if (state->emulating) {
+      state->tipDown = down;
+      processButton(
+          event->time_msec, BTN_LEFT, down ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED
+      );
+      wlr_seat_pointer_notify_frame(m_server->seat()->wlr());
+      return;
+    }
+    if (down) {
+      state->tipDown = true;
+      // Click-to-focus parity with processButton.
+      double sx = 0;
+      double sy = 0;
+      wlr_surface* surface = nullptr;
+      LayerSurface* layer = nullptr;
+      View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+      if (layer != nullptr) {
+        if (!isXdgPopupSurface(surface)) {
+          layer->focus();
+        }
+      } else if (m_server->exclusiveKeyboardLayer() == nullptr && view != nullptr) {
+        m_server->focusView(view, FocusReason::PointerPress);
+      }
+      wlr_tablet_v2_tablet_tool_notify_down(state->v2);
+      wlr_tablet_tool_v2_start_implicit_grab(state->v2);
+    } else {
+      state->tipDown = false;
+      wlr_tablet_v2_tablet_tool_notify_up(state->v2);
+    }
+  }
+
+  void Cursor::handleTabletToolButton(void* data) {
+    auto* event = static_cast<wlr_tablet_tool_button_event*>(data);
+    m_server->notifyIdleActivity();
+    TabletToolState* state = toolState(event->tool);
+    const bool pressed = event->state == WLR_BUTTON_PRESSED;
+    if (!state->emulating) {
+      wlr_tablet_v2_tablet_tool_notify_button(
+          state->v2, event->button,
+          pressed ? ZWP_TABLET_PAD_V2_BUTTON_STATE_PRESSED : ZWP_TABLET_PAD_V2_BUTTON_STATE_RELEASED
+      );
+      return;
+    }
+    uint32_t mapped = event->button;
+    if (mapped == BTN_STYLUS) {
+      mapped = BTN_RIGHT;
+    } else if (mapped == BTN_STYLUS2) {
+      mapped = BTN_MIDDLE;
+    } else if (mapped == BTN_STYLUS3) {
+      mapped = BTN_SIDE;
+    }
+    processButton(
+        event->time_msec, mapped, pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED
+    );
+    wlr_seat_pointer_notify_frame(m_server->seat()->wlr());
   }
 
   void Cursor::processMove() {

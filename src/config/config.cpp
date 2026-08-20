@@ -183,6 +183,28 @@ namespace umbriel {
       };
     }
 
+    std::optional<std::array<float, 6>> readCalibrationMatrix(Section& section, std::string_view context) {
+      const toml::node* node = section.take("calibration_matrix");
+      if (node == nullptr) {
+        return std::nullopt;
+      }
+      const auto* array = node->as_array();
+      if (array == nullptr || array->size() != 6) {
+        warnAt(node->source(), "{}.calibration_matrix must be an array of 6 finite numbers", context);
+        return std::nullopt;
+      }
+      std::array<float, 6> matrix{};
+      for (size_t index = 0; index < 6; ++index) {
+        const auto value = (*array)[index].value<double>();
+        if (!value || !std::isfinite(*value)) {
+          warnAt(node->source(), "{}.calibration_matrix must be an array of 6 finite numbers", context);
+          return std::nullopt;
+        }
+        matrix[index] = static_cast<float>(*value);
+      }
+      return matrix;
+    }
+
     std::optional<std::vector<double>> readWidthPresets(Section& section, std::string_view context) {
       const toml::node* node = section.take("width_presets");
       if (node == nullptr) {
@@ -623,6 +645,14 @@ namespace umbriel {
           if (const auto profile = readAccelProfile(m, "accel_profile", "input.mouse")) {
             in.mouse.accelProfile = *profile;
           }
+        });
+        s.sub("tablet", [&](Section& t) {
+          t.boolean("enabled", in.tablet.enabled)
+              .text("map_to_output", in.tablet.mapToOutput)
+              .boolean("map_to_focused_output", in.tablet.mapToFocusedOutput)
+              .boolean("map_to_focused_window", in.tablet.mapToFocusedWindow)
+              .boolean("left_handed", in.tablet.leftHanded);
+          in.tablet.calibrationMatrix = readCalibrationMatrix(t, "input.tablet");
         });
         s.sub("cursor", [&](Section& c) { c.text("theme", in.cursor.theme).integer("size", 1, 512, in.cursor.size); });
         s.sub("focus", [&](Section& f) {

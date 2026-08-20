@@ -1038,6 +1038,29 @@ namespace umbriel {
     wlr_xdg_popup_unconstrain_from_box(popup, &box);
   }
 
+  View* View::fromSurface(wlr_surface* surface) {
+    wlr_surface* walk = surface;
+    while (walk != nullptr) {
+      if (wlr_xdg_toplevel* toplevel = wlr_xdg_toplevel_try_from_wlr_surface(walk)) {
+        auto* tree = static_cast<wlr_scene_tree*>(toplevel->base->data);
+        if (tree == nullptr) {
+          return nullptr;
+        }
+        SceneNode* node = sceneNodeFrom(tree->node.data);
+        if (node == nullptr || node->kind != SceneNodeKind::View) {
+          return nullptr;
+        }
+        return static_cast<View*>(node);
+      }
+      if (wlr_xdg_popup* popup = wlr_xdg_popup_try_from_wlr_surface(walk)) {
+        walk = popup->parent;
+        continue;
+      }
+      break;
+    }
+    return nullptr;
+  }
+
   void View::clearOutputClip() {
     // Fullscreen must not keep a copied tile clip (that freezes usable-area size and
     // leaves a bar-sized gap). Use scheduled (not current): on leave, scheduled clears

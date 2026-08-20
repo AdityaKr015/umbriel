@@ -61,6 +61,9 @@ namespace umbriel {
     [[nodiscard]] int presentedWidth(const wlr_box& target) const;
     [[nodiscard]] int presentedHeight(const wlr_box& target) const;
     [[nodiscard]] wlr_scene_tree* homeTree() const;
+    // The toplevel view owning `surface` after walking xdg popup parents, or
+    // nullptr when the surface is not under a view (layer surfaces, cursors).
+    static View* fromSurface(wlr_surface* surface);
 
     // Mechanism only: applies seat keyboard, activation chrome, and raise.
     // Policy lives in Server::focusView; do not call from input/event code.

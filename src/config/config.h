@@ -363,6 +363,19 @@ namespace umbriel {
         std::optional<double> followsMouseMaxScroll;
         bool operator==(const Focus&) const = default;
       } focus;
+
+      struct Tablet {
+        // false silences the tablet and its pads via libinput
+        bool enabled = true;
+        // empty = no static output mapping
+        std::string mapToOutput;
+        bool mapToFocusedOutput = false;
+        bool mapToFocusedWindow = false;
+        bool leftHanded = false;
+        std::optional<std::array<float, 6>> calibrationMatrix;
+        bool operator==(const Tablet&) const = default;
+      } tablet;
+
       struct Device {
         std::string name;
         std::optional<std::string> layout;

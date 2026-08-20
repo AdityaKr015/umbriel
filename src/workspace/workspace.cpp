@@ -179,7 +179,7 @@ namespace umbriel {
     m_group->reconcileDynamic();
   }
 
-  View* Workspace::removeView(View* view, std::optional<std::pair<double, double>> focusPoint) {
+  View* Workspace::removeView(View* view, std::optional<std::pair<double, double>> focusPoint, bool reconcile) {
     if (view == nullptr) {
       return nullptr;
     }
@@ -240,7 +240,9 @@ namespace umbriel {
     // at the left edge while empty space opens on the right.
     ensureFocusedVisible();
     markArrange();
-    m_group->reconcileDynamic();
+    if (reconcile) {
+      m_group->reconcileDynamic();
+    }
     return replacement;
   }
 

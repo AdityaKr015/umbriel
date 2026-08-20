@@ -211,8 +211,11 @@ namespace umbriel {
         m_workspace != nullptr && m_workspace->group() != nullptr ? m_workspace->group()->output() : nullptr;
     if (m_workspace != nullptr) {
       Workspace* previous = m_workspace;
+      const bool sameGroup = workspace != nullptr && workspace->group() == previous->group();
       m_workspace = nullptr;
-      previous->removeView(this);
+      // Keep an empty destination alive until this view has been attached.
+      // addView() reconciles the group after the transfer is complete.
+      previous->removeView(this, std::nullopt, !sameGroup);
     }
     m_workspace = workspace;
     if (m_workspace != nullptr) {

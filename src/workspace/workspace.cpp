@@ -314,6 +314,10 @@ namespace umbriel {
     }
 
     m_layout->arrange(usable);
+    // The map-time IPC event can fire before this arrange runs, leaving the
+    // previous window positions in the listing. Re-emit now that the layout
+    // boxes are settled; the event coalescer caps this at one per frame.
+    m_group->server()->scheduleIpcWindowsEvent();
     for (View* view : m_views) {
       if (view == nullptr || !view->mapped() || !view->tiled()) {
         continue;

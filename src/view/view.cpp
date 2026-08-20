@@ -248,7 +248,14 @@ namespace umbriel {
     if (active) {
       enterForeignOutput();
     } else {
-      leaveForeignOutput();
+      // Output membership tracks the physical monitor, not the active
+      // workspace: a window on another workspace is still on its output.
+      // Leaving the output here would make foreign-toplevel clients drop the
+      // window from their task lists. Scratchpad windows have no workspace at
+      // all, so they genuinely leave.
+      if (m_workspace == nullptr) {
+        leaveForeignOutput();
+      }
       setForeignActivated(false);
       setBorderFocused(false);
     }

@@ -74,8 +74,18 @@ namespace umbriel {
       entry["focused"] = v->workspace() != nullptr && v->workspace()->focusedView() == v.get();
       entry["urgent"] = v->urgent();
       entry["xwayland"] = v->xwayland();
-      entry["x"] = v->sceneTree()->node.x;
-      entry["y"] = v->sceneTree()->node.y;
+      // Tiled windows report their layout slot, which the layout computes even
+      // for hidden workspaces; floats report their own position. Ordering a
+      // listing by these positions then matches the strip (scrolling) or tile
+      // tree (dwindle) regardless of visibility or in-flight animations.
+      if (Workspace* workspace = v->workspace(); workspace != nullptr && workspace->layout().columnOf(v.get()) >= 0) {
+        const wlr_box box = workspace->layout().targetBox(v.get());
+        entry["x"] = box.x;
+        entry["y"] = box.y;
+      } else {
+        entry["x"] = v->layoutTargetX();
+        entry["y"] = v->layoutTargetY();
+      }
       entry["w"] = v->toplevel()->base->geometry.width;
       entry["h"] = v->toplevel()->base->geometry.height;
       windows.push_back(std::move(entry));

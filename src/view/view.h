@@ -7,6 +7,7 @@
 #include "view/presentation.h"
 
 #include <array>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <wayland-server-core.h>
@@ -77,6 +78,12 @@ namespace umbriel {
     void setScratchpadBorder(bool scratchpad);
     void animateTo(int x, int y);
     void setPosition(int x, int y);
+    // The authoritative layout position: where the window's slot is, not
+    // where its scene node happens to be mid-animation. Workspace slides and
+    // arrange reflows move nodes without touching the animation targets, so
+    // window listings that order by position must read these instead.
+    [[nodiscard]] int layoutTargetX() const { return static_cast<int>(std::lround(m_posX.target())); }
+    [[nodiscard]] int layoutTargetY() const { return static_cast<int>(std::lround(m_posY.target())); }
     // Move the scene nodes without touching the position animation: an
     // interactive drag tracks the pointer 1:1 and owns the position itself.
     void setDragPosition(int x, int y);

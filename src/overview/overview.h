@@ -80,6 +80,9 @@ namespace umbriel {
     void handleMotion(double lx, double ly);
     bool handleAxisNotch(bool vertical, double direction, double lx, double ly);
     bool handleFallbackKey(uint32_t keysym);
+    // Focus a neighboring column while keeping the overview card strip in
+    // sync with the regular horizontal window animation.
+    bool focusAdjacent(int direction);
     // Step the active workspace `delta` rows down the filmstrip on `output`
     // (null: wherever the pointer is). Returns false at either end. The wheel,
     // the arrow keys and the three-finger swipe all arrive here: while the

@@ -143,10 +143,31 @@ namespace umbriel {
   wlr_box Overview::worldBoxOf(const View* view, const wlr_box& outputBox) const {
     const wlr_box& geometry = view->toplevel()->base->geometry;
     if (view->toplevel()->current.fullscreen && geometry.width > 0 && geometry.height > 0) {
-      // Match View::updateFullscreenPresentation: committed fullscreen content
-      // is centered without scaling, and oversized buffers are cropped evenly.
+      // Fullscreen content keeps its committed size and centering, but a tiled
+      // fullscreen column still belongs to the horizontal strip. Keeping it
+      // pinned to the output lets its topmost card cover adjacent columns as
+      // the overview scrolls underneath it.
+      int stripOffset = 0;
+      if (const Workspace* workspace = view->workspace(); workspace != nullptr) {
+        const int column = workspace->layout().columnOf(view);
+        if (column >= 0
+            && workspace->layout().mode() == LayoutMode::Scrolling
+            && workspace->group() != nullptr
+            && workspace->group()->output() != nullptr) {
+          // Use the last arranged target rather than the live scroll value.
+          // ensureVisible updates scroll before arrange notifies the overview;
+          // reading it here would let an unrelated relayout snap the card to
+          // its destination before onWorkspaceArranged can arm the animation.
+          const wlr_box target = workspace->layout().targetBox(view);
+          const wlr_box& usable = workspace->group()->output()->usableArea();
+          const int stripOrigin = usable.width > 0 ? usable.x : outputBox.x;
+          if (target.width > 0 && target.height > 0) {
+            stripOffset = target.x - stripOrigin - workspace->layoutConfig().edgePad;
+          }
+        }
+      }
       return {
-          outputBox.x + (outputBox.width - geometry.width) / 2,
+          outputBox.x + stripOffset + (outputBox.width - geometry.width) / 2,
           outputBox.y + (outputBox.height - geometry.height) / 2,
           geometry.width,
           geometry.height,
@@ -1238,6 +1259,23 @@ namespace umbriel {
     return true;
   }
 
+  bool Overview::focusAdjacent(int direction) {
+    if (!interactive()) {
+      return false;
+    }
+    Workspace* workspace = preferredWorkspace();
+    if (workspace == nullptr) {
+      return false;
+    }
+    View* target = workspace->focusAdjacent(direction);
+    if (target == nullptr) {
+      return false;
+    }
+    m_horizontalWorkspace = workspace;
+    m_server->focusView(target, FocusReason::Directional);
+    return true;
+  }
+
   bool Overview::handleFallbackKey(uint32_t keysym) {
     if (!interactive()) {
       return false;
@@ -1254,12 +1292,7 @@ namespace umbriel {
       return true;
     case XKB_KEY_Left:
     case XKB_KEY_Right:
-      if (Workspace* workspace = preferredWorkspace()) {
-        if (View* target = workspace->focusAdjacent(keysym == XKB_KEY_Left ? -1 : 1)) {
-          m_horizontalWorkspace = workspace;
-          m_server->focusView(target, FocusReason::Directional);
-        }
-      }
+      focusAdjacent(keysym == XKB_KEY_Left ? -1 : 1);
       return true;
     case XKB_KEY_Up:
     case XKB_KEY_Down:

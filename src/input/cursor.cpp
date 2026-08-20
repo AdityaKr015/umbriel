@@ -41,6 +41,10 @@ namespace umbriel {
       return which == ZWLR_LAYER_SHELL_V1_LAYER_TOP || which == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
     }
 
+    bool isXdgPopupSurface(wlr_surface* surface) {
+      return surface != nullptr && wlr_xdg_popup_try_from_wlr_surface(wlr_surface_get_root_surface(surface)) != nullptr;
+    }
+
     bool surfaceLocalCoordinates(wlr_scene* scene, wlr_surface* target, double lx, double ly, double* sx, double* sy) {
       if (target == nullptr) {
         return false;
@@ -520,7 +524,10 @@ namespace umbriel {
           wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
         }
         wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
-        if (pressed) {
+        // The popup's xdg-shell grab already owns focus. Refocusing its parent
+        // layer would end the keyboard grab, whose wlroots cancel handler also
+        // ends the pointer grab before the menu receives the matching release.
+        if (pressed && !isXdgPopupSurface(surface)) {
           layer->focus();
         }
         return;
@@ -626,7 +633,9 @@ namespace umbriel {
 
     wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
     if (layer != nullptr) {
-      layer->focus();
+      if (!isXdgPopupSurface(surface)) {
+        layer->focus();
+      }
     } else if (m_server->exclusiveKeyboardLayer() == nullptr) {
       if (view != nullptr) {
         m_server->focusView(view, FocusReason::PointerPress);
@@ -787,7 +796,9 @@ namespace umbriel {
       // Focus the touched view (click-to-focus equivalent).
       if (!m_server->sessionLocked() && m_server->exclusiveKeyboardLayer() == nullptr) {
         if (layer != nullptr) {
-          layer->focus();
+          if (!isXdgPopupSurface(surface)) {
+            layer->focus();
+          }
         } else if (view != nullptr) {
           m_server->focusView(view, FocusReason::PointerPress);
         }

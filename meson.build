@@ -126,6 +126,12 @@ layer_shell_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+xdg_shell_client_h = custom_target(
+  'xdg-shell-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'stable/xdg-shell/xdg-shell.xml',
+  output: 'xdg-shell-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
 xdg_shell_client_c = custom_target(
   'xdg-shell-client-protocol.c',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'stable/xdg-shell/xdg-shell.xml',
@@ -349,6 +355,14 @@ executable(
 executable(
   'global-client',
   'tests/harness/global_client.cpp',
+  dependencies: [wayland_client_dep],
+)
+
+# Harness helper that unmaps its toplevel on a close request without destroying
+# it, so the compositor keeps the View registered but unmapped.
+executable(
+  'unmap-client',
+  ['tests/harness/unmap_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
   dependencies: [wayland_client_dep],
 )
 

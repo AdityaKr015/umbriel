@@ -1010,8 +1010,38 @@ namespace umbriel {
       m_dropWorkspaceGroup = nullptr;
       m_server->cursor()->overrideCursor(nullptr);
     }
-    OutputState* state = stateForWorkspace(view->workspace());
+    Workspace* workspace = view->workspace();
+    OutputState* state = stateForWorkspace(workspace);
     dropCard(view);
+    // The closed window may have been the focused one. The overview keeps the
+    // focus chrome while it owns the seat, so reassign to a survivor now rather
+    // than leaving the workspace focused on a dead view until zoom-out (or a
+    // later destroy) happens to refocus. Prefer a tiled survivor, mirroring
+    // Workspace::removeView; fall back to any remaining mapped window.
+    if (workspace != nullptr && workspace->focusedView() == view) {
+      View* replacement = nullptr;
+      for (View* candidate : workspace->allViews()) {
+        if (candidate == nullptr || candidate == view || !candidate->mapped()) {
+          continue;
+        }
+        if (candidate->tiled() && workspace->layout().columnOf(candidate) >= 0) {
+          replacement = candidate;
+          break;
+        }
+        if (replacement == nullptr) {
+          replacement = candidate;
+        }
+      }
+      if (replacement != nullptr) {
+        if (workspace->active()) {
+          m_server->focusView(replacement, FocusReason::Startup);
+        } else {
+          workspace->setFocusedView(replacement);
+        }
+      } else {
+        workspace->setFocusedView(nullptr);
+      }
+    }
     if (state != nullptr) {
       layoutOutput(*state);
       wlr_output_schedule_frame(state->output->wlr());

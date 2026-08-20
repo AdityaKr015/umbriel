@@ -308,6 +308,10 @@ namespace umbriel {
     if (server.scratchpadManager() != nullptr && server.scratchpadManager()->contains(&view)) {
       return;
     }
+    const auto restoreSceneParent = [&view, &target]() {
+      const bool fullscreen = view.toplevel()->current.fullscreen || view.toplevel()->scheduled.fullscreen;
+      wlr_scene_node_reparent(&view.sceneTree()->node, fullscreen ? target.fullscreenTree() : target.viewLayer(true));
+    };
     // Policy fork again: a dwindle drop splits a leaf, a scrolling drop inserts
     // a column.
     if (DwindleLayout* dwindle = target.dwindleLayout()) {
@@ -325,7 +329,7 @@ namespace umbriel {
       } else {
         dwindle->insertView(&view, static_cast<int>(dwindle->columns().size()));
       }
-      wlr_scene_node_reparent(&view.sceneTree()->node, target.viewLayer(true));
+      restoreSceneParent();
       target.markArrange(animate);
       server.focusView(&view, FocusReason::DragDrop);
       return;
@@ -347,7 +351,7 @@ namespace umbriel {
       }
       wlr_xdg_toplevel_set_maximized(view.toplevel(), columnWidth->fullWidth);
     }
-    wlr_scene_node_reparent(&view.sceneTree()->node, target.viewLayer(true));
+    restoreSceneParent();
     target.markArrange(animate);
     server.focusView(&view, FocusReason::DragDrop);
   }

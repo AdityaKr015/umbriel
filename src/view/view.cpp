@@ -308,7 +308,9 @@ namespace umbriel {
     m_server->deactivateViews(this);
 
     raiseToTop();
-    wlr_xdg_toplevel_set_activated(m_toplevel, true);
+    if (!m_toplevel->scheduled.activated) {
+      wlr_xdg_toplevel_set_activated(m_toplevel, true);
+    }
     setBorderFocused(true);
     setForeignActivated(true);
 

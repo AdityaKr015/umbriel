@@ -188,7 +188,9 @@ namespace umbriel {
       if (entry.get() == except || !entry->mapped()) {
         continue;
       }
-      wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
+      if (entry->toplevel()->scheduled.activated) {
+        wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
+      }
       entry->setBorderFocused(false);
       entry->setForeignActivated(false);
     }

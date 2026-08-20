@@ -425,6 +425,11 @@ void setConsoleLogging(bool enabled) {
 }
 
 void wlrLogHandler(enum wlr_log_importance importance, const char* fmt, va_list args) {
+  // wlroots only applies the wlr_log_init verbosity in its default stderr
+  // logger; a custom callback receives every message, WLR_DEBUG included.
+  if (importance > wlr_log_get_verbosity()) {
+    return;
+  }
   LogLevel level = LogLevel::Debug;
   switch (importance) {
   case WLR_ERROR:

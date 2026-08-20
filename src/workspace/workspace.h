@@ -74,7 +74,7 @@ namespace umbriel {
     void syncFloatingStack(View* view);
     void restackFloatingViews();
     void addView(View* view, bool attachToLayout = true);
-    View* removeView(View* view);
+    View* removeView(View* view, std::optional<std::pair<double, double>> focusPoint = std::nullopt);
     void layoutAttach(View* view, std::optional<double> initialWidth = std::nullopt);
     void layoutDetach(View* view, bool animate = false);
     void arrange(bool animate = true);

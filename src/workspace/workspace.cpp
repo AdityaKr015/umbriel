@@ -178,7 +178,7 @@ namespace umbriel {
     m_group->reconcileDynamic();
   }
 
-  View* Workspace::removeView(View* view) {
+  View* Workspace::removeView(View* view, std::optional<std::pair<double, double>> focusPoint) {
     if (view == nullptr) {
       return nullptr;
     }
@@ -198,11 +198,36 @@ namespace umbriel {
 
     View* replacement = nullptr;
     if (m_focusedView == view) {
+      m_focusedView = nullptr;
+      if (focusPoint && m_group != nullptr && m_group->output() != nullptr) {
+        wlr_box usable = m_group->output()->usableArea();
+        if (usable.width <= 0 || usable.height <= 0) {
+          wlr_output_layout_get_box(m_group->server()->outputLayout(), m_group->output()->wlr(), &usable);
+        }
+        if (usable.width > 0 && usable.height > 0) {
+          // Removal changes both column indices and the scrolling offset. Refresh
+          // layout targets before deciding which survivor now occupies a
+          // stationary pointer; the scene nodes catch up on the next frame.
+          m_layout->arrange(usable);
+          for (View* candidate : m_views) {
+            if (candidate == nullptr || !candidate->mapped() || !candidate->tiled()) {
+              continue;
+            }
+            const wlr_box box = m_layout->targetBox(candidate);
+            if (wlr_box_contains_point(&box, focusPoint->first, focusPoint->second)) {
+              replacement = candidate;
+              break;
+            }
+          }
+        }
+      }
       if (removedColumn >= 0) {
-        for (View* v : m_views) {
-          if (v->tiled() && m_layout->columnOf(v) >= 0) {
-            replacement = v;
-            break;
+        if (replacement == nullptr) {
+          for (View* v : m_views) {
+            if (v->tiled() && m_layout->columnOf(v) >= 0) {
+              replacement = v;
+              break;
+            }
           }
         }
       }

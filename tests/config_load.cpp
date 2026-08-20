@@ -413,6 +413,22 @@ hardware_cursor = false
   CHECK(!containsDiagnostic(store, "unknown key input.cursor.hardware_cursor"));
 }
 
+UMBRIEL_TEST(cursorHideTimeoutLoads) {
+  const TempConfig file;
+  file.write(R"(
+[input.cursor]
+hide_timeout = 15
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK_EQ(store.config().input.cursor.hideTimeout, 15);
+  CHECK(!containsDiagnostic(store, "unknown key input.cursor.hide_timeout"));
+}
+
 UMBRIEL_TEST(invalidCustomAccelerationCurveIsRejected) {
   const TempConfig file;
   file.write(R"(

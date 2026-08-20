@@ -125,9 +125,13 @@ namespace umbriel {
     wl_signal_add(&m_cursor->events.tablet_tool_button, &m_tabletToolButton);
 
     m_constraintDestroy.link.next = nullptr;
+    updateHideTimer();
   }
 
   Cursor::~Cursor() {
+    if (m_hideTimer != nullptr) {
+      wl_event_source_remove(m_hideTimer);
+    }
     if (m_constraintDestroy.link.next != nullptr) {
       wl_list_remove(&m_constraintDestroy.link);
     }
@@ -152,6 +156,7 @@ namespace umbriel {
   void Cursor::attachInputDevice(wlr_input_device* device) { wlr_cursor_attach_input_device(m_cursor, device); }
   void Cursor::applyConfig() {
     const Config::Input::Cursor& configured = config().input.cursor;
+    updateHideTimer();
     if (configured.theme == m_xcursorTheme && configured.size == m_xcursorSize) {
       return;
     }
@@ -175,14 +180,70 @@ namespace umbriel {
     wlr_xcursor_manager_destroy(oldManager);
   }
 
+  void Cursor::noteActivity() {
+    if (m_cursorHidden) {
+      m_cursorHidden = false;
+      if (m_compositorOwnsCursor) {
+        setXcursor(m_compositorCursorName.c_str());
+      } else {
+        restoreClientCursor();
+      }
+    }
+    updateHideTimer();
+  }
+
+  void Cursor::updateHideTimer() {
+    const int timeoutSeconds = config().input.cursor.hideTimeout;
+    if (timeoutSeconds == 0) {
+      if (m_hideTimer != nullptr) {
+        wl_event_source_timer_update(m_hideTimer, 0);
+      }
+      if (m_cursorHidden) {
+        m_cursorHidden = false;
+        if (m_compositorOwnsCursor) {
+          setXcursor(m_compositorCursorName.c_str());
+        } else {
+          restoreClientCursor();
+        }
+      }
+      return;
+    }
+    if (m_hideTimer == nullptr) {
+      m_hideTimer = wl_event_loop_add_timer(wl_display_get_event_loop(m_server->display()), onHideTimer, this);
+      if (m_hideTimer == nullptr) {
+        return;
+      }
+    }
+    if (!m_cursorHidden) {
+      wl_event_source_timer_update(m_hideTimer, timeoutSeconds * 1000);
+    }
+  }
+
+  void Cursor::hideCursor() {
+    if (m_cursorHidden) {
+      return;
+    }
+    m_cursorHidden = true;
+    wlr_cursor_set_surface(m_cursor, nullptr, 0, 0);
+  }
+
+  int Cursor::onHideTimer(void* data) {
+    static_cast<Cursor*>(data)->hideCursor();
+    return 0;
+  }
+
   void Cursor::setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY) {
-    wlr_cursor_set_surface(m_cursor, surface, hotspotX, hotspotY);
+    if (!m_cursorHidden) {
+      wlr_cursor_set_surface(m_cursor, surface, hotspotX, hotspotY);
+    }
     m_activeXcursorManager = nullptr;
     m_activeXcursorName.clear();
   }
 
   void Cursor::setXcursor(const char* name) {
-    wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, name);
+    if (!m_cursorHidden) {
+      wlr_cursor_set_xcursor(m_cursor, m_xcursorManager, name);
+    }
     m_activeXcursorManager = m_xcursorManager;
     m_activeXcursorName = name;
   }
@@ -343,6 +404,7 @@ namespace umbriel {
   }
 
   void Cursor::warpTo(double lx, double ly) {
+    noteActivity();
     const double oldX = m_cursor->x;
     const double oldY = m_cursor->y;
     wlr_cursor_warp(m_cursor, nullptr, lx, ly);
@@ -411,6 +473,7 @@ namespace umbriel {
 
   void Cursor::handleMotion(void* data) {
     auto* event = static_cast<wlr_pointer_motion_event*>(data);
+    noteActivity();
     m_server->notifyIdleActivity();
 
     wlr_relative_pointer_manager_v1_send_relative_motion(
@@ -444,6 +507,7 @@ namespace umbriel {
 
   void Cursor::handleMotionAbsolute(void* data) {
     auto* event = static_cast<wlr_pointer_motion_absolute_event*>(data);
+    noteActivity();
     m_server->notifyIdleActivity();
     if (m_activeConstraint != nullptr && m_activeConstraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
       if (!constraintSurfaceActive()) {
@@ -478,6 +542,7 @@ namespace umbriel {
   }
 
   void Cursor::processButton(uint32_t timeMsec, uint32_t button, wl_pointer_button_state state) {
+    noteActivity();
     m_server->notifyIdleActivity();
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
       m_server->cancelModifierTap();
@@ -665,6 +730,7 @@ namespace umbriel {
 
   void Cursor::handleAxis(void* data) {
     auto* event = static_cast<wlr_pointer_axis_event*>(data);
+    noteActivity();
     m_server->notifyIdleActivity();
     m_server->cancelModifierTap();
 
@@ -1197,6 +1263,7 @@ namespace umbriel {
 
   void Cursor::handleTabletToolAxis(void* data) {
     auto* event = static_cast<wlr_tablet_tool_axis_event*>(data);
+    noteActivity();
     m_server->notifyIdleActivity();
     TabletToolState* state = toolState(event->tool);
     const double oldX = m_cursor->x;
@@ -1236,6 +1303,7 @@ namespace umbriel {
 
   void Cursor::handleTabletToolProximity(void* data) {
     auto* event = static_cast<wlr_tablet_tool_proximity_event*>(data);
+    noteActivity();
     m_server->notifyIdleActivity();
     if (event->state == WLR_TABLET_TOOL_PROXIMITY_IN) {
       TabletToolState* state = toolState(event->tool);
@@ -1272,6 +1340,7 @@ namespace umbriel {
 
   void Cursor::handleTabletToolTip(void* data) {
     auto* event = static_cast<wlr_tablet_tool_tip_event*>(data);
+    noteActivity();
     m_server->notifyIdleActivity();
     if (event->state == WLR_TABLET_TOOL_TIP_DOWN) {
       m_server->cancelModifierTap();
@@ -1311,6 +1380,7 @@ namespace umbriel {
 
   void Cursor::handleTabletToolButton(void* data) {
     auto* event = static_cast<wlr_tablet_tool_button_event*>(data);
+    noteActivity();
     m_server->notifyIdleActivity();
     TabletToolState* state = toolState(event->tool);
     const bool pressed = event->state == WLR_BUTTON_PRESSED;

@@ -657,7 +657,8 @@ namespace umbriel {
         s.sub("cursor", [&](Section& c) {
           c.text("theme", in.cursor.theme)
               .integer("size", 1, 512, in.cursor.size)
-              .boolean("hardware_cursor", in.cursor.hardwareCursor);
+              .boolean("hardware_cursor", in.cursor.hardwareCursor)
+              .integer("hide_timeout", 0, 3600, in.cursor.hideTimeout);
         });
         s.sub("focus", [&](Section& f) {
           // The limit is measured in viewport widths and the quantity it is

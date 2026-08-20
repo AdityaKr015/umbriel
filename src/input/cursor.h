@@ -10,6 +10,7 @@
 #include <wayland-server-core.h>
 
 struct wlr_cursor;
+struct wl_event_source;
 struct wlr_input_device;
 struct wlr_output;
 struct wlr_pointer_constraint_v1;
@@ -177,6 +178,10 @@ namespace umbriel {
     void updateInteractiveCursor(View* under);
     void setCompositorCursor(const char* name);
     void restoreClientCursor();
+    void noteActivity();
+    void updateHideTimer();
+    void hideCursor();
+    static int onHideTimer(void* data);
     void setActiveConstraint(wlr_pointer_constraint_v1* constraint);
     void updateConstraintForSurface(wlr_surface* surface);
     [[nodiscard]] bool constraintSurfaceActive() const;
@@ -203,7 +208,9 @@ namespace umbriel {
     std::vector<uint32_t> m_swallowedButtons;
     std::vector<std::unique_ptr<TabletToolState>> m_tools;
     bool m_compositorOwnsCursor = false;
+    bool m_cursorHidden = false;
     std::string m_compositorCursorName;
+    wl_event_source* m_hideTimer = nullptr;
 
     wl_listener m_motion{};
     wl_listener m_motionAbsolute{};

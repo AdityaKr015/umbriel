@@ -698,6 +698,7 @@ namespace umbriel {
         }
         OutputRule rule;
         rule.name = name;
+        keys.boolean("enabled", rule.enabled);
         if (const toml::node* workspacesNode = keys.take("workspaces")) {
           if (const auto count = workspacesNode->value<std::int64_t>()) {
             if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {

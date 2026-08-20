@@ -21,8 +21,12 @@ namespace umbriel {
     if (output != nullptr) {
       return output;
     }
-    if (!m_outputs.empty()) {
-      return m_outputs.front()->wlr();
+    // Disabled outputs are removed from the layout; never fall back onto one,
+    // or focus and new layer surfaces would land on a monitor that is off.
+    for (const auto& entry : m_outputs) {
+      if (entry->wlr()->enabled) {
+        return entry->wlr();
+      }
     }
     return nullptr;
   }
@@ -44,7 +48,9 @@ namespace umbriel {
 
   Output* Server::outputFromName(const std::string& name) const {
     for (const auto& entry : m_outputs) {
-      if (entry->wlr()->name != nullptr && name == entry->wlr()->name) {
+      // Disabled outputs are off the desktop: rules and keybinds must not be
+      // able to address them, or windows and focus would land on a blank screen.
+      if (entry->wlr()->enabled && entry->wlr()->name != nullptr && name == entry->wlr()->name) {
         return entry.get();
       }
     }

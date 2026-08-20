@@ -184,6 +184,30 @@ UMBRIEL_TEST(outputVrrPolicyLoadsAndDefaultsDisabled) {
   CHECK(store.config().outputs[0].vrr == VrrMode::Disabled);
 }
 
+UMBRIEL_TEST(outputEnabledFlagParsesAndDefaultsTrue) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[output.DP-1]\nenabled = false\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK(!store.config().outputs[0].enabled);
+
+  file.write("[output.DP-1]\nenabled = true\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].enabled);
+
+  file.write("[output.DP-1]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].enabled);
+
+  file.write("[output.DP-1]\nenabled = \"yes\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].enabled);
+  CHECK(containsDiagnostic(store, "ignoring output.DP-1.enabled"));
+}
+
 UMBRIEL_TEST(semanticColorsLoadFromTheirOwnSection) {
   const TempConfig file;
   file.write(R"(

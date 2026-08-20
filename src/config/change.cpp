@@ -30,7 +30,8 @@ namespace umbriel {
       static const OutputRule defaults;
       const OutputRule& lhs = before != nullptr ? *before : defaults;
       const OutputRule& rhs = after != nullptr ? *after : defaults;
-      return lhs.mode == rhs.mode
+      return lhs.enabled == rhs.enabled
+          && lhs.mode == rhs.mode
           && lhs.position == rhs.position
           && lhs.scale == rhs.scale
           && lhs.transform == rhs.transform

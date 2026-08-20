@@ -307,6 +307,8 @@ namespace umbriel {
         output->applyOutputState();
       }
       updateOutputManagerConfig();
+      // A disabled output must not keep keyboard focus: pull it onto a live one.
+      refocus();
     }
     if (effects.workspaceInventory) {
       for (const auto& output : m_outputs) {
@@ -1270,7 +1272,9 @@ namespace umbriel {
     WorkspaceGroup* dying = output->workspaceGroup();
     Output* fallback = nullptr;
     for (const auto& entry : m_outputs) {
-      if (entry.get() != output) {
+      // Prefer a live monitor: rehoming windows onto a disabled one would
+      // strand them off-screen.
+      if (entry.get() != output && entry->wlr()->enabled) {
         fallback = entry.get();
         break;
       }
@@ -1388,11 +1392,13 @@ namespace umbriel {
   }
 
   void Server::applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly) {
-    // Reject disabling outputs: umbriel has no disabled-output state model.
+    // Reject disabling outputs: the protocol commit would bypass the layout
+    // and scene handling that Output::applyOutputState does for the config
+    // `enabled` key, leaving the monitor off but still on the desktop.
     wlr_output_configuration_head_v1* head = nullptr;
     wl_list_for_each(head, &config->heads, link) {
       if (!head->state.enabled) {
-        kLog.warn("output-management: disabling outputs is not supported");
+        kLog.warn("output-management: disabling outputs is not supported, use the config `enabled` key");
         wlr_output_configuration_v1_send_failed(config);
         wlr_output_configuration_v1_destroy(config);
         return;

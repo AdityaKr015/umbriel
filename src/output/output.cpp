@@ -43,9 +43,11 @@ namespace umbriel {
 
     applyCursorConfig();
     applyConfiguredState();
-    wlr_output_layout_output* layoutOutput = addToLayout();
     m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
-    wlr_scene_output_layout_add_output(m_server->sceneLayout(), layoutOutput, m_sceneOutput);
+    if (configuredEnabled()) {
+      wlr_output_layout_output* layoutOutput = addToLayout();
+      wlr_scene_output_layout_add_output(m_server->sceneLayout(), layoutOutput, m_sceneOutput);
+    }
 
     for (uint32_t layer = 0; layer < kLayerCount; ++layer) {
       m_layerTrees[layer] = wlr_scene_tree_create(m_server->shellLayerTree(layer));
@@ -54,60 +56,69 @@ namespace umbriel {
     arrangeLayers();
     m_workspaceGroup = std::make_unique<WorkspaceGroup>(*m_server, *this);
   }
+  bool Output::configuredEnabled() const {
+    const OutputRule* rule = findRule(m_output->name);
+    return rule == nullptr || rule->enabled;
+  }
+
   void Output::applyConfiguredState() {
     const OutputRule* rule = findRule(m_output->name);
+    const bool enabled = configuredEnabled();
     wlr_output_state state{};
     wlr_output_state_init(&state);
-    wlr_output_state_set_enabled(&state, true);
+    wlr_output_state_set_enabled(&state, enabled);
 
-    if (rule != nullptr && rule->mode) {
-      if (wlr_output_is_wl(m_output)) {
-        kLog.info("output '{}': mode is ignored in nested sessions", m_output->name);
-      } else {
-        const OutputMode& configured = *rule->mode;
-        wlr_output_mode* selected = nullptr;
-        wlr_output_mode* mode = nullptr;
-        wl_list_for_each(mode, &m_output->modes, link) {
-          if (mode->width != configured.width || mode->height != configured.height) {
-            continue;
-          }
-          if (configured.refreshMHz != 0) {
-            if (selected == nullptr
-                || std::abs(mode->refresh - configured.refreshMHz)
-                    < std::abs(selected->refresh - configured.refreshMHz)) {
+    bool enableVrr = false;
+    if (enabled) {
+      if (rule != nullptr && rule->mode) {
+        if (wlr_output_is_wl(m_output)) {
+          kLog.info("output '{}': mode is ignored in nested sessions", m_output->name);
+        } else {
+          const OutputMode& configured = *rule->mode;
+          wlr_output_mode* selected = nullptr;
+          wlr_output_mode* mode = nullptr;
+          wl_list_for_each(mode, &m_output->modes, link) {
+            if (mode->width != configured.width || mode->height != configured.height) {
+              continue;
+            }
+            if (configured.refreshMHz != 0) {
+              if (selected == nullptr
+                  || std::abs(mode->refresh - configured.refreshMHz)
+                      < std::abs(selected->refresh - configured.refreshMHz)) {
+                selected = mode;
+              }
+            } else if (
+                selected == nullptr
+                || (mode->preferred && !selected->preferred)
+                || (mode->preferred == selected->preferred && mode->refresh > selected->refresh)
+            ) {
               selected = mode;
             }
-          } else if (
-              selected == nullptr
-              || (mode->preferred && !selected->preferred)
-              || (mode->preferred == selected->preferred && mode->refresh > selected->refresh)
-          ) {
-            selected = mode;
+          }
+          if (selected != nullptr) {
+            wlr_output_state_set_mode(&state, selected);
+          } else {
+            wlr_output_state_set_custom_mode(&state, configured.width, configured.height, configured.refreshMHz);
           }
         }
-        if (selected != nullptr) {
-          wlr_output_state_set_mode(&state, selected);
-        } else {
-          wlr_output_state_set_custom_mode(&state, configured.width, configured.height, configured.refreshMHz);
+      } else if (!wlr_output_is_wl(m_output)) {
+        if (wlr_output_mode* mode = wlr_output_preferred_mode(m_output)) {
+          wlr_output_state_set_mode(&state, mode);
         }
       }
-    } else if (!wlr_output_is_wl(m_output)) {
-      if (wlr_output_mode* mode = wlr_output_preferred_mode(m_output)) {
-        wlr_output_state_set_mode(&state, mode);
-      }
-    }
 
-    if (rule != nullptr && rule->scale) {
-      wlr_output_state_set_scale(&state, static_cast<float>(*rule->scale));
-    }
-    if (rule != nullptr && rule->transform) {
-      wlr_output_state_set_transform(&state, static_cast<wl_output_transform>(*rule->transform));
-    }
-    const bool enableVrr = configuredVrrEnabled();
-    if (m_output->adaptive_sync_supported) {
-      wlr_output_state_set_adaptive_sync_enabled(&state, enableVrr);
-    } else if (enableVrr) {
-      kLog.warn("output '{}': VRR requested but adaptive sync is not supported", m_output->name);
+      if (rule != nullptr && rule->scale) {
+        wlr_output_state_set_scale(&state, static_cast<float>(*rule->scale));
+      }
+      if (rule != nullptr && rule->transform) {
+        wlr_output_state_set_transform(&state, static_cast<wl_output_transform>(*rule->transform));
+      }
+      enableVrr = configuredVrrEnabled();
+      if (m_output->adaptive_sync_supported) {
+        wlr_output_state_set_adaptive_sync_enabled(&state, enableVrr);
+      } else if (enableVrr) {
+        kLog.warn("output '{}': VRR requested but adaptive sync is not supported", m_output->name);
+      }
     }
 
     bool committed = wlr_output_commit_state(m_output, &state);
@@ -121,10 +132,14 @@ namespace umbriel {
       kLog.error("output '{}': failed to commit configured state", m_output->name);
       return;
     }
-    kLog.info(
-        "output '{}': applied mode={}x{}@{}mHz scale={} transform={}", m_output->name, m_output->width,
-        m_output->height, m_output->refresh, m_output->scale, static_cast<int>(m_output->transform)
-    );
+    if (enabled) {
+      kLog.info(
+          "output '{}': applied mode={}x{}@{}mHz scale={} transform={}", m_output->name, m_output->width,
+          m_output->height, m_output->refresh, m_output->scale, static_cast<int>(m_output->transform)
+      );
+    } else {
+      kLog.info("output '{}': disabled by config", m_output->name);
+    }
   }
 
   bool Output::configuredVrrEnabled() const {
@@ -141,7 +156,9 @@ namespace umbriel {
   }
 
   void Output::updateVrr() {
-    if (!m_output->adaptive_sync_supported) {
+    // wlroots rejects adaptive-sync commits on disabled outputs; nothing to
+    // update while the monitor is off.
+    if (!m_output->adaptive_sync_supported || !m_output->enabled) {
       return;
     }
     const bool enabled = configuredVrrEnabled();
@@ -172,7 +189,14 @@ namespace umbriel {
 
   void Output::applyOutputState() {
     applyConfiguredState();
-    addToLayout();
+    if (configuredEnabled()) {
+      wlr_output_layout_output* layoutOutput = addToLayout();
+      // Re-bind the scene output after a disable removed it from the layout.
+      // No-op while it is still bound.
+      wlr_scene_output_layout_add_output(m_server->sceneLayout(), layoutOutput, m_sceneOutput);
+    } else {
+      wlr_output_layout_remove(m_server->outputLayout(), m_output);
+    }
     markDirty(Dirty::LayerArrange | Dirty::Banner);
     if (m_server->sessionLocked()) {
       m_server->updateLockBlank();

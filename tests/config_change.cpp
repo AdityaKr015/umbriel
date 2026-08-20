@@ -288,6 +288,17 @@ UMBRIEL_TEST(outputStateAndWorkspaceInventoryAreIndependent) {
   CHECK(!inventoryEffects.outputState);
   CHECK(inventoryEffects.workspaceInventory);
   CHECK(inventoryEffects.workspaceLayout);
+
+  Config disabled = before;
+  disabled.outputs[0].enabled = false;
+  const ConfigEffects disableEffects = ConfigEffects::between(before, disabled);
+  CHECK(disableEffects.outputState);
+  CHECK(!disableEffects.workspaceInventory);
+  CHECK(!disableEffects.workspaceLayout);
+
+  const ConfigEffects reenableEffects = ConfigEffects::between(disabled, before);
+  CHECK(reenableEffects.outputState);
+  CHECK(!reenableEffects.workspaceInventory);
 }
 
 UMBRIEL_TEST(vrrPolicyTracksFullscreenOnlyWhenRequested) {

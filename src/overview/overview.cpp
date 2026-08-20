@@ -671,7 +671,7 @@ namespace umbriel {
     m_tree = m_server->overviewTree();
     for (const auto& output : m_server->outputs()) {
       WorkspaceGroup* group = output->workspaceGroup();
-      if (group == nullptr || group->workspaceCount() == 0) {
+      if (group == nullptr || group->workspaceCount() == 0 || !output->wlr()->enabled) {
         continue;
       }
       auto state = std::make_unique<OutputState>();

@@ -19,6 +19,7 @@ workspaces = 5
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| `enabled` | bool | `true` | Set to `false` to turn the monitor off and remove it from the desktop. |
 | `mode` | string | (native) | Resolution and refresh rate: `"WIDTHxHEIGHT"` or `"WIDTHxHEIGHT@HZ"`. Fractional Hz allowed. Ignored in nested sessions (the parent controls size). |
 | `position` | `[x, y]` | (auto) | Layout coordinates. |
 | `scale` | float | (auto) | Output scale (0.25-4.0). |
@@ -54,6 +55,23 @@ Umbriel logs a warning and keeps VRR disabled if the output does not support
 adaptive sync or rejects the request. Nested Wayland outputs normally depend on
 the parent compositor and may not expose adaptive sync support.
 
+## Disabling an output
+
+Set `enabled = false` on an output section to turn the monitor off. The
+connector is powered down, the output leaves the output layout, and its
+workspaces no longer appear in the overview. The output's workspaces and their
+windows are preserved, so setting `enabled = true` back (or removing the key)
+restores the monitor exactly as it was. A disabled output is never picked as a
+focus, placement, or layer-surface target.
+
+```toml
+[output.HDMI-A-1]
+enabled = false
+```
+
+Changing `enabled` applies on the next config reload, like the other output
+settings. Only the config file can disable an output; see below.
+
 ## Live reconfiguration
 
 Umbriel implements `wlr-output-management-unstable-v1`, so tools such as
@@ -62,8 +80,9 @@ scale, transform, and adaptive sync at runtime without editing the config file.
 `umbriel outputs` only reads from this protocol; it does not send configuration
 requests itself.
 
-Requests that disable an output through this protocol are rejected: umbriel
-has no disabled-output state model.
+Requests that disable an output through this protocol are rejected: the
+protocol commit would bypass the layout and overview handling that the config
+`enabled` key performs. Use `enabled = false` instead.
 
 ## Moving focus and windows between outputs
 

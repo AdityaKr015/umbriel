@@ -99,6 +99,9 @@ namespace umbriel {
   }
   struct OutputRule {
     std::string name;
+    // False powers the monitor off, removes it from the layout, and hides its
+    // workspaces from the desktop. Content is preserved while disabled.
+    bool enabled = true;
     std::optional<OutputMode> mode;
     std::optional<std::array<int, 2>> position;
     std::optional<double> scale;

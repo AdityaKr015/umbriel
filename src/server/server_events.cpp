@@ -306,6 +306,19 @@ namespace umbriel {
       for (const auto& output : m_outputs) {
         output->applyOutputState();
       }
+      for (const auto& output : m_outputs) {
+        if (output->wlr()->enabled) {
+          continue;
+        }
+        Output* fallback = nullptr;
+        for (const auto& candidate : m_outputs) {
+          if (candidate.get() != output.get() && candidate->wlr()->enabled) {
+            fallback = candidate.get();
+            break;
+          }
+        }
+        reassignOutputViews(output.get(), fallback);
+      }
       updateOutputManagerConfig();
       // A disabled output must not keep keyboard focus: pull it onto a live one.
       refocus();
@@ -1273,7 +1286,6 @@ namespace umbriel {
       }
     }
 
-    WorkspaceGroup* dying = output->workspaceGroup();
     Output* fallback = nullptr;
     for (const auto& entry : m_outputs) {
       // Prefer a live monitor: rehoming windows onto a disabled one would
@@ -1284,22 +1296,7 @@ namespace umbriel {
       }
     }
 
-    if (dying != nullptr) {
-      Workspace* destination = nullptr;
-      if (fallback != nullptr && fallback->workspaceGroup() != nullptr) {
-        destination = fallback->workspaceGroup()->active();
-      }
-      for (const auto& entry : m_registry.all()) {
-        Workspace* workspace = entry->workspace();
-        if (workspace == nullptr || workspace->group() != dying) {
-          continue;
-        }
-        entry->setWorkspace(destination);
-      }
-    }
-    if (m_scratchpadManager != nullptr) {
-      m_scratchpadManager->moveOutput(output, fallback);
-    }
+    reassignOutputViews(output, fallback);
 
     std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) { return entry.get() == output; });
     markDirty(Dirty::Banner | Dirty::Cheatsheet | Dirty::QuitConfirm);
@@ -1309,6 +1306,27 @@ namespace umbriel {
     updateOutputManagerConfig();
     // Scratchpad and pinned views rehome without going through setWorkspace.
     refreshSurfaceScales();
+  }
+
+  void Server::reassignOutputViews(Output* source, Output* destination) {
+    if (source == nullptr || source == destination) {
+      return;
+    }
+    WorkspaceGroup* sourceGroup = source->workspaceGroup();
+    Workspace* targetWorkspace = destination != nullptr && destination->workspaceGroup() != nullptr
+        ? destination->workspaceGroup()->active()
+        : nullptr;
+    if (sourceGroup != nullptr) {
+      for (const auto& view : m_registry.all()) {
+        Workspace* workspace = view->workspace();
+        if (workspace != nullptr && workspace->group() == sourceGroup) {
+          view->setWorkspace(targetWorkspace);
+        }
+      }
+    }
+    if (m_scratchpadManager != nullptr) {
+      m_scratchpadManager->moveOutput(source, destination);
+    }
   }
 
   void Server::removeKeyboard(Keyboard* keyboard) {

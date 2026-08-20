@@ -275,6 +275,7 @@ namespace umbriel {
     [[nodiscard]] wlr_tablet_v2_tablet* tabletV2FromWlr(const wlr_tablet* tablet) const;
 
     void removeOutput(Output* output);
+    void reassignOutputViews(Output* source, Output* destination);
     void removeKeyboard(Keyboard* keyboard);
     void removeView(View* view);
     void removeLayerSurface(LayerSurface* layerSurface, wlr_output* output);

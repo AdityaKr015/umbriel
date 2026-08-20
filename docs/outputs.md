@@ -4,6 +4,11 @@ Output sections configure individual monitors. Names must exactly match
 connector names such as `DP-1` or `HDMI-A-1`. Nested outputs use `WL-1`;
 headless outputs use `HEADLESS-1`.
 
+When an output is disconnected or disabled through configuration, Umbriel moves
+its windows to the active workspace on another enabled output. Scratchpad
+windows move with that output assignment. If no enabled output remains, windows
+stay without a workspace until one becomes available.
+
 Run `umbriel outputs` inside a session to list connector names and modes.
 
 ```toml

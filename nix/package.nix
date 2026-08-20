@@ -19,6 +19,7 @@
   libxcb,
   libxcb-wm,
   lcms2,
+  jemalloc,
   tomlplusplus,
   nlohmann_json,
   xwayland-satellite,

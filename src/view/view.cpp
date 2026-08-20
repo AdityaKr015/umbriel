@@ -24,6 +24,14 @@ namespace umbriel {
   namespace {
     constexpr Logger kLog("view");
 
+    // How long the layout withholds the column size after an unfullscreen
+    // configure (sent with size 0x0). xwayland-satellite acks configures
+    // immediately, so acks prove nothing; the X11 client's re-request arrives
+    // through a full X round trip (observed 310-330 ms for a loaded game).
+    // A client that truly accepts windowed mode exits the grace early by
+    // committing a geometry different from its fullscreen one.
+    constexpr uint64_t kUnfullscreenGraceMsec = 1000;
+
     bool looksTiled(const wlr_xdg_toplevel* toplevel) {
       const auto& state = toplevel->current;
       const bool fixedWidth = state.max_width > 0 && state.min_width == state.max_width;
@@ -530,10 +538,60 @@ namespace umbriel {
     scheduleFrame();
   }
 
+  void View::clipForSnapMove(int x, int y) {
+    if (!m_mapped
+        || m_workspace == nullptr
+        || m_workspace->group() == nullptr
+        || m_workspace->group()->output() == nullptr) {
+      return;
+    }
+    // Drags intentionally span outputs; entering the neighbor is the point.
+    if (m_server->cursor() != nullptr && m_server->cursor()->isDraggingView(this)) {
+      return;
+    }
+    const int oldX = m_sceneTree->node.x;
+    const int oldY = m_sceneTree->node.y;
+    const wlr_box& geo = m_toplevel->base->geometry;
+    if ((oldX == x && oldY == y) || geo.width <= 0 || geo.height <= 0) {
+      return;
+    }
+    wlr_box outputBox{};
+    wlr_output_layout_get_box(m_server->outputLayout(), m_workspace->group()->output()->wlr(), &outputBox);
+    if (wlr_box_empty(&outputBox)) {
+      return;
+    }
+    // The union of the content footprint at both endpoints bounds every box the
+    // move can produce; inside the home output means no neighbor can be grazed.
+    const wlr_box moveUnion{
+        std::min(oldX, x),
+        std::min(oldY, y),
+        geo.width + std::max(x, oldX) - std::min(x, oldX),
+        geo.height + std::max(y, oldY) - std::min(y, oldY),
+    };
+    wlr_box contained{};
+    if (wlr_box_intersection(&contained, &moveUnion, &outputBox) && wlr_box_equal(&contained, &moveUnion)) {
+      return;
+    }
+    // Clip to the region visible on the home output at BOTH endpoints
+    // (surface-local output box at node position p is outputBox - p + geo
+    // offset). The caller re-derives the exact clip right after the move.
+    const wlr_box atOld{outputBox.x - oldX + geo.x, outputBox.y - oldY + geo.y, outputBox.width, outputBox.height};
+    const wlr_box atNew{outputBox.x - x + geo.x, outputBox.y - y + geo.y, outputBox.width, outputBox.height};
+    wlr_box pre{};
+    if (!wlr_box_intersection(&pre, &atOld, &atNew)) {
+      // Not visible at both endpoints at once: park the clip off-surface (an
+      // empty box would mean "unclip" to wlroots and flash the full buffer).
+      constexpr int kFarAway = 1 << 20;
+      pre = {-kFarAway, -kFarAway, 1, 1};
+    }
+    setSurfaceTreeClip(&pre);
+  }
+
   void View::setPosition(int x, int y) {
     m_posX.snap(x);
     m_posY.snap(y);
     m_positioned = true;
+    clipForSnapMove(x, y);
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
     m_decoration.setShadowPosition(x, y);
   }
@@ -604,6 +662,32 @@ namespace umbriel {
       setFadeAlpha(static_cast<float>(m_fade.current()));
       active = active || m_fade.animating();
     }
+    // Unfullscreen grace: the compositor asked the client to leave fullscreen
+    // with a size-0x0 configure. A compliant client commits its own windowed
+    // geometry (handleCommit ends the grace and tiles it); a client that
+    // re-requests fullscreen cancels it in setFullscreen. Expiry means the
+    // client ignored the state change entirely: some game engines only react
+    // to an actual resize, and resizing them permanently breaks their X11
+    // mouse mapping, so re-assert fullscreen instead of poking them with the
+    // column size.
+    if (m_pendingUnfullscreenSize) {
+      if (m_unfullscreenGraceStartMsec == 0) {
+        m_unfullscreenGraceStartMsec = nowMsec;
+      }
+      if (nowMsec - m_unfullscreenGraceStartMsec >= kUnfullscreenGraceMsec) {
+        m_pendingUnfullscreenSize = false;
+        m_unfullscreenGraceStartMsec = 0;
+        if (m_tiled && !m_toplevel->scheduled.fullscreen) {
+          kLog.debug(
+              "unfullscreen grace expired without compliance for '{}'; re-asserting fullscreen",
+              m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?"
+          );
+          setFullscreen(true);
+        }
+      } else {
+        active = true;
+      }
+    }
     // The scene helper may process a surface commit after View::handleCommit.
     // Reapply on the ensuing frame, after every commit listener has run.
     if (m_dragOpacityCommitPending) {
@@ -619,8 +703,14 @@ namespace umbriel {
   }
 
   bool View::hasActiveAnimations() const {
-    return m_posX.animating() || m_posY.animating() || sizeAnimating() || m_fade.animating();
+    return m_posX.animating()
+        || m_posY.animating()
+        || sizeAnimating()
+        || m_fade.animating()
+        || m_pendingUnfullscreenSize;
   }
+
+  bool View::layoutFullscreen() const { return m_toplevel->scheduled.fullscreen || m_pendingUnfullscreenSize; }
 
   void View::onMap(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_map);
@@ -1195,6 +1285,7 @@ namespace umbriel {
     if (m_toplevel->scheduled.width != fullArea.width || m_toplevel->scheduled.height != fullArea.height) {
       wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
     }
+    clipForSnapMove(fullArea.x, fullArea.y);
     wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
     m_decoration.setShadowPosition(fullArea.x, fullArea.y);
     updateFullscreenPresentation(fullArea.width, fullArea.height);
@@ -1514,6 +1605,18 @@ namespace umbriel {
         m_presentation.setSize(geometry.width, geometry.height);
       }
     }
+    // The client committed a geometry other than its fullscreen one while the
+    // unfullscreen grace ran: it accepted windowed mode, so the layout may
+    // assign the column size now instead of waiting out the grace.
+    if (m_pendingUnfullscreenSize
+        && !m_toplevel->current.fullscreen
+        && !wlr_box_equal(&m_toplevel->base->geometry, &m_unfullscreenGeometry)) {
+      m_pendingUnfullscreenSize = false;
+      m_unfullscreenGraceStartMsec = 0;
+      if (m_mapped && m_tiled && m_workspace != nullptr) {
+        m_workspace->markArrange(false);
+      }
+    }
     // Re-apply output clip after configure ack so Super+F / resize sizes show
     // without needing a workspace switch (clip boxes are copied, not live).
     if (m_mapped && m_tiled && m_workspace != nullptr && m_workspace->active()) {
@@ -1664,8 +1767,8 @@ namespace umbriel {
       return;
     }
     kLog.debug(
-        "request_fullscreen '{}': {}", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?",
-        m_toplevel->requested.fullscreen
+        "request_fullscreen '{}' [{}]: {}", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?",
+        static_cast<const void*>(this), m_toplevel->requested.fullscreen
     );
 
     const bool requested = m_toplevel->requested.fullscreen;
@@ -1692,6 +1795,15 @@ namespace umbriel {
 
     // Honor the client's requested state (not a blind toggle).
     setFullscreen(requested);
+    if (!requested && m_pendingUnfullscreenSize) {
+      // The client itself asked for windowed mode: no compliance grace is
+      // needed, size it into its column right away.
+      m_pendingUnfullscreenSize = false;
+      m_unfullscreenGraceStartMsec = 0;
+      if (m_tiled && m_workspace != nullptr) {
+        m_workspace->markArrange(false);
+      }
+    }
   }
 
   void View::toggleFullscreen() {
@@ -1760,7 +1872,20 @@ namespace umbriel {
     if (!m_mapped || !m_toplevel->base->initialized) {
       return;
     }
+    kLog.debug(
+        "set_floating '{}' [{}] -> {} (tiled={}, pinned={}, fs={})",
+        m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?", static_cast<const void*>(this), floating, m_tiled,
+        m_pinned, m_toplevel->scheduled.fullscreen
+    );
     if (!floating && m_server->scratchpadManager() != nullptr && m_server->scratchpadManager()->contains(this)) {
+      return;
+    }
+    // A no-op request must stay a no-op: unfullscreening or cancelling the size
+    // animation here would let a redundant "make tiled" call rip a fullscreen
+    // game out of its state (the game re-requests, the compositor re-grants,
+    // and every cycle reflows the strip).
+    const bool wantTiled = !floating;
+    if (m_tiled == wantTiled) {
       return;
     }
     if (!floating && m_pinned) {
@@ -1773,15 +1898,29 @@ namespace umbriel {
       }
     }
     cancelSizeAnimation();
-    // Fullscreen owns its own scene tree; leave it before changing tile/float.
-    if (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen) {
+    const bool fullscreen = m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen;
+    // Only the float direction leaves fullscreen (it owns its own scene tree).
+    // Re-tiling a fullscreen view keeps the state and re-inserts it as a
+    // fullscreen column: dropping it first configures the client to a regular
+    // column size for the instant before it re-requests fullscreen, and game
+    // engines latch that transient windowed size for their input mapping,
+    // leaving hover and clicks dead outside it (X geometry recovers, the
+    // engine's notion does not).
+    if (floating && fullscreen) {
       setFullscreen(false);
+      // Remember to restore on the next re-tile. Set after setFullscreen,
+      // which clears the flag on every leave-fullscreen path.
+      m_refullscreenOnTile = true;
+      // The float path requests its own size below; the tiled-column size
+      // deferral set by setFullscreen(false) does not apply to floats.
+      m_pendingUnfullscreenSize = false;
+      m_unfullscreenGraceStartMsec = 0;
     }
-
-    const bool wantTiled = !floating;
-    if (m_tiled == wantTiled) {
-      return;
-    }
+    // Consume the memory: a client that itself left fullscreen while floating
+    // cleared it (setFullscreen(false) below via its request), so this only
+    // fires for a float episode the client still considers fullscreen.
+    const bool refullscreen = !floating && !fullscreen && m_refullscreenOnTile;
+    m_refullscreenOnTile = floating && m_refullscreenOnTile;
 
     if (floating) {
       int keepWidth = 0;
@@ -1863,21 +2002,31 @@ namespace umbriel {
 
     const wlr_box usable = floatingUsableArea();
     const wlr_box& geo = m_toplevel->base->geometry;
-    if (geo.width > 0 && geo.height > 0) {
+    // A fullscreen geometry is not a floating size; remembering it would make
+    // the next float episode restore output-sized dimensions.
+    if (!fullscreen && geo.width > 0 && geo.height > 0) {
       m_floating.rememberSize(geo.width, geo.height);
     }
     m_floating.rememberPositionFraction({.x = m_sceneTree->node.x, .y = m_sceneTree->node.y}, usable);
 
     m_floating.clearSizeRequest();
     m_tiled = true;
+    // Restore the fullscreen the float toggle dropped BEFORE the layout
+    // attach: arrange then sizes the column to the full output instead of a
+    // regular column width, and the client sees no transient windowed
+    // configure. setFullscreen also reparents and disables borders.
+    if (refullscreen) {
+      setFullscreen(true);
+    }
+    const bool wantFullscreen = fullscreen || refullscreen;
     if (m_workspace != nullptr) {
-      wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(m_tiled));
+      wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
       m_workspace->syncFloatingStack(this);
     }
     wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
     wlr_xdg_toplevel_set_maximized(m_toplevel, false);
     m_decoration.ensureBorders(m_sceneTree);
-    m_decoration.setBordersEnabled(true);
+    m_decoration.setBordersEnabled(!wantFullscreen);
     updateBorderGeometry();
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this);
@@ -1885,14 +2034,27 @@ namespace umbriel {
     applyCornerRadius();
     updateShadow();
     m_server->focusView(this);
+    // setFullscreen(true) is not re-run on this path, so its scroll snap does
+    // not happen; without it the strip can rest showing the neighbor column
+    // beside a viewport-wide fullscreen column.
+    if (wantFullscreen && m_workspace != nullptr) {
+      m_workspace->ensureFocusedVisible();
+      m_workspace->markArrange(false);
+    }
     updateForeignState();
   }
 
   void View::setFullscreen(bool fullscreen) {
     kLog.debug(
-        "set_fullscreen '{}' -> {} (tiled={}, ws_active={})", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?",
-        fullscreen, m_tiled, m_workspace != nullptr && m_workspace->active()
+        "set_fullscreen '{}' [{}] -> {} (tiled={}, ws_active={})",
+        m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?", static_cast<const void*>(this), fullscreen, m_tiled,
+        m_workspace != nullptr && m_workspace->active()
     );
+    // Any leave-fullscreen invalidates a pending float-toggle restore: the
+    // float path re-sets the flag right after its own setFullscreen(false).
+    if (!fullscreen) {
+      m_refullscreenOnTile = false;
+    }
     // Leaving column maximize when entering real fullscreen avoids a stale
     // widthFrac=1.0 column after the client leaves fullscreen.
     if (fullscreen && m_tiled && m_workspace != nullptr) {
@@ -1943,10 +2105,31 @@ namespace umbriel {
     if (!fullscreen) {
       // scheduled.fullscreen is already false; arrange into usable area (exclusive zones).
       if (m_tiled && m_workspace != nullptr) {
+        // xwayland-satellite clients only: send the unfullscreen with size
+        // 0x0 (client picks) and withhold the column size for a grace
+        // period. Game engines behind satellite latch a transient windowed
+        // resize for input mapping and never recover (hover and clicks go
+        // dead outside it even after the geometry returns), and they only
+        // notice the state change when a resize pokes them, so on expiry the
+        // grace re-asserts fullscreen instead of resizing. Wayland-native
+        // clients handle resizes fine and commonly keep their size on 0x0,
+        // which would wrongly bounce them back to fullscreen; they keep the
+        // immediate column sizing.
+        if (m_xwayland) {
+          m_pendingUnfullscreenSize = true;
+          m_unfullscreenGraceStartMsec = 0;
+          m_unfullscreenGeometry = m_toplevel->base->geometry;
+          wlr_xdg_toplevel_set_size(m_toplevel, 0, 0);
+          // The grace countdown runs on frame ticks; make sure one is coming.
+          scheduleFrame();
+        }
         m_workspace->markArrange(false);
       } else {
         placeInUsableArea();
       }
+    } else {
+      m_pendingUnfullscreenSize = false;
+      m_unfullscreenGraceStartMsec = 0;
     }
     updateForeignState();
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {

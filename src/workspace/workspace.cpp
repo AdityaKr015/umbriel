@@ -40,7 +40,7 @@ namespace umbriel {
           .minHeight = hints.minHeight,
           .maxWidth = hints.maxWidth,
           .maxHeight = hints.maxHeight,
-          .fullscreen = toplevel != nullptr && toplevel->scheduled.fullscreen,
+          .fullscreen = view != nullptr && view->layoutFullscreen(),
       };
     }
   } // namespace
@@ -364,6 +364,11 @@ namespace umbriel {
         }
         continue;
       }
+      // An unfullscreen configure with client-chosen size is in flight; the
+      // column size waits for the ack (View::handleCommit re-arranges).
+      if (view->awaitingUnfullscreenSize()) {
+        continue;
+      }
       const wlr_box target = m_layout->targetBox(view);
       const XdgSizeHints hints = xdgSizeHints(view->toplevel());
       const int width = clampXdgWidth(target.width, hints);
@@ -435,7 +440,7 @@ namespace umbriel {
         return;
       }
 
-      if (view->toplevel()->scheduled.fullscreen) {
+      if (view->layoutFullscreen()) {
         if (m_layout->columnOf(view) < 0) {
           if (m_active) {
             view->setNodeEnabled(true);
@@ -479,7 +484,7 @@ namespace umbriel {
       if (view == nullptr || !view->mapped()) {
         continue;
       }
-      if (view->toplevel()->scheduled.fullscreen) {
+      if (view->layoutFullscreen()) {
         const int col = m_layout->columnOf(view);
         if (col >= 0) {
           wlr_box target = outputBox; // fullscreen fills the whole output, not the dwindle tile box

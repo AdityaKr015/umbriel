@@ -47,6 +47,13 @@ namespace umbriel {
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
     [[nodiscard]] bool pinned() const { return m_pinned; }
+    // True while an unfullscreen configure with size 0x0 is unacknowledged;
+    // Workspace::arrange must not impose the column size yet.
+    [[nodiscard]] bool awaitingUnfullscreenSize() const { return m_pendingUnfullscreenSize; }
+    // Fullscreen for layout purposes: a view inside the unfullscreen grace
+    // keeps its fullscreen slot and presentation so the strip does not reflow
+    // (and no resize leaks) while the client decides how to respond.
+    [[nodiscard]] bool layoutFullscreen() const;
     [[nodiscard]] bool urgent() const { return m_urgent; }
     // The window id the ext-foreign-toplevel protocol hands to clients, which
     // the IPC surface reuses verbatim for its own window identity. Null only
@@ -90,6 +97,14 @@ namespace umbriel {
     // Move the scene nodes without touching the position animation: an
     // interactive drag tracks the pointer 1:1 and owns the position itself.
     void setDragPosition(int x, int y);
+    // Tighten the subsurface clip before a snap move so the surface never
+    // transits a neighboring output. wlroots recomputes surface->output
+    // membership inside wlr_scene_node_set_position, before the caller can
+    // re-derive the clip for the new position; a stale (wider) clip then
+    // grazes the neighbor for one scene update. xwayland-satellite latches
+    // wl_surface.enter permanently (leave never reverts it), so a single
+    // transient enter re-homes X11 windows to the wrong output.
+    void clipForSnapMove(int x, int y);
     // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
     void clampFloatingPosition();
     // Record the floating position as a fraction of the current usable area,
@@ -296,6 +311,23 @@ namespace umbriel {
     bool m_tiled = false;
     bool m_pinned = false;
     bool m_restoreTiledAfterUnpin = false;
+    // Set when a float toggle drops fullscreen: re-tiling restores fullscreen
+    // BEFORE the layout attach, so the client never receives a transient
+    // column-sized configure (game engines latch it for input mapping and go
+    // dead outside it). Cleared whenever fullscreen is left by any other path,
+    // so a client that chose windowed mode while floating re-tiles as a
+    // regular column.
+    bool m_refullscreenOnTile = false;
+    // Set while an unfullscreen configure with size 0x0 is in flight: the
+    // layout must not impose the column size until the client commits its
+    // non-fullscreen state (or re-requests fullscreen, avoiding any resize).
+    bool m_pendingUnfullscreenSize = false;
+    // 0 until the first frame tick after arming; the grace deadline counts
+    // from there so a stalled frame clock cannot expire it instantly.
+    uint64_t m_unfullscreenGraceStartMsec = 0;
+    // Geometry at unfullscreen time; a commit with a different geometry means
+    // the client accepted windowed mode and the grace can end early.
+    wlr_box m_unfullscreenGeometry{};
     bool m_onActiveWorkspace = false;
     bool m_scratchpadBorder = false;
     bool m_urgent = false;

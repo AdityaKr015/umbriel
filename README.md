@@ -1,6 +1,6 @@
 # Umbriel
 
-Umbriel is a polished Wayland compositor for daily use, with scrolling and dwindle layouts, per-output workspaces,
+Umbriel is a Wayland compositor designed for daily use, with scrolling and dwindle layouts, per-output workspaces,
 window rules, blur, shadows, and fluid animations.
 
 It runs independently and can be paired with [Noctalia](https://github.com/noctalia-dev/noctalia), which provides a
@@ -9,9 +9,8 @@ first-class desktop shell experience for Umbriel. Umbriel is built in C++23 on
 Xwayland support provided by [xwayland-satellite](https://github.com/Supreeeme/xwayland-satellite).
 
 > [!IMPORTANT]
-> Umbriel is young. It is usable for daily use today, but it is still finding its shape: configuration keys, keybinds,
-> and behavior can change between releases, and you may hit rough edges. We would rather change what feels wrong than
-> promise stability we cannot back yet, so treat current defaults as opinions, not contracts.
+> Umbriel is young and actively evolving. It is usable today, but configuration keys, keybinds, and behavior may change
+> between releases, and rough edges remain. Current defaults are opinions, not stability promises.
 
 <p align="center">
   <img src="https://assets.noctalia.dev/?file=umbriel.svg" alt="Umbriel Logo" style="width: 192px" />

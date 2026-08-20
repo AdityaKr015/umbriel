@@ -36,6 +36,10 @@ namespace umbriel {
 
     void focus();
     void unconstrainPopup(wlr_xdg_popup* popup);
+    // Push the owning output's scale to every surface of this layer surface
+    // (fractional-scale + preferred buffer scale, popups included).
+    void notifyOutputScale();
+    [[nodiscard]] Output* output() const;
 
   private:
     friend class Server;
@@ -54,7 +58,6 @@ namespace umbriel {
     void reparentToLayer(uint32_t layer);
     void updateBlur();
     void applyConfig();
-    Output* output() const;
 
     Server* m_server = nullptr;
     wlr_layer_surface_v1* m_layerSurface = nullptr;

@@ -114,11 +114,7 @@ namespace umbriel {
     m_toplevel->base->data = m_sceneTree;
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
     m_presentation.createBackdrop(m_sceneTree);
-    if (wlr_output* output = m_server->preferredOutput()) {
-      wlr_surface* surface = m_toplevel->base->surface;
-      wlr_fractional_scale_v1_notify_scale(surface, output->scale);
-      wlr_surface_set_preferred_buffer_scale(surface, static_cast<int32_t>(std::ceil(output->scale)));
-    }
+    notifyOutputScale();
 
     m_commit.notify = onCommit;
     wl_signal_add(&m_toplevel->base->surface->events.commit, &m_commit);
@@ -223,6 +219,7 @@ namespace umbriel {
     } else {
       setOnActiveWorkspace(true);
     }
+    notifyOutputScale();
     if (m_mapped && m_onActiveWorkspace) {
       enterForeignOutput();
     }
@@ -994,17 +991,27 @@ namespace umbriel {
     applyEffectiveOpacity();
   }
 
+  Output* View::currentOutput() const {
+    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
+      return m_workspace->group()->output();
+    }
+    return m_server->outputFromWlr(m_server->preferredOutput());
+  }
+
+  void View::notifyOutputScale() {
+    Output* output = currentOutput();
+    if (output == nullptr || m_toplevel == nullptr || m_toplevel->base == nullptr) {
+      return;
+    }
+    wlr_xdg_surface_for_each_surface(m_toplevel->base, &Output::notifySurfaceScaleIter, output);
+    wlr_xdg_surface_for_each_popup_surface(m_toplevel->base, &Output::notifySurfaceScaleIter, output);
+  }
+
   void View::unconstrainPopup(wlr_xdg_popup* popup) {
     if (popup == nullptr || m_sceneTree == nullptr) {
       return;
     }
-    Output* output = nullptr;
-    if (m_workspace != nullptr && m_workspace->group() != nullptr) {
-      output = m_workspace->group()->output();
-    }
-    if (output == nullptr) {
-      output = m_server->outputFromWlr(m_server->preferredOutput());
-    }
+    Output* output = currentOutput();
     if (output == nullptr) {
       return;
     }

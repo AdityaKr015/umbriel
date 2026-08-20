@@ -309,6 +309,9 @@ namespace umbriel {
       updateOutputManagerConfig();
       // A disabled output must not keep keyboard focus: pull it onto a live one.
       refocus();
+      // Scale may have changed; every surface must hear about it or clients
+      // like xwayland-satellite keep mapping input with the stale scale.
+      refreshSurfaceScales();
     }
     if (effects.workspaceInventory) {
       for (const auto& output : m_outputs) {
@@ -895,6 +898,7 @@ namespace umbriel {
       raiseLockTree();
     }
     updateOutputManagerConfig();
+    refreshSurfaceScales();
   }
 
   void Server::addKeyboard(wlr_input_device* device) {
@@ -1303,6 +1307,8 @@ namespace umbriel {
       updateLockBlank();
     }
     updateOutputManagerConfig();
+    // Scratchpad and pinned views rehome without going through setWorkspace.
+    refreshSurfaceScales();
   }
 
   void Server::removeKeyboard(Keyboard* keyboard) {
@@ -1430,6 +1436,7 @@ namespace umbriel {
       if (m_sessionLocked) {
         updateLockBlank();
       }
+      refreshSurfaceScales();
     }
 
     free(states);

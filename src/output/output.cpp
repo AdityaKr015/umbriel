@@ -10,6 +10,7 @@
 #include "workspace/workspace.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 
@@ -219,6 +220,15 @@ namespace umbriel {
     m_gammaDirty = true;
     markDirty(Dirty::LayerArrange);
     wlr_output_schedule_frame(m_output);
+  }
+
+  void Output::notifySurfaceScaleIter(wlr_surface* surface, int /*sx*/, int /*sy*/, void* data) {
+    const auto* self = static_cast<Output*>(data);
+    if (surface == nullptr || self == nullptr || self->m_output == nullptr) {
+      return;
+    }
+    wlr_fractional_scale_v1_notify_scale(surface, self->m_output->scale);
+    wlr_surface_set_preferred_buffer_scale(surface, static_cast<int32_t>(std::ceil(self->m_output->scale)));
   }
 
   Output::~Output() {

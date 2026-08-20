@@ -231,6 +231,14 @@ namespace umbriel {
     // Apply subsurface clip to the toplevel surface only, not xdg popup children.
     void setSurfaceTreeClip(const wlr_box* clip);
     void unconstrainPopup(wlr_xdg_popup* popup);
+    // The output this view is presented on: its workspace group's output, or
+    // the server's preferred output while unassigned (scratchpad, pre-map).
+    [[nodiscard]] Output* currentOutput() const;
+    // Push the current output's scale to every surface of this toplevel
+    // (fractional-scale + preferred buffer scale, popups included). Clients
+    // like xwayland-satellite size and map pointer coordinates by this, so it
+    // must follow the view across outputs and track scale changes.
+    void notifyOutputScale();
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
     void requestFloatingSize(int width, int height);

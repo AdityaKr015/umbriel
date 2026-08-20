@@ -16,6 +16,15 @@ namespace umbriel {
     }
   }
 
+  void Server::refreshSurfaceScales() {
+    for (const auto& view : m_registry.all()) {
+      view->notifyOutputScale();
+    }
+    for (const auto& layer : m_layerSurfaces) {
+      layer->notifyOutputScale();
+    }
+  }
+
   wlr_output* Server::preferredOutput() const {
     wlr_output* output = wlr_output_layout_output_at(m_outputLayout, m_cursor->wlr()->x, m_cursor->wlr()->y);
     if (output != nullptr) {

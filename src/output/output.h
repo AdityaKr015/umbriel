@@ -12,6 +12,7 @@ struct wlr_output_layout_output;
 struct wlr_scene_output;
 struct wlr_scene_optimized_blur;
 struct wlr_scene_tree;
+struct wlr_surface;
 
 extern "C" {
 #include <wlr/util/box.h>
@@ -51,6 +52,11 @@ namespace umbriel {
     void updateVrr();
     void markBlurBackgroundDirty();
     void handleExternalConfigChange();
+    // Tell one surface this output's scale (fractional + integer preferred
+    // buffer scale). Both wlroots calls dedup internally, so re-notifying is
+    // free. Shaped as a wlr_surface_iterator_func_t so shell for_each helpers
+    // can walk a whole surface tree with it; `data` is the Output*.
+    static void notifySurfaceScaleIter(wlr_surface* surface, int sx, int sy, void* data);
 
   private:
     // Flushed at the top of handleFrame, in Dirty declaration order: layer

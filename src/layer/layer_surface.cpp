@@ -63,6 +63,8 @@ namespace umbriel {
     wl_signal_add(&m_layerSurface->events.destroy, &m_destroy);
     m_newPopup.notify = onNewPopup;
     wl_signal_add(&m_layerSurface->events.new_popup, &m_newPopup);
+
+    notifyOutputScale();
   }
 
   LayerSurface::~LayerSurface() {
@@ -80,6 +82,15 @@ namespace umbriel {
       return nullptr;
     }
     return static_cast<Output*>(m_layerSurface->output->data);
+  }
+
+  void LayerSurface::notifyOutputScale() {
+    Output* out = output();
+    if (out == nullptr || m_layerSurface == nullptr) {
+      return;
+    }
+    wlr_layer_surface_v1_for_each_surface(m_layerSurface, &Output::notifySurfaceScaleIter, out);
+    wlr_layer_surface_v1_for_each_popup_surface(m_layerSurface, &Output::notifySurfaceScaleIter, out);
   }
 
   bool LayerSurface::exclusiveKeyboard() const {

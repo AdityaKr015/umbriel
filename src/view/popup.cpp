@@ -1,6 +1,7 @@
 #include "view/popup.h"
 
 #include "layer/layer_surface.h"
+#include "output/output.h"
 #include "scene/node.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -87,6 +88,19 @@ namespace umbriel {
     );
     if (!m_popup->base->initial_commit) {
       return;
+    }
+
+    // New popups miss the parent's map/workspace-time scale notify; tell them
+    // the parent's output scale before the first configure so scale-aware
+    // clients (xwayland-satellite) size and map input correctly from frame one.
+    Output* output = nullptr;
+    if (LayerSurface* layer = layerSurfaceFromSurface(m_popup->parent)) {
+      output = layer->output();
+    } else if (View* view = View::fromSurface(m_popup->parent)) {
+      output = view->currentOutput();
+    }
+    if (output != nullptr) {
+      wlr_xdg_surface_for_each_surface(m_popup->base, &Output::notifySurfaceScaleIter, output);
     }
 
     unconstrain();

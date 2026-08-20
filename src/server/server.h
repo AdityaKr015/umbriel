@@ -257,6 +257,11 @@ namespace umbriel {
     [[nodiscard]] std::optional<Keybind> releaseModifierTap(const void* source, uint32_t keycode);
     void cancelModifierTap() { m_modifierTap.cancel(); }
     void arrangeLayers(wlr_output* output);
+    // Re-send every surface's output scale (views, layer surfaces, popups).
+    // Run after anything that changes an output's scale or moves surfaces
+    // between outputs outside setWorkspace; the notifies dedup, so extra calls
+    // are cheap.
+    void refreshSurfaceScales();
     [[nodiscard]] wlr_output* preferredOutput() const;
     [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
     [[nodiscard]] Output* outputFromName(const std::string& name) const;

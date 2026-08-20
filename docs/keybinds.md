@@ -65,6 +65,8 @@ set.
 | `workspace-switch:<ws>` | Workspace name, optionally `/<output>` | `"workspace-switch:3"`, `"workspace-switch:CHAT/HDMI-A-1"` |
 | `window-move-to-workspace:<ws>` | Same as above | `"window-move-to-workspace:2"` |
 | `window-set-width:<frac>` | Fraction 0.1-1.0 | `"window-set-width:0.667"` |
+| `window-modify-width:<delta>` | Signed fraction -0.9..0.9; the resulting width clamps to 0.1..1.0 | `"window-modify-width:-0.2"` |
+| `workspace-set-layout:<scrolling\|dwindle\|toggle>` | Switch the active workspace's layout at runtime; sticky until a config reload reasserts the configured mode | `"workspace-set-layout:toggle"` |
 | `window-focus:<window-id>` | Window id from `umbriel windows` | `"window-focus:0123abcd"` |
 | `window-close[:<window-id>]` | Optional window id; bare form closes the focused window | `"window-close"` |
 
@@ -84,6 +86,31 @@ right of its tiled position while keeping it on-screen.
 fullscreen windows on its output. Pinned windows remain visible when you
 switch workspaces. You cannot pin a fullscreen window, and making a pinned
 window fullscreen removes its pinned state.
+
+### Output and movement actions
+
+`workspace-next` and `workspace-previous` switch to the adjacent workspace on the
+focused output, by index. They do not wrap around: `workspace-previous` on the
+first workspace is a silent no-op. On a dynamic output, `workspace-next` reaches
+the trailing empty workspace, which becomes active as usual.
+
+`window-center` centers the focused floating window on its output's usable
+area. It is a no-op while a tiled window is focused.
+
+The directional output actions target the adjacent monitor:
+
+| Action | What it does |
+|--------|--------------|
+| `output-focus-left` / `output-focus-right` / `output-focus-up` / `output-focus-down` | Move focus to the adjacent monitor in that direction. |
+| `window-move-to-output-left` / `window-move-to-output-right` / `window-move-to-output-up` / `window-move-to-output-down` | Move the focused window to the adjacent monitor's active workspace. |
+| `column-move-to-output-left` / `column-move-to-output-right` / `column-move-to-output-up` / `column-move-to-output-down` | Move the focused window's whole column to the adjacent monitor's active workspace. |
+| `workspace-move-to-output-left` / `workspace-move-to-output-right` / `workspace-move-to-output-up` / `workspace-move-to-output-down` | Move every window of the active workspace to the adjacent monitor, preserving column order and widths. |
+
+Directions do not wrap around: with no monitor in that direction the action
+fails with an IPC error ("no output to the left" and friends). The cursor warps
+to the center of the target monitor, so focus follows the action. Floating
+windows keep their relative position on the new monitor; a column moved onto a
+dwindle output flattens into single-window columns, the same as drag-and-drop.
 
 ### Overview actions
 

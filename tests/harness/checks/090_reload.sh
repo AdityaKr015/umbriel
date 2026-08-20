@@ -13,8 +13,11 @@ readonly RECOVERY_INCLUDE="${UMBRIEL_CONFIG%/*}/reload-recovery.toml"
 
 CLIENT_PIDS=()
 cleanup() {
-  if [[ -f $RECOVERY_ROOT ]]; then
-    cp "$RECOVERY_ROOT" "$UMBRIEL_CONFIG"
+  # Restore the config this check inherited, not the mutated one it leaves
+  # behind: later checks read UMBRIEL_CONFIG and would otherwise run with the
+  # gap=40 / border=12 test layout.
+  if [[ -f $UMBRIEL_CONFIG.bak ]]; then
+    cp "$UMBRIEL_CONFIG.bak" "$UMBRIEL_CONFIG"
     "$UMBRIEL" msg config-reload > /dev/null 2>&1 || true
   fi
   rm -f "$RECOVERY_ROOT" "$RECOVERY_INCLUDE"
@@ -167,7 +170,9 @@ if [[ $(snapshot) != "$bordered" ]]; then
   exit 1
 fi
 
-cp "$RECOVERY_ROOT" "$UMBRIEL_CONFIG"
+# Leave the session on the config this check inherited, not the bordered test
+# layout: later checks append their own rules and reload.
+cp "$UMBRIEL_CONFIG.bak" "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 rm -f "$RECOVERY_ROOT" "$RECOVERY_INCLUDE"
 

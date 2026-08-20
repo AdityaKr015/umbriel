@@ -16,6 +16,7 @@
 #include "view/xdg_size.h"
 // clang-format off
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <linux/input-event-codes.h>
 #include "wlr.h"
@@ -321,6 +322,18 @@ namespace umbriel {
     };
     view->beginFloatingResize(edges);
     updateInteractiveCursor(view);
+  }
+
+  void Cursor::warpTo(double lx, double ly) {
+    const double oldX = m_cursor->x;
+    const double oldY = m_cursor->y;
+    wlr_cursor_warp(m_cursor, nullptr, lx, ly);
+    // processMotion needs a timestamp and no real input event backs a
+    // programmatic warp; derive one from the monotonic clock.
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    const uint32_t timeMsec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+    m_server->notifyIdleActivity();
+    processMotion(timeMsec, oldX, oldY);
   }
 
   void Cursor::resetMode() {

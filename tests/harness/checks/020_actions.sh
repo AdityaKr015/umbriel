@@ -14,6 +14,11 @@ skip_action() {
     session-quit) return 0 ;;  # would kill the instance mid-run
     spawn)        return 0 ;;  # would start a process outside the container
     window-focus) return 0 ;;  # needs a live window id; the round trip is covered by 010_ipc
+    # These require a second output; single-output rejection paths are covered by 055.
+    output-focus-*)             return 0 ;;
+    window-move-to-output-*)    return 0 ;;
+    column-move-to-output-*)    return 0 ;;
+    workspace-move-to-output-*) return 0 ;;
     *)            return 1 ;;
   esac
 }
@@ -23,8 +28,10 @@ sample_arg() {
   case $1 in
     '<cmd>')                     echo 'true' ;;
     '<fraction>')                echo '0.5' ;;
+    '<delta>')                   echo '0.1' ;;
     '<workspace>[/<output>]')    echo '1' ;;
     '<name>')                    echo 'harness' ;;
+    '<scrolling|dwindle|toggle>') echo 'scrolling' ;; # harness default: exercising it is a no-op
     '[<output>]')                echo '' ;;
     '[<window-id>]')             echo '' ;;
     *)                           echo '' ;;

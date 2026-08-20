@@ -237,6 +237,85 @@ UMBRIEL_TEST(rejectsOutOfRangeWidthFractions) {
   CHECK(!parseAction("window-set-width:nan", bind));
 }
 
+UMBRIEL_TEST(parsesWidthDeltas) {
+  const auto fraction = [](const Keybind& bind) {
+    const auto* width = umbriel::payloadIf<umbriel::WidthArg>(bind);
+    return width != nullptr ? width->fraction : 0.0;
+  };
+
+  Keybind bind;
+  CHECK(parseAction("window-modify-width:-0.2", bind));
+  CHECK(bind.action == KeybindAction::WindowModifyWidth);
+  CHECK(std::fabs(fraction(bind) + 0.2) < 1e-9);
+
+  CHECK(parseAction("window-modify-width:+0.1", bind)); // explicit plus is allowed
+  CHECK(std::fabs(fraction(bind) - 0.1) < 1e-9);
+
+  CHECK(parseAction("window-modify-width:0.25", bind));
+  CHECK(std::fabs(fraction(bind) - 0.25) < 1e-9);
+}
+
+UMBRIEL_TEST(rejectsInvalidWidthDeltas) {
+  Keybind bind;
+  CHECK(!parseAction("window-modify-width:0", bind));    // zero delta is a no-op
+  CHECK(!parseAction("window-modify-width:1.5", bind));  // above the 0.9 cap
+  CHECK(!parseAction("window-modify-width:-1.0", bind)); // below -0.9
+  CHECK(!parseAction("window-modify-width:abc", bind));
+  CHECK(!parseAction("window-modify-width:", bind));      // empty arg
+  CHECK(!parseAction("window-modify-width", bind));       // requires an argument
+  CHECK(!parseAction("window-modify-width:++0.1", bind)); // only one leading '+'
+  CHECK(!parseAction("window-modify-width:0.1x", bind));  // trailing garbage
+  CHECK(!parseAction("window-modify-width:nan", bind));
+}
+
+UMBRIEL_TEST(parsesLayoutModeActions) {
+  Keybind bind;
+  CHECK(parseAction("workspace-set-layout:scrolling", bind));
+  CHECK(bind.action == KeybindAction::WorkspaceSetLayout);
+  const auto* scrolling = umbriel::payloadIf<umbriel::LayoutModeArg>(bind);
+  CHECK(scrolling != nullptr);
+  CHECK(scrolling != nullptr && scrolling->mode == umbriel::LayoutMode::Scrolling);
+
+  CHECK(parseAction("workspace-set-layout:dwindle", bind));
+  const auto* dwindle = umbriel::payloadIf<umbriel::LayoutModeArg>(bind);
+  CHECK(dwindle != nullptr && dwindle->mode == umbriel::LayoutMode::Dwindle);
+
+  CHECK(parseAction("workspace-set-layout:toggle", bind));
+  const auto* toggle = umbriel::payloadIf<umbriel::LayoutModeArg>(bind);
+  CHECK(toggle != nullptr && !toggle->mode.has_value());
+}
+
+UMBRIEL_TEST(rejectsInvalidLayoutModeActions) {
+  Keybind bind;
+  CHECK(!parseAction("workspace-set-layout:spiral", bind));    // not a known mode
+  CHECK(!parseAction("workspace-set-layout:", bind));          // empty arg
+  CHECK(!parseAction("workspace-set-layout", bind));           // requires an argument
+  CHECK(!parseAction("workspace-set-layout:Scrolling", bind)); // exact lowercase only
+}
+
+UMBRIEL_TEST(parsesArgumentFreeNewActions) {
+  Keybind bind;
+  CHECK(parseAction("workspace-next", bind));
+  CHECK(bind.action == KeybindAction::WorkspaceNext);
+  CHECK(std::holds_alternative<std::monostate>(bind.payload));
+
+  CHECK(parseAction("workspace-previous", bind));
+  CHECK(bind.action == KeybindAction::WorkspacePrevious);
+
+  CHECK(parseAction("output-focus-left", bind));
+  CHECK(bind.action == KeybindAction::OutputFocusLeft);
+  CHECK(parseAction("output-focus-right", bind));
+  CHECK(bind.action == KeybindAction::OutputFocusRight);
+
+  CHECK(parseAction("window-center", bind));
+  CHECK(bind.action == KeybindAction::WindowCenter);
+
+  // Argument-free actions reject arguments.
+  CHECK(!parseAction("workspace-next:1", bind));
+  CHECK(!parseAction("output-focus-left:DP-1", bind));
+  CHECK(!parseAction("window-center:x", bind));
+}
+
 UMBRIEL_TEST(parsesWorkspaceSelectors) {
   const auto selector = [](const Keybind& bind) {
     static const umbriel::WorkspaceArg empty;
@@ -321,6 +400,12 @@ UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
     case ActionArgKind::WidthFraction:
       input += ":0.5";
       break;
+    case ActionArgKind::WidthDelta:
+      input += ":0.1";
+      break;
+    case ActionArgKind::LayoutMode:
+      input += ":toggle";
+      break;
     case ActionArgKind::Workspace:
       input += ":1";
       break;
@@ -341,7 +426,11 @@ UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {
       );
       break;
     case ActionArgKind::WidthFraction:
+    case ActionArgKind::WidthDelta:
       CHECK(umbriel::payloadIf<umbriel::WidthArg>(bind) != nullptr);
+      break;
+    case ActionArgKind::LayoutMode:
+      CHECK(umbriel::payloadIf<umbriel::LayoutModeArg>(bind) != nullptr);
       break;
     case ActionArgKind::Workspace:
       CHECK(umbriel::payloadIf<umbriel::WorkspaceArg>(bind) != nullptr);
@@ -388,6 +477,12 @@ UMBRIEL_TEST(everyActionSpecRoundTripsThroughParseAction) {
       break;
     case ActionArgKind::WidthFraction:
       input += ":0.5";
+      break;
+    case ActionArgKind::WidthDelta:
+      input += ":0.1";
+      break;
+    case ActionArgKind::LayoutMode:
+      input += ":toggle";
       break;
     case ActionArgKind::Workspace:
       input += ":1";

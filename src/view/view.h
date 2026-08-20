@@ -82,6 +82,13 @@ namespace umbriel {
     void setDragPosition(int x, int y);
     // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
     void clampFloatingPosition();
+    // Record the floating position as a fraction of the current usable area,
+    // so a cross-output move can land the window proportionally. No-op when tiled.
+    void rememberFloatingPosition();
+    // Re-anchor into the (new) workspace output's usable area. No-op when tiled.
+    void restoreFloatingPosition();
+    // Center the floating window on its output's usable area. False when not floating.
+    bool centerFloating();
     // Animate the presented size toward a layout-assigned size. Called by
     // Workspace::arrange when it configures the client, so the animation owns
     // the presented size before the clip can report the final size.

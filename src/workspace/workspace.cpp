@@ -565,6 +565,16 @@ namespace umbriel {
     return true;
   }
 
+  bool Workspace::modifyFocusedWidth(double delta) {
+    const int column = m_layout->columnOf(m_focusedView);
+    if (column < 0) {
+      return false;
+    }
+    // Clamp here, not in the layouts: ScrollingLayout clamps internally but
+    // DwindleLayout does not, and both must land in [0.1, 1.0].
+    return setFocusedWidth(std::clamp(m_layout->widthFraction(column) + delta, 0.1, 1.0));
+  }
+
   bool Workspace::toggleFocusedFullWidth() {
     const int column = m_layout->columnOf(m_focusedView);
     if (column < 0) {
@@ -680,6 +690,13 @@ namespace umbriel {
     if (m_active) {
       markArrange(false);
     }
+  }
+
+  void Workspace::overrideLayoutMode(LayoutMode mode) {
+    m_layoutModeOverride = mode;
+    ResolvedLayoutConfig copy = m_layoutConfig;
+    copy.mode = mode;
+    applyLayoutConfig(std::move(copy));
   }
 
   void Workspace::rename(std::string name, size_t index) {
@@ -881,6 +898,9 @@ namespace umbriel {
   void WorkspaceGroup::refreshLayouts() {
     const char* outputName = m_output->wlr()->name != nullptr ? m_output->wlr()->name : "output";
     for (const auto& workspace : m_workspaces) {
+      // A config reload reasserts the configured mode, dropping any runtime
+      // workspace-set-layout override.
+      workspace->clearLayoutModeOverride();
       ResolvedLayoutConfig layout = resolveWorkspaceLayout(config(), outputName, workspace->name(), workspace->index());
       if (workspace->layoutConfig() != layout) {
         workspace->applyLayoutConfig(std::move(layout));
@@ -926,6 +946,11 @@ namespace umbriel {
       const std::string name = std::to_string(index + 1);
       ResolvedLayoutConfig layout = resolveWorkspaceLayout(config(), outputName, name, index);
       Workspace* workspace = m_workspaces[index].get();
+      // Keep a runtime layout switch across window open/close: dynamic
+      // reconcile re-resolves the configured layout here.
+      if (const std::optional<LayoutMode> overrideMode = workspace->layoutModeOverride()) {
+        layout.mode = *overrideMode;
+      }
       if (workspace->layoutConfig() != layout) {
         workspace->applyLayoutConfig(std::move(layout));
       }

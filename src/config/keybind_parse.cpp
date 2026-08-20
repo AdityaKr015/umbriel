@@ -156,10 +156,18 @@ namespace umbriel {
         {"cheatsheet-toggle", "", KeybindAction::CheatsheetToggle},
         {"column-move-left", "", KeybindAction::ColumnMoveLeft},
         {"column-move-right", "", KeybindAction::ColumnMoveRight},
+        {"column-move-to-output-down", "", KeybindAction::ColumnMoveToOutputDown},
+        {"column-move-to-output-left", "", KeybindAction::ColumnMoveToOutputLeft},
+        {"column-move-to-output-right", "", KeybindAction::ColumnMoveToOutputRight},
+        {"column-move-to-output-up", "", KeybindAction::ColumnMoveToOutputUp},
         {"config-reload", "", KeybindAction::ConfigReload},
         {"keyboard-layout-next", "", KeybindAction::KeyboardLayoutNext},
         {"layout-scroll-left", "", KeybindAction::LayoutScrollLeft},
         {"layout-scroll-right", "", KeybindAction::LayoutScrollRight},
+        {"output-focus-down", "", KeybindAction::OutputFocusDown},
+        {"output-focus-left", "", KeybindAction::OutputFocusLeft},
+        {"output-focus-right", "", KeybindAction::OutputFocusRight},
+        {"output-focus-up", "", KeybindAction::OutputFocusUp},
         {"overview-close", "", KeybindAction::OverviewClose},
         {"overview-open", "", KeybindAction::OverviewOpen},
         {"overview-toggle", "", KeybindAction::OverviewToggle},
@@ -168,6 +176,7 @@ namespace umbriel {
         {"session-quit", "", KeybindAction::SessionQuit},
         {"spawn", "<cmd>", KeybindAction::Spawn, ActionArgKind::Command},
         {"submap", "<name>", KeybindAction::Submap, ActionArgKind::Command},
+        {"window-center", "", KeybindAction::WindowCenter},
         {"window-close", "[<window-id>]", KeybindAction::WindowClose, ActionArgKind::OptionalWindowId},
         {"window-consume-left", "", KeybindAction::WindowConsumeLeft},
         {"window-cycle-width", "", KeybindAction::WindowCycleWidth},
@@ -178,7 +187,12 @@ namespace umbriel {
         {"window-focus-next", "", KeybindAction::WindowFocusNext},
         {"window-focus-right", "", KeybindAction::WindowFocusRight},
         {"window-focus-up", "", KeybindAction::WindowFocusUp},
+        {"window-modify-width", "<delta>", KeybindAction::WindowModifyWidth, ActionArgKind::WidthDelta},
         {"window-move-down", "", KeybindAction::WindowMoveDown},
+        {"window-move-to-output-down", "", KeybindAction::WindowMoveToOutputDown},
+        {"window-move-to-output-left", "", KeybindAction::WindowMoveToOutputLeft},
+        {"window-move-to-output-right", "", KeybindAction::WindowMoveToOutputRight},
+        {"window-move-to-output-up", "", KeybindAction::WindowMoveToOutputUp},
         {"window-move-to-scratchpad", "[<output>]", KeybindAction::WindowMoveToScratchpad,
          ActionArgKind::OptionalOutput},
         {"window-move-to-workspace", "<workspace>[/<output>]", KeybindAction::WindowMoveToWorkspace,
@@ -191,6 +205,14 @@ namespace umbriel {
         {"window-toggle-fullscreen", "", KeybindAction::ToggleFullscreen},
         {"window-toggle-maximize", "", KeybindAction::ToggleMaximize},
         {"window-toggle-pinned", "", KeybindAction::TogglePinned},
+        {"workspace-move-to-output-down", "", KeybindAction::WorkspaceMoveToOutputDown},
+        {"workspace-move-to-output-left", "", KeybindAction::WorkspaceMoveToOutputLeft},
+        {"workspace-move-to-output-right", "", KeybindAction::WorkspaceMoveToOutputRight},
+        {"workspace-move-to-output-up", "", KeybindAction::WorkspaceMoveToOutputUp},
+        {"workspace-next", "", KeybindAction::WorkspaceNext},
+        {"workspace-previous", "", KeybindAction::WorkspacePrevious},
+        {"workspace-set-layout", "<scrolling|dwindle|toggle>", KeybindAction::WorkspaceSetLayout,
+         ActionArgKind::LayoutMode},
         {"workspace-switch", "<workspace>[/<output>]", KeybindAction::WorkspaceSwitch, ActionArgKind::Workspace},
     };
 
@@ -290,6 +312,27 @@ namespace umbriel {
         output.payload = WidthArg{.fraction = fraction};
         return true;
       }
+      case ActionArgKind::WidthDelta: {
+        if (!takeActionArg(value, spec, arg)) {
+          break;
+        }
+        // std::from_chars rejects a leading '+', but the delta is signed.
+        if (!arg.empty() && arg.front() == '+') {
+          arg.remove_prefix(1);
+        }
+        double delta = 0.0;
+        const auto [deltaPtr, deltaError] = std::from_chars(arg.data(), arg.data() + arg.size(), delta);
+        if (deltaError != std::errc{}
+            || deltaPtr != arg.data() + arg.size()
+            || !std::isfinite(delta)
+            || delta == 0.0
+            || std::fabs(delta) > 0.9) {
+          break;
+        }
+        output.action = spec.action;
+        output.payload = WidthArg{.fraction = delta};
+        return true;
+      }
       case ActionArgKind::Workspace: {
         if (!takeActionArg(value, spec, arg)) {
           break;
@@ -340,6 +383,25 @@ namespace umbriel {
           output.action = spec.action;
           output.payload = WindowIdArg{.id = std::string(arg)};
           return true;
+        }
+        break;
+      case ActionArgKind::LayoutMode:
+        if (takeActionArg(value, spec, arg)) {
+          if (arg == "scrolling") {
+            output.action = spec.action;
+            output.payload = LayoutModeArg{.mode = LayoutMode::Scrolling};
+            return true;
+          }
+          if (arg == "dwindle") {
+            output.action = spec.action;
+            output.payload = LayoutModeArg{.mode = LayoutMode::Dwindle};
+            return true;
+          }
+          if (arg == "toggle") {
+            output.action = spec.action;
+            output.payload = LayoutModeArg{};
+            return true;
+          }
         }
         break;
       }

@@ -156,6 +156,14 @@ follows_mouse = false
 # "Mod+Space" is taken above; pick a free chord for layout switching.
 # "Mod+Shift+K" = "keyboard-layout-next"
 
+# Output, workspace, and window movement actions.
+# "Mod+Comma" = "workspace-previous"
+# "Mod+Period" = "workspace-next"
+# "Mod+Ctrl+H" = "output-focus-left"
+# "Mod+Minus" = "window-modify-width:-0.1"
+# "Mod+C" = "window-center"
+# "Mod+T" = "workspace-set-layout:toggle"
+
 # Window and layer rules (see docs/rules.md) --------------------------------
 
 # [[window_rule]]

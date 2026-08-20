@@ -54,6 +54,12 @@ namespace umbriel {
     [[nodiscard]] DwindleLayout* dwindleLayout();
     [[nodiscard]] const ResolvedLayoutConfig& layoutConfig() const { return m_layoutConfig; }
     [[nodiscard]] LayoutMode layoutMode() const { return m_layoutMode; }
+    // Runtime layout override set by workspace-set-layout. Empty = the
+    // configured mode applies. A config reload clears it and reasserts the
+    // configured mode; window open/close keeps it (reconcileDynamic re-applies).
+    [[nodiscard]] std::optional<LayoutMode> layoutModeOverride() const { return m_layoutModeOverride; }
+    void overrideLayoutMode(LayoutMode mode);
+    void clearLayoutModeOverride() { m_layoutModeOverride.reset(); }
     [[nodiscard]] View* focusedView() const { return m_focusedView; }
     [[nodiscard]] int slideOffsetY() const { return m_slideOffsetY; }
     [[nodiscard]] wlr_scene_tree* viewLayer(bool tiled) const { return tiled ? m_tiledLayer : m_floatingLayer; }
@@ -93,6 +99,9 @@ namespace umbriel {
     bool moveFocusedVertical(int direction);
     bool cycleFocusedWidth();
     bool setFocusedWidth(double fraction);
+    // Incremental width change: apply `delta` to the focused column's current
+    // width fraction, clamped to [0.1, 1.0].
+    bool modifyFocusedWidth(double delta);
     bool toggleFocusedFullWidth();
     bool toggleFocusedFullscreen();
     bool toggleFocusedFloating();
@@ -132,6 +141,7 @@ namespace umbriel {
     std::unique_ptr<Layout> m_layout;
     ResolvedLayoutConfig m_layoutConfig;
     LayoutMode m_layoutMode = LayoutMode::Scrolling;
+    std::optional<LayoutMode> m_layoutModeOverride;
     View* m_focusedView = nullptr;
     bool m_inSwitchTransition = false;
     bool m_arrangePending = false;

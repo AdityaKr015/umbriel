@@ -687,6 +687,43 @@ namespace umbriel {
     }
   }
 
+  void View::rememberFloatingPosition() {
+    if (m_tiled) {
+      return;
+    }
+    m_floating.rememberPositionFraction({m_sceneTree->node.x, m_sceneTree->node.y}, floatingUsableArea());
+  }
+
+  void View::restoreFloatingPosition() {
+    if (m_tiled) {
+      return;
+    }
+    const wlr_box usable = floatingUsableArea();
+    if (const std::optional<FloatingPoint> origin = m_floating.restoredOrigin(usable)) {
+      animateTo(origin->x, origin->y);
+      // Re-anchor on the new usable area so a second cross-output move lands
+      // proportionally again instead of reusing a stale fraction.
+      m_floating.rememberPositionFraction(*origin, usable);
+      return;
+    }
+    clampFloatingPosition();
+  }
+
+  bool View::centerFloating() {
+    if (!m_mapped || m_tiled || m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen) {
+      return false;
+    }
+    const wlr_box usable = floatingUsableArea();
+    const wlr_box& geo = m_toplevel->base->geometry;
+    if (usable.width <= 0 || usable.height <= 0 || geo.width <= 0 || geo.height <= 0) {
+      return false;
+    }
+    const FloatingPoint origin = centeredOrigin(usable, geo.width, geo.height);
+    animateTo(origin.x, origin.y);
+    m_floating.rememberPositionFraction(origin, usable);
+    return true;
+  }
+
   void View::placeInUsableArea() {
     wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
     if (usable.width <= 0 || usable.height <= 0) {

@@ -195,6 +195,19 @@ namespace {
           return std::format("{}: {:.2g}", name, width->fraction);
         }
         return name;
+      case umbriel::ActionArgKind::WidthDelta:
+        if (const auto* width = umbriel::payloadIf<umbriel::WidthArg>(bind)) {
+          return std::format("{}: {:+.2g}", name, width->fraction);
+        }
+        return name;
+      case umbriel::ActionArgKind::LayoutMode:
+        if (const auto* arg = umbriel::payloadIf<umbriel::LayoutModeArg>(bind)) {
+          if (arg->mode.has_value()) {
+            return name + ": " + (*arg->mode == umbriel::LayoutMode::Scrolling ? "scrolling" : "dwindle");
+          }
+          return name + ": toggle";
+        }
+        return name;
       case umbriel::ActionArgKind::Workspace:
         if (const auto* workspace = umbriel::payloadIf<umbriel::WorkspaceArg>(bind)) {
           std::string label = name + ": " + workspace->name;
@@ -266,8 +279,18 @@ namespace {
     case A::WindowExpelRight:
     case A::WindowCycleWidth:
     case A::WindowSetWidth:
+    case A::WindowModifyWidth:
+    case A::WindowCenter:
     case A::LayoutScrollLeft:
     case A::LayoutScrollRight:
+    case A::WindowMoveToOutputLeft:
+    case A::WindowMoveToOutputRight:
+    case A::WindowMoveToOutputUp:
+    case A::WindowMoveToOutputDown:
+    case A::ColumnMoveToOutputLeft:
+    case A::ColumnMoveToOutputRight:
+    case A::ColumnMoveToOutputUp:
+    case A::ColumnMoveToOutputDown:
       return Group::MoveSize;
     case A::WindowClose:
     case A::ToggleFloating:
@@ -276,7 +299,19 @@ namespace {
       return Group::Windows;
     case A::WorkspaceSwitch:
     case A::WindowMoveToWorkspace:
+    case A::WorkspaceNext:
+    case A::WorkspacePrevious:
+    case A::WorkspaceSetLayout:
+    case A::WorkspaceMoveToOutputLeft:
+    case A::WorkspaceMoveToOutputRight:
+    case A::WorkspaceMoveToOutputUp:
+    case A::WorkspaceMoveToOutputDown:
       return Group::Workspaces;
+    case A::OutputFocusLeft:
+    case A::OutputFocusRight:
+    case A::OutputFocusUp:
+    case A::OutputFocusDown:
+      return Group::Focus;
     case A::OverviewToggle:
     case A::OverviewOpen:
     case A::OverviewClose:

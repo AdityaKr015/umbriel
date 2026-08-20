@@ -3,6 +3,8 @@
 // Keybind vocabulary and the pure text-to-struct parsers over it. Split out of
 // config.h so the parsing can be exercised without loading a config file.
 
+#include "layout/layout.h"
+
 #include <cstdint>
 #include <span>
 #include <string>
@@ -60,6 +62,27 @@ namespace umbriel {
     ScratchpadFocusNext,
     Submap,
     WindowFocusId,
+    WorkspaceNext,
+    WorkspacePrevious,
+    OutputFocusLeft,
+    OutputFocusRight,
+    OutputFocusUp,
+    OutputFocusDown,
+    WindowMoveToOutputLeft,
+    WindowMoveToOutputRight,
+    WindowMoveToOutputUp,
+    WindowMoveToOutputDown,
+    ColumnMoveToOutputLeft,
+    ColumnMoveToOutputRight,
+    ColumnMoveToOutputUp,
+    ColumnMoveToOutputDown,
+    WorkspaceMoveToOutputLeft,
+    WorkspaceMoveToOutputRight,
+    WorkspaceMoveToOutputUp,
+    WorkspaceMoveToOutputDown,
+    WindowModifyWidth,
+    WindowCenter,
+    WorkspaceSetLayout,
     Count,
   };
 
@@ -92,9 +115,13 @@ namespace umbriel {
     std::string id; // empty = the focused window
     bool operator==(const WindowIdArg&) const = default;
   };
+  struct LayoutModeArg {
+    std::optional<LayoutMode> mode; // nullopt = toggle between scrolling and dwindle
+    bool operator==(const LayoutModeArg&) const = default;
+  };
 
   using KeybindPayload =
-      std::variant<std::monostate, SpawnArg, SubmapArg, WidthArg, WorkspaceArg, OutputArg, WindowIdArg>;
+      std::variant<std::monostate, SpawnArg, SubmapArg, WidthArg, WorkspaceArg, OutputArg, WindowIdArg, LayoutModeArg>;
 
   struct Keybind {
     // What triggers the bind.
@@ -143,7 +170,9 @@ namespace umbriel {
     Workspace,
     OptionalOutput,
     WindowId,
-    OptionalWindowId
+    OptionalWindowId,
+    WidthDelta,
+    LayoutMode
   };
 
   struct ActionSpec {

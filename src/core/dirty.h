@@ -19,8 +19,8 @@ namespace umbriel {
     // area. Everything below depends on the result, so this runs first.
     LayerArrange = 1U << 0,
     // At least one workspace on this output owes an arrange. Which ones, and
-    // whether each animates, is recorded on the workspaces themselves — hidden
-    // workspaces are arranged too, so it is not one piece of state per output.
+    // whether each animates, is recorded on the workspaces themselves (hidden
+    // workspaces are arranged too, so it is not one piece of state per output).
     // This bit is the part that belongs here: where the work sits in the order.
     Layout = 1U << 1,
     // Chrome that sits over the layout: the config-error banner, the desktop

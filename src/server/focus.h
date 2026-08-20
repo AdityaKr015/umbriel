@@ -33,7 +33,7 @@ namespace umbriel {
   // Focus is not one piece of state. It is the seat's keyboard focus, the
   // activation flag each client reads, the focus ring, the foreign-toplevel
   // activation other clients see, the workspace's own idea of its focused view,
-  // and the registry's recency order — all of which have to agree. Every method
+  // and the registry's recency order: all of which have to agree. Every method
   // here exists to keep them agreeing through one kind of transition.
   //
   // Layer-shell surfaces and the overview can both take the seat away. When they

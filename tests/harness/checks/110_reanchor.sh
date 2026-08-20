@@ -16,8 +16,8 @@
 # is already sitting at a band edge, and every focus-driven route leaves it
 # exactly there. So the earlier versions of this check passed with the
 # compensation ripped out. The scroll has to be strictly inside the band, which
-# means putting it there by hand — layout-scroll-left, or a touchpad swipe in
-# real use — and that is also the only situation in which a user sees the bug.
+# means putting it there by hand (layout-scroll-left, or a touchpad swipe in
+# real use), and that is also the only situation in which a user sees the bug.
 set -euo pipefail
 
 declare -A CLIENT_PID=()

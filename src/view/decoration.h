@@ -25,7 +25,7 @@ namespace umbriel {
   // position updates whenever the view moves.
   //
   // This class holds no reference back to its View. Everything that varies per
-  // view — content size, corner radius, fade alpha, focus — arrives as an
+  // view (content size, corner radius, fade alpha, focus) arrives as an
   // argument, because those are questions only the View can answer (a fullscreen
   // window keeps its border tree but draws square, and a size animation presents
   // a size the committed geometry has not caught up with yet). Appearance

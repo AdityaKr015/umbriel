@@ -44,7 +44,7 @@ namespace umbriel {
     bool operator==(const WorkspaceConfig&) const = default;
   };
 
-  // Fully resolved layout config — no optionals. Owned by each Workspace.
+  // Fully resolved layout config: no optionals. Owned by each Workspace.
   struct ResolvedLayoutConfig {
     LayoutMode mode = LayoutMode::Scrolling;
     int gap = 8;

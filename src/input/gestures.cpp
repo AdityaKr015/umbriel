@@ -18,7 +18,7 @@
 namespace umbriel {
 
   namespace {
-    // Tuning constants — file-local, no config keys.
+    // Tuning constants: file-local, no config keys.
     constexpr double kAxisLockPx = 16.0;
     constexpr double kScrollFactor = 3.0;
     constexpr double kSwitchDistancePx = 300.0;
@@ -116,7 +116,7 @@ namespace umbriel {
             || m_state == State::Scroll
             || m_state == State::Switch
             || m_state == State::OverviewSelect)) {
-      // Hard reset — do NOT call into workspace/group objects (they may be mid-destruction).
+      // Hard reset: do NOT call into workspace/group objects (they may be mid-destruction).
       m_output = nullptr;
       m_scrollWorkspace = nullptr;
       m_switchGroup = nullptr;
@@ -195,8 +195,8 @@ namespace umbriel {
       return;
     }
     if (event->fingers == 3) {
-      // Which of the three-finger gestures this is — scroll, switch, or an
-      // overview row step — is decided once the axis locks, not here.
+      // Which of the three-finger gestures this is (scroll, switch, or an
+      // overview row step) is decided once the axis locks, not here.
       m_state = State::Pending;
       m_accumX = 0;
       m_accumY = 0;

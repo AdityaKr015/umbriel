@@ -56,8 +56,8 @@ namespace umbriel {
     // Ignores duplicates: the same file can be included from several places.
     void addWatchPath(std::filesystem::path path);
     // Put diagnostics back into source order. Readers emit in whatever order
-    // they run — and unknown-key reports come last, after a section has finished
-    // — so without this the list jumps around the file.
+    // they run, and unknown-key reports come last (after a section has finished),
+    // so without this the list jumps around the file.
     void sortDiagnostics();
     // Adopt a successfully parsed config and bump the generation.
     [[nodiscard]] ConfigReloadResult commit(Config&& config, bool fileMissing);

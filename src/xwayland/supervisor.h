@@ -14,8 +14,8 @@ namespace umbriel {
   //
   // Umbriel does not implement X11 itself; xwayland-satellite is a separate
   // program that owns an X display and translates for it. All this class does is
-  // pick a display number, spawn the process, notice when it dies, and restart it
-  // — with a failure budget, so a satellite that cannot start (missing Xwayland,
+  // pick a display number, spawn the process, notice when it dies, and restart it,
+  // with a failure budget, so a satellite that cannot start (missing Xwayland,
   // wrong version) stops rather than spinning forever.
   //
   // Death is detected through a pidfd on the event loop rather than SIGCHLD: the

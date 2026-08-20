@@ -24,8 +24,8 @@ namespace umbriel {
   //   - fullscreen, where an oversized or undersized client buffer is centered
   //     in the output rather than scaled (scaling would distort the aspect).
   //
-  // Everything that depends on how large the view looks right now — borders,
-  // shadow, blur, output clipping — must ask this rather than reading the
+  // Everything that depends on how large the view looks right now (borders,
+  // shadow, blur, output clipping) must ask this rather than reading the
   // committed geometry, or it will lag a frame behind or fight the animation.
   //
   // Holds no reference back to its View: the scene tree and surface it operates

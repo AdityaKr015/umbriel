@@ -253,7 +253,7 @@ namespace umbriel::configmerge {
       parsed.erase("include");
 
       if (directive.entries.empty()) {
-        // No includes — return parsed directly, preserving toml++ source regions
+        // No includes: return parsed directly, preserving toml++ source regions
         // (copies lose them; only moves keep line/column/path).
         return parsed;
       }

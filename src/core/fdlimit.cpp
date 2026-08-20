@@ -56,6 +56,6 @@ void restoreFileDescriptorLimit() {
     return;
   }
   // Runs between fork() and exec(): must stay async-signal-safe, so no logging
-  // on failure — the child is about to be replaced anyway.
+  // on failure: the child is about to be replaced anyway.
   (void)setrlimit(RLIMIT_NOFILE, &gOriginalLimit);
 }

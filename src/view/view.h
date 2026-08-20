@@ -62,7 +62,7 @@ namespace umbriel {
     [[nodiscard]] int presentedHeight(const wlr_box& target) const;
     [[nodiscard]] wlr_scene_tree* homeTree() const;
 
-    // Mechanism only — applies seat keyboard, activation chrome, and raise.
+    // Mechanism only: applies seat keyboard, activation chrome, and raise.
     // Policy lives in Server::focusView; do not call from input/event code.
     // `withKeyboard` is false while overview owns the seat: chrome and
     // activation still update, the keyboard enter is deferred to the close.
@@ -251,7 +251,7 @@ namespace umbriel {
     // Window rules, resolved at most once per (config, app-id, title, focus).
     //
     // Resolution runs every rule's regexes, and it is reached on focus changes
-    // and on every title change — a terminal that retitles per command would
+    // and on every title change; a terminal that retitles per command would
     // otherwise pay the whole rule set on each one. All four inputs are part of
     // the key: `match.is_focused` makes focus a matching criterion, not just a
     // consumer of the result.

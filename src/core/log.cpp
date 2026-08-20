@@ -307,7 +307,7 @@ namespace {
   }
 
   // If fd 1 or fd 2 points at a TTY (greetd wires them to /dev/tty1), replace
-  // them with an append-mode file inside `cacheDir` — synchronous VT writes on
+  // them with an append-mode file inside `cacheDir`: synchronous VT writes on
   // the main thread turned a per-frame wlroots error into a hard livelock
   // (see gpu-hang-handoff.md, Bug C). `cacheDir` may be empty; we fall through
   // to /dev/null in that case. Silencing raw writes is strictly better than

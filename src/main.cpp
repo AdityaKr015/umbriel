@@ -66,7 +66,7 @@ namespace {
     auto row = [stream](std::string_view lead, std::string_view cmd, std::string_view desc) {
       std::println(stream, "{}umbriel {:<30} {}", lead, cmd, desc);
     };
-    std::println(stream, "umbriel {} — a wayland compositor\n", UMBRIEL_VERSION);
+    std::println(stream, "umbriel {}: a wayland compositor\n", UMBRIEL_VERSION);
     row("Usage: ", "[-s <command>] [-c <config>]", "run the compositor");
     for (const auto& spec : umbriel::ipcCommands()) {
       std::string cmd{spec.name};

@@ -43,7 +43,7 @@ namespace umbriel {
     // Claim a display number by finding one nobody has taken. This is a
     // check-then-use race by construction: another compositor starting at the
     // same instant can take the same slot between the test and satellite's bind.
-    // Left alone deliberately — the socket is xwayland-satellite's to create, so
+    // Left alone deliberately: the socket is xwayland-satellite's to create, so
     // it owns the decision, and losing the race costs a respawn rather than
     // corrupting anything.
     for (int n = 0; n < kMaxDisplay; ++n) {
@@ -73,7 +73,7 @@ namespace umbriel {
       restoreFileDescriptorLimit();
       setenv("WAYLAND_DISPLAY", m_waylandSocket.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");
-      // Satellite provides DISPLAY — it must not consume one.
+      // Satellite provides DISPLAY; it must not consume one.
       unsetenv("DISPLAY");
       execlp("xwayland-satellite", "xwayland-satellite", m_display.c_str(), nullptr);
       _exit(kExecFailedStatus);

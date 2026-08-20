@@ -190,7 +190,7 @@ namespace umbriel {
     // Runs a parsed action. Shared by the keybind path and the IPC `msg` command.
     bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);
     // Record that something server-wide became stale. The work happens once, in
-    // a fixed order, at the top of the next frame — see Output::flushDirty.
+    // a fixed order, at the top of the next frame (see Output::flushDirty).
     // Schedules a frame on every output, so recording is always enough.
     void markDirty(Dirty what);
     // Hand the pending set to the flush and clear it.

@@ -9,7 +9,7 @@ namespace umbriel {
   struct TextBufferParams {
     std::string markup; // Pango markup
     std::string font = "monospace 11";
-    int maxWidth = 800; // logical pixels — text wrap limit
+    int maxWidth = 800; // logical pixels (text wrap limit)
     int padding = 14;   // logical pixels on all sides
     double scale = 1.0; // device-pixel scale (ceil of output scale)
     // Background colour.

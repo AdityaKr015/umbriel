@@ -339,7 +339,7 @@ namespace umbriel {
 
   // Fires when the underlying GL context is invalidated (GPU reset, VRAM lost after suspend,
   // driver-detected hang). Without this, the renderer keeps issuing GL calls into a dead
-  // context — Mesa's context_lost_nop_handler no-ops each one and spams "[GLES2]
+  // context: Mesa's context_lost_nop_handler no-ops each one and spams "[GLES2]
   // GL_CONTEXT_LOST in context lost" ~40k lines/sec, and the desktop never comes back.
   // Rebuild the renderer and rebind everything.
   void Server::onRendererLost(wl_listener* listener, void* /*data*/) {
@@ -349,20 +349,20 @@ namespace umbriel {
   }
 
   void Server::recreateRenderer() {
-    kLog.warn("GPU context lost — recreating renderer");
+    kLog.warn("GPU context lost, recreating renderer");
 
     wlr_renderer* oldRenderer = m_renderer;
     wlr_allocator* oldAllocator = m_allocator;
 
     wlr_renderer* newRenderer = fx_renderer_create(m_backend);
     if (newRenderer == nullptr) {
-      kLog.error("could not recreate fx_renderer after GPU reset — terminating");
+      kLog.error("could not recreate fx_renderer after GPU reset, terminating");
       wl_display_terminate(m_display);
       return;
     }
     wlr_allocator* newAllocator = wlr_allocator_autocreate(m_backend, newRenderer);
     if (newAllocator == nullptr) {
-      kLog.error("could not recreate allocator after GPU reset — terminating");
+      kLog.error("could not recreate allocator after GPU reset, terminating");
       wlr_renderer_destroy(newRenderer);
       wl_display_terminate(m_display);
       return;

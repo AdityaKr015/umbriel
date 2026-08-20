@@ -323,7 +323,7 @@ namespace umbriel {
     if (has(pending, Dirty::LayerArrange)) {
       arrangeLayers();
       // Changing the usable area makes the layout stale, so arrangeLayers marks
-      // it — after this set was taken. Take again rather than let that wait a
+      // it, after this set was taken. Take again rather than let that wait a
       // frame; the same holds for anything a later step records for a step
       // further down.
       pending |= m_dirty;

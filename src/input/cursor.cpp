@@ -840,7 +840,7 @@ namespace umbriel {
 
     wlr_seat* seat = m_server->seat()->wlr();
     // Find the first client with an active touch point, then cancel outside
-    // the iteration — wlr_seat_touch_notify_cancel may mutate the list.
+    // the iteration: wlr_seat_touch_notify_cancel may mutate the list.
     wlr_seat_client* client = nullptr;
     wlr_touch_point* point;
     wl_list_for_each(point, &seat->touch_state.touch_points, link) {
@@ -972,7 +972,7 @@ namespace umbriel {
         && view != nullptr
         && view->mapped()) {
       // Only activate when the pointer enters a different window (under old pos
-      // != under new pos). Do not warp the pointer with scroll — that re-arms enters
+      // != under new pos). Do not warp the pointer with scroll: that re-arms enters
       // during a swipe and cascades across columns.
       wlr_surface* oldSurface = nullptr;
       double oldSx = 0;

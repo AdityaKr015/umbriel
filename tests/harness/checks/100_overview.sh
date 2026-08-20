@@ -96,7 +96,7 @@ expect_notch -1 1 # and back up
 
 # At the top row there is nowhere further up: the step is refused rather than
 # wrapping or running off the end of the group. This asserts the behaviour, not
-# the bounds check that implements it — deleting that check still passes here,
+# the bounds check that implements it: deleting that check still passes here,
 # because workspaceAt() then returns null and select(null) is already a no-op.
 if [[ $(notch_activates -1) != "none" ]]; then
   echo "a notch past the first workspace was not clamped"

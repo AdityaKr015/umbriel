@@ -285,7 +285,7 @@ namespace umbriel {
   }
 
   void View::applySeatFocus(bool withKeyboard) {
-    // Mechanism only. Policy lives in Server::focusView — do not call directly
+    // Mechanism only. Policy lives in Server::focusView; do not call directly
     // from input/event code.
     if (!m_onActiveWorkspace && !m_pinned) {
       return;
@@ -1264,7 +1264,7 @@ namespace umbriel {
       }
     }
 
-    // Apply rule opacity — flush to scene buffers immediately so views on
+    // Apply rule opacity: flush to scene buffers immediately so views on
     // inactive workspaces get the correct opacity when they become visible.
     if (rule.opacity) {
       m_ruleOpacity = static_cast<float>(*rule.opacity);
@@ -1585,7 +1585,7 @@ namespace umbriel {
 
     // Redundant request (wine spams set_fullscreen while already fullscreen):
     // ack with a configure, but skip the reparent/scroll-snap/arrange churn
-    // that a full setFullscreen() would run — that churn is visible flicker.
+    // that a full setFullscreen() would run: that churn is visible flicker.
     if (requested == m_toplevel->scheduled.fullscreen) {
       wlr_xdg_surface_schedule_configure(m_toplevel->base);
       return;

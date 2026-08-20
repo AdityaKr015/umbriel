@@ -1344,6 +1344,7 @@ namespace umbriel {
     setUrgent(false);
     if (m_pinned) {
       m_pinned = false;
+      m_restoreTiledAfterUnpin = false;
       if (m_workspace != nullptr) {
         wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(false));
         reparentShadow(m_workspace->shadowLayer());
@@ -1676,6 +1677,7 @@ namespace umbriel {
       return;
     }
     if (!m_pinned) {
+      m_restoreTiledAfterUnpin = m_tiled;
       if (m_tiled) {
         setFloating(true);
       }
@@ -1691,7 +1693,13 @@ namespace umbriel {
       return;
     }
 
+    const bool restoreTiled = m_restoreTiledAfterUnpin;
+    m_restoreTiledAfterUnpin = false;
     m_pinned = false;
+    if (restoreTiled) {
+      setFloating(false);
+      return;
+    }
     if (m_workspace != nullptr) {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(false));
       reparentShadow(m_workspace->shadowLayer());
@@ -1711,6 +1719,7 @@ namespace umbriel {
     }
     if (!floating && m_pinned) {
       m_pinned = false;
+      m_restoreTiledAfterUnpin = false;
       if (m_workspace != nullptr) {
         wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(false));
         reparentShadow(m_workspace->shadowLayer());
@@ -1850,6 +1859,7 @@ namespace umbriel {
     if (fullscreen) {
       if (m_pinned) {
         m_pinned = false;
+        m_restoreTiledAfterUnpin = false;
         if (m_workspace != nullptr) {
           wlr_scene_node_reparent(&m_sceneTree->node, m_workspace->viewLayer(false));
           reparentShadow(m_workspace->shadowLayer());

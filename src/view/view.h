@@ -284,6 +284,7 @@ namespace umbriel {
     bool m_positioned = false;
     bool m_tiled = false;
     bool m_pinned = false;
+    bool m_restoreTiledAfterUnpin = false;
     bool m_onActiveWorkspace = false;
     bool m_scratchpadBorder = false;
     bool m_urgent = false;

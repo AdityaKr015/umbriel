@@ -80,6 +80,25 @@ Add `/output` to target another output explicitly. On a dynamic output, a
 numeric target first uses the preferred output. If the number is beyond the
 current workspace list, Umbriel uses the last workspace.
 
+### Window and layout actions
+
+These take no argument.
+
+| Action | What it does |
+|--------|--------------|
+| `window-focus-left` / `window-focus-right` | Move focus to the adjacent window along the row. |
+| `window-focus-up` / `window-focus-down` | Move focus to the adjacent window along the column. |
+| `window-focus-next` | Cycle focus to the next mapped window on the active workspace. |
+| `column-move-left` / `column-move-right` | Move the focused window's column left or right. |
+| `window-move-up` / `window-move-down` | Move the focused window up or down within its column. |
+| `window-consume-left` | Pull the focused window into the column to its left. |
+| `window-expel-right` | Pop the focused window out of its column into a new column to the right. |
+| `window-cycle-width` | Cycle the focused column through its preset widths. |
+| `window-toggle-fullscreen` | Toggle fullscreen for the focused window. |
+| `window-toggle-maximize` | Toggle the focused column's full-width state. |
+| `layout-scroll-left` / `layout-scroll-right` | Scroll the active workspace's scrolling-layout viewport; a no-op on a dwindle workspace. |
+| `config-reload` | Reload the config file, the same reload that runs automatically when the file changes on disk. |
+
 ### Floating action
 
 `window-toggle-floating` remembers the window's floating size and position.

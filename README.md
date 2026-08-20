@@ -44,7 +44,7 @@ To understand the values and philosophy guiding the project, read our [ethos](ht
 - Per-output scratchpads for temporarily hiding windows, with toggle, move, restore, and focus-next actions targetable at any output
 - An animated overview, directional focus, configurable keybinds, submaps, and activation policy
 - Blur, shadows, rounded corners, double borders, opacity, and animated position, size, and fade transitions
-- Keyboard, pointer, touch, touchpad gestures, XKB configuration, and fcitx5-compatible input method support
+- Keyboard, pointer, touch, touchpad gestures, XKB configuration, and text-input-v3/input-method-v2 input method support
 - Layer shell, session locking, clipboard management, screen capture, output control, and gamma control
 - X11 application support through xwayland-satellite
 - Live-reloaded TOML configuration with diagnostics and includes, plus local IPC and runtime inspection commands
@@ -113,18 +113,20 @@ Inside the session:
 | Shortcut | Action |
 |----------|--------|
 | mod+Escape | Quit (asks for confirmation) |
-| mod+Return | Spawn the configured terminal |
 | mod+F1 | Cycle window focus |
 | mod+H/J/K/L or arrows | Focus adjacent window |
 | mod+Shift+H/J/K/L or arrows | Move focused window |
 | mod+comma / mod+period | Consume left / expel right |
-| mod+R / mod+F | Cycle width / toggle full width |
+| mod+R / mod+F | Cycle width / toggle fullscreen |
+| mod+T | Toggle floating for the focused window |
 | mod+P | Toggle pin for the focused window |
+| mod+O | Toggle the overview |
 | mod+1..9 | Switch workspace on focused monitor |
 | mod+Shift+1..9 | Move focused window to workspace and follow |
 
 `kitty` is an optional startup command. Replace it with another command, or omit it by running `just run debug`
-or `./build-debug/umbriel`.
+or `./build-debug/umbriel`. There is no default spawn keybind, so add one under `[keybinds]` (see
+[`example.toml`](example.toml)) to open more terminals from inside the session, e.g. `"Mod+Return" = "spawn:kitty"`.
 
 Stop with mod+Escape or `Ctrl+C` from the parent terminal.
 
@@ -159,10 +161,7 @@ imports = [ inputs.umbriel.homeModules.default ];
 programs.umbriel = {
   enable = true;
   settings = {
-    general = {
-      terminal = "kitty";
-      autostart = [ "noctalia" ];
-    };
+    general.autostart = [ "noctalia" ];
     layout.gap = 5;
     input.keyboard.layout = "de";
     keybinds = {

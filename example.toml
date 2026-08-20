@@ -119,7 +119,9 @@ repeat_delay = 600             # 0-10000 ms
 # natural_scroll = false
 scroll_wheel_step = 60         # 1-1000
 # Override only the listed settings for an exact, case-sensitive device name.
-# Find names with `libinput list-devices`.
+# Applies per device kind: layout, variant, options, repeat_rate, and
+# repeat_delay to keyboards; tap to touchpads; natural_scroll to touchpads
+# and mice. Find names with `libinput list-devices`.
 # [[input.device]]
 # name = "Acme Precision Touchpad"
 # tap = true
@@ -162,7 +164,7 @@ follows_mouse = false
 # "Mod+Ctrl+H" = "output-focus-left"
 # "Mod+Minus" = "window-modify-width:-0.1"
 # "Mod+C" = "window-center"
-# "Mod+T" = "workspace-set-layout:toggle"
+# "Mod+Shift+T" = "workspace-set-layout:toggle"
 
 # Window and layer rules (see docs/rules.md) --------------------------------
 

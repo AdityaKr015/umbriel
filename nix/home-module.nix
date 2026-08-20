@@ -49,10 +49,7 @@ in
         See {file}`example.toml` in the Umbriel repository for every available option.
       '';
       example = lib.literalExpression ''
-        general = {
-          terminal = "kitty";
-          autostart = [ "noctalia" ];
-        };
+        general.autostart = [ "noctalia" ];
 
         layout.gap = 5;
 

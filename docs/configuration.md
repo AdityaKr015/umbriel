@@ -18,8 +18,10 @@ For the exact reload guarantees, see the
 files = ["appearance.toml", "keybinds.toml"]
 ```
 
-Paths are resolved relative to the main config file. Later files override
-earlier files, and values in the main file override every include.
+Paths are resolved relative to the main config file. A leading `~` or `~/`
+expands to your home directory, and `$VAR` or `${VAR}` expands environment
+variables. Later files override earlier files, and values in the main file
+override every include.
 
 You can split your config into multiple files for clarity:
 
@@ -63,7 +65,8 @@ QT_QPA_PLATFORMTHEME = "qt5ct"
 ```
 
 Extra environment variables exported to Umbriel and all spawned commands.
-All values must be strings.
+All values must be strings. Applied once at startup; changing this section
+requires a restart.
 
 ## Workspaces
 

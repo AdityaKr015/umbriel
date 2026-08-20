@@ -26,9 +26,9 @@ controls whether this is a light tint, a translucent panel, or an opaque fill.
 
 ## Dragging
 
-A dragged card renders at half opacity. This multiplier combines with the
-client's own surface alpha rather than replacing it, which keeps the insertion
-preview visible through the card.
+A dragged card renders at 0.75 opacity (`View::kDragOpacity`). This multiplier
+combines with the client's own surface alpha rather than replacing it, which
+keeps the insertion preview visible through the card.
 
 The scrolling layout previews insertion beside the actual column edges. For an
 overflowing strip, prepend and append previews remain visible at the output

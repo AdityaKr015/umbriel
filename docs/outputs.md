@@ -29,6 +29,27 @@ workspaces = 5
 `normal`, `90`, `180`, `270`, `flipped`, `flipped-90`, `flipped-180`,
 `flipped-270`.
 
+## Live reconfiguration
+
+Umbriel implements `wlr-output-management-unstable-v1`, so tools such as
+`wlr-randr`, `kanshi`, and `wdisplays` can query and change mode, position,
+scale, and transform at runtime without editing the config file. `umbriel
+outputs` only reads from this protocol; it does not send configuration
+requests itself.
+
+Requests that disable an output through this protocol are rejected: umbriel
+has no disabled-output state model.
+
+## Moving focus and windows between outputs
+
+`output-focus-left/right/up/down` move keyboard focus to the adjacent
+monitor in that direction. `window-move-to-output-*` and
+`column-move-to-output-*` move the focused window, or its whole column, to
+the adjacent monitor's active workspace. `workspace-move-to-output-*` instead
+creates a new workspace on the adjacent monitor and moves every window of the
+active workspace into it, preserving column order and widths. See
+[keybinds.md](keybinds.md) for the full list and their exact semantics.
+
 ## Multi-monitor example
 
 A triple-monitor setup with a 4K primary, a 1440p top monitor, and a 1080p

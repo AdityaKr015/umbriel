@@ -42,12 +42,16 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 
 | Command | Purpose |
 |---------|---------|
+| `just configure <mode> [prefix]` | Create or reconfigure a build directory and symlink `compile_commands.json` to it |
 | `just asan` | Build with AddressSanitizer |
 | `just run <mode> [startup]` | Build and run a nested session, optionally spawning a command |
 | `just test` | Run the Meson test suite |
+| `just verify <mode> [filter]` | Run the interactive/visual regression harness (`tests/harness/verify.sh`) against a headless build |
 | `just lint` | Rebuild without compiler warnings and run clang-tidy |
 | `just format` | Format source and test files |
+| `just install` | Build a release binary and install it with `meson install` |
 | `just clean <mode>` | Remove a build directory |
+| `just rebuild <mode>` | Clean and rebuild a build directory |
 
 ## Code Style
 
@@ -105,6 +109,7 @@ src/
   view/       XDG toplevels and popups, window rules, and decoration
   layer/      layer-shell surfaces
   lock/       ext-session-lock surfaces
+  xwayland/   xwayland-satellite process supervisor
   workspace/  per-output workspaces and scratchpads
   layout/     scrolling and dwindle layouts, insert and drop targets
   overview/   overview lifecycle and presentation
@@ -144,11 +149,12 @@ umbriel validate [-c <config>]   # check a config file without starting
 umbriel outputs                  # list connectors and modes
 umbriel windows                  # list windows (focused *, urgent !)
 umbriel layers                   # list layer-shell surfaces
+umbriel keyboard-layouts         # list configured keyboard layouts
 umbriel msg --help              # list actions available to `msg` and keybinds
 umbriel msg <action> [args...]   # send an action to the running compositor
 ```
 
-`windows`, `layers`, and `msg` accept `--json` / `-j` for machine-readable output.
+`windows`, `layers`, `keyboard-layouts`, and `msg` accept `--json` / `-j` for machine-readable output.
 
 ## Commits
 

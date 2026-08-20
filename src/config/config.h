@@ -89,12 +89,21 @@ namespace umbriel {
     std::vector<ResolvedWorkspace> workspaces;
     bool operator==(const ResolvedWorkspaceSet&) const = default;
   };
+  enum class VrrMode {
+    Disabled,
+    Always,
+    Fullscreen,
+  };
+  [[nodiscard]] constexpr bool vrrEnabled(VrrMode mode, bool fullscreen) {
+    return mode == VrrMode::Always || (mode == VrrMode::Fullscreen && fullscreen);
+  }
   struct OutputRule {
     std::string name;
     std::optional<OutputMode> mode;
     std::optional<std::array<int, 2>> position;
     std::optional<double> scale;
     std::optional<int> transform;
+    VrrMode vrr = VrrMode::Disabled;
     // Explicit workspace inventory. Omitted means dynamic workspaces.
     std::optional<std::vector<std::string>> workspaces;
     bool operator==(const OutputRule&) const = default;

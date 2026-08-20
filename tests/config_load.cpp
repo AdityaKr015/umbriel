@@ -11,6 +11,7 @@ using umbriel::ConfigDiagnostic;
 using umbriel::ConfigStore;
 using umbriel::LayoutMode;
 using umbriel::ModifierKey;
+using umbriel::VrrMode;
 
 namespace {
   bool containsDiagnostic(const ConfigStore& store, const std::string& text) {
@@ -135,6 +136,34 @@ UMBRIEL_TEST(modKeyIsUserConfigurable) {
   CHECK(store.reload().success);
   CHECK(!store.config().general.modKey.has_value());
   CHECK(containsDiagnostic(store, "unknown general.mod_key"));
+}
+
+UMBRIEL_TEST(outputVrrPolicyLoadsAndDefaultsDisabled) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[output.DP-1]\nvrr = \"fullscreen\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK(store.config().outputs[0].vrr == VrrMode::Fullscreen);
+
+  file.write("[output.DP-1]\nvrr = \"always\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].vrr == VrrMode::Always);
+
+  file.write("[output.DP-1]\nvrr = \"disabled\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].vrr == VrrMode::Disabled);
+
+  file.write("[output.DP-1]\nvrr = \"sometimes\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].vrr == VrrMode::Disabled);
+  CHECK(containsDiagnostic(store, "ignoring output.DP-1.vrr"));
+
+  file.write("[output.DP-1]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].vrr == VrrMode::Disabled);
 }
 
 UMBRIEL_TEST(semanticColorsLoadFromTheirOwnSection) {

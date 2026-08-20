@@ -207,6 +207,8 @@ namespace umbriel {
     if (m_workspace == workspace) {
       return;
     }
+    Output* previousOutput =
+        m_workspace != nullptr && m_workspace->group() != nullptr ? m_workspace->group()->output() : nullptr;
     if (m_workspace != nullptr) {
       Workspace* previous = m_workspace;
       m_workspace = nullptr;
@@ -223,6 +225,12 @@ namespace umbriel {
     }
     if (m_mapped) {
       m_server->scheduleIpcWindowsEvent();
+      if (previousOutput != nullptr) {
+        previousOutput->updateVrr();
+      }
+      if (m_workspace != nullptr && m_workspace->group() != nullptr) {
+        m_workspace->group()->output()->updateVrr();
+      }
     }
   }
 
@@ -1369,6 +1377,9 @@ namespace umbriel {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
     }
     m_mapped = false;
+    if (m_workspace != nullptr && m_workspace->group() != nullptr) {
+      m_workspace->group()->output()->updateVrr();
+    }
     m_server->scheduleIpcWindowsEvent();
     m_positioned = false;
     if (m_workspace != nullptr) {
@@ -1903,6 +1914,9 @@ namespace umbriel {
       }
     }
     updateForeignState();
+    if (m_workspace != nullptr && m_workspace->group() != nullptr) {
+      m_workspace->group()->output()->updateVrr();
+    }
   }
 
   void View::applyWindowRules(const ResolvedWindowRule& initiallyApplied) {

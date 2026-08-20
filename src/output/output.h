@@ -46,6 +46,8 @@ namespace umbriel {
     void markDirty(Dirty what);
     void onGammaChanged(wlr_gamma_control_v1* control);
     void applyOutputState();
+    // Re-evaluate fullscreen-controlled VRR after a view or workspace changes.
+    void updateVrr();
     void markBlurBackgroundDirty();
     void handleExternalConfigChange();
 
@@ -66,6 +68,7 @@ namespace umbriel {
     void handleDestroy();
     void applyMode(int width, int height);
     void applyConfiguredState();
+    [[nodiscard]] bool configuredVrrEnabled() const;
     wlr_output_layout_output* addToLayout();
     void arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive);
     void updateOptimizedBlur(const wlr_box& fullArea);

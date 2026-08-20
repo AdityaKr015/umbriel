@@ -255,6 +255,7 @@ namespace umbriel {
     [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
     [[nodiscard]] Output* outputFromName(const std::string& name) const;
     [[nodiscard]] wlr_box usableAreaAt(double lx, double ly) const;
+    void updateOutputManagerConfig();
 
     void removeOutput(Output* output);
     void removeKeyboard(Keyboard* keyboard);
@@ -319,7 +320,6 @@ namespace umbriel {
     void updateIdleInhibit();
     void handleWorkspaceCommit(void* data);
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
-    void updateOutputManagerConfig();
     void applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly);
     [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 

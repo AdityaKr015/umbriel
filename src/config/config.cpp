@@ -750,6 +750,19 @@ namespace umbriel {
 
         keys.real("scale", 0.25, 4.0, rule.scale);
 
+        if (const toml::node* vrrNode = keys.take("vrr")) {
+          const auto value = vrrNode->value<std::string>();
+          if (value == "disabled") {
+            rule.vrr = VrrMode::Disabled;
+          } else if (value == "always") {
+            rule.vrr = VrrMode::Always;
+          } else if (value == "fullscreen") {
+            rule.vrr = VrrMode::Fullscreen;
+          } else {
+            warnAt(vrrNode->source(), "ignoring output.{}.vrr (expected disabled|always|fullscreen)", name);
+          }
+        }
+
         if (const toml::node* transformNode = keys.take("transform")) {
           const auto value = transformNode->value<std::string>();
           static constexpr std::pair<std::string_view, int> transforms[] = {

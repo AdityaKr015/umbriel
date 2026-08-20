@@ -268,12 +268,27 @@ UMBRIEL_TEST(outputStateAndWorkspaceInventoryAreIndependent) {
   CHECK(!stateEffects.workspaceInventory);
   CHECK(!stateEffects.workspaceLayout);
 
+  Config vrrChanged = before;
+  vrrChanged.outputs[0].vrr = umbriel::VrrMode::Fullscreen;
+  const ConfigEffects vrrEffects = ConfigEffects::between(before, vrrChanged);
+  CHECK(vrrEffects.outputState);
+  CHECK(!vrrEffects.workspaceInventory);
+
   Config inventoryChanged = before;
   inventoryChanged.outputs[0].workspaces = std::vector<std::string>{"1", "dev"};
   const ConfigEffects inventoryEffects = ConfigEffects::between(before, inventoryChanged);
   CHECK(!inventoryEffects.outputState);
   CHECK(inventoryEffects.workspaceInventory);
   CHECK(inventoryEffects.workspaceLayout);
+}
+
+UMBRIEL_TEST(vrrPolicyTracksFullscreenOnlyWhenRequested) {
+  CHECK(!umbriel::vrrEnabled(umbriel::VrrMode::Disabled, false));
+  CHECK(!umbriel::vrrEnabled(umbriel::VrrMode::Disabled, true));
+  CHECK(umbriel::vrrEnabled(umbriel::VrrMode::Always, false));
+  CHECK(umbriel::vrrEnabled(umbriel::VrrMode::Always, true));
+  CHECK(!umbriel::vrrEnabled(umbriel::VrrMode::Fullscreen, false));
+  CHECK(umbriel::vrrEnabled(umbriel::VrrMode::Fullscreen, true));
 }
 
 UMBRIEL_TEST(blurRulesAndInputReachOnlyTheirConsumers) {

@@ -118,6 +118,7 @@ namespace umbriel {
     applyVisibility();
     if (active) {
       markArrange(false);
+      m_group->output()->updateVrr();
     }
   }
 

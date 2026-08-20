@@ -5,9 +5,11 @@
 #include "layer/layer_surface.h"
 #include "scene/node.h"
 #include "server/server.h"
+#include "view/view.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
 
@@ -100,8 +102,19 @@ namespace umbriel {
     if (rule != nullptr && rule->transform) {
       wlr_output_state_set_transform(&state, static_cast<wl_output_transform>(*rule->transform));
     }
+    const bool enableVrr = configuredVrrEnabled();
+    if (m_output->adaptive_sync_supported) {
+      wlr_output_state_set_adaptive_sync_enabled(&state, enableVrr);
+    } else if (enableVrr) {
+      kLog.warn("output '{}': VRR requested but adaptive sync is not supported", m_output->name);
+    }
 
-    const bool committed = wlr_output_commit_state(m_output, &state);
+    bool committed = wlr_output_commit_state(m_output, &state);
+    if (!committed && enableVrr && m_output->adaptive_sync_supported) {
+      kLog.warn("output '{}': failed to enable VRR, retrying with VRR disabled", m_output->name);
+      wlr_output_state_set_adaptive_sync_enabled(&state, false);
+      committed = wlr_output_commit_state(m_output, &state);
+    }
     wlr_output_state_finish(&state);
     if (!committed) {
       kLog.error("output '{}': failed to commit configured state", m_output->name);
@@ -111,6 +124,41 @@ namespace umbriel {
         "output '{}': applied mode={}x{}@{}mHz scale={} transform={}", m_output->name, m_output->width,
         m_output->height, m_output->refresh, m_output->scale, static_cast<int>(m_output->transform)
     );
+  }
+
+  bool Output::configuredVrrEnabled() const {
+    const OutputRule* rule = findRule(m_output->name);
+    if (rule == nullptr) {
+      return false;
+    }
+    const Workspace* workspace = m_workspaceGroup != nullptr ? m_workspaceGroup->active() : nullptr;
+    const bool fullscreen =
+        workspace != nullptr && std::ranges::any_of(workspace->allViews(), [](const View* view) {
+          return view->mapped() && (view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen);
+        });
+    return vrrEnabled(rule->vrr, fullscreen);
+  }
+
+  void Output::updateVrr() {
+    if (!m_output->adaptive_sync_supported) {
+      return;
+    }
+    const bool enabled = configuredVrrEnabled();
+    const bool currentlyEnabled = m_output->adaptive_sync_status == WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED;
+    if (enabled == currentlyEnabled) {
+      return;
+    }
+
+    wlr_output_state state{};
+    wlr_output_state_init(&state);
+    wlr_output_state_set_adaptive_sync_enabled(&state, enabled);
+    if (!wlr_output_commit_state(m_output, &state)) {
+      kLog.warn("output '{}': failed to {} VRR", m_output->name, enabled ? "enable" : "disable");
+    } else {
+      kLog.info("output '{}': VRR {}", m_output->name, enabled ? "enabled" : "disabled");
+      m_server->updateOutputManagerConfig();
+    }
+    wlr_output_state_finish(&state);
   }
 
   wlr_output_layout_output* Output::addToLayout() {

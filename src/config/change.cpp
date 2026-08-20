@@ -33,7 +33,8 @@ namespace umbriel {
       return lhs.mode == rhs.mode
           && lhs.position == rhs.position
           && lhs.scale == rhs.scale
-          && lhs.transform == rhs.transform;
+          && lhs.transform == rhs.transform
+          && lhs.vrr == rhs.vrr;
     }
 
     bool sameWorkspaceInventory(const OutputRule* before, const OutputRule* after) {

@@ -100,6 +100,7 @@ center_underfull_strip = true  # center the strip whenever it is narrower than t
 # mode = "2560x1440@144"
 # position = [0, 0]
 # scale = 1.25
+# vrr = "fullscreen"            # "disabled" (default), "always", or "fullscreen"
 # Dynamic workspaces are the default; use a count or name list for static workspaces.
 # workspaces = 5
 

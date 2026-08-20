@@ -355,6 +355,7 @@ namespace umbriel {
       struct Cursor {
         std::string theme;
         int size = 24;
+        bool hardwareCursor = true;
         bool operator==(const Cursor&) const = default;
       } cursor;
 

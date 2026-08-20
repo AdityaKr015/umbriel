@@ -141,6 +141,7 @@ scroll_wheel_step = 60         # 1-1000
 [input.cursor]
 theme = ""
 size = 24                      # 1-512
+hardware_cursor = true         # false forces software cursor composition
 
 [input.focus]
 follows_mouse = false

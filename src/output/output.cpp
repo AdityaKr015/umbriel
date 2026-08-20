@@ -41,6 +41,7 @@ namespace umbriel {
     m_destroy.notify = onDestroy;
     wl_signal_add(&m_output->events.destroy, &m_destroy);
 
+    applyCursorConfig();
     applyConfiguredState();
     wlr_output_layout_output* layoutOutput = addToLayout();
     m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
@@ -179,6 +180,16 @@ namespace umbriel {
     wlr_output_schedule_frame(m_output);
   }
 
+  void Output::applyCursorConfig() {
+    const bool lockSoftwareCursor = !config().input.cursor.hardwareCursor;
+    if (lockSoftwareCursor == m_softwareCursorLocked) {
+      return;
+    }
+    wlr_output_lock_software_cursors(m_output, lockSoftwareCursor);
+    m_softwareCursorLocked = lockSoftwareCursor;
+    wlr_output_schedule_frame(m_output);
+  }
+
   void Output::handleExternalConfigChange() {
     // Mode changes can drop the DRM gamma LUT; re-apply on the next frame.
     m_gammaDirty = true;
@@ -187,6 +198,10 @@ namespace umbriel {
   }
 
   Output::~Output() {
+    if (m_softwareCursorLocked) {
+      wlr_output_lock_software_cursors(m_output, false);
+      m_softwareCursorLocked = false;
+    }
     if (m_output != nullptr && m_output->data == this) {
       m_output->data = nullptr;
     }

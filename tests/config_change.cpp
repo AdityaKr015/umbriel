@@ -367,6 +367,14 @@ UMBRIEL_TEST(overviewInvalidationExcludesIrrelevantRuntimeEffects) {
   const ConfigEffects inputEffects = ConfigEffects::between(before, inputChanged);
   CHECK(inputEffects.any());
   CHECK(!inputEffects.invalidatesOverview());
+
+  Config hotCornerChanged;
+  hotCornerChanged.hotCorners.corners[0].enabled = true;
+  const ConfigEffects hotCornerEffects = ConfigEffects::between(before, hotCornerChanged);
+  CHECK(hotCornerEffects.input);
+  CHECK(!hotCornerEffects.overviewPresentation);
+  CHECK(!hotCornerEffects.invalidatesOverview());
+  CHECK(ConfigChange::between(before, hotCornerChanged).hotCorners);
 }
 
 UMBRIEL_TEST(modKeyReloadRefreshesOnlyInternalUi) {

@@ -12,6 +12,7 @@ namespace umbriel {
     bool colors = false;
     bool appearance = false;
     bool overview = false;
+    bool hotCorners = false;
     bool layout = false;
     bool workspaces = false;
     bool general = false;
@@ -27,6 +28,7 @@ namespace umbriel {
       return colors
           || appearance
           || overview
+          || hotCorners
           || layout
           || workspaces
           || general

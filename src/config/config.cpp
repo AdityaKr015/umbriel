@@ -442,6 +442,36 @@ namespace umbriel {
       });
     }
 
+    void readHotCorners(Section& root, Config& loaded) {
+      root.sub("hot_corners", [&](Section& s) {
+        const auto readCorner = [&](Section& cornerSection, Config::HotCorner& corner, std::string_view name) {
+          cornerSection.boolean("enabled", corner.enabled).integer("delay_ms", 0, 10000, corner.delayMs);
+          const toml::node* node = cornerSection.take("action");
+          if (node == nullptr) {
+            return;
+          }
+          const auto value = node->value<std::string>();
+          if (!value) {
+            warnAt(node->source(), "hot_corners.{}.action must be a string", name);
+            return;
+          }
+          Keybind bind;
+          if (!parseAction(*value, bind)) {
+            warnAt(node->source(), R"(invalid hot_corners.{}.action "{}")", name, *value);
+            return;
+          }
+          corner.action = std::move(bind);
+        };
+
+        s.sub("top_left", [&](Section& corner) { readCorner(corner, loaded.hotCorners.corners[0], "top_left"); });
+        s.sub("top_right", [&](Section& corner) { readCorner(corner, loaded.hotCorners.corners[1], "top_right"); });
+        s.sub("bottom_left", [&](Section& corner) { readCorner(corner, loaded.hotCorners.corners[2], "bottom_left"); });
+        s.sub("bottom_right", [&](Section& corner) {
+          readCorner(corner, loaded.hotCorners.corners[3], "bottom_right");
+        });
+      });
+    }
+
     void readLayout(Section& root, Config& loaded) {
       root.sub("layout", [&](Section& s) {
         if (const auto mode = readLayoutMode(s, "layout")) {
@@ -1161,6 +1191,7 @@ namespace umbriel {
           readColors(root, loaded);
           readAppearance(root, loaded);
           readOverview(root, loaded);
+          readHotCorners(root, loaded);
           readLayout(root, loaded);
           readGeneral(root, loaded);
           readEnvironment(root, loaded);

@@ -26,6 +26,7 @@ namespace umbriel {
   class Server;
   class View;
   class Workspace;
+  struct Keybind;
   struct ResizeGrab;
 
   class Cursor {
@@ -181,6 +182,10 @@ namespace umbriel {
     void updateHideTimer();
     void hideCursor();
     static int onHideTimer(void* data);
+    void updateHotCorner();
+    void cancelHotCorner();
+    [[nodiscard]] const Keybind* hotCornerAction(size_t* index = nullptr) const;
+    static int onHotCornerTimer(void* data);
     void setActiveConstraint(wlr_pointer_constraint_v1* constraint);
     void updateConstraintForSurface(wlr_surface* surface);
     [[nodiscard]] bool constraintSurfaceActive() const;
@@ -210,6 +215,10 @@ namespace umbriel {
     bool m_cursorHidden = false;
     std::string m_compositorCursorName;
     wl_event_source* m_hideTimer = nullptr;
+    wl_event_source* m_hotCornerTimer = nullptr;
+    bool m_hotCornerPending = false;
+    bool m_hotCornerTriggered = false;
+    size_t m_hotCornerIndex = 4;
 
     wl_listener m_motion{};
     wl_listener m_motionAbsolute{};

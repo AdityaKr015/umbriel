@@ -279,6 +279,19 @@ namespace umbriel {
       bool operator==(const Overview&) const = default;
     } overview;
 
+    struct HotCorner {
+      bool enabled = false;
+      int delayMs = 500;
+      std::optional<Keybind> action;
+      bool operator==(const HotCorner&) const = default;
+    };
+
+    struct HotCorners {
+      // Corners are ordered top-left, top-right, bottom-left, bottom-right.
+      std::array<HotCorner, 4> corners;
+      bool operator==(const HotCorners&) const = default;
+    } hotCorners;
+
     struct Layout {
       LayoutMode mode = LayoutMode::Scrolling;
       int gap = 8;

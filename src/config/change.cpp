@@ -61,7 +61,7 @@ namespace umbriel {
         .sceneBlur = sceneBlur,
         .viewChrome = before.appearance != after.appearance || before.windowRules != after.windowRules,
         .layerEffects = sceneBlur || before.layerRules != after.layerRules,
-        .input = before.input != after.input,
+        .input = before.input != after.input || before.hotCorners != after.hotCorners,
         .overviewPresentation = before.overview != after.overview,
         .internalUi = before.colors != after.colors || before.general.modKey != after.general.modKey,
     };
@@ -86,6 +86,7 @@ namespace umbriel {
         .colors = true,
         .appearance = true,
         .overview = true,
+        .hotCorners = true,
         .layout = true,
         .workspaces = true,
         .general = true,
@@ -104,6 +105,7 @@ namespace umbriel {
         .colors = before.colors != after.colors,
         .appearance = before.appearance != after.appearance,
         .overview = before.overview != after.overview,
+        .hotCorners = before.hotCorners != after.hotCorners,
         .layout = before.layout != after.layout,
         .workspaces = before.workspaces != after.workspaces,
         .general = before.general != after.general,
@@ -131,6 +133,7 @@ namespace umbriel {
     add(colors, "colors");
     add(appearance, "appearance");
     add(overview, "overview");
+    add(hotCorners, "hot corners");
     add(layout, "layout");
     add(workspaces, "workspaces");
     add(general, "general");

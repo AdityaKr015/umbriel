@@ -138,6 +138,41 @@ UMBRIEL_TEST(modKeyIsUserConfigurable) {
   CHECK(containsDiagnostic(store, "unknown general.mod_key"));
 }
 
+UMBRIEL_TEST(hotCornersLoadActionsAndValidate) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write(
+      "[hot_corners.top_left]\nenabled = true\ndelay_ms = 750\naction = \"overview-open\"\n"
+      "[hot_corners.bottom_right]\nenabled = true\ndelay_ms = 125\naction = \"spawn:notify-send corner\"\n"
+  );
+  CHECK(store.reload().success);
+  CHECK(store.config().hotCorners.corners[0].enabled);
+  CHECK_EQ(store.config().hotCorners.corners[0].delayMs, 750);
+  CHECK(store.config().hotCorners.corners[0].action.has_value());
+  CHECK(
+      store.config().hotCorners.corners[0].action
+      && store.config().hotCorners.corners[0].action->action == umbriel::KeybindAction::OverviewOpen
+  );
+  CHECK(!store.config().hotCorners.corners[1].enabled);
+  CHECK(!store.config().hotCorners.corners[2].enabled);
+  CHECK(store.config().hotCorners.corners[3].enabled);
+  CHECK_EQ(store.config().hotCorners.corners[3].delayMs, 125);
+  CHECK(store.config().hotCorners.corners[3].action.has_value());
+  CHECK(
+      store.config().hotCorners.corners[3].action
+      && store.config().hotCorners.corners[3].action->action == umbriel::KeybindAction::Spawn
+  );
+
+  file.write("[hot_corners.top_right]\nenabled = true\ndelay_ms = -1\naction = \"not-an-action\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().hotCorners.corners[1].delayMs, 0);
+  CHECK(!store.config().hotCorners.corners[1].action.has_value());
+  CHECK(containsDiagnostic(store, "invalid hot_corners.top_right.action \"not-an-action\""));
+  CHECK(containsDiagnostic(store, "hot_corners.top_right.delay_ms = -1"));
+}
+
 UMBRIEL_TEST(middleClickPasteLoadsAndDefaultsEnabled) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

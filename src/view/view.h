@@ -123,7 +123,7 @@ namespace umbriel {
     // Compositor-driven fullscreen toggle (keybind); client requests use handleRequestFullscreen.
     void toggleFullscreen();
     // Detach from the scrolling layout (float) or re-insert as a tiled column.
-    void setFloating(bool floating);
+    void setFloating(bool floating, bool focus = true);
     void toggleFloating();
     void togglePinned();
     // Restore the global pinned scene layer after temporary drag reparenting.
@@ -253,6 +253,7 @@ namespace umbriel {
     void adoptFloatingClientSize();
     [[nodiscard]] wlr_box floatingUsableArea() const;
     void placeInUsableArea(const std::optional<WindowPosition>& position = std::nullopt);
+    void setPinned(bool pinned, bool focus);
     void updateForeignIdentity();
     void updateForeignState();
     void enterForeignOutput();

@@ -12,3 +12,12 @@ boundaries, or regression-sensitive behavior.
 - [Workspace lifecycle](workspace-lifecycle.md)
 - [Overview rendering](overview-rendering.md)
 - [Xwayland input stability](xwayland-input-stability.md)
+
+## Pointer drag completion
+
+A client data-device drag temporarily replaces normal pointer delivery with a
+seat grab. When the initiating button release ends that grab,
+`Cursor::processButton` reruns pointer motion at the unchanged layout position.
+This is required even when the pointer did not move: clients use the fresh
+surface-local input to recalculate hover state and restore their cursor image.
+The short-drag case is covered by `101_external_drag.sh`.

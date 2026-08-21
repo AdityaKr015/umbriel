@@ -48,6 +48,9 @@ namespace {
     bool ready = false;
     bool dragStarted = false;
     bool dragFinished = false;
+    bool waitForPointerRefresh = false;
+    bool pointerRefreshObserved = false;
+    bool complete = false;
     bool failed = false;
   };
 
@@ -84,6 +87,10 @@ namespace {
     state.dragFinished = true;
     std::println("{}", result);
     std::fflush(stdout);
+
+    if (!state.waitForPointerRefresh) {
+      state.complete = true;
+    }
   }
 
   void sourceTarget(void*, wl_data_source*, const char*) {}
@@ -122,9 +129,23 @@ namespace {
       .action = sourceAction,
   };
 
-  void pointerEnter(void*, wl_pointer*, uint32_t, wl_surface*, wl_fixed_t, wl_fixed_t) {}
+  void observePointerRefresh(State& state) {
+    if (!state.waitForPointerRefresh || !state.dragFinished || state.pointerRefreshObserved) {
+      return;
+    }
+    state.pointerRefreshObserved = true;
+    state.complete = true;
+    std::println("pointer-refreshed");
+    std::fflush(stdout);
+  }
+
+  void pointerEnter(void* data, wl_pointer*, uint32_t, wl_surface*, wl_fixed_t, wl_fixed_t) {
+    observePointerRefresh(*static_cast<State*>(data));
+  }
   void pointerLeave(void*, wl_pointer*, uint32_t, wl_surface*) {}
-  void pointerMotion(void*, wl_pointer*, uint32_t, wl_fixed_t, wl_fixed_t) {}
+  void pointerMotion(void* data, wl_pointer*, uint32_t, wl_fixed_t, wl_fixed_t) {
+    observePointerRefresh(*static_cast<State*>(data));
+  }
 
   void pointerButton(void* data, wl_pointer*, uint32_t serial, uint32_t, uint32_t button, uint32_t buttonState) {
     auto& state = *static_cast<State*>(data);
@@ -207,7 +228,7 @@ namespace {
   void layerClosed(void* data, zwlr_layer_surface_v1*) {
     auto& state = *static_cast<State*>(data);
     state.failed = true;
-    state.dragFinished = true;
+    state.complete = true;
   }
 
   constexpr zwlr_layer_surface_v1_listener kLayerSurfaceListener = {
@@ -253,8 +274,14 @@ namespace {
 
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
+  if (argc > 2 || (argc == 2 && std::string_view(argv[1]) != "cursor-refresh")) {
+    std::println(stderr, "usage: drag-client [cursor-refresh]");
+    return EXIT_FAILURE;
+  }
+
   State state;
+  state.waitForPointerRefresh = argc == 2;
   state.display = wl_display_connect(nullptr);
   if (state.display == nullptr) {
     std::println(stderr, "drag-client: cannot connect to WAYLAND_DISPLAY");
@@ -297,7 +324,7 @@ int main() {
   zwlr_layer_surface_v1_set_exclusive_zone(state.layerSurface, 0);
   wl_surface_commit(state.surface);
 
-  while (!state.dragFinished && wl_display_dispatch(state.display) >= 0) {
+  while (!state.complete && wl_display_dispatch(state.display) >= 0) {
   }
 
   if (state.source != nullptr) {

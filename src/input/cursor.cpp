@@ -586,6 +586,11 @@ namespace umbriel {
     // Otherwise the drag icon and both input grabs remain active indefinitely.
     if (wlr_seat* seat = m_server->seat()->wlr(); seat->drag != nullptr) {
       wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
+      if (seat->drag == nullptr) {
+        // The drag grab suppressed normal pointer motion. Re-run hit testing at
+        // the unchanged position so the client can restore its hover cursor.
+        processMotion(timeMsec, m_cursor->x, m_cursor->y);
+      }
       return;
     }
 

@@ -36,6 +36,37 @@ wayland_env=(
   WAYLAND_DISPLAY=wayland-0
 )
 
+# Ending a short drag without leaving its source surface must generate fresh
+# pointer input. Clients use that input to restore the hover cursor which they
+# replaced while dragging.
+"${wayland_env[@]}" "$DRAG_CLIENT" cursor-refresh > "$CLIENT_LOG" 2>&1 &
+DRAG_PID=$!
+CLIENT_PIDS+=("$DRAG_PID")
+for _ in $(seq 50); do
+  grep -q '^ready$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+if ! grep -q '^ready$' "$CLIENT_LOG"; then
+  echo "timed out waiting for cursor refresh drag surface"
+  exit 1
+fi
+
+"${wayland_env[@]}" "$POINTER" "$OUTPUT_W" "$OUTPUT_H" \
+  move 32 32 press "$LEFT_BUTTON" move 48 48 pause 100 release "$LEFT_BUTTON"
+for _ in $(seq 50); do
+  grep -q '^pointer-refreshed$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+if ! grep -q '^pointer-refreshed$' "$CLIENT_LOG"; then
+  echo "pointer input was not refreshed after the drag ended"
+  cat "$CLIENT_LOG"
+  exit 1
+fi
+wait "$DRAG_PID"
+CLIENT_PIDS=()
+
+: > "$CLIENT_LOG"
+
 "${wayland_env[@]}" "$DRAG_CLIENT" > "$CLIENT_LOG" 2>&1 &
 DRAG_PID=$!
 CLIENT_PIDS+=("$DRAG_PID")

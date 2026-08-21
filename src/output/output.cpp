@@ -329,6 +329,9 @@ namespace umbriel {
         wlr_scene_node_destroy(&m_optimizedBlur->node);
         m_optimizedBlur = nullptr;
       }
+      if (!blur.enabled) {
+        fx_renderer_clear_output_effect_buffers(m_output);
+      }
       return;
     }
 

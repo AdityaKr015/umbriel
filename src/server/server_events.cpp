@@ -279,6 +279,9 @@ namespace umbriel {
           m_scene, blur.passes, blur.radius, static_cast<float>(blur.noise), static_cast<float>(blur.brightness),
           static_cast<float>(blur.contrast), static_cast<float>(blur.saturation)
       );
+      for (const auto& output : m_outputs) {
+        output->markDirty(Dirty::LayerArrange);
+      }
     }
     if (effects.input) {
       for (const auto& keyboard : m_keyboards) {

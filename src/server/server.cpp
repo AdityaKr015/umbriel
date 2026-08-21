@@ -133,6 +133,7 @@ namespace umbriel {
     wl_display_set_global_filter(m_display, filterGlobal, nullptr);
     wlr_viewporter_create(m_display);
     wlr_fractional_scale_manager_v1_create(m_display, 1);
+    wlr_presentation_create(m_display, m_backend, 2);
     wlr_ext_data_control_manager_v1_create(m_display, 1);
 
     m_outputLayout = wlr_output_layout_create(m_display);

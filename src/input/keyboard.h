@@ -38,9 +38,8 @@ namespace umbriel {
     void handleModifiers();
     void handleKey(void* data);
     void handleDestroy();
-    // Fire the IPC keyboard-layout event when the effective group changed since
-    // the last notification. A single keyboard drives the event stream, so the
-    // tracked index is per-keyboard and the first notification always fires.
+    // Fire the IPC keyboard-layout event when the effective group changed since the last notification. A single
+    // keyboard drives the event stream, so the tracked index is per-keyboard and the first notification always fires.
     void notifyLayoutIfChanged();
     void armRepeat(const Keybind& bind, uint32_t keycode);
     void cancelRepeat();

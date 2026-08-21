@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# Every action `umbriel msg --help` advertises is parseable and accepted by `msg`.
-#
-# This is the regression net for the action registry. The action list is spread
-# across the KeybindAction enum, the kActionSpecs table, and the dispatch switch,
-# so any change that consolidates or reshapes them can silently drop an action
-# without the compiler noticing.
+# Every action `umbriel msg --help` advertises is parseable and accepted by `msg`. This is the regression net for the action registry. The action list is spread across the KeybindAction enum, the kActionSpecs table, and the dispatch switch, so any change that consolidates or reshapes them can silently drop an action without the compiler noticing.
 set -euo pipefail
 
 # Actions deliberately not exercised: they act on the harness itself rather than

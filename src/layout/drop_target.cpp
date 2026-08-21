@@ -178,9 +178,8 @@ namespace umbriel {
       const int totalGap = workspace.layoutConfig().totalGap;
       const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
       const int columnCount = static_cast<int>(layout.columns().size());
-      // The strip may extend far beyond the viewport, making either outer
-      // layout-space gap unreachable. Reserve the output's extreme edges as
-      // stable prepend and append targets regardless of the scroll offset.
+      // The strip may extend far beyond the viewport, making either outer layout-space gap unreachable. Reserve the
+      // output's extreme edges as stable prepend and append targets regardless of the scroll offset.
       if (columnCount > 0 && layout.maxScroll(viewportWidth) > 0) {
         if (atScrollingLeftEdge(usable, worldX)) {
           return {.column = 0, .row = -1};

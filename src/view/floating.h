@@ -44,9 +44,8 @@ namespace umbriel {
     };
   }
 
-  // Where the window's content sits mid-resize. The edge being dragged moves and
-  // the opposite one stays put, which matters because the client's geometry
-  // catches up asynchronously: without an anchor, a left- or top-edge drag would
+  // Where the window's content sits mid-resize. The edge being dragged moves and the opposite one stays put, which
+  // matters because the client's geometry catches up asynchronously: without an anchor, a left- or top-edge drag would
   // visibly walk the far edge as each configure lands.
   [[nodiscard]] constexpr FloatingPoint
   anchoredContentOrigin(const wlr_box& anchor, uint32_t edges, const wlr_box& geometry) {
@@ -56,11 +55,9 @@ namespace umbriel {
     };
   }
 
-  // Has the client caught up with the configure we sent at `requested`?
-  //
-  // Serials are a free-running 32-bit counter that wraps, so this is a signed
-  // difference rather than `committed >= requested`: a plain comparison inverts
-  // for the whole second half of the counter's range after a wrap.
+  // Has the client caught up with the configure we sent at `requested`? Serials are a free-running 32-bit counter that
+  // wraps, so this is a signed difference rather than `committed >= requested`: a plain comparison inverts for the
+  // whole second half of the counter's range after a wrap.
   [[nodiscard]] constexpr bool serialSettled(uint32_t committed, uint32_t requested) {
     return static_cast<int32_t>(committed - requested) >= 0;
   }
@@ -74,17 +71,13 @@ namespace umbriel {
     };
   }
 
-  // The remembered state of a window's floating identity, kept across
-  // tiled round trips so that floating a window twice puts it back where it was.
-  //
-  // It also owns the configure-serial handoff. A floating client's size is
-  // compositor-owned right up until it commits the serial we last requested;
-  // after that the client owns it and the compositor must stop echoing
-  // configures back, or the two fight and the window shivers.
+  // The remembered state of a window's floating identity, kept across tiled round trips so that floating a window twice
+  // puts it back where it was. It also owns the configure-serial handoff. A floating client's size is compositor-owned
+  // right up until it commits the serial we last requested; after that the client owns it and the compositor must stop
+  // echoing configures back, or the two fight and the window shivers.
   class FloatingGeometry {
   public:
-    // --- Remembered size and position ---
-
+    // Remembered size and position
     void rememberSize(int width, int height) { m_size = {{width, height}}; }
     [[nodiscard]] const std::optional<std::array<int, 2>>& size() const { return m_size; }
     // Position is stored as a fraction of the usable area so a float restored on
@@ -92,17 +85,14 @@ namespace umbriel {
     void rememberPositionFraction(FloatingPoint origin, const wlr_box& usable);
     [[nodiscard]] std::optional<FloatingPoint> restoredOrigin(const wlr_box& usable) const;
 
-    // --- Configure-serial handoff ---
-
+    // Configure-serial handoff
     void recordSizeRequest(uint32_t serial) { m_sizeRequestSerial = serial; }
     void clearSizeRequest() { m_sizeRequestSerial.reset(); }
-    // True once the client has committed the requested configure (or there was
-    // none outstanding). Retires the request and, unless a resize is still in
-    // progress, the anchor with it.
+    // True once the client has committed the requested configure (or there was none outstanding). Retires the request
+    // and, unless a resize is still in progress, the anchor with it.
     [[nodiscard]] bool retireSizeRequestIfSettled(uint32_t committedSerial);
 
-    // --- Interactive resize ---
-
+    // Interactive resize
     void beginResize(const wlr_box& anchor, uint32_t edges);
     void endResize();
     [[nodiscard]] const std::optional<wlr_box>& anchor() const { return m_anchor; }

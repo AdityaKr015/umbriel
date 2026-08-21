@@ -1,18 +1,5 @@
 #!/usr/bin/env bash
-# The overview steps workspaces from a wheel notch, and stops at the ends.
-#
-# While the overview is up the real window trees are hidden, so switching is a
-# discrete step down the filmstrip rather than the animated slide it is outside.
-# The wheel, the arrow keys and the three-finger swipe all reach that step
-# through Overview::selectRelativeWorkspace. Only the wheel is drivable here:
-# the headless backend has no touchpad, and zwlr_virtual_pointer_v1 carries
-# motion, buttons and axes but no gesture events. So this covers the shared
-# selection path; the gesture state machine on top of it is not reachable
-# without a real device.
-#
-# Asserted through the log rather than through focus: with one window in the
-# session, focus falls back to it whichever workspace is active, so focus does
-# not distinguish a step that happened from one that did not.
+# The overview steps workspaces from a wheel notch, and stops at the ends. While the overview is up the real window trees are hidden, so switching is a discrete step down the filmstrip rather than the animated slide it is outside. The wheel, the arrow keys and the three-finger swipe all reach that step through Overview::selectRelativeWorkspace. Only the wheel is drivable here: the headless backend has no touchpad, and zwlr_virtual_pointer_v1 carries motion, buttons and axes but no gesture events. So this covers the shared selection path; the gesture state machine on top of it is not reachable without a real device. Asserted through the log rather than through focus: with one window in the session, focus falls back to it whichever workspace is active, so focus does not distinguish a step that happened from one that did not.
 set -euo pipefail
 
 readonly OUTPUT_W=1280
@@ -94,10 +81,8 @@ sleep 0.6
 expect_notch 1 2  # down the filmstrip
 expect_notch -1 1 # and back up
 
-# At the top row there is nowhere further up: the step is refused rather than
-# wrapping or running off the end of the group. This asserts the behaviour, not
-# the bounds check that implements it: deleting that check still passes here,
-# because workspaceAt() then returns null and select(null) is already a no-op.
+# At the top row there is nowhere further up: the step is refused rather than wrapping or running off the end of the group. This asserts the behaviour, not the
+# bounds check that implements it: deleting that check still passes here, because workspaceAt() then returns null and select(null) is already a no-op.
 if [[ $(notch_activates -1) != "none" ]]; then
   echo "a notch past the first workspace was not clamped"
   exit 1

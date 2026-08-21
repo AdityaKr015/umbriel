@@ -73,9 +73,8 @@ namespace umbriel {
     const std::string headingColor = rgbaHex(colors.error);
     const std::string textColor = rgbaHex(colors.textPrimary);
 
-    // Static strings, no user input, so no escaping needed. Transparent
-    // background: the panel rect behind provides the surface. The title is
-    // sized like the cheatsheet's heading.
+    // Static strings, no user input, so no escaping needed. Transparent background: the panel rect behind provides the
+    // surface. The title is sized like the cheatsheet's heading.
     std::string markup =
         std::format("<span size='14pt' weight='bold' foreground='{}'>Quit Umbriel?</span>", headingColor);
     markup += std::format("\n<span foreground='{}'>Enter confirms; any other key or click cancels</span>", textColor);

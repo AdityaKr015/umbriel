@@ -110,9 +110,8 @@ namespace umbriel {
     void beginMove(View* view);
     void beginResize(View* view, uint32_t edges);
     void resetMode();
-    // Warp the cursor to a layout position and run the motion pipeline (pointer
-    // focus, xcursor, pointer-output tracking, idle). Output actions use it so
-    // focus follows the cursor onto the target monitor.
+    // Warp the cursor to a layout position and run the motion pipeline (pointer focus, xcursor, pointer-output
+    // tracking, idle). Output actions use it so focus follows the cursor onto the target monitor.
     void warpTo(double lx, double ly);
     // A layout-mode reload can replace the layout that owns a tiled resize.
     void cancelStaleTiledResize();

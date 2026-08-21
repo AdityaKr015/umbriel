@@ -46,10 +46,9 @@ namespace umbriel {
       return;
     }
 
-    // PointerHover gate: reject focus entirely when revealing would exceed the
-    // configured max scroll fraction. Must run before any side effects (MRU,
-    // seat focus) so an over-limit hover focuses nothing, preserving the
-    // current behavior where cursor.cpp skipped focusView altogether.
+    // PointerHover gate: reject focus entirely when revealing would exceed the configured max scroll fraction. Must run
+    // before any side effects (MRU, seat focus) so an over-limit hover focuses nothing, preserving the current behavior
+    // where cursor.cpp skipped focusView altogether.
     if (reason == FocusReason::PointerHover && view->tiled()) {
       if (Workspace* workspace = view->workspace()) {
         const auto& maxScroll = config().input.focus.followsMouseMaxScroll;
@@ -83,10 +82,9 @@ namespace umbriel {
     m_server.registry().promote(view);
     view->setUrgent(false);
 
-    // Keep workspace focus while exclusive layer-shell holds the seat; refocus applies it later.
-    // Still clear activation chrome so the previous window does not stay visually focused.
-    // Overview owns the seat the same way, but keeps the chrome so card borders
-    // track the focused window; the keyboard enter replays when it closes.
+    // Keep workspace focus while exclusive layer-shell holds the seat; refocus applies it later. Still clear activation
+    // chrome so the previous window does not stay visually focused. Overview owns the seat the same way, but keeps the
+    // chrome so card borders track the focused window; the keyboard enter replays when it closes.
     const bool overviewActive = m_server.overview() != nullptr && m_server.overview()->active();
     const bool seatAvailable = exclusiveKeyboardLayer() == nullptr;
     if (seatAvailable) {

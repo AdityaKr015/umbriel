@@ -1,15 +1,8 @@
 #pragma once
 
-// Minimal zero-dependency test harness.
-//
-//   UMBRIEL_TEST(descriptiveName) {
-//     CHECK(condition);
-//     CHECK_EQ(actual, expected);
-//   }
-//   int main() { return RUN_TESTS(); }
-//
-// Cases self-register, every failure is reported (a failing CHECK does not stop
-// the case), and failures print file, line, the expressions, and both values.
+// Minimal zero-dependency test harness. UMBRIEL_TEST(descriptiveName) { CHECK(condition); CHECK_EQ(actual, expected); }
+// int main() { return RUN_TESTS(); } Cases self-register, every failure is reported (a failing CHECK does not stop the
+// case), and failures print file, line, the expressions, and both values.
 
 #include <cstddef>
 #include <format>

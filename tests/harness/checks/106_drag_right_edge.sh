@@ -43,9 +43,8 @@ for id in $(seq 1 6); do
 done
 sleep 0.5
 
-# Return focus and scroll to the first column, leaving most of the strip beyond
-# the right edge. This is the state where layout-space nearest-gap selection
-# cannot reach the strip's final gap.
+# Return focus and scroll to the first column, leaving most of the strip beyond the right edge. This is the state where layout-space nearest-gap selection cannot
+# reach the strip's final gap.
 for _ in $(seq 1 5); do
   "$UMBRIEL" msg window-focus-left > /dev/null
 done

@@ -36,27 +36,24 @@ namespace umbriel {
 
     [[nodiscard]] wlr_ext_workspace_handle_v1* handle() const { return m_handle; }
     [[nodiscard]] WorkspaceGroup* group() const { return m_group; }
-    // The canonical workspace id: the "<output>:<serial>" string handed to
-    // wlr_ext_workspace_handle_v1_create, identical across the ext protocol and
-    // the IPC surface.
+    // The canonical workspace id: the "<output>:<serial>" string handed to wlr_ext_workspace_handle_v1_create,
+    // identical across the ext protocol and the IPC surface.
     [[nodiscard]] const std::string& id() const { return m_id; }
     [[nodiscard]] const std::string& name() const { return m_name; }
     [[nodiscard]] size_t index() const { return m_index; }
     [[nodiscard]] bool active() const { return m_active; }
     [[nodiscard]] Layout& layout() { return *m_layout; }
     [[nodiscard]] const Layout& layout() const { return *m_layout; }
-    // The one place a layout is downcast. Null unless this workspace is
-    // scrolling, so callers that need scroll offsets, column positions, or row
-    // weights ask for the layout that has them instead of asking every layout a
-    // question only this one can answer.
+    // The one place a layout is downcast. Null unless this workspace is scrolling, so callers that need scroll offsets,
+    // column positions, or row weights ask for the layout that has them instead of asking every layout a question only
+    // this one can answer.
     [[nodiscard]] ScrollingLayout* scrollingLayout();
     [[nodiscard]] const ScrollingLayout* scrollingLayout() const;
     [[nodiscard]] DwindleLayout* dwindleLayout();
     [[nodiscard]] const ResolvedLayoutConfig& layoutConfig() const { return m_layoutConfig; }
     [[nodiscard]] LayoutMode layoutMode() const { return m_layoutMode; }
-    // Runtime layout override set by workspace-set-layout. Empty = the
-    // configured mode applies. A config reload clears it and reasserts the
-    // configured mode; window open/close keeps it (reconcileDynamic re-applies).
+    // Runtime layout override set by workspace-set-layout. Empty = the configured mode applies. A config reload clears
+    // it and reasserts the configured mode; window open/close keeps it (reconcileDynamic re-applies).
     [[nodiscard]] std::optional<LayoutMode> layoutModeOverride() const { return m_layoutModeOverride; }
     void overrideLayoutMode(LayoutMode mode);
     void clearLayoutModeOverride() { m_layoutModeOverride.reset(); }
@@ -79,16 +76,12 @@ namespace umbriel {
     void layoutAttach(View* view, std::optional<double> initialWidth = std::nullopt);
     void layoutDetach(View* view, bool animate = false);
     void arrange(bool animate = true);
-    // Record that the layout is stale instead of rebuilding it now. The work
-    // runs once, before the next frame, however many times this is called in
-    // between: a touchpad swipe marks on every motion event, and unrelated
-    // paths reached in the same frame (a focus change, a config reload, a
-    // client's fullscreen commit) each used to arrange on their own.
-    //
-    // Prefer this to arrange(). Call arrange() directly only when the code
-    // immediately afterwards reads the arranged geometry back out of the
-    // layout -- targetBox() is the only thing arrange() produces that is not
-    // simply applied to the scene, and a stale one would be read.
+    // Record that the layout is stale instead of rebuilding it now. The work runs once, before the next frame, however
+    // many times this is called in between: a touchpad swipe marks on every motion event, and unrelated paths reached
+    // in the same frame (a focus change, a config reload, a client's fullscreen commit) each used to arrange on their
+    // own. Prefer this to arrange(). Call arrange() directly only when the code immediately afterwards reads the
+    // arranged geometry back out of the layout, targetBox() is the only thing arrange() produces that is not simply
+    // applied to the scene, and a stale one would be read.
     void markArrange(bool animate = true);
     void flushArrange();
     void syncViewPresentation(View* view);
@@ -127,9 +120,8 @@ namespace umbriel {
     // Width the strip scrolls within: the usable area less the edge padding on
     // both sides. At least 1, so callers can divide by it.
     [[nodiscard]] int viewportWidth() const;
-    // Take `view` out of the layout, holding the columns that stay on screen
-    // still. Both removal paths come through here: closing a window reaches
-    // layoutDetach, moving one to another workspace reaches removeView.
+    // Take `view` out of the layout, holding the columns that stay on screen still. Both removal paths come through
+    // here: closing a window reaches layoutDetach, moving one to another workspace reaches removeView.
     void detachFromLayout(View* view);
     WorkspaceGroup* m_group = nullptr;
     wlr_ext_workspace_handle_v1* m_handle = nullptr;
@@ -181,16 +173,14 @@ namespace umbriel {
     void select(Workspace* workspace);
     void deactivate(Workspace* workspace);
     Workspace* createWorkspace(const char* name);
-    // Insert an empty numbered workspace into a dynamic group and renumber the
-    // following workspaces. Static configured groups cannot be extended this
-    // way and return null.
+    // Insert an empty numbered workspace into a dynamic group and renumber the following workspaces. Static configured
+    // groups cannot be extended this way and return null.
     Workspace* insertDynamicWorkspace(size_t index);
     void reconcileInventory();
     void refreshLayouts();
     void reconcileDynamic();
-    // Every workspace, not just the active one: a client can change fullscreen
-    // state while another workspace is showing, and that workspace still owes
-    // it a configure at the right size.
+    // Every workspace, not just the active one: a client can change fullscreen state while another workspace is
+    // showing, and that workspace still owes it a configure at the right size.
     void flushArrange();
 
     [[nodiscard]] bool slideActive() const { return m_slide.base != nullptr; }

@@ -30,8 +30,7 @@ namespace {
 
 } // namespace
 
-// ---- parseChord: modifiers ----
-
+// parseChord: modifiers
 UMBRIEL_TEST(parsesEveryModifierToken) {
   CHECK(chord("Mod+a").useMod);
   CHECK_EQ(chord("Shift+a").modifiers, uint32_t{WLR_MODIFIER_SHIFT});
@@ -86,8 +85,7 @@ UMBRIEL_TEST(combinesMultipleModifiers) {
   CHECK_EQ(bind.keysym, uint32_t{XKB_KEY_q});
 }
 
-// ---- parseChord: keys ----
-
+// parseChord: keys
 UMBRIEL_TEST(keysymsAreLowercased) {
   CHECK_EQ(chord("Mod+A").keysym, uint32_t{XKB_KEY_a});
   CHECK_EQ(chord("Mod+a").keysym, uint32_t{XKB_KEY_a});
@@ -133,8 +131,7 @@ UMBRIEL_TEST(failedParseLeavesBindDefaulted) {
   CHECK(!bind.modifierOnly);
 }
 
-// ---- parseChord: wheel and mouse ----
-
+// parseChord: wheel and mouse
 UMBRIEL_TEST(parsesWheelDirections) {
   CHECK(chord("Mod+WheelUp").wheel == WheelDirection::Up);
   CHECK(chord("Mod+WheelDown").wheel == WheelDirection::Down);
@@ -158,8 +155,7 @@ UMBRIEL_TEST(rejectsBareWheelAndMouseBinds) {
   CHECK(!parseChord("MouseLeft", bind));
 }
 
-// ---- parseChord: submaps ----
-
+// parseChord: submaps
 UMBRIEL_TEST(parsesSubmapPrefix) {
   const Keybind bind = chord("submap[resize],Mod+h");
   CHECK_EQ(bind.submap, std::string{"resize"});
@@ -177,8 +173,7 @@ UMBRIEL_TEST(rejectsMalformedSubmapPrefix) {
   CHECK(!parseChord("submap[resize]", bind));  // nothing after the prefix
 }
 
-// ---- parseAction ----
-
+// parseAction
 UMBRIEL_TEST(parsesSimpleActions) {
   Keybind bind;
   CHECK(parseAction("window-close", bind));
@@ -492,8 +487,7 @@ UMBRIEL_TEST(rejectsUnknownActions) {
   CHECK(!parseAction("spawn:", bind));             // requires a non-empty argument
 }
 
-// ---- action spec table ----
-
+// action spec table
 UMBRIEL_TEST(everyActionSpecRoundTripsThroughParseAction) {
   // The registry is duplicated across the enum, this table, and the dispatch
   // switch. At minimum, every advertised name must parse back to its action.
@@ -552,8 +546,7 @@ UMBRIEL_TEST(parameterizedSpecsDeclareAParam) {
   }
 }
 
-// ---- defaults ----
-
+// defaults
 UMBRIEL_TEST(defaultKeybindsAreUsable) {
   const auto binds = umbriel::defaultKeybinds();
   CHECK(!binds.empty());

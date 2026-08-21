@@ -28,15 +28,13 @@ namespace umbriel {
     constexpr double kOverscrollMaxWs = 0.08;
     // Finger travel for a full overview open or close.
     constexpr double kOverviewDistancePx = 300.0;
-    // Finger travel per workspace step while the overview is up. Outside it, a
-    // switch commits once the swipe passes kCommitProgress of a full slide, so
-    // that same travel is what the hand already reads as "one workspace"; there
-    // is no slide to be a fraction of in here, so it becomes the step itself.
+    // Finger travel per workspace step while the overview is up. Outside it, a switch commits once the swipe passes
+    // kCommitProgress of a full slide, so that same travel is what the hand already reads as "one workspace"; there is
+    // no slide to be a fraction of in here, so it becomes the step itself.
     constexpr double kOverviewStepPx = kSwitchDistancePx * kCommitProgress;
   } // namespace
 
-  // ----- trampolines (same pattern as Cursor) -----
-
+  // trampolines (same pattern as Cursor)
   void Gestures::onSwipeBegin(wl_listener* listener, void* data) {
     Gestures* self;
     self = wl_container_of(listener, self, m_swipeBegin);
@@ -254,7 +252,7 @@ namespace umbriel {
       }
 
       if (std::abs(m_accumX) > std::abs(m_accumY)) {
-        // ----- Horizontal lock → Scroll -----
+        // Horizontal lock scrolls the active workspace.
         Workspace* ws = out->workspaceGroup()->active();
         ScrollingLayout* scrolling = ws != nullptr ? ws->scrollingLayout() : nullptr;
         if (scrolling == nullptr || scrolling->columns().empty()) {
@@ -267,7 +265,7 @@ namespace umbriel {
         ws->markArrange(false);
         m_state = State::Scroll;
       } else {
-        // ----- Vertical lock → Switch -----
+        // Vertical lock switches workspaces.
         WorkspaceGroup* group = out->workspaceGroup();
         const size_t idx = group->active()->index();
         m_hasPrev = idx > 0;
@@ -348,9 +346,8 @@ namespace umbriel {
         return;
       }
       m_accumY += event->dy;
-      // Natural, and the same sense as the switch outside the overview: swipe
-      // up (negative dy) moves to the next workspace. The leftover travel stays
-      // in m_accumY so one long swipe crosses several rows.
+      // Natural, and the same sense as the switch outside the overview: swipe up (negative dy) moves to the next
+      // workspace. The leftover travel stays in m_accumY so one long swipe crosses several rows.
       while (m_accumY <= -kOverviewStepPx) {
         m_accumY += kOverviewStepPx;
         overview->selectRelativeWorkspace(1, m_output);
@@ -470,11 +467,9 @@ namespace umbriel {
       const double currentScroll = std::clamp(rawScroll, 0.0, maxScroll);
       int best = -1;
 
-      // The viewport-center heuristic has no snap point at either strip edge.
-      // With mixed column widths, the second column can remain closer to the
-      // viewport center even at scroll 0, making the first column unreachable.
-      // Preserve the gesture direction at an overscrolled edge by explicitly
-      // selecting that endpoint.
+      // The viewport-center heuristic has no snap point at either strip edge. With mixed column widths, the second
+      // column can remain closer to the viewport center even at scroll 0, making the first column unreachable. Preserve
+      // the gesture direction at an overscrolled edge by explicitly selecting that endpoint.
       if (m_accumX > 0.0 && rawScroll <= 0.0) {
         best = 0;
       } else if (m_accumX < 0.0 && rawScroll >= maxScroll) {

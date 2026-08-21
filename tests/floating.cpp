@@ -14,8 +14,7 @@ namespace {
   constexpr wlr_box kUsable{0, 0, 1920, 1080};
 }
 
-// --- Serial handoff ---
-
+// Serial handoff
 UMBRIEL_TEST(serialSettledOnAnExactMatch) { CHECK(serialSettled(100, 100)); }
 
 UMBRIEL_TEST(serialNotSettledWhileTheClientLags) {
@@ -29,9 +28,8 @@ UMBRIEL_TEST(serialSettledOnceTheClientPassesIt) {
 }
 
 UMBRIEL_TEST(serialSurvivesCounterWraparound) {
-  // The whole reason this is a signed difference. Requested just below the
-  // wrap, committed just above it: the client is ahead, and a plain
-  // `committed >= requested` would say the opposite for 2 billion serials.
+  // The whole reason this is a signed difference. Requested just below the wrap, committed just above it: the client is
+  // ahead, and a plain `committed >= requested` would say the opposite for 2 billion serials.
   constexpr uint32_t kNearMax = 0xFFFFFFF0;
   CHECK(serialSettled(4, kNearMax));
   CHECK(!serialSettled(kNearMax, 4));
@@ -94,8 +92,7 @@ UMBRIEL_TEST(endResizeDropsTheAnchorWhenNothingIsInFlight) {
   CHECK(!floating.anchor().has_value());
 }
 
-// --- Clamp arithmetic ---
-
+// Clamp arithmetic
 UMBRIEL_TEST(keepVisibleIsAQuarterWithinBounds) {
   CHECK_EQ(floatingKeepVisible(200), 50);
   // Floored at 10 for a tiny window, capped at 75 for a huge one.
@@ -148,9 +145,8 @@ UMBRIEL_TEST(aWindowWiderThanItsOutputStillClampsToTheFarEdge) {
 }
 
 UMBRIEL_TEST(clampDoesNotInvertWhenTheBoundsCross) {
-  // The guard's actual trigger: with no geometry to speak of and a tiny usable
-  // area, the low bound overshoots the high one. Without the guard std::clamp
-  // is undefined behaviour here.
+  // The guard's actual trigger: with no geometry to speak of and a tiny usable area, the low bound overshoots the high
+  // one. Without the guard std::clamp is undefined behaviour here.
   const wlr_box usable{0, 0, 10, 10};
   const wlr_box geo{0, 0, 0, 0};
   const FloatingPoint clamped = clampFloatingOrigin({500, 500}, geo, usable);
@@ -159,8 +155,7 @@ UMBRIEL_TEST(clampDoesNotInvertWhenTheBoundsCross) {
   CHECK_EQ(clamped.y, usable.y + floatingKeepVisible(0));
 }
 
-// --- Resize anchoring ---
-
+// Resize anchoring
 UMBRIEL_TEST(draggingTheRightEdgeLeavesTheOriginAlone) {
   const wlr_box anchor{100, 100, 400, 300};
   const wlr_box shrunk{0, 0, 250, 300};
@@ -194,8 +189,7 @@ UMBRIEL_TEST(draggingACornerPinsBothOppositeEdges) {
   CHECK_EQ(origin.y + shrunk.height, anchor.y + anchor.height);
 }
 
-// --- Remembered position ---
-
+// Remembered position
 UMBRIEL_TEST(positionIsRestoredOnTheSameOutput) {
   FloatingGeometry floating;
   floating.rememberPositionFraction({480, 270}, kUsable);
@@ -242,8 +236,7 @@ UMBRIEL_TEST(sizeIsRememberedAcrossRoundTrips) {
   CHECK_EQ((*floating.size())[1], 480);
 }
 
-// --- Centering ---
-
+// Centering
 UMBRIEL_TEST(centeringPlacesEqualMarginsOnEachSide) {
   const FloatingPoint origin = centeredOrigin(kUsable, 800, 600);
   CHECK_EQ(origin.x, 560);

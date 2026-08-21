@@ -10,17 +10,12 @@ struct wl_event_source;
 
 namespace umbriel {
 
-  // Keeps an xwayland-satellite process alive for the lifetime of the session.
-  //
-  // Umbriel does not implement X11 itself; xwayland-satellite is a separate
-  // program that owns an X display and translates for it. All this class does is
-  // pick a display number, spawn the process, notice when it dies, and restart it,
-  // with a failure budget, so a satellite that cannot start (missing Xwayland,
-  // wrong version) stops rather than spinning forever.
-  //
-  // Death is detected through a pidfd on the event loop rather than SIGCHLD: the
-  // compositor sets SIGCHLD to SIG_IGN so it never has to reap, and a pidfd gives
-  // the same notification without a signal handler racing the main loop.
+  // Keeps an xwayland-satellite process alive for the lifetime of the session. Umbriel does not implement X11 itself;
+  // xwayland-satellite is a separate program that owns an X display and translates for it. All this class does is pick
+  // a display number, spawn the process, notice when it dies, and restart it, with a failure budget, so a satellite
+  // that cannot start (missing Xwayland, wrong version) stops rather than spinning forever. Death is detected through a
+  // pidfd on the event loop rather than SIGCHLD: the compositor sets SIGCHLD to SIG_IGN so it never has to reap, and a
+  // pidfd gives the same notification without a signal handler racing the main loop.
   class XwaylandSupervisor {
   public:
     XwaylandSupervisor(wl_event_loop* loop, std::string waylandSocket);
@@ -36,9 +31,8 @@ namespace umbriel {
     // called by the destructor.
     void stop();
 
-    // The DISPLAY the satellite owns, or empty when no satellite is running.
-    // Children inherit this; when it is empty they must have DISPLAY *unset*
-    // rather than inherited, or X11 clients fall back to the outer session.
+    // The DISPLAY the satellite owns, or empty when no satellite is running. Children inherit this; when it is empty
+    // they must have DISPLAY *unset* rather than inherited, or X11 clients fall back to the outer session.
     [[nodiscard]] const std::string& display() const { return m_display; }
     [[nodiscard]] pid_t pid() const { return m_pid; }
 

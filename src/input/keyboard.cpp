@@ -85,9 +85,8 @@ namespace umbriel {
     }
     const xkb_layout_index_t current = xkb_state_serialize_layout(m_keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
     const xkb_layout_index_t next = (current + 1) % count;
-    // Locking the group through wlroots rather than xkbcommon directly is what
-    // gets the new group out to clients: it refreshes wlr_keyboard::modifiers
-    // and emits the modifiers event the seat forwards.
+    // Locking the group through wlroots rather than xkbcommon directly is what gets the new group out to clients: it
+    // refreshes wlr_keyboard::modifiers and emits the modifiers event the seat forwards.
     wlr_keyboard_notify_modifiers(
         m_keyboard, m_keyboard->modifiers.depressed, m_keyboard->modifiers.latched, m_keyboard->modifiers.locked, next
     );
@@ -173,9 +172,8 @@ namespace umbriel {
 
     bool handled = false;
     std::optional<Keybind> modifierTap;
-    // An XF86 key can arrive from a dedicated hotkey device while its
-    // modifiers are held on the main keyboard. Match against the combined
-    // seat-wide state so those chords behave like keys on one device.
+    // An XF86 key can arrive from a dedicated hotkey device while its modifiers are held on the main keyboard. Match
+    // against the combined seat-wide state so those chords behave like keys on one device.
     uint32_t modifiers = m_server->keyboardModifiers();
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
       m_server->armModifierTap(
@@ -185,10 +183,9 @@ namespace umbriel {
       for (int i = 0; i < nsyms; ++i) {
         handled = m_server->handleVtSwitch(syms[i], modifiers) || handled;
       }
-      // Modal quit confirmation: Enter or the session-quit bind confirms, any
-      // other non-modifier key cancels. The press is consumed either way,
-      // reaching neither binds nor clients. Modifier-only presses pass through
-      // so held chords stay intact.
+      // Modal quit confirmation: Enter or the session-quit bind confirms, any other non-modifier key cancels. The press
+      // is consumed either way, reaching neither binds nor clients. Modifier-only presses pass through so held chords
+      // stay intact.
       bool quitConfirmConsumed = false;
       if (QuitConfirm* confirm = m_server->quitConfirm(); confirm != nullptr && confirm->visible()) {
         const bool modifierOnly = nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R;
@@ -197,10 +194,8 @@ namespace umbriel {
           for (int i = 0; i < nsyms; ++i) {
             confirmed = confirmed || syms[i] == XKB_KEY_Return || syms[i] == XKB_KEY_KP_Enter;
           }
-          // Pressing the quit bind again confirms. matchKeybind
-          // mirrors handleKeybind without running the action, so a press that
-          // would fire session-quit quits; any other matched or unbound press
-          // dismisses.
+          // Pressing the quit bind again confirms. matchKeybind mirrors handleKeybind without running the action, so a
+          // press that would fire session-quit quits; any other matched or unbound press dismisses.
           for (int i = 0; i < nsyms && !confirmed; ++i) {
             const Keybind* matched = m_server->matchKeybind(syms[i], rawSym, modifiers);
             if (matched != nullptr && matched->action == KeybindAction::SessionQuit) {
@@ -230,9 +225,8 @@ namespace umbriel {
       if (matched != nullptr) {
         armRepeat(*matched, event->keycode);
       }
-      // Unbound plain keys drive overview navigation instead of reaching
-      // clients, unless a layer surface (launcher, panel) holds the keyboard:
-      // its Escape/arrows belong to it, not to the filmstrip.
+      // Unbound plain keys drive overview navigation instead of reaching clients, unless a layer surface (launcher,
+      // panel) holds the keyboard: its Escape/arrows belong to it, not to the filmstrip.
       if (!handled && seat->keyboard_state.focused_surface == nullptr) {
         Overview* overview = m_server->overview();
         const uint32_t plain = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
@@ -264,9 +258,8 @@ namespace umbriel {
         wlr_input_method_keyboard_grab_v2_set_keyboard(grab, m_keyboard);
         wlr_input_method_keyboard_grab_v2_send_key(grab, event->time_msec, event->keycode, event->state);
       } else {
-        // Overview holds the seat, so windows see no keys until it closes. It
-        // never hands keyboard focus to a view while open (focusView skips the
-        // seat enter), so a non-null focus here is a layer surface that took it
+        // Overview holds the seat, so windows see no keys until it closes. It never hands keyboard focus to a view
+        // while open (focusView skips the seat enter), so a non-null focus here is a layer surface that took it
         // deliberately, e.g. a launcher panel; those keep typing.
         const Overview* overview = m_server->overview();
         const bool overviewOwnsKeyboard =

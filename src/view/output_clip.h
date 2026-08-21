@@ -18,9 +18,8 @@ namespace umbriel {
     };
   }
 
-  // Scene clipping resizes the rendered buffer to its visible part. Remove the
-  // radius from every cut edge so that the new boundary reads as a clip, not as
-  // a smaller rounded window.
+  // Scene clipping resizes the rendered buffer to its visible part. Remove the radius from every cut edge so that the
+  // new boundary reads as a clip, not as a smaller rounded window.
   [[nodiscard]] constexpr fx_corner_radii
   cornerRadiiForVisible(const wlr_box& full, const wlr_box& visible, fx_corner_radii corners) {
     const bool left = visible.x > full.x;
@@ -33,23 +32,19 @@ namespace umbriel {
     );
   }
 
-  // Offset centering a client buffer of `contentSize` in a fullscreen tile of
-  // `tileSize`. Negative when the buffer is the larger of the two, which crops it
-  // equally on both sides; a fullscreen buffer is never scaled, because scaling
-  // a client that is mid mode-change shows it at the wrong aspect ratio.
+  // Offset centering a client buffer of `contentSize` in a fullscreen tile of `tileSize`. Negative when the buffer is
+  // the larger of the two, which crops it equally on both sides; a fullscreen buffer is never scaled, because scaling a
+  // client that is mid mode-change shows it at the wrong aspect ratio.
   [[nodiscard]] constexpr int fullscreenCenterOffset(int tileSize, int contentSize) {
     return contentSize > 0 ? (tileSize - contentSize) / 2 : 0;
   }
 
-  // Map the visible part of an animated presentation back onto the committed
-  // buffer. `content` is the box the view is being drawn at and `clip` the
-  // visible part of it (both surface coordinates); `base` is the surface's own
-  // buffer source box, which carries any viewport and scale the client set.
-  //
-  // This exists because a scene clip cannot express it: a clip crops 1:1 and caps
-  // the destination at the committed surface size, so it cannot show a buffer at
-  // a size the client has not committed. Returns an empty box when the clamp
-  // leaves nothing, meaning the buffer should be left alone.
+  // Map the visible part of an animated presentation back onto the committed buffer. `content` is the box the view is
+  // being drawn at and `clip` the visible part of it (both surface coordinates); `base` is the surface's own buffer
+  // source box, which carries any viewport and scale the client set. This exists because a scene clip cannot express
+  // it: a clip crops 1:1 and caps the destination at the committed surface size, so it cannot show a buffer at a size
+  // the client has not committed. Returns an empty box when the clamp leaves nothing, meaning the buffer should be left
+  // alone.
   [[nodiscard]] constexpr wlr_fbox croppedSourceBox(
       const wlr_fbox& base, const wlr_box& geometry, const wlr_box& content, const wlr_box& clip, int surfaceWidth,
       int surfaceHeight
@@ -101,14 +96,11 @@ namespace umbriel {
     return {.x = x, .y = y, .width = right - x, .height = bottom - y};
   }
 
-  // The region of a view's node that blur is allowed to sample, in coordinates
-  // local to the node. `target` is the node's origin in layout space.
-  //
-  // SceneFX samples past the node's own bounds by roughly radius*passes pixels,
-  // so a view sitting flush against an output edge would pull in whatever is on
-  // the neighbouring output. Insetting by that bleed on any edge that touches the
-  // output boundary keeps the sample inside. Returns an empty box (width or
-  // height <= 0) when nothing may be blurred and the effect must be hidden.
+  // The region of a view's node that blur is allowed to sample, in coordinates local to the node. `target` is the
+  // node's origin in layout space. SceneFX samples past the node's own bounds by roughly radius*passes pixels, so a
+  // view sitting flush against an output edge would pull in whatever is on the neighbouring output. Insetting by that
+  // bleed on any edge that touches the output boundary keeps the sample inside. Returns an empty box (width or height
+  // <= 0) when nothing may be blurred and the effect must be hidden.
   [[nodiscard]] constexpr wlr_box blurClipForOutput(
       const wlr_box& nodeBox, const wlr_box& contentVisible, const wlr_box& outputBox, const wlr_box& target, int bleed
   ) {

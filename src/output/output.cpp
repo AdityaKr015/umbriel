@@ -419,10 +419,9 @@ namespace umbriel {
     // it, and the chrome sits over the result.
     if (has(pending, Dirty::LayerArrange)) {
       arrangeLayers();
-      // Changing the usable area makes the layout stale, so arrangeLayers marks
-      // it, after this set was taken. Take again rather than let that wait a
-      // frame; the same holds for anything a later step records for a step
-      // further down.
+      // Changing the usable area makes the layout stale, so arrangeLayers marks it, after this set was taken. Take
+      // again rather than let that wait a frame; the same holds for anything a later step records for a step further
+      // down.
       pending |= m_dirty;
       m_dirty = Dirty::None;
     }
@@ -459,13 +458,11 @@ namespace umbriel {
       return;
     }
 
-    // Render + commit only if the scene actually changed or a gamma upload is pending.
-    // All exit paths below MUST reach the unconditional wlr_scene_output_send_frame_done
-    // call at the bottom: mailbox/FIFO clients (games via DXVK, video players) block on
-    // wl_surface.frame before submitting their next buffer. If we skip frame_done on the
-    // "nothing to render" path, they never commit again -> damage stays clean ->
-    // wlr_scene_output_needs_frame returns false forever -> compositor parks in epoll_wait.
-    // (Reproducible with any mailbox/FIFO Vulkan game.)
+    // Render + commit only if the scene actually changed or a gamma upload is pending. All exit paths below MUST reach
+    // the unconditional wlr_scene_output_send_frame_done call at the bottom: mailbox/FIFO clients (games via DXVK,
+    // video players) block on wl_surface.frame before submitting their next buffer. If we skip frame_done on the
+    // "nothing to render" path, they never commit again -> damage stays clean -> wlr_scene_output_needs_frame returns
+    // false forever -> compositor parks in epoll_wait. (Reproducible with any mailbox/FIFO Vulkan game.)
     if (wlr_scene_output_needs_frame(m_sceneOutput) || m_gammaDirty) {
       m_inFrame = true;
 

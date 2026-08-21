@@ -340,9 +340,8 @@ namespace umbriel {
         wl_event_source_remove(connection.deadline);
         connection.deadline = nullptr;
       }
-      // Initial-state lines in a fixed order; prepareResponse appends the
-      // final newline. A keyboard_layout line with no keyboard is skipped, so
-      // that stream simply starts when a keyboard arrives.
+      // Initial-state lines in a fixed order; prepareResponse appends the final newline. A keyboard_layout line with no
+      // keyboard is skipped, so that stream simply starts when a keyboard arrives.
       std::string response;
       auto append = [&response](const nlohmann::json& event) {
         if (!response.empty()) {

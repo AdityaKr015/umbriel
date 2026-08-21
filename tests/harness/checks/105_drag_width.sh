@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Dragging a single-view scrolling column must retain its width when reordered.
-# The overview is used because virtual pointer events can drive its unmodified
-# drag path without synthesizing a compositor modifier key.
+# Dragging a single-view scrolling column must retain its width when reordered. The overview is used because virtual pointer events can drive its unmodified drag
+# path without synthesizing a compositor modifier key.
 set -euo pipefail
 
 readonly BTN_LEFT=272

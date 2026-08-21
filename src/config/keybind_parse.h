@@ -86,10 +86,9 @@ namespace umbriel {
     Count,
   };
 
-  // Action payloads. Exactly one is valid for a given action, so they live in a
-  // variant rather than as sibling fields: a spawn command and a workspace
-  // selector can no longer be set at the same time, and the submap name no
-  // longer shares storage with the spawn command.
+  // Action payloads. Exactly one is valid for a given action, so they live in a variant rather than as sibling fields:
+  // a spawn command and a workspace selector can no longer be set at the same time, and the submap name no longer
+  // shares storage with the spawn command.
   struct SpawnArg {
     std::string command;
     bool operator==(const SpawnArg&) const = default;
@@ -187,15 +186,13 @@ namespace umbriel {
     ActionArgKind argKind = ActionArgKind::None;
   };
 
-  // Parse a chord such as "Mod+Shift+h", "Ctrl+Alt+Delete", "Mod+WheelUp",
-  // "Mod+MouseBack", or "submap[resize],Escape". Only the trigger fields are
-  // written; the action is set separately by parseAction. Returns false and
-  // leaves `output` default-constructed on any malformed input.
+  // Parse a chord such as "Mod+Shift+h", "Ctrl+Alt+Delete", "Mod+WheelUp", "Mod+MouseBack", or "submap[resize],Escape".
+  // Only the trigger fields are written; the action is set separately by parseAction. Returns false and leaves `output`
+  // default-constructed on any malformed input.
   bool parseChord(std::string_view chord, Keybind& output);
 
-  // Parse an action such as "window-close", "spawn:foot", "window-set-width:0.5",
-  // or "workspace-switch:2/DP-1", writing the action and its payload into
-  // `output` without touching the trigger fields.
+  // Parse an action such as "window-close", "spawn:foot", "window-set-width:0.5", or "workspace-switch:2/DP-1", writing
+  // the action and its payload into `output` without touching the trigger fields.
   bool parseAction(std::string_view value, Keybind& output);
 
   std::span<const ActionSpec> actionSpecs();

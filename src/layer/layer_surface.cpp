@@ -136,9 +136,8 @@ namespace umbriel {
       return;
     }
 
-    // End any keyboard grab (e.g. xdg_popup) that would intercept the enter and
-    // block focus from reaching this layer surface. Pointer/touch grabs remain
-    // intact so the popup stays visually mapped.
+    // End any keyboard grab (e.g. xdg_popup) that would intercept the enter and block focus from reaching this layer
+    // surface. Pointer/touch grabs remain intact so the popup stays visually mapped.
     wlr_seat_keyboard_end_grab(seat);
 
     // Give the layer seat keyboard focus so clients (e.g. Noctalia) receive Escape.

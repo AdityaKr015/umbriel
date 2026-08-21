@@ -28,12 +28,10 @@ namespace umbriel {
   class Workspace;
   class WorkspaceGroup;
 
-  // Zoomed-out view of every workspace on every output, arranged as
-  // one vertical filmstrip per output. Clients are never reconfigured: the real
-  // window trees are hidden and re-rendered as "cards", per-surface scene
-  // buffers sharing the client textures and scaled by the scene graph. The
-  // overview is also an editor (click to focus, middle-click to close, drag to
-  // relocate), so it owns pointer and keyboard input while open.
+  // Zoomed-out view of every workspace on every output, arranged as one vertical filmstrip per output. Clients are
+  // never reconfigured: the real window trees are hidden and re-rendered as "cards", per-surface scene buffers sharing
+  // the client textures and scaled by the scene graph. The overview is also an editor (click to focus, middle-click to
+  // close, drag to relocate), so it owns pointer and keyboard input while open.
   class Overview : public Animatable {
   public:
     explicit Overview(Server& server);
@@ -84,12 +82,10 @@ namespace umbriel {
     // Focus a neighboring column while keeping the overview card strip in
     // sync with the regular horizontal window animation.
     bool focusAdjacent(int direction);
-    // Step the active workspace `delta` rows down the filmstrip on `output`
-    // (null: wherever the pointer is). Returns false at either end. The wheel,
-    // the arrow keys and the three-finger swipe all arrive here: while the
-    // overview is up the real trees are hidden, so there is nothing to slide
-    // and switching is a discrete step rather than the animated transition it
-    // is outside.
+    // Step the active workspace `delta` rows down the filmstrip on `output` (null: wherever the pointer is). Returns
+    // false at either end. The wheel, the arrow keys and the three-finger swipe all arrive here: while the overview is
+    // up the real trees are hidden, so there is nothing to slide and switching is a discrete step rather than the
+    // animated transition it is outside.
     bool selectRelativeWorkspace(int delta, Output* output);
     [[nodiscard]] bool dragging() const { return m_dragCard != nullptr; }
 

@@ -661,11 +661,10 @@ namespace umbriel {
               .integer("hide_timeout", 0, 3600, in.cursor.hideTimeout);
         });
         s.sub("focus", [&](Section& f) {
-          // The limit is measured in viewport widths and the quantity it is
-          // compared against is unbounded: revealing a column three screens away
-          // is 3.0. The upper bound here is a nonsense-catcher, not a ceiling.
-          // Below zero would refuse focus even for a window already fully
-          // visible, which disables hover focus rather than limiting it.
+          // The limit is measured in viewport widths and the quantity it is compared against is unbounded: revealing a
+          // column three screens away is 3.0. The upper bound here is a nonsense-catcher, not a ceiling. Below zero
+          // would refuse focus even for a window already fully visible, which disables hover focus rather than limiting
+          // it.
           f.boolean("follows_mouse", in.focus.followsMouse)
               .real("follows_mouse_max_scroll", 0.0, kMaxFollowsMouseScroll, in.focus.followsMouseMaxScroll);
         });

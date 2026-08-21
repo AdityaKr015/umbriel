@@ -1,21 +1,13 @@
 #!/usr/bin/env bash
-# A reload that changes nothing does nothing; one that changes something applies
-# only that.
-#
-# Reload used to re-apply every subsystem unconditionally, which is visible: the
-# view loop clears every focus ring before refocus puts one back, so a no-op
-# reload flickers and can land focus somewhere else entirely. This asserts the
-# two halves of the fix -- that an unchanged file is inert, and that a changed
-# one still takes effect.
+# A reload that changes nothing does nothing; one that changes something applies only that. Reload used to re-apply every subsystem unconditionally, which is visible: the view loop clears every focus ring before refocus puts one back, so a no-op reload flickers and can land focus somewhere else entirely. This asserts the two halves of the fix, that an unchanged file is inert, and that a changed one still takes effect.
 set -euo pipefail
 readonly RECOVERY_ROOT="$UMBRIEL_CONFIG.recovery-root"
 readonly RECOVERY_INCLUDE="${UMBRIEL_CONFIG%/*}/reload-recovery.toml"
 
 CLIENT_PIDS=()
 cleanup() {
-  # Restore the config this check inherited, not the mutated one it leaves
-  # behind: later checks read UMBRIEL_CONFIG and would otherwise run with the
-  # gap=40 / border=12 test layout.
+  # Restore the config this check inherited, not the mutated one it leaves behind: later checks read UMBRIEL_CONFIG and would otherwise run with the gap=40 /
+  # border=12 test layout.
   if [[ -f $UMBRIEL_CONFIG.bak ]]; then
     cp "$UMBRIEL_CONFIG.bak" "$UMBRIEL_CONFIG"
     "$UMBRIEL" msg config-reload > /dev/null 2>&1 || true
@@ -80,8 +72,7 @@ if [[ $before != "$after" ]]; then
   exit 1
 fi
 
-# Window state alone cannot tell the two apart: re-applying everything lands on
-# the same geometry and refocuses the same window. What it cannot fake is the
+# Window state alone cannot tell the two apart: re-applying everything lands on the same geometry and refocuses the same window. What it cannot fake is the
 # reload reporting that it had nothing to do.
 if ! tail -n 20 "$UMBRIEL_LOG" | grep -q "config reloaded (sections: none; effects: none)"; then
   echo "a no-op reload reported work:"

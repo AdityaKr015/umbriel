@@ -85,13 +85,7 @@ _clang_tidy m=mode *args:
     tests_root="$(realpath tests)"
     run-clang-tidy -quiet -use-color -p "build-{{m}}" -j "$(nproc)" -header-filter='\.\./(src|tests)/.*' {{args}} "^(${src_root}|${tests_root})/.*"
 
-# Fail on any compiler warning emitted while building. clang-tidy does not
-# surface these: it reports its own check names, not the compiler's diagnostics.
-#
-# Compiles everything rather than only what changed. A warning is emitted when a
-# file is compiled, so an incremental build reports nothing for the files it
-# skipped -- which silently turns a gate into a coin flip. A dead function left
-# behind by an edit in another file is exactly the case that slips through.
+# Fail on any compiler warning emitted while building. clang-tidy does not surface these: it reports its own check names, not the compiler's diagnostics. Compiles everything rather than only what changed. A warning is emitted when a file is compiled, so an incremental build reports nothing for the files it skipped, which silently turns a gate into a coin flip. A dead function left behind by an edit in another file is exactly the case that slips through.
 _warnings m=mode: (_ensure-configured m)
     #!/usr/bin/env bash
     set -euo pipefail

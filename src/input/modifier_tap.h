@@ -10,9 +10,8 @@ namespace umbriel {
   // Include the modifier represented by the current press when matching.
   [[nodiscard]] bool modifierTapPressMatches(uint32_t modifiers, uint32_t pressedModifier, uint32_t expected);
 
-  // Tracks one seat-wide modifier-only bind from its press until release.
-  // The source identity keeps identical keycodes from different keyboards
-  // from completing each other's tap.
+  // Tracks one seat-wide modifier-only bind from its press until release. The source identity keeps identical keycodes
+  // from different keyboards from completing each other's tap.
   class ModifierTapState {
   public:
     // Every other key press invalidates the pending tap. Returns true when a

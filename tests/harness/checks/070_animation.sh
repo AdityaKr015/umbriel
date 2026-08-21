@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
-# Animated operations reach a steady state with the geometry the layout predicts.
-#
-# Every animated owner is driven from one registry, in a fixed phase order.
-# Nothing here can watch an animation mid-flight, but it can see the consequence
-# of one that never finishes: an owner dropped from the registry stops being
-# ticked, so its windows never stop moving or never reach their target. Closing a
-# window additionally exercises the fade-out snapshot, the one owner that
-# registers and unregisters at runtime.
-#
-# Absolute positions are asserted only where they are determined. Mid-strip the
-# scroll offset depends on which column has focus and on the neighbour peek, so
-# those steps assert size and spacing. Once two columns exactly fill the viewport
-# the offset has only one legal value, so the close step pins it.
+# Animated operations reach a steady state with the geometry the layout predicts. Every animated owner is driven from one registry, in a fixed phase order. Nothing here can watch an animation mid-flight, but it can see the consequence of one that never finishes: an owner dropped from the registry stops being ticked, so its windows never stop moving or never reach their target. Closing a window additionally exercises the fade-out snapshot, the one owner that registers and unregisters at runtime. Absolute positions are asserted only where they are determined. Mid-strip the scroll offset depends on which column has focus and on the neighbour peek, so those steps assert size and spacing. Once two columns exactly fill the viewport the offset has only one legal value, so the close step pins it.
 set -euo pipefail
 
 readonly EXPECT_W=624 # 0.5 fraction of the 1260 viewport, gap-aware
@@ -105,8 +93,7 @@ unset 'CLIENT_PIDS[-1]'
 wait_for_count 2
 assert_tiled_strip "after close" 2
 
-# Two 624 columns plus one gap are exactly the 1260 viewport, so maxScroll is 0
-# and the strip must sit flush at the left edge pad. Losing the re-anchor on
+# Two 624 columns plus one gap are exactly the 1260 viewport, so maxScroll is 0 and the strip must sit flush at the left edge pad. Losing the re-anchor on
 # removal leaves it scrolled, with a survivor cut off and empty space right.
 if [[ $settled != '[{"h":700,"w":624,"x":10},{"h":700,"w":624,"x":646}]' ]]; then
   echo "strip not re-anchored after close: $settled"

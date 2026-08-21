@@ -12,17 +12,12 @@
 
 namespace umbriel {
 
-  // Reads one table of a config file, remembering which keys it was asked for.
-  //
-  // The point of remembering is the unknown-key warning. Every section used to
-  // carry a hand-written list of its own key names beside the code that reads
-  // them, so adding a setting meant editing two places and forgetting one meant
-  // either a valid key was warned about or a typo was silently accepted. Here the
-  // list *is* the set of keys the reader asked for, so it cannot drift.
-  //
-  // The warning is emitted from the destructor, so a reader that returns early
-  // still reports. Diagnostics go to a caller-supplied vector rather than to a
-  // global, which is also what lets this be tested without a compositor.
+  // Reads one table of a config file, remembering which keys it was asked for. The point of remembering is the
+  // unknown-key warning. Every section used to carry a hand-written list of its own key names beside the code that
+  // reads them, so adding a setting meant editing two places and forgetting one meant either a valid key was warned
+  // about or a typo was silently accepted. Here the list *is* the set of keys the reader asked for, so it cannot drift.
+  // The warning is emitted from the destructor, so a reader that returns early still reports. Diagnostics go to a
+  // caller-supplied vector rather than to a global, which is also what lets this be tested without a compositor.
   class Section {
   public:
     Section(const toml::table& table, std::string name, std::vector<ConfigDiagnostic>& diagnostics);
@@ -33,9 +28,8 @@ namespace umbriel {
     Section(Section&&) = delete;
     Section& operator=(Section&&) = delete;
 
-    // Numbers are clamped into range, and clamping is reported: silently
-    // accepting a value the compositor will not honour is how a user ends up
-    // believing a setting does nothing.
+    // Numbers are clamped into range, and clamping is reported: silently accepting a value the compositor will not
+    // honour is how a user ends up believing a setting does nothing.
     Section& integer(std::string_view key, int minimum, int maximum, int& target);
     Section& integer(std::string_view key, int minimum, int maximum, std::optional<int>& target);
     Section& real(std::string_view key, double minimum, double maximum, double& target);
@@ -44,17 +38,15 @@ namespace umbriel {
     Section& boolean(std::string_view key, bool& target);
     Section& boolean(std::string_view key, std::optional<bool>& target);
     Section& color(std::string_view key, std::array<float, 4>& target);
-    // An array of non-empty strings. A single bad element rejects the whole
-    // array: a half-applied autostart list is worse than none, because the user
-    // cannot tell which entries ran.
+    // An array of non-empty strings. A single bad element rejects the whole array: a half-applied autostart list is
+    // worse than none, because the user cannot tell which entries ran.
     Section& strings(std::string_view key, std::vector<std::string>& target);
     // Every key in the table read as a string, for tables whose keys are
     // user-chosen names. Implies `freeform`.
     Section& eachString(std::vector<std::pair<std::string, std::string>>& target);
 
-    // Descend into a nested table, if it is there and is a table. `fn` takes a
-    // `Section&`. Taking a callback rather than returning a Section keeps this
-    // type immovable, which is what makes the destructor-based warning safe.
+    // Descend into a nested table, if it is there and is a table. `fn` takes a `Section&`. Taking a callback rather
+    // than returning a Section keeps this type immovable, which is what makes the destructor-based warning safe.
     template <typename F> Section& sub(std::string_view key, F&& fn) {
       const toml::table* nested = nestedTable(key);
       if (nested != nullptr) {
@@ -64,9 +56,8 @@ namespace umbriel {
       return *this;
     }
 
-    // Claim a key and hand back its raw node, for parsing that does not fit the
-    // shapes above. Preferred over `node` + `custom`: fetching is what marks the
-    // key known, so the two cannot come apart.
+    // Claim a key and hand back its raw node, for parsing that does not fit the shapes above. Preferred over `node` +
+    // `custom`: fetching is what marks the key known, so the two cannot come apart.
     [[nodiscard]] const toml::node* take(std::string_view key) { return claim(key); }
     // The raw node without claiming, when the key is claimed elsewhere.
     [[nodiscard]] const toml::node* node(std::string_view key) const { return m_table.get(key); }
@@ -94,12 +85,9 @@ namespace umbriel {
     bool m_freeform = false;
   };
 
-  // Read `name` from `table` if present. Warns and skips when the key exists but
-  // is not a table. Returns whether `fn` ran.
-  //
-  // `displayName` overrides how the section is named in diagnostics, for tables
-  // nested under a per-entry context (a workspace's own `layout` block reports as
-  // `workspace[2].layout`, not `layout`).
+  // Read `name` from `table` if present. Warns and skips when the key exists but is not a table. Returns whether `fn`
+  // ran. `displayName` overrides how the section is named in diagnostics, for tables nested under a per-entry context
+  // (a workspace's own `layout` block reports as `workspace[2].layout`, not `layout`).
   template <typename F>
   bool readSection(
       const toml::table& table, std::string_view name, std::vector<ConfigDiagnostic>& diagnostics, F&& fn,

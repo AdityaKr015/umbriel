@@ -1,11 +1,7 @@
-// Maps an xdg toplevel, then on a compositor close request unmaps it without
-// destroying the surface. The compositor therefore keeps the View registered
-// and unmapped, which is what makes this client useful: closing a window this
-// way never reaches Server::removeView, so any focus reassignment the
-// compositor performs must happen at unmap time, the same point a card
-// disappears from the overview.
-//
-// Prints "mapped" once the toplevel is up and "unmapped" once the close
+// Maps an xdg toplevel, then on a compositor close request unmaps it without destroying the surface. The compositor
+// therefore keeps the View registered and unmapped, which is what makes this client useful: closing a window this way
+// never reaches Server::removeView, so any focus reassignment the compositor performs must happen at unmap time, the
+// same point a card disappears from the overview. Prints "mapped" once the toplevel is up and "unmapped" once the close
 // request lands, then keeps the connection alive until the harness kills it.
 
 #include "xdg-shell-client-protocol.h"

@@ -56,8 +56,7 @@ namespace {
 
 } // namespace
 
-// ---- tree bookkeeping ----
-
+// tree bookkeeping
 UMBRIEL_TEST(firstLeafFillsTheUsableArea) {
   Fixture fixture;
   fixture.addLeaves(1);
@@ -87,10 +86,9 @@ UMBRIEL_TEST(insertIsIdempotentPerView) {
 }
 
 UMBRIEL_TEST(batchInsertWithoutArrangeKeepsEveryView) {
-  // Workspace::applyConfig creates a fresh layout and re-inserts every tiled
-  // view in a loop, arranging only afterwards. insertView locates its target
-  // leaf through the flat-column cache, so if a structural edit leaves that
-  // cache stale, every view after the first is silently dropped.
+  // Workspace::applyConfig creates a fresh layout and re-inserts every tiled view in a loop, arranging only afterwards.
+  // insertView locates its target leaf through the flat-column cache, so if a structural edit leaves that cache stale,
+  // every view after the first is silently dropped.
   Fixture fixture;
   for (int i = 0; i < 5; ++i) {
     fixture.layout.insertView(stub(i), static_cast<int>(fixture.layout.columns().size()));
@@ -105,9 +103,8 @@ UMBRIEL_TEST(batchInsertWithoutArrangeKeepsEveryView) {
 }
 
 UMBRIEL_TEST(swapOperationsRefreshTheColumnMapping) {
-  // consumeLeft, expelRight, moveViewVertical, and moveColumn reassign leaf
-  // views. The column mapping must be current straight afterwards, without
-  // waiting for the next arrange().
+  // consumeLeft, expelRight, moveViewVertical, and moveColumn reassign leaf views. The column mapping must be current
+  // straight afterwards, without waiting for the next arrange().
   Fixture fixture;
   fixture.addLeaves(2);
   const int first = fixture.layout.columnOf(stub(0));
@@ -168,8 +165,7 @@ UMBRIEL_TEST(removingAnUnknownViewIsHarmless) {
   CHECK_EQ(fixture.layout.columns().size(), size_t{2});
 }
 
-// ---- tiling geometry ----
-
+// tiling geometry
 UMBRIEL_TEST(twoLeavesSplitTheAreaWithoutOverlapping) {
   Fixture fixture;
   fixture.addLeaves(2);
@@ -254,8 +250,7 @@ UMBRIEL_TEST(arrangeOnAnEmptyTreeIsHarmless) {
   CHECK_EQ(fixture.layout.columns().size(), size_t{0});
 }
 
-// ---- initial sizing ----
-
+// initial sizing
 UMBRIEL_TEST(initialSizeFillsTheAreaForTheFirstLeaf) {
   Fixture fixture;
   const Layout::InitialSize initial = fixture.layout.initialSize(kUsable, std::nullopt);
@@ -286,8 +281,7 @@ UMBRIEL_TEST(initialSizeIgnoresARuleWidthFraction) {
   CHECK_EQ(fixture.layout.initialSize(kUsable, 1.0 / 3).width, fixture.layout.initialSize(kUsable, std::nullopt).width);
 }
 
-// ---- hit testing ----
-
+// hit testing
 UMBRIEL_TEST(leafIndexAtFindsTheLeafUnderAPoint) {
   Fixture fixture;
   fixture.addLeaves(2);
@@ -307,8 +301,7 @@ UMBRIEL_TEST(leafIndexAtMissesOutsideTheArea) {
   CHECK_EQ(fixture.layout.leafIndexAt(99999, 99999), -1);
 }
 
-// ---- resize boundaries ----
-
+// resize boundaries
 UMBRIEL_TEST(onlyInternalEdgesAreResizable) {
   Fixture fixture;
   fixture.addLeaves(2);
@@ -361,10 +354,9 @@ UMBRIEL_TEST(resizeBoundaryRejectsAScreenFacingEdge) {
   CHECK(!fixture.layout.setResizeBoundary(stub(0), WLR_EDGE_LEFT, 0.75));
 }
 
-// The scrolling-only API is no longer reachable from a DwindleLayout at all:
-// scroll offsets, column positions, and row weights moved onto ScrollingLayout,
-// so the question a previous test asked here ("does dwindle answer 0?") cannot
-// be compiled any more. That is the point. Callers reach those through
-// Workspace::scrollingLayout(), which is null for a dwindle workspace.
+// The scrolling-only API is no longer reachable from a DwindleLayout at all: scroll offsets, column positions, and row
+// weights moved onto ScrollingLayout, so the question a previous test asked here ("does dwindle answer 0?") cannot be
+// compiled any more. That is the point. Callers reach those through Workspace::scrollingLayout(), which is null for a
+// dwindle workspace.
 
 int main() { return RUN_TESTS(); }

@@ -111,8 +111,7 @@ if ! jq -e 'type == "array"' <<< "$windows" > /dev/null; then
   echo "windows --json is not an array: $windows"
   exit 1
 fi
-# Every window entry carries the identity fields noctalia joins on, with the
-# workspace id in the ext-workspace "<output>:<serial>" shape and a boolean
+# Every window entry carries the identity fields noctalia joins on, with the workspace id in the ext-workspace "<output>:<serial>" shape and a boolean
 # seat-global active flag distinct from the per-workspace focused flag.
 if ! jq -e '
   all(.[];

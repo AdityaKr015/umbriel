@@ -90,9 +90,8 @@ namespace umbriel {
       return;
     }
 
-    // New popups miss the parent's map/workspace-time scale notify; tell them
-    // the parent's output scale before the first configure so scale-aware
-    // clients (xwayland-satellite) size and map input correctly from frame one.
+    // New popups miss the parent's map/workspace-time scale notify; tell them the parent's output scale before the
+    // first configure so scale-aware clients (xwayland-satellite) size and map input correctly from frame one.
     Output* output = nullptr;
     if (LayerSurface* layer = layerSurfaceFromSurface(m_popup->parent)) {
       output = layer->output();

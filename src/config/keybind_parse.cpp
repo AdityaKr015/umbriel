@@ -1,10 +1,7 @@
 #include "config/keybind_parse.h"
 
+// <cmath> must precede the Wayland headers to avoid a libstdc++ 16 include-order failure.
 // clang-format off
-// <cmath> must come before the wayland/wlroots chain. wayland-util.h reaches
-// <cmath> through <math.h>, and libstdc++ 16's <bits/specfun.h> fails to
-// compile when it is first pulled in that way. config.cpp never hit this only
-// because config.h includes <regex>, which pulls <cmath> in first.
 #include <cmath>
 #include <linux/input-event-codes.h>
 #include <xkbcommon/xkbcommon.h>
@@ -424,9 +421,8 @@ namespace umbriel {
   std::vector<Keybind> defaultKeybinds() {
     std::vector<Keybind> keybinds;
     keybinds.reserve(60);
-    // Built by assignment rather than aggregate initialisation: the trigger and
-    // payload fields already carry default member initialisers, and naming every
-    // one of them just to satisfy -Wmissing-field-initializers is noise.
+    // Built by assignment rather than aggregate initialisation: the trigger and payload fields already carry default
+    // member initialisers, and naming every one of them just to satisfy -Wmissing-field-initializers is noise.
     auto add = [&keybinds](KeybindAction action, uint32_t keysym, uint32_t modifiers = 0) {
       Keybind bind;
       bind.modifiers = modifiers;

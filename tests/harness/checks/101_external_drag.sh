@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Opening the overview while a client owns a data-device drag must be refused.
-# Otherwise the overview consumes the physical button release, leaving wlroots'
+# Opening the overview while a client owns a data-device drag must be refused. Otherwise the overview consumes the physical button release, leaving wlroots'
 # pointer and keyboard drag grabs active indefinitely.
 set -euo pipefail
 
@@ -36,8 +35,7 @@ wayland_env=(
   WAYLAND_DISPLAY=wayland-0
 )
 
-# Ending a short drag without leaving its source surface must generate fresh
-# pointer input. Clients use that input to restore the hover cursor which they
+# Ending a short drag without leaving its source surface must generate fresh pointer input. Clients use that input to restore the hover cursor which they
 # replaced while dragging.
 "${wayland_env[@]}" "$DRAG_CLIENT" cursor-refresh > "$CLIENT_LOG" 2>&1 &
 DRAG_PID=$!

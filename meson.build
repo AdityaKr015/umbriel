@@ -34,9 +34,8 @@ cpp = meson.get_compiler('cpp')
 fs = import('fs')
 pkgconfig = find_program('pkg-config', required: false)
 
-# jemalloc keeps a long-running compositor's heap compact: fewer arenas and
-# fast page decay bound RSS. It interposes malloc only on glibc, so other libc
-# builds skip it (auto) or fail (enabled).
+# jemalloc keeps a long-running compositor's heap compact: fewer arenas and fast page decay bound RSS. It interposes malloc only on glibc, so other libc builds
+# skip it (auto) or fail (enabled).
 jemalloc_option = get_option('jemalloc')
 is_glibc = cpp.get_define('__GLIBC__', prefix: '#include <features.h>') != ''
 jemalloc_deps = []
@@ -179,11 +178,7 @@ virtual_keyboard_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
-# Logic with no dependency on the compositor: string parsing and layout geometry.
-# Built once and linked by both the compositor and the tests, so a test never
-# recompiles a translation unit and two tests cannot drift in what they cover.
-# Keep this list free of anything needing SceneFX, pango, or a running server;
-# that is what makes these tests cheap and the coverage honest.
+# Logic with no dependency on the compositor: string parsing and layout geometry. Built once and linked by both the compositor and the tests, so a test never recompiles a translation unit and two tests cannot drift in what they cover. Keep this list free of anything needing SceneFX, pango, or a running server; that is what makes these tests cheap and the coverage honest.
 pure_sources = files(
   'src/config/change.cpp',
   'src/config/resolve.cpp',
@@ -214,9 +209,8 @@ umbriel_pure_dep = declare_dependency(
   dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep, tomlplusplus_dep],
 )
 
-# The compositor itself. main.cpp is deliberately not here: everything lives in
-# a library so a test can link any of it without re-listing or recompiling
-# sources, and the executable is just an entry point.
+# The compositor itself. main.cpp is deliberately not here: everything lives in a library so a test can link any of it without re-listing or recompiling sources,
+# and the executable is just an entry point.
 core_sources = files(
   'src/core/animation.cpp',
   'src/core/fdlimit.cpp',
@@ -290,8 +284,7 @@ umbriel_core = static_library(
   dependencies: umbriel_core_deps,
 )
 
-# A test over compositor code links this and nothing else. It is far heavier than
-# umbriel_pure_dep (SceneFX, pango, cairo), so prefer the pure layer wherever the
+# A test over compositor code links this and nothing else. It is far heavier than umbriel_pure_dep (SceneFX, pango, cairo), so prefer the pure layer wherever the
 # code under test allows it.
 umbriel_core_dep = declare_dependency(
   link_with: umbriel_core,
@@ -307,8 +300,7 @@ umbriel = executable(
   install: true,
 )
 
-# Unit tests. Each entry is [name, test sources, extra dependencies]. Every test
-# gets umbriel_pure_dep; add umbriel_core_dep to the third field for a test that
+# Unit tests. Each entry is [name, test sources, extra dependencies]. Every test gets umbriel_pure_dep; add umbriel_core_dep to the third field for a test that
 # needs compositor code. Either way a test never lists or recompiles a source.
 unit_tests = [
   ['output-clip', ['tests/output_clip.cpp'], []],
@@ -328,9 +320,8 @@ unit_tests = [
   ['config-resolve', ['tests/config_resolve.cpp'], []],
 ]
 
-# Harness helper, not a unit test: drives virtual pointer and modifier input
-# against a running compositor. The headless backend has no input devices, so
-# protocol input is the only way to exercise pointer hit-testing and grabs.
+# Harness helper, not a unit test: drives virtual pointer and modifier input against a running compositor. The headless backend has no input devices, so protocol
+# input is the only way to exercise pointer hit-testing and grabs.
 executable(
   'pointer-client',
   [

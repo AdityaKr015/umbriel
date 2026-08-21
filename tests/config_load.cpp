@@ -260,9 +260,8 @@ UMBRIEL_TEST(missingIncludesRemainPendingUntilTheyLoad) {
 }
 
 UMBRIEL_TEST(mainFileOverridesIncludedFiles) {
-  // Noctalia's rendered theme lands in an include file; the user's root
-  // config must win on conflicts while still picking up keys the include
-  // alone provides. This is what lets users override generated theme colors.
+  // Noctalia's rendered theme lands in an include file; the user's root config must win on conflicts while still
+  // picking up keys the include alone provides. This is what lets users override generated theme colors.
   const TempConfig file;
   file.write(
       R"(

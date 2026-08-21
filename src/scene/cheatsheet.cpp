@@ -60,14 +60,12 @@ namespace {
   constexpr int kBodyFooterGap = 12;
   constexpr int kColumnMaxWidth = 600;
   constexpr int kMaxColumns = 4;
-  // Body font sizes, largest first. Dropping a point costs legibility on every
-  // line, so it is a last resort: only reached once every column count has been
-  // tried and the panel still does not fit. 9 is the floor because below it the
-  // chord pills stop being readable at arm's length, which is the whole job.
+  // Body font sizes, largest first. Dropping a point costs legibility on every line, so it is a last resort: only
+  // reached once every column count has been tried and the panel still does not fit. 9 is the floor because below it
+  // the chord pills stop being readable at arm's length, which is the whole job.
   constexpr int kFontSizes[] = {11, 10, 9};
 
-  // --- Chord reconstruction helpers ---
-
+  // Chord reconstruction helpers
   // Escape text for Pango markup.
   std::string escape(const std::string& text) {
     gchar* escaped = g_markup_escape_text(text.c_str(), -1);
@@ -89,9 +87,8 @@ namespace {
     std::string text; // Pango markup for the full line (header or row)
   };
 
-  // A group header, preceded by a blank spacer unless it opens the list. The
-  // spacer carries the upcoming group's id because a column break happens
-  // before it, never between it and its header.
+  // A group header, preceded by a blank spacer unless it opens the list. The spacer carries the upcoming group's id
+  // because a column break happens before it, never between it and its header.
   void
   pushHeader(std::vector<DisplayLine>& lines, int groupId, std::string_view title, const CheatsheetPalette& palette) {
     if (!lines.empty()) {
@@ -126,9 +123,8 @@ namespace {
     };
   }
 
-  // Apps: binaries bound once render as flat rows here; a binary bound to
-  // several distinct commands is promoted to its own top-level section so its
-  // variants read as a set. Advances `groupId` for each section it opens.
+  // Apps: binaries bound once render as flat rows here; a binary bound to several distinct commands is promoted to its
+  // own top-level section so its variants read as a set. Advances `groupId` for each section it opens.
   void pushAppsRows(
       std::vector<DisplayLine>& lines, int& groupId, const std::vector<const CheatsheetRow*>& groupRows,
       size_t maxChordLen, const CheatsheetPalette& palette
@@ -195,9 +191,8 @@ namespace {
     }
   }
 
-  // Rows become Pango markup lines under their group headers. Lines sharing a
-  // group value are never split across columns, so a header cannot be stranded
-  // at the foot of one.
+  // Rows become Pango markup lines under their group headers. Lines sharing a group value are never split across
+  // columns, so a header cannot be stranded at the foot of one.
   std::vector<DisplayLine> buildDisplayLines(
       const std::vector<umbriel::CheatsheetRow>& rows, const std::vector<std::string>& submapOrder,
       const CheatsheetPalette& palette
@@ -264,11 +259,9 @@ namespace {
     return lines;
   }
 
-  // Pack the lines into `numCols` columns of markup, breaking only between groups.
-  // A run of lines that has to stay together: one group, plus the blank spacer
-  // that precedes it. A group broken across a column break reads as two
-  // unrelated fragments, so these are the atoms and the only freedom in the
-  // layout is where the breaks between them go.
+  // Pack the lines into `numCols` columns of markup, breaking only between groups. A run of lines that has to stay
+  // together: one group, plus the blank spacer that precedes it. A group broken across a column break reads as two
+  // unrelated fragments, so these are the atoms and the only freedom in the layout is where the breaks between them go.
   struct Block {
     int begin = 0;
     int size = 0;
@@ -309,9 +302,8 @@ namespace {
       }
       for (int i = block.begin; i < block.begin + block.size; ++i) {
         const std::string& text = allLines[static_cast<size_t>(i)].text;
-        // The spacer before a group is there to separate it from the group
-        // above. At the top of a column there is nothing above, and keeping it
-        // would indent that column's first heading below its neighbours'.
+        // The spacer before a group is there to separate it from the group above. At the top of a column there is
+        // nothing above, and keeping it would indent that column's first heading below its neighbours'.
         if (markup.empty() && text.empty()) {
           continue;
         }
@@ -406,27 +398,17 @@ namespace {
     }
   }
 
-  // Rasterise the body, adding columns until the panel fits.
-  //
-  // The two bounds pull opposite ways: another column is always shorter and
-  // always wider. The height bound is what makes the loop advance, the width
-  // bound is what stops it, and the answer is the narrowest arrangement that
-  // clears both. Shrinking the font is the outer, later lever, because it costs
-  // legibility everywhere while a column costs only width. Buffers from a
-  // rejected attempt are dropped rather than leaked.
-  //
-  // Checking width at all is the point. This used to bound height only, and its
-  // remedy for an overflowing panel was to add a column -- which is the very
-  // thing that makes it too wide. On a 1080p screen at scale 1.25 that walked
-  // out to four columns and 1862 logical pixels across an output 1536 wide, and
-  // the panel was then centred to a negative x, putting the first column off
-  // the left edge.
-  //
-  // A loop rather than the single retry this replaces, which gave up after one
-  // widening and returned the overflowing result anyway. It starts at one
-  // column instead of guessing from a lines-per-column constant that knew
-  // nothing about the output: the guess cost a rasterisation when it was wrong
-  // in either direction, and being wrong low was silently unrecoverable.
+  // Rasterise the body, adding columns until the panel fits. The two bounds pull opposite ways: another column is
+  // always shorter and always wider. The height bound is what makes the loop advance, the width bound is what stops it,
+  // and the answer is the narrowest arrangement that clears both. Shrinking the font is the outer, later lever, because
+  // it costs legibility everywhere while a column costs only width. Buffers from a rejected attempt are dropped rather
+  // than leaked. Checking width at all is the point. This used to bound height only, and its remedy for an overflowing
+  // panel was to add a column, which is the very thing that makes it too wide. On a 1080p screen at scale 1.25 that
+  // walked out to four columns and 1862 logical pixels across an output 1536 wide, and the panel was then centred to a
+  // negative x, putting the first column off the left edge. A loop rather than the single retry this replaces, which
+  // gave up after one widening and returned the overflowing result anyway. It starts at one column instead of guessing
+  // from a lines-per-column constant that knew nothing about the output: the guess cost a rasterisation when it was
+  // wrong in either direction, and being wrong low was silently unrecoverable.
   int bodyWidth(const std::vector<umbriel::TextBufferResult>& columns) {
     int width = 0;
     for (size_t i = 0; i < columns.size(); ++i) {
@@ -532,7 +514,7 @@ namespace umbriel {
 
     m_tree = wlr_scene_tree_create(m_parent);
 
-    // --- Output info ---
+    // Read the preferred output's geometry.
     wlr_output* output = m_server.preferredOutput();
     double scale = 1.0;
     wlr_box outputBox{};
@@ -546,7 +528,6 @@ namespace umbriel {
     std::vector<CheatsheetRow> rows = buildCheatsheetRows(config().keybinds);
     const CheatsheetPalette palette = makeCheatsheetPalette(config().colors);
 
-    // --- Step 2: Group rows ---
     // Collect submaps in first-seen order.
     std::vector<std::string> submapOrder;
     for (const auto& row : rows) {
@@ -559,7 +540,7 @@ namespace umbriel {
 
     auto allLines = buildDisplayLines(rows, submapOrder, palette);
 
-    // --- Handle empty bind list ---
+    // Provide a placeholder for an empty bind list.
     if (allLines.empty()) {
       allLines.push_back({
           .isHeader = false,
@@ -567,9 +548,6 @@ namespace umbriel {
       });
     }
 
-    // --- Step 4: Column layout ---
-
-    // --- Step 5: Header/footer buffers ---
     Chrome chrome = renderChrome(configFileMissing(), m_server.modKeyName(), scale, palette);
     TextBufferResult& titleBuf = chrome.title;
     TextBufferResult& footerBuf = chrome.footer;
@@ -584,7 +562,7 @@ namespace umbriel {
     FittedBody body = fitBody(allLines, scale, chromeHeight, maxPanelHeight, maxBodyWidth);
     auto& colBufs = body.columns;
 
-    // --- Step 6: Panel assembly ---
+    // Assemble the panel.
     int totalColW = 0;
     for (size_t i = 0; i < colBufs.size(); ++i) {
       totalColW += colBufs[i].logicalWidth;
@@ -639,11 +617,10 @@ namespace umbriel {
 
     // Position: centered on preferred output.
     if (haveOutput) {
-      // Clamped, not just centred. A panel taller or wider than the output
-      // centres to a negative offset, which pushes the title off the top edge
-      // and the footer off the bottom with no way to reach either. Pinning the
-      // top-left corner instead keeps the beginning of the list readable, which
-      // is the part worth keeping when something has to be lost.
+      // Clamped, not just centred. A panel taller or wider than the output centres to a negative offset, which pushes
+      // the title off the top edge and the footer off the bottom with no way to reach either. Pinning the top-left
+      // corner instead keeps the beginning of the list readable, which is the part worth keeping when something has to
+      // be lost.
       const int x = outputBox.x + std::max(0, (outputBox.width - panelW) / 2);
       const int y = outputBox.y + std::max(0, (outputBox.height - panelH) / 2);
       wlr_scene_node_set_position(&m_tree->node, x, y);

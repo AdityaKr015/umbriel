@@ -15,9 +15,8 @@ namespace {
     int payload = 42;
   };
 
-  // Stands in for View, which also inherits a polymorphic base. That base takes
-  // offset 0 for its vptr, so the SceneNode subobject does NOT start at the
-  // address of the object.
+  // Stands in for View, which also inherits a polymorphic base. That base takes offset 0 for its vptr, so the SceneNode
+  // subobject does NOT start at the address of the object.
   struct PolymorphicBase {
     virtual ~PolymorphicBase() = default;
     virtual void anything() = 0;
@@ -82,10 +81,9 @@ UMBRIEL_TEST(magicIsTheFirstMemberSoTheGuardReadsIt) {
 }
 
 UMBRIEL_TEST(sceneNodeDataRoundTripsThroughAPolymorphicDerivedClass) {
-  // The regression this file previously missed. View gained a second,
-  // polymorphic base, which moved its SceneNode subobject off offset 0. Storing
-  // a raw `this` then made sceneNodeFrom read the vptr as `magic`, reject every
-  // window, and take pointer hit-testing (click to focus, drag, resize) with it.
+  // The regression this file previously missed. View gained a second, polymorphic base, which moved its SceneNode
+  // subobject off offset 0. Storing a raw `this` then made sceneNodeFrom read the vptr as `magic`, reject every window,
+  // and take pointer hit-testing (click to focus, drag, resize) with it.
   TaggedPolymorphicNode node(SceneNodeKind::View);
 
   // The premise: the object does not begin with its SceneNode subobject.

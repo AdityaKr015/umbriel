@@ -16,27 +16,18 @@ namespace umbriel {
 
   struct ResolvedWindowRule;
 
-  // Everything drawn around a view's surface: the inner border ring, the outer
-  // ring, the blur sampled behind the surface, and the drop shadow.
-  //
-  // The shadow is deliberately not a child of the view's tree. It lives in the
-  // workspace's shadow layer so it renders under every window rather than only
-  // under its own, which is why it needs its own container node and its own
-  // position updates whenever the view moves.
-  //
-  // This class holds no reference back to its View. Everything that varies per
-  // view (content size, corner radius, fade alpha, focus) arrives as an
-  // argument, because those are questions only the View can answer (a fullscreen
-  // window keeps its border tree but draws square, and a size animation presents
-  // a size the committed geometry has not caught up with yet). Appearance
-  // settings are read from the config directly, as the other scene classes do.
+  // Everything drawn around a view's surface: the inner border ring, the outer ring, the blur sampled behind the
+  // surface, and the drop shadow. The shadow is deliberately not a child of the view's tree. It lives in the
+  // workspace's shadow layer so it renders under every window rather than only under its own, which is why it needs its
+  // own container node and its own position updates whenever the view moves. This class holds no reference back to its
+  // View. Everything that varies per view (content size, corner radius, fade alpha, focus) arrives as an argument,
+  // because those are questions only the View can answer (a fullscreen window keeps its border tree but draws square,
+  // and a size animation presents a size the committed geometry has not caught up with yet). Appearance settings are
+  // read from the config directly, as the other scene classes do.
   class ViewDecoration {
   public:
-    // --- Borders ---
-
-    // Idempotent: the ring is created once and then reused, because destroying
-    // and rebuilding it on every fullscreen toggle would drop the scene node
-    // ordering that keeps the inner ring above the outer one.
+    // The ring is reused so fullscreen toggles preserve scene-node ordering that
+    // keeps the inner ring above the outer one.
     void ensureBorders(wlr_scene_tree* parent);
     // True while the ring exists and is showing. Fullscreen disables the tree
     // rather than destroying it, so existence alone does not answer this.
@@ -45,9 +36,8 @@ namespace umbriel {
     void updateBorderGeometry(int contentWidth, int contentHeight);
     // `alpha` premultiplies the border color so a fading view's ring fades with it.
     void setBorderColor(bool focused, bool scratchpad, float alpha);
-    // Trim the ring to the part of `outputBox` it occupies, for a view straddling
-    // two outputs. Corners on a trimmed side are squared off so the ring does not
-    // appear to round at the cut.
+    // Trim the ring to the part of `outputBox` it occupies, for a view straddling two outputs. Corners on a trimmed
+    // side are squared off so the ring does not appear to round at the cut.
     void clipBorders(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight);
     // True when the drawn ring no longer matches the given content size, i.e. a
     // client commit changed geometry behind the layout's back.
@@ -58,8 +48,7 @@ namespace umbriel {
         wlr_scene_tree* snapshot, bool focused, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>>& out
     ) const;
 
-    // --- Blur ---
-
+    // Blur
     [[nodiscard]] SurfaceBlurOptions blurOptions() const { return m_blurOptions; }
     [[nodiscard]] SurfaceBlurOptions popupBlurOptions() const { return m_popupBlurOptions; }
     void applyRule(const ResolvedWindowRule& rule);
@@ -69,8 +58,7 @@ namespace umbriel {
     );
     void hideBlur();
 
-    // --- Shadow ---
-
+    // Shadow
     // Pass a null layer to tear the shadow down (the view left every workspace).
     void reparentShadow(wlr_scene_tree* layer, int x, int y, bool enabled);
     void setShadowPosition(int x, int y);

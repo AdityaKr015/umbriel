@@ -243,9 +243,8 @@ namespace umbriel {
     wlr_ext_output_image_capture_source_manager_v1_create(m_display, 1);
     wlr_ext_image_copy_capture_manager_v1_create(m_display, 1);
 
-    // Create the manager so apply/test listeners stay wired, but leave heads empty
-    // (see updateOutputManagerConfig). Advertising a full configuration on bind
-    // currently takes down the desktop shell from this flake.
+    // Create the manager so apply/test listeners stay wired, but leave heads empty (see updateOutputManagerConfig).
+    // Advertising a full configuration on bind currently takes down the desktop shell from this flake.
     m_outputManager = wlr_output_manager_v1_create(m_display);
     m_outputManagerApply.notify = onOutputManagerApply;
     wl_signal_add(&m_outputManager->events.apply, &m_outputManagerApply);
@@ -335,9 +334,8 @@ namespace umbriel {
       }
     }
     wl_display_destroy_clients(m_display);
-    // Chrome components destroy scene nodes in their destructors, so they must
-    // go before the scene tree does; otherwise the destructor body frees the
-    // nodes and the member destructors touch already-freed memory.
+    // Chrome components destroy scene nodes in their destructors, so they must go before the scene tree does; otherwise
+    // the destructor body frees the nodes and the member destructors touch already-freed memory.
     m_quitConfirm.reset();
     m_cheatsheet.reset();
     m_configBanner.reset();
@@ -361,9 +359,8 @@ namespace umbriel {
       return false;
     }
 
-    // These are delivered through the event loop, not a signal handler, so the
-    // shutdown path is ordinary code. Note the side effect: wl_event_loop_add_signal
-    // blocks the signal process-wide, and a blocked mask survives fork and exec,
+    // These are delivered through the event loop, not a signal handler, so the shutdown path is ordinary code. Note the
+    // side effect: wl_event_loop_add_signal blocks the signal process-wide, and a blocked mask survives fork and exec,
     // so every fork below must clear it before handing off to a child.
     wl_event_loop* loop = wl_display_get_event_loop(m_display);
     m_signalSources[0] = wl_event_loop_add_signal(loop, SIGINT, onTerminateSignal, this);
@@ -629,11 +626,10 @@ namespace umbriel {
     m_lastAnimTickMsec = nowMsec;
 
     bool active = false;
-    // Iterate a copy so a registration during the pass cannot invalidate the
-    // walk. Nothing unregisters mid-pass: snapshots are reaped below rather than
-    // from their own tick, and no owner destroys another. The phase order is
-    // what makes that hold, since finishing the overview calls focusView, which
-    // reorders the view registry after every view has already ticked.
+    // Iterate a copy so a registration during the pass cannot invalidate the walk. Nothing unregisters mid-pass:
+    // snapshots are reaped below rather than from their own tick, and no owner destroys another. The phase order is
+    // what makes that hold, since finishing the overview calls focusView, which reorders the view registry after every
+    // view has already ticked.
     const std::vector<Animatable*> owners = m_animatables;
     for (Animatable* owner : owners) {
       active = owner->tickAnimations(nowMsec) || active;

@@ -1,12 +1,9 @@
 #pragma once
 
-// Cheatsheet content, independent of how it is drawn.
-//
-// Turning the configured keybinds into display rows is where the interesting
-// logic lives: merging binds that share an action, marking repeats with a ditto,
-// splitting a spawn command into binary and arguments, and collapsing the
-// per-digit workspace binds into one row. None of that needs pango, cairo, or a
-// running compositor, so it lives here and is tested directly.
+// Cheatsheet content, independent of how it is drawn. Turning the configured keybinds into display rows is where the
+// interesting logic lives: merging binds that share an action, marking repeats with a ditto, splitting a spawn command
+// into binary and arguments, and collapsing the per-digit workspace binds into one row. None of that needs pango,
+// cairo, or a running compositor, so it lives here and is tested directly.
 
 #include "config/keybind_parse.h"
 
@@ -16,26 +13,19 @@
 
 namespace umbriel {
 
-  // ---- Column packing ----
-  //
-  // The cheatsheet body is a list of lines split into columns. Groups stay
-  // whole: a group broken across a column break reads as two unrelated
-  // fragments. So the atoms are runs of lines -- one group plus the blank
-  // spacer before it -- and the only freedom is where the breaks between them
-  // go. Pure integer arithmetic over the run lengths, so it is tested directly
-  // rather than inferred from a rendered panel.
+  // Column packing: The cheatsheet body is a list of lines split into columns. Groups stay whole: a group broken across
+  // a column break reads as two unrelated fragments. So the atoms are runs of lines, one group plus the blank spacer
+  // before it, and the only freedom is where the breaks between them go. Pure integer arithmetic over the run lengths,
+  // so it is tested directly rather than inferred from a rendered panel.
 
-  // Columns a greedy fill needs when none may exceed `limit` lines. Greedy is
-  // optimal: filling each column as far as it goes can never need more columns
-  // than holding back would.
+  // Columns a greedy fill needs when none may exceed `limit` lines. Greedy is optimal: filling each column as far as it
+  // goes can never need more columns than holding back would.
   [[nodiscard]] int columnsNeededFor(std::span<const int> blockSizes, int limit);
 
-  // The shortest the tallest column can be, given `numCols` of them.
-  //
-  // Binary search on the answer. The column count a limit requires only falls
-  // as the limit rises, so the smallest limit that still fits in `numCols` is
-  // the true optimum, not a heuristic. The lower bound is the largest single
-  // block, since no column can be shorter than a group it has to hold whole.
+  // The shortest the tallest column can be, given `numCols` of them. Binary search on the answer. The column count a
+  // limit requires only falls as the limit rises, so the smallest limit that still fits in `numCols` is the true
+  // optimum, not a heuristic. The lower bound is the largest single block, since no column can be shorter than a group
+  // it has to hold whole.
   [[nodiscard]] int balancedColumnHeight(std::span<const int> blockSizes, int numCols);
 
   struct CheatsheetRow {
@@ -64,9 +54,8 @@ namespace umbriel {
     SubmapBase = 100, // submaps start here
   };
 
-  // Plain text, not markup. The caller escapes it for pango; a title that
-  // arrived pre-escaped would be escaped a second time and the entity would
-  // show up on screen, which is what "Move &amp; size" used to do.
+  // Plain text, not markup. The caller escapes it for pango; a title that arrived pre-escaped would be escaped a second
+  // time and the entity would show up on screen, which is what "Move &amp; size" used to do.
   [[nodiscard]] const char* groupTitle(Group group);
   [[nodiscard]] Group groupForAction(KeybindAction action);
 

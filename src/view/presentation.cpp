@@ -11,8 +11,7 @@
 
 namespace umbriel {
 
-  // --- Presented size ---
-
+  // Presented size
   void ViewPresentation::setSize(int width, int height) {
     m_width = width;
     m_height = height;
@@ -26,8 +25,7 @@ namespace umbriel {
     m_height = height;
   }
 
-  // --- Size animation ---
-
+  // Size animation
   bool ViewPresentation::targeting(int width, int height) const {
     return animating() && width == static_cast<int>(m_animW.target()) && height == static_cast<int>(m_animH.target());
   }
@@ -55,8 +53,7 @@ namespace umbriel {
     return true;
   }
 
-  // --- Fullscreen ---
-
+  // Fullscreen
   void ViewPresentation::createBackdrop(wlr_scene_tree* parent) {
     m_backdrop = wlr_scene_rect_create(parent, 0, 0, config().appearance.backdropColor.data());
     wlr_scene_rect_set_corner_radius(m_backdrop, 0);
@@ -110,8 +107,7 @@ namespace umbriel {
     }
   }
 
-  // --- Buffer crop ---
-
+  // Buffer crop
   void ViewPresentation::applyCrop(
       wlr_scene_tree* tree, wlr_surface* surface, const wlr_box& geometry, const wlr_box& content,
       const wlr_box& surfaceClip

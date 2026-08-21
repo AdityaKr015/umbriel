@@ -103,10 +103,9 @@ namespace umbriel {
     if (columnIsFullscreen(column, *this)) {
       return std::max(1, viewportWidth);
     }
-    // Gap-aware: reserve one inter-column gap per column so N columns whose
-    // fractions sum to 1 tile exactly across the viewport (viewport already
-    // excludes edgePad on both sides). Solving Σw + (N-1)g = V with w = p*(V+g) - g
-    // gives Σw = V - (N-1)g, which the (N-1) inter-column gaps fill.
+    // Gap-aware: reserve one inter-column gap per column so N columns whose fractions sum to 1 tile exactly across the
+    // viewport (viewport already excludes edgePad on both sides). Solving Σw + (N-1)g = V with w = p*(V+g) - g gives Σw
+    // = V - (N-1)g, which the (N-1) inter-column gaps fill.
     const int gap = m_config->totalGap;
     int width = static_cast<int>(std::lround(column.widthFrac * (viewportWidth + gap) - gap));
     width = std::max(width, columnMinWidthPx(column, *this));
@@ -331,10 +330,9 @@ namespace umbriel {
       return m_scroll;
     }
 
-    // Move by the shortest distance that reveals the whole column. A column
-    // entering from the right lands flush against the right edge, while one
-    // entering from the left lands flush against the left edge. Do not reserve
-    // space for a neighboring sliver after focus has moved.
+    // Move by the shortest distance that reveals the whole column. A column entering from the right lands flush against
+    // the right edge, while one entering from the left lands flush against the left edge. Do not reserve space for a
+    // neighboring sliver after focus has moved.
     const double scroll = std::clamp(m_scroll, static_cast<double>(x + width - viewportWidth), static_cast<double>(x));
     const double max = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
     return std::clamp(scroll, 0.0, max);
@@ -560,8 +558,7 @@ namespace umbriel {
     return m_columns[static_cast<size_t>(columnIndex)].bottomGapWeight;
   }
 
-  // ---- Interactive resize ----
-
+  // Interactive resize
   namespace {
 
     // Layout-owned resize session. Holds the state captured at grab start and
@@ -637,9 +634,8 @@ namespace umbriel {
         };
 
         if ((m_edges & WLR_EDGE_RIGHT) != 0) {
-          // While the strip fits, its center stays fixed: changing a boundary
-          // width by two pointer pixels moves the outer edge by one. Past the
-          // viewport boundary, the strip grows normally at one pixel per pixel.
+          // While the strip fits, its center stays fixed: changing a boundary width by two pointer pixels moves the
+          // outer edge by one. Past the viewport boundary, the strip grows normally at one pixel per pixel.
           const double widthDelta = centerUnderfullStrip ? centeredWidthDelta(dx) : dx;
           const int newWidth = std::clamp(
               m_startWidthPx + static_cast<int>(std::lround(widthDelta)), columnMinWidth(m_column),

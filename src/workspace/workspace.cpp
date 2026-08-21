@@ -29,9 +29,8 @@ namespace umbriel {
 
     constexpr uint32_t kGroupCaps = EXT_WORKSPACE_GROUP_HANDLE_V1_GROUP_CAPABILITIES_CREATE_WORKSPACE;
 
-    // The bridge between the layout's opaque View identity and the client state
-    // it needs to size that view. Workspace owns both sides, so it owns the
-    // lookup; layout/ stays free of view/ and its geometry stays testable.
+    // The bridge between the layout's opaque View identity and the client state it needs to size that view. Workspace
+    // owns both sides, so it owns the lookup; layout/ stays free of view/ and its geometry stays testable.
     LayoutConstraints viewLayoutConstraints(const View* view) {
       const wlr_xdg_toplevel* toplevel = view != nullptr ? view->toplevel() : nullptr;
       const XdgSizeHints hints = xdgSizeHints(toplevel);
@@ -206,9 +205,8 @@ namespace umbriel {
           wlr_output_layout_get_box(m_group->server()->outputLayout(), m_group->output()->wlr(), &usable);
         }
         if (usable.width > 0 && usable.height > 0) {
-          // Removal changes both column indices and the scrolling offset. Refresh
-          // layout targets before deciding which survivor now occupies a
-          // stationary pointer; the scene nodes catch up on the next frame.
+          // Removal changes both column indices and the scrolling offset. Refresh layout targets before deciding which
+          // survivor now occupies a stationary pointer; the scene nodes catch up on the next frame.
           m_layout->arrange(usable);
           for (View* candidate : m_views) {
             if (candidate == nullptr || !candidate->mapped() || !candidate->tiled()) {
@@ -234,10 +232,9 @@ namespace umbriel {
       }
       m_focusedView = replacement;
     }
-    // Re-anchor the strip on whatever is focused now, the way every other
-    // focus-moving operation does. Activating an adjacent column and fitting
-    // the view prevents the old scroll offset from leaving a survivor cut off
-    // at the left edge while empty space opens on the right.
+    // Re-anchor the strip on whatever is focused now, the way every other focus-moving operation does. Activating an
+    // adjacent column and fitting the view prevents the old scroll offset from leaving a survivor cut off at the left
+    // edge while empty space opens on the right.
     ensureFocusedVisible();
     markArrange();
     if (reconcile) {
@@ -262,13 +259,10 @@ namespace umbriel {
 
   void Workspace::layoutDetach(View* view, bool animate) {
     detachFromLayout(view);
-    // The column just left the strip, so the old offset can now point past the
-    // end: a survivor stays cut off at the left edge while empty space opens on
-    // the right. Clamping re-anchors the remaining columns after removal while
-    // leaving the offset alone if the strip is still longer than the viewport.
-    //
-    // Deliberately not inside arrange(): a touchpad swipe overscrolls on
-    // purpose, and it arranges on every frame of the gesture.
+    // The column just left the strip, so the old offset can now point past the end: a survivor stays cut off at the
+    // left edge while empty space opens on the right. Clamping re-anchors the remaining columns after removal while
+    // leaving the offset alone if the strip is still longer than the viewport. Deliberately not inside arrange(): a
+    // touchpad swipe overscrolls on purpose, and it arranges on every frame of the gesture.
     clampScrollToRange();
     markArrange(animate);
   }
@@ -301,12 +295,10 @@ namespace umbriel {
   }
 
   void Workspace::markArrange(bool animate) {
-    // Last mark wins. The pairing that settles this is a touchpad scroll: every
-    // motion marks unanimated, and the release that snaps to the nearest column
-    // marks animated, often in the same frame as the last motion. Letting the
-    // unanimated mark win would teleport the strip at the end of every swipe.
-    // The opposite mistake -- an animated mark landing mid-drag -- costs one
-    // tween on a frame where something unrelated also changed the layout.
+    // Last mark wins. The pairing that settles this is a touchpad scroll: every motion marks unanimated, and the
+    // release that snaps to the nearest column marks animated, often in the same frame as the last motion. Letting the
+    // unanimated mark win would teleport the strip at the end of every swipe. The opposite mistake, an animated mark
+    // landing mid-drag, costs one tween on a frame where something unrelated also changed the layout.
     m_arrangeAnimate = animate;
     m_arrangePending = true;
     if (m_group != nullptr && m_group->output() != nullptr) {
@@ -321,14 +313,12 @@ namespace umbriel {
   }
 
   void Workspace::arrange(bool animate) {
-    // Clearing here, rather than only in flushArrange, is what makes mixing the
-    // two safe: a direct arrange() satisfies whatever was marked earlier in the
-    // frame, so the flush does not repeat it.
+    // Clearing here, rather than only in flushArrange, is what makes mixing the two safe: a direct arrange() satisfies
+    // whatever was marked earlier in the frame, so the flush does not repeat it.
     m_arrangePending = false;
-    // Layout math and client configures must run even for hidden workspaces:
-    // clients (games especially) change fullscreen state while another
-    // workspace is active, and skipping the configure here leaves them with a
-    // stale size (fullscreen at tile size, windowed at output size, ...).
+    // Layout math and client configures must run even for hidden workspaces: clients (games especially) change
+    // fullscreen state while another workspace is active, and skipping the configure here leaves them with a stale size
+    // (fullscreen at tile size, windowed at output size, ...).
     if (m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
@@ -342,9 +332,8 @@ namespace umbriel {
     }
 
     m_layout->arrange(usable);
-    // The map-time IPC event can fire before this arrange runs, leaving the
-    // previous window positions in the listing. Re-emit now that the layout
-    // boxes are settled; the event coalescer caps this at one per frame.
+    // The map-time IPC event can fire before this arrange runs, leaving the previous window positions in the listing.
+    // Re-emit now that the layout boxes are settled; the event coalescer caps this at one per frame.
     m_group->server()->scheduleIpcWindowsEvent();
     for (View* view : m_views) {
       if (view == nullptr || !view->mapped() || !view->tiled()) {
@@ -376,9 +365,8 @@ namespace umbriel {
       const auto& scheduled = view->toplevel()->scheduled;
       if (scheduled.width != width || scheduled.height != height) {
         wlr_xdg_toplevel_set_size(view->toplevel(), width, height);
-        // Start the presentation animation when the compositor changes the
-        // assigned size. Client geometry can differ from a stable configure,
-        // notably with Chromium CSD, and must not replay the resize on focus.
+        // Start the presentation animation when the compositor changes the assigned size. Client geometry can differ
+        // from a stable configure, notably with Chromium CSD, and must not replay the resize on focus.
         if (animate) {
           view->beginResizeAnimation(width, height);
         }
@@ -414,10 +402,9 @@ namespace umbriel {
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
 
-    // Clip against the node's CURRENT position, not the layout target: during
-    // position animations (column swaps, drag drops) the node lags the target,
-    // and clips computed at the target land displaced on screen (cut-off
-    // borders that reappear as the window settles).
+    // Clip against the node's CURRENT position, not the layout target: during position animations (column swaps, drag
+    // drops) the node lags the target, and clips computed at the target land displaced on screen (cut-off borders that
+    // reappear as the window settles).
     const wlr_scene_node& node = view->sceneTree()->node;
     const int border = config().appearance.totalBorderWidth();
     const auto grow = [border](const wlr_box& box, int width, int height) {
@@ -664,11 +651,9 @@ namespace umbriel {
         continue;
       }
       view->setOnActiveWorkspace(m_active);
-      // Persistent resting state: an inactive workspace keeps its nodes disabled
-      // so the shared scene never renders them on any output. Active (and
-      // in-transition) views are enabled + clipped to their home output by
-      // syncViewPresentation (arrange / slide), which replaces the old
-      // per-render-pass enable/disable.
+      // Persistent resting state: an inactive workspace keeps its nodes disabled so the shared scene never renders them
+      // on any output. Active (and in-transition) views are enabled + clipped to their home output by
+      // syncViewPresentation (arrange / slide), which replaces the old per-render-pass enable/disable.
       if (!m_active && !m_inSwitchTransition) {
         view->setNodeEnabled(false);
       }
@@ -713,11 +698,10 @@ namespace umbriel {
   }
 
   void Workspace::endSwitchTransition() {
-    // Refresh every view at its resting position while transition visibility is
-    // still active. Once m_inSwitchTransition is cleared, an inactive workspace
-    // deliberately skips presentation sync and could retain an off-surface clip
-    // from the final slide frame. Its border tree would then reappear without
-    // window content the next time the workspace becomes visible.
+    // Refresh every view at its resting position while transition visibility is still active. Once m_inSwitchTransition
+    // is cleared, an inactive workspace deliberately skips presentation sync and could retain an off-surface clip from
+    // the final slide frame. Its border tree would then reappear without window content the next time the workspace
+    // becomes visible.
     setSlideOffset(0);
     m_inSwitchTransition = false;
     for (View* view : m_switchViews) {
@@ -727,9 +711,9 @@ namespace umbriel {
       }
     }
     m_switchViews.clear();
-    // setSlideOffset() refreshes visibility and clips, but it does not move tiled
-    // scene nodes to their authoritative horizontal strip positions. Reconcile
-    // after an interrupted switch so a fullscreen column cannot remain off-screen.
+    // setSlideOffset() refreshes visibility and clips, but it does not move tiled scene nodes to their
+    // authoritative horizontal strip positions. Reconcile after an interrupted switch so a fullscreen column cannot
+    // remain off-screen.
     if (m_active) {
       markArrange(false);
     }
@@ -993,9 +977,8 @@ namespace umbriel {
   }
 
   void WorkspaceGroup::flushArrange() {
-    // Indexed, and the bound re-read every step: arrange() reaches the overview
-    // and the view animations, and a workspace list that grows or shrinks under
-    // an iterator would be a use-after-free rather than a missed arrange.
+    // Indexed, and the bound re-read every step: arrange() reaches the overview and the view animations, and a
+    // workspace list that grows or shrinks under an iterator would be a use-after-free rather than a missed arrange.
     for (size_t index = 0; index < m_workspaces.size(); ++index) { // NOLINT(modernize-loop-convert)
       m_workspaces[index]->flushArrange();
     }
@@ -1006,10 +989,9 @@ namespace umbriel {
       return;
     }
 
-    // Dynamic groups keep exactly one empty workspace. Prefer an empty active
-    // workspace so closing its last window does not destroy the workspace the
-    // user is currently viewing; otherwise retain the last existing empty one
-    // to avoid replacing its protocol identity on every reconciliation.
+    // Dynamic groups keep exactly one empty workspace. Prefer an empty active workspace so closing its last window does
+    // not destroy the workspace the user is currently viewing; otherwise retain the last existing empty one to avoid
+    // replacing its protocol identity on every reconciliation.
     Workspace* emptyKeeper = m_active != nullptr && !m_active->hasViews() ? m_active : nullptr;
     if (emptyKeeper == nullptr && !m_workspaces.empty() && !m_workspaces.back()->hasViews()) {
       emptyKeeper = m_workspaces.back().get();

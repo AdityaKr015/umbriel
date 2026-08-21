@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
-# Workspace selectors resolve, and bad ones report a useful error.
-#
-# The selector logic is the densest branch in the action dispatch: qualified
-# `<workspace>/<output>` addresses one group, an unqualified numeric selector
-# prefers the focused output's dynamic group, and an unqualified name falls back
-# to a unique match anywhere before failing. The failure paths carry the
-# messages users actually see, so they are asserted by text, not just by status.
+# Workspace selectors resolve, and bad ones report a useful error. The selector logic is the densest branch in the action dispatch: qualified `<workspace>/<output>` addresses one group, an unqualified numeric selector prefers the focused output's dynamic group, and an unqualified name falls back to a unique match anywhere before failing. The failure paths carry the messages users actually see, so they are asserted by text, not just by status.
 set -euo pipefail
 
 accepts() {

@@ -397,12 +397,10 @@ namespace umbriel {
     }
   }
 
-  // Slow tick that keeps hidden-workspace toplevels driving their game/network
-  // loops (see kBackgroundFrameIntervalMs). wlr_scene_output_send_frame_done
-  // walks only enabled scene nodes, so a view whose workspace has been
-  // deactivated stops receiving wl_surface.frame callbacks entirely; any
-  // client that gates advance-work on the callback stalls until it is shown
-  // again.
+  // Slow tick that keeps hidden-workspace toplevels driving their game/network loops (see kBackgroundFrameIntervalMs).
+  // wlr_scene_output_send_frame_done walks only enabled scene nodes, so a view whose workspace has been deactivated
+  // stops receiving wl_surface.frame callbacks entirely; any client that gates advance-work on the callback stalls
+  // until it is shown again.
   int Server::onBackgroundFrameTimer(void* data) {
     auto* self = static_cast<Server*>(data);
     timespec now{};
@@ -427,11 +425,10 @@ namespace umbriel {
     return 0;
   }
 
-  // Fires when the underlying GL context is invalidated (GPU reset, VRAM lost after suspend,
-  // driver-detected hang). Without this, the renderer keeps issuing GL calls into a dead
-  // context: Mesa's context_lost_nop_handler no-ops each one and spams "[GLES2]
-  // GL_CONTEXT_LOST in context lost" ~40k lines/sec, and the desktop never comes back.
-  // Rebuild the renderer and rebind everything.
+  // Fires when the underlying GL context is invalidated (GPU reset, VRAM lost after suspend, driver-detected hang).
+  // Without this, the renderer keeps issuing GL calls into a dead context: Mesa's context_lost_nop_handler no-ops each
+  // one and spams "[GLES2] GL_CONTEXT_LOST in context lost" ~40k lines/sec, and the desktop never comes back. Rebuild
+  // the renderer and rebind everything.
   void Server::onRendererLost(wl_listener* listener, void* /*data*/) {
     Server* self;
     self = wl_container_of(listener, self, m_rendererLost);
@@ -588,11 +585,10 @@ namespace umbriel {
     device->destroy.notify = onVirtualPointerDestroy;
     wl_resource_add_destroy_listener(vpointer->resource, &device->destroy);
 
-    // Attach to the cursor exactly like a physical pointer (see addPointer), so
-    // a virtual pointer runs the same Cursor pipeline: hover, click-to-focus,
-    // mouse binds, and interactive move and resize. Hand-wiring these signals
-    // instead only warped the cursor and forwarded buttons to the seat, so a
-    // virtual pointer could move the cursor but never focus or drag anything.
+    // Attach to the cursor exactly like a physical pointer (see addPointer), so a virtual pointer runs the same Cursor
+    // pipeline: hover, click-to-focus, mouse binds, and interactive move and resize. Hand-wiring these signals instead
+    // only warped the cursor and forwarded buttons to the seat, so a virtual pointer could move the cursor but never
+    // focus or drag anything.
     self->m_cursor->attachInputDevice(&vpointer->pointer.base);
 
     self->m_virtualPointers.push_back(std::move(device));
@@ -1270,9 +1266,8 @@ namespace umbriel {
       unregisterAnimatable(snap.get());
       return true;
     });
-    // wlroots 0.20 does not track output lifetime for layer surfaces, so
-    // their wlr_output pointer would dangle once the output is freed.
-    // Destroy them now while the wlr_output is still valid.
+    // wlroots 0.20 does not track output lifetime for layer surfaces, so their wlr_output pointer would dangle once the
+    // output is freed. Destroy them now while the wlr_output is still valid.
     {
       wlr_output* dying = output->wlr();
       std::vector<wlr_layer_surface_v1*> toClose;
@@ -1416,9 +1411,8 @@ namespace umbriel {
   }
 
   void Server::applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly) {
-    // Reject disabling outputs: the protocol commit would bypass the layout
-    // and scene handling that Output::applyOutputState does for the config
-    // `enabled` key, leaving the monitor off but still on the desktop.
+    // Reject disabling outputs: the protocol commit would bypass the layout and scene handling that
+    // Output::applyOutputState does for the config `enabled` key, leaving the monitor off but still on the desktop.
     wlr_output_configuration_head_v1* head = nullptr;
     wl_list_for_each(head, &config->heads, link) {
       if (!head->state.enabled) {

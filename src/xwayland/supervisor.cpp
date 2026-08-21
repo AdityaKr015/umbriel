@@ -40,12 +40,10 @@ namespace umbriel {
       return;
     }
 
-    // Claim a display number by finding one nobody has taken. This is a
-    // check-then-use race by construction: another compositor starting at the
-    // same instant can take the same slot between the test and satellite's bind.
-    // Left alone deliberately: the socket is xwayland-satellite's to create, so
-    // it owns the decision, and losing the race costs a respawn rather than
-    // corrupting anything.
+    // Claim a display number by finding one nobody has taken. This is a check-then-use race by construction: another
+    // compositor starting at the same instant can take the same slot between the test and satellite's bind. Left alone
+    // deliberately: the socket is xwayland-satellite's to create, so it owns the decision, and losing the race costs a
+    // respawn rather than corrupting anything.
     for (int n = 0; n < kMaxDisplay; ++n) {
       const std::string num = std::to_string(n);
       if (std::filesystem::exists("/tmp/.X11-unix/X" + num) || std::filesystem::exists("/tmp/.X" + num + "-lock")) {

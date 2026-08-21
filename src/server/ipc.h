@@ -16,9 +16,8 @@ namespace umbriel {
 
   class Ipc {
   public:
-    // One bit per subscribable event name; the subscribe request ORs the bits
-    // it asked for into the connection. Keep the names below in sync with the
-    // event builders in ipc.cpp.
+    // One bit per subscribable event name; the subscribe request ORs the bits it asked for into the connection. Keep
+    // the names below in sync with the event builders in ipc.cpp.
     enum : uint8_t {
       kEventTheme = 1 << 0,
       kEventOverview = 1 << 1,

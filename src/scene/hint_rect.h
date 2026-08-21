@@ -16,9 +16,8 @@ namespace umbriel {
   class Output;
   class Server;
 
-  // Animated drop-target indicator: a rounded rect that fades in on appear,
-  // morphs between target boxes, and fades out on hide. Alpha and geometry are
-  // written only from tickAnimations (plus snap points), never ad hoc.
+  // Animated drop-target indicator: a rounded rect that fades in on appear, morphs between target boxes, and fades out
+  // on hide. Alpha and geometry are written only from tickAnimations (plus snap points), never ad hoc.
   class HintRect : public Animatable {
   public:
     HintRect(Server& server, wlr_scene_tree* parent);

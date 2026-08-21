@@ -147,9 +147,8 @@ UMBRIEL_TEST(spawnsWithDifferentCommandsDoNotMerge) {
 }
 
 UMBRIEL_TEST(perDigitWorkspaceBindsCollapseToOneRow) {
-  // The defaults bind workspaces 1-9 on both the number row and the keypad.
-  // Eighteen rows of near-identical text would swamp the sheet, so they
-  // collapse to a single "1…9" row.
+  // The defaults bind workspaces 1-9 on both the number row and the keypad. Eighteen rows of near-identical text would
+  // swamp the sheet, so they collapse to a single "1…9" row.
   std::vector<Keybind> binds;
   for (int i = 0; i < 9; ++i) {
     const auto digit = static_cast<uint32_t>(XKB_KEY_1 + i);
@@ -194,9 +193,8 @@ UMBRIEL_TEST(submapBindsCarryTheirSubmap) {
 }
 
 UMBRIEL_TEST(groupTitlesArePlainTextNotMarkup) {
-  // This layer is content; escaping belongs to whatever draws it. A title
-  // carrying its own entities gets escaped a second time and the reader sees
-  // the entity: "Move &amp; size" was rendered exactly like that.
+  // This layer is content; escaping belongs to whatever draws it. A title carrying its own entities gets escaped a
+  // second time and the reader sees the entity: "Move &amp; size" was rendered exactly like that.
   for (int i = 0; i < 32; ++i) {
     const char* title = umbriel::groupTitle(static_cast<umbriel::Group>(i));
     if (title == nullptr) {
@@ -220,11 +218,8 @@ UMBRIEL_TEST(everyActionMapsToAGroupWithATitle) {
   }
 }
 
-// ---- column packing ----
-//
-// Groups are indivisible, so the panel is as tall as the tallest column and the
-// only lever is where the breaks fall. These pin that the split is the best one
-// available rather than a plausible one.
+// column packing: Groups are indivisible, so the panel is as tall as the tallest column and the only lever is where the
+// breaks fall. These pin that the split is the best one available rather than a plausible one.
 
 UMBRIEL_TEST(oneColumnHoldsEverything) {
   const std::vector<int> blocks{4, 9, 2};
@@ -244,9 +239,8 @@ UMBRIEL_TEST(noColumnIsShorterThanItsLargestGroup) {
 }
 
 UMBRIEL_TEST(aShortGroupLetsItsNeighbourShareTheColumn) {
-  // The naive lineCount/numCols target is 22/2 = 11, and snapping back to a
-  // group boundary would cut the first column at 10 and leave 12 in the second.
-  // Packing 10 + 2 together is better, and is what this must find.
+  // The naive lineCount/numCols target is 22/2 = 11, and snapping back to a group boundary would cut the first column
+  // at 10 and leave 12 in the second. Packing 10 + 2 together is better, and is what this must find.
   const std::vector<int> blocks{10, 2, 10};
   CHECK_EQ(umbriel::balancedColumnHeight(blocks, 2), 12);
 }

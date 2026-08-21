@@ -135,9 +135,7 @@ namespace {
     return result;
   }
 
-  // --- Action label ---
-
-  // Decompose a spawn command into binary basename and args for compact display.
+  // Decompose a spawn command into a basename and arguments for compact display.
   // IPC pattern "<binary> msg <args>" collapses the "msg" boilerplate.
   struct SpawnParts {
     std::string binary; // basename of the executable
@@ -241,8 +239,7 @@ namespace {
     return "unknown";
   }
 
-  // --- Row data ---
-
+  // Row data
   const char* groupTitleImpl(Group group) {
     switch (group) {
     case Group::Apps:
@@ -396,9 +393,8 @@ namespace umbriel {
 
   std::vector<CheatsheetRow> buildCheatsheetRows(std::span<const Keybind> keybinds) {
 
-    // Collect rows, merging keybinds with identical action into one group.
-    // Each group becomes multiple display rows: first shows the action,
-    // subsequent rows show the chord with a dim ditto mark.
+    // Collect rows, merging keybinds with identical action into one group. Each group becomes multiple display rows:
+    // first shows the action, subsequent rows show the chord with a dim ditto mark.
     struct RawRow {
       std::vector<std::string> chords;
       std::string actionStr;
@@ -483,9 +479,8 @@ namespace umbriel {
       }
     }
 
-    // --- Collapse workspace digit runs ---
-    // For each (submap, action in {WorkspaceSwitch, WindowMoveToWorkspace}, modifiers, useMod),
-    // check if digits 1..9 are present with workspaceName == digit. If so, collapse them.
+    // Collapse workspace digit runs: For each (submap, action in {WorkspaceSwitch, WindowMoveToWorkspace}, modifiers,
+    // useMod), check if digits 1..9 are present with workspaceName == digit. If so, collapse them.
     auto collapseWorkspaceRuns = [&](KeybindAction wsAction) {
       struct RunKey {
         std::string submap;

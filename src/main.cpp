@@ -92,10 +92,9 @@ namespace {
 } // namespace
 
 #ifdef UMBRIEL_USE_JEMALLOC
-// Read by jemalloc before its first allocation. Few arenas and fast dirty/muzzy
-// decay bound fragmentation and return freed pages to the OS promptly. The
-// background thread runs decay even while the compositor is idle, otherwise
-// pages freed by a burst would wait for the next allocation to be returned.
+// Read by jemalloc before its first allocation. Few arenas and fast dirty/muzzy decay bound fragmentation and return
+// freed pages to the OS promptly. The background thread runs decay even while the compositor is idle, otherwise pages
+// freed by a burst would wait for the next allocation to be returned.
 const char* malloc_conf = "background_thread:true,narenas:2,dirty_decay_ms:1000,muzzy_decay_ms:5000,lg_tcache_max:12";
 
 #define UMBRIEL_STRINGIFY_HELPER(x) #x
@@ -246,9 +245,8 @@ int main(int argc, char** argv) {
     umbriel::loadConfig(configPath);
     umbriel::Server server;
 
-    // SIGINT and SIGTERM are handled on the event loop by the server itself.
-    // SIG_IGN for SIGCHLD reaps spawned children without a handler; every fork
-    // in Server restores the default before exec.
+    // SIGINT and SIGTERM are handled on the event loop by the server itself. SIG_IGN for SIGCHLD reaps spawned children
+    // without a handler; every fork in Server restores the default before exec.
     std::signal(SIGCHLD, SIG_IGN);
 
     if (!server.start(startupCmd)) {
@@ -256,9 +254,8 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
 
-    // Startup allocates heavily (config, scene tree, xwayland, banners) and
-    // none of that peak is needed once the session is up. Purge the excess
-    // pages so steady-state RSS tracks what the session actually uses.
+    // Startup allocates heavily (config, scene tree, xwayland, banners) and none of that peak is needed once the
+    // session is up. Purge the excess pages so steady-state RSS tracks what the session actually uses.
 #ifdef UMBRIEL_USE_JEMALLOC
     // Log the effective configuration once so a wrong malloc_conf shows up in
     // the startup log instead of silently degrading allocator behavior.

@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
-# Boots a contained headless Umbriel, runs the checks in checks/, tears it down,
-# and asserts the compositor exited cleanly.
-#
-# Containment matters. A stock Umbriel start runs its built-in autostarts, and
-# `dbus-update-activation-environment --systemd` would repoint the *caller's*
-# session-wide WAYLAND_DISPLAY and UMBRIEL_SOCKET at this throwaway instance.
-# Unsetting DBUS_SESSION_BUS_ADDRESS makes both autostarts fail harmlessly.
-#
-# Usage: verify.sh <path-to-umbriel-binary> [check-name-filter]
+# Boots a contained headless Umbriel, runs the checks in checks/, tears it down, and asserts the compositor exited cleanly. Containment matters. A stock Umbriel start runs its built-in autostarts, and `dbus-update-activation-environment --systemd` would repoint the *caller's* session-wide WAYLAND_DISPLAY and UMBRIEL_SOCKET at this throwaway instance. Unsetting DBUS_SESSION_BUS_ADDRESS makes both autostarts fail harmlessly. Usage: verify.sh <path-to-umbriel-binary> [check-name-filter]
 
 set -euo pipefail
 
@@ -21,9 +13,8 @@ fi
 BINARY=$(realpath "$BINARY")
 HARNESS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# sockaddr_un caps paths at 108 bytes and the compositor appends
-# "/umbriel-wayland-0.sock" (23) to XDG_RUNTIME_DIR, so keep the root short.
-# A long path makes wl_display_add_socket fail and the boot abort.
+# sockaddr_un caps paths at 108 bytes and the compositor appends "/umbriel-wayland-0.sock" (23) to XDG_RUNTIME_DIR, so keep the root short. A long path makes
+# wl_display_add_socket fail and the boot abort.
 RUNTIME_DIR=$(mktemp -d /tmp/umv.XXXXXXXX)
 LOG=$RUNTIME_DIR/compositor.log
 CONFIG=$RUNTIME_DIR/config.toml
@@ -105,12 +96,7 @@ if [[ $ran -eq 0 ]]; then
   exit 1
 fi
 
-# Clean shutdown is itself a check: a listener still attached to a wlroots object
-# at teardown trips an assert and the process dies on SIGABRT (exit 134) after
-# having already logged "shutting down".
-# Keep one incomplete IPC connection registered through teardown. Completed
-# connections were exercised by the checks above; both lifecycle paths must
-# leave no event source or descriptor behind.
+# Clean shutdown is itself a check: a listener still attached to a wlroots object at teardown trips an assert and the process dies on SIGABRT (exit 134) after having already logged "shutting down". Keep one incomplete IPC connection registered through teardown. Completed connections were exercised by the checks above; both lifecycle paths must leave no event source or descriptor behind.
 IPC_READY=$RUNTIME_DIR/ipc-idle-ready
 python3 - "$UMBRIEL_SOCKET" "$IPC_READY" <<'PY' &
 import pathlib

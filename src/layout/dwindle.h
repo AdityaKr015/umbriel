@@ -56,9 +56,8 @@ namespace umbriel {
     // WLR edge (0 = default/automatic orientation, new view last).
     void insertViewSplitOnView(View* newView, View* targetView, uint32_t edge);
 
-    // Interactive resize: which edges of the view border an internal split
-    // (screen-facing edges are excluded), the current ratio/pixel span of the
-    // boundary behind an edge, and a setter for that boundary ratio.
+    // Interactive resize: which edges of the view border an internal split (screen-facing edges are excluded), the
+    // current ratio/pixel span of the boundary behind an edge, and a setter for that boundary ratio.
     [[nodiscard]] uint32_t resizableEdges(const View* view) const;
     [[nodiscard]] bool resizeBoundary(const View* view, uint32_t edge, double* outRatio, double* outSpan) const;
     bool setResizeBoundary(View* view, uint32_t edge, double ratio);
@@ -101,10 +100,9 @@ namespace umbriel {
     [[nodiscard]] Node* boundaryNode(const View* view, uint32_t edge) const;
     void arrangeNode(Node* node, const wlr_box& area);
     void collectColumns(const Node* node);
-    // Refreshes the flat-column cache. Every operation that changes the tree or
-    // reassigns a leaf's view must call this before returning: insertView reads
-    // the cache to locate its target leaf, so a caller that inserts twice with
-    // no arrange() in between would otherwise silently drop the second view.
+    // Refreshes the flat-column cache. Every operation that changes the tree or reassigns a leaf's view must call this
+    // before returning: insertView reads the cache to locate its target leaf, so a caller that inserts twice with no
+    // arrange() in between would otherwise silently drop the second view.
     void rebuildFlatColumns();
     void detachNode(Node* node);
 

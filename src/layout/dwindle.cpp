@@ -289,8 +289,7 @@ namespace umbriel {
     collectColumns(m_root.get());
   }
 
-  // ---- Public Layout interface ----
-
+  // Public Layout interface
   int DwindleLayout::columnOf(const View* view) const {
     for (size_t i = 0; i < m_flatColumns.size(); ++i) {
       if (!m_flatColumns[i].views.empty() && m_flatColumns[i].views[0] == view) {
@@ -434,10 +433,9 @@ namespace umbriel {
   Layout::InitialSize
   DwindleLayout::initialSize(const wlr_box& usable, std::optional<double> /*ruleWidthFraction*/) const {
     const wlr_box content = contentArea(usable);
-    // A window rule's default_width is a viewport fraction, which a splitting
-    // layout has no use for. The first leaf owns the whole area; any later one
-    // lands in a split of the target leaf, and half is the closest guess before
-    // the target is known.
+    // A window rule's default_width is a viewport fraction, which a splitting layout has no use for. The first leaf
+    // owns the whole area; any later one lands in a split of the target leaf, and half is the closest guess before the
+    // target is known.
     if (m_flatColumns.empty()) {
       return {.width = content.width, .height = content.height};
     }
@@ -564,8 +562,7 @@ namespace umbriel {
     return fraction;
   }
 
-  // ---- Drag-and-drop directional insertion ----
-
+  // Drag-and-drop directional insertion
   void DwindleLayout::insertViewSplitOnView(View* newView, View* targetView, uint32_t edge) {
     if (newView == nullptr || findNode(newView) != nullptr) {
       return;
@@ -585,8 +582,7 @@ namespace umbriel {
     rebuildFlatColumns();
   }
 
-  // ---- Interactive resize ----
-
+  // Interactive resize
   DwindleLayout::Node* DwindleLayout::boundaryNode(const View* view, uint32_t edge) const {
     Node* node = findNode(view);
     if (node == nullptr) {

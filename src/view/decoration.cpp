@@ -10,8 +10,7 @@
 
 namespace umbriel {
 
-  // --- Borders ---
-
+  // Borders
   void ViewDecoration::ensureBorders(wlr_scene_tree* parent) {
     if (m_borderTree != nullptr) {
       return;
@@ -157,8 +156,7 @@ namespace umbriel {
     }
   }
 
-  // --- Blur ---
-
+  // Blur
   void ViewDecoration::applyRule(const ResolvedWindowRule& rule) {
     m_blurOptions = SurfaceBlurOptions{
         .ignoreAlpha = static_cast<float>(rule.blurIgnoreAlpha.value_or(0.0)),
@@ -182,8 +180,7 @@ namespace umbriel {
 
   void ViewDecoration::hideBlur() { m_blur.hide(); }
 
-  // --- Shadow ---
-
+  // Shadow
   void ViewDecoration::reparentShadow(wlr_scene_tree* layer, int x, int y, bool enabled) {
     if (layer == nullptr) {
       m_shadow.reset();

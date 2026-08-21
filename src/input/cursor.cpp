@@ -30,9 +30,8 @@ namespace umbriel {
   namespace {
     constexpr Logger kLog("cursor");
 
-    // Panels (top/overlay) keep working inside the overview. Wallpaper and
-    // bottom-layer widgets are part of the inert desktop behind the filmstrip,
-    // so their clicks belong to the overview instead.
+    // Panels (top/overlay) keep working inside the overview. Wallpaper and bottom-layer widgets are part of the inert
+    // desktop behind the filmstrip, so their clicks belong to the overview instead.
     bool overviewPassthroughLayer(const LayerSurface* layer) {
       if (layer == nullptr) {
         return false;
@@ -553,17 +552,15 @@ namespace umbriel {
       }
     }
 
-    // Config mouse binds win over the overview and the built-in Mod+drag /
-    // Mod+resize grabs. Presses consumed here swallow their paired release so
-    // clients never see an unmatched release.
+    // Config mouse binds win over the overview and the built-in Mod+drag / Mod+resize grabs. Presses consumed here
+    // swallow their paired release so clients never see an unmatched release.
     if (state == WL_POINTER_BUTTON_STATE_PRESSED && !m_server->sessionLocked() && isPassthrough()) {
       wlr_keyboard* kb = wlr_seat_get_keyboard(m_server->seat()->wlr());
       const uint32_t modifiers = kb != nullptr ? wlr_keyboard_get_modifiers(kb) : 0;
       const Keybind* bound = m_server->handleMouseBind(button, modifiers);
-      // Any press dismisses the cheatsheet, as any key press does, except one
-      // that just ran a cheatsheet action. Unlike a key press, an unbound press
-      // is consumed: the overlay hides whatever sits under the cursor, so the
-      // click that dismisses it must not also reach that surface.
+      // Any press dismisses the cheatsheet, as any key press does, except one that just ran a cheatsheet action. Unlike
+      // a key press, an unbound press is consumed: the overlay hides whatever sits under the cursor, so the click that
+      // dismisses it must not also reach that surface.
       if (Cheatsheet* sheet = m_server->cheatsheet();
           sheet != nullptr && sheet->visible() && !(bound != nullptr && isCheatsheetAction(bound->action))) {
         sheet->hide();
@@ -581,9 +578,8 @@ namespace umbriel {
       return;
     }
 
-    // A client data-device drag owns the seat grab. Its initiating release must
-    // reach wlroots even when the drag began from a panel over the overview.
-    // Otherwise the drag icon and both input grabs remain active indefinitely.
+    // A client data-device drag owns the seat grab. Its initiating release must reach wlroots even when the drag began
+    // from a panel over the overview. Otherwise the drag icon and both input grabs remain active indefinitely.
     if (wlr_seat* seat = m_server->seat()->wlr(); seat->drag != nullptr) {
       wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
       if (seat->drag == nullptr) {
@@ -594,9 +590,8 @@ namespace umbriel {
       return;
     }
 
-    // Overview owns the pointer while it is up: cards are its own hit-test
-    // surface and the desktop underneath is inert. Top/overlay layer surfaces
-    // (panels) stay fully interactive.
+    // Overview owns the pointer while it is up: cards are its own hit-test surface and the desktop underneath is inert.
+    // Top/overlay layer surfaces (panels) stay fully interactive.
     if (Overview* overview = m_server->overview();
         overview != nullptr && overview->active() && !m_server->sessionLocked()) {
       const bool pressed = state == WL_POINTER_BUTTON_STATE_PRESSED;
@@ -611,9 +606,8 @@ namespace umbriel {
           wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
         }
         wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
-        // The popup's xdg-shell grab already owns focus. Refocusing its parent
-        // layer would end the keyboard grab, whose wlroots cancel handler also
-        // ends the pointer grab before the menu receives the matching release.
+        // The popup's xdg-shell grab already owns focus. Refocusing its parent layer would end the keyboard grab, whose
+        // wlroots cancel handler also ends the pointer grab before the menu receives the matching release.
         if (pressed && !isXdgPopupSurface(surface)) {
           layer->focus();
         }
@@ -648,11 +642,9 @@ namespace umbriel {
       }
       wlr_seat_pointer_notify_button(m_server->seat()->wlr(), timeMsec, button, state);
 
-      // After the final release, refresh pointer focus so it matches the
-      // surface actually under the cursor.  The implicit-grab guard in
-      // processMotion kept focus pinned while buttons were held; realign
-      // now so a subsequent press without intervening motion targets the
-      // correct surface.
+      // After the final release, refresh pointer focus so it matches the surface actually under the cursor. The
+      // implicit-grab guard in processMotion kept focus pinned while buttons were held; realign now so a subsequent
+      // press without intervening motion targets the correct surface.
       if (m_server->seat()->wlr()->pointer_state.button_count == 0) {
         double sx2 = 0;
         double sy2 = 0;
@@ -753,9 +745,8 @@ namespace umbriel {
       eventDir = rawDelta < 0 ? WheelDirection::Left : WheelDirection::Right;
     }
 
-    // Unmodified scrolling drives the overview filmstrip instead of the inert
-    // desktop under the cursor. Panels (top/overlay) keep their own scrolling,
-    // and modifier chords still fall through to the wheel binds below.
+    // Unmodified scrolling drives the overview filmstrip instead of the inert desktop under the cursor. Panels
+    // (top/overlay) keep their own scrolling, and modifier chords still fall through to the wheel binds below.
     if (Overview* overview = m_server->overview(); overview != nullptr && overview->active() && effective == 0) {
       double sx = 0;
       double sy = 0;
@@ -1036,10 +1027,9 @@ namespace umbriel {
     if (seat->drag == nullptr
         && seat->pointer_state.button_count > 0
         && seat->pointer_state.focused_surface != nullptr) {
-      // Keep an implicit grab in the coordinate space established by the
-      // press. Re-resolving against the scene would turn compositor-driven
-      // window animation into apparent pointer travel and make small clicks
-      // look like client drags.
+      // Keep an implicit grab in the coordinate space established by the press. Re-resolving against the scene
+      // would turn compositor-driven window animation into apparent pointer travel and make small clicks look like
+      // client drags.
       const double sx = seat->pointer_state.sx + (m_cursor->x - oldX);
       const double sy = seat->pointer_state.sy + (m_cursor->y - oldY);
       wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);
@@ -1096,9 +1086,8 @@ namespace umbriel {
   View* Cursor::hoverFocus(
       View* view, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer, double oldX, double oldY
   ) {
-    // Only activate when the pointer enters a different window (under old pos
-    // != under new pos). Do not warp the pointer with scroll: that re-arms enters
-    // during a swipe and cascades across columns.
+    // Only activate when the pointer enters a different window (under old pos != under new pos). Do not warp the
+    // pointer with scroll: that re-arms enters during a swipe and cascades across columns.
     if (m_server->seat()->wlr()->drag != nullptr
         || m_server->sessionLocked()
         || *layer != nullptr
@@ -1210,10 +1199,9 @@ namespace umbriel {
   Cursor::processTabletMotion(uint32_t timeMsec, double oldX, double oldY, TabletToolState* state, wlr_tablet* tablet) {
     wlr_tablet_v2_tablet* v2tablet = m_server->tabletV2FromWlr(tablet);
     wlr_seat* seat = m_server->seat()->wlr();
-    // Emulation wholesale: no tablet-v2 handle for this device, or a
-    // compositor state (overview, grab, lock, drag) that must see a plain
-    // pointer. A stroke already being emulated stays emulated for its whole
-    // tip-down so a mid-stroke bind of tablet-v2 cannot split it.
+    // Emulation wholesale: no tablet-v2 handle for this device, or a compositor state (overview, grab, lock, drag) that
+    // must see a plain pointer. A stroke already being emulated stays emulated for its whole tip-down so a mid-stroke
+    // bind of tablet-v2 cannot split it.
     const bool emulate = v2tablet == nullptr
         || m_server->overview()->active()
         || !isPassthrough()
@@ -1227,9 +1215,8 @@ namespace umbriel {
       return;
     }
 
-    // Native implicit grab: tip or a button is held on the focused surface, so
-    // motion belongs to that surface's coordinate space even when the cursor
-    // leaves it.
+    // Native implicit grab: tip or a button is held on the focused surface, so motion belongs to that surface's
+    // coordinate space even when the cursor leaves it.
     if (state->v2->focused_surface != nullptr && (state->tipDown || wlr_tablet_tool_v2_has_implicit_grab(state->v2))) {
       double sx = 0;
       double sy = 0;

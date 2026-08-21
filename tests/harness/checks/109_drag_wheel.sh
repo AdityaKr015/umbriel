@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Five default-width wheel steps must cross two column gaps during a tiled drag.
-# This covers both the doubled drag speed and the refreshed target under a
+# Five default-width wheel steps must cross two column gaps during a tiled drag. This covers both the doubled drag speed and the refreshed target under a
 # stationary pointer.
 set -euo pipefail
 

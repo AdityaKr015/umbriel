@@ -50,14 +50,12 @@ namespace umbriel {
     // True while an unfullscreen configure with size 0x0 is unacknowledged;
     // Workspace::arrange must not impose the column size yet.
     [[nodiscard]] bool awaitingUnfullscreenSize() const { return m_pendingUnfullscreenSize; }
-    // Fullscreen for layout purposes: a view inside the unfullscreen grace
-    // keeps its fullscreen slot and presentation so the strip does not reflow
-    // (and no resize leaks) while the client decides how to respond.
+    // Fullscreen for layout purposes: a view inside the unfullscreen grace keeps its fullscreen slot and presentation
+    // so the strip does not reflow (and no resize leaks) while the client decides how to respond.
     [[nodiscard]] bool layoutFullscreen() const;
     [[nodiscard]] bool urgent() const { return m_urgent; }
-    // The window id the ext-foreign-toplevel protocol hands to clients, which
-    // the IPC surface reuses verbatim for its own window identity. Null only
-    // while no ext handle exists (the handle lives for the whole map lifetime).
+    // The window id the ext-foreign-toplevel protocol hands to clients, which the IPC surface reuses verbatim for its
+    // own window identity. Null only while no ext handle exists (the handle lives for the whole map lifetime).
     [[nodiscard]] const char* extForeignIdentifier() const {
       return m_extForeign != nullptr ? m_extForeign->identifier : nullptr;
     }
@@ -72,10 +70,9 @@ namespace umbriel {
     // nullptr when the surface is not under a view (layer surfaces, cursors).
     static View* fromSurface(wlr_surface* surface);
 
-    // Mechanism only: applies seat keyboard, activation chrome, and raise.
-    // Policy lives in Server::focusView; do not call from input/event code.
-    // `withKeyboard` is false while overview owns the seat: chrome and
-    // activation still update, the keyboard enter is deferred to the close.
+    // Mechanism only: applies seat keyboard, activation chrome, and raise. Policy lives in Server::focusView; do not
+    // call from input/event code. `withKeyboard` is false while overview owns the seat: chrome and activation still
+    // update, the keyboard enter is deferred to the close.
     void applySeatFocus(bool withKeyboard = true);
     void setForeignActivated(bool activated);
     void setUrgent(bool urgent);
@@ -88,22 +85,19 @@ namespace umbriel {
     void setScratchpadBorder(bool scratchpad);
     void animateTo(int x, int y);
     void setPosition(int x, int y);
-    // The authoritative layout position: where the window's slot is, not
-    // where its scene node happens to be mid-animation. Workspace slides and
-    // arrange reflows move nodes without touching the animation targets, so
-    // window listings that order by position must read these instead.
+    // The authoritative layout position: where the window's slot is, not where its scene node happens to be
+    // mid-animation. Workspace slides and arrange reflows move nodes without touching the animation targets, so window
+    // listings that order by position must read these instead.
     [[nodiscard]] int layoutTargetX() const { return static_cast<int>(std::lround(m_posX.target())); }
     [[nodiscard]] int layoutTargetY() const { return static_cast<int>(std::lround(m_posY.target())); }
     // Move the scene nodes without touching the position animation: an
     // interactive drag tracks the pointer 1:1 and owns the position itself.
     void setDragPosition(int x, int y);
-    // Tighten the subsurface clip before a snap move so the surface never
-    // transits a neighboring output. wlroots recomputes surface->output
-    // membership inside wlr_scene_node_set_position, before the caller can
-    // re-derive the clip for the new position; a stale (wider) clip then
-    // grazes the neighbor for one scene update. xwayland-satellite latches
-    // wl_surface.enter permanently (leave never reverts it), so a single
-    // transient enter re-homes X11 windows to the wrong output.
+    // Tighten the subsurface clip before a snap move so the surface never transits a neighboring output. wlroots
+    // recomputes surface->output membership inside wlr_scene_node_set_position, before the caller can re-derive the
+    // clip for the new position; a stale (wider) clip then grazes the neighbor for one scene update. xwayland-satellite
+    // latches wl_surface.enter permanently (leave never reverts it), so a single transient enter re-homes X11 windows
+    // to the wrong output.
     void clipForSnapMove(int x, int y);
     // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
     void clampFloatingPosition();
@@ -114,9 +108,8 @@ namespace umbriel {
     void restoreFloatingPosition();
     // Center the floating window on its output's usable area. False when not floating.
     bool centerFloating();
-    // Animate the presented size toward a layout-assigned size. Called by
-    // Workspace::arrange when it configures the client, so the animation owns
-    // the presented size before the clip can report the final size.
+    // Animate the presented size toward a layout-assigned size. Called by Workspace::arrange when it configures the
+    // client, so the animation owns the presented size before the clip can report the final size.
     void beginResizeAnimation(int width, int height);
     void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
     // Drop the per-output clip so the view renders unclipped (e.g. a window
@@ -200,17 +193,14 @@ namespace umbriel {
     [[nodiscard]] SurfaceBlurOptions popupBlurOptions() const { return m_decoration.popupBlurOptions(); }
     void updateShadow();
     void updateShadow(int contentWidth, int contentHeight);
-    // Show the borders and refresh everything derived from them. The four steps
-    // are always wanted together: a ring that exists but was never given a
-    // geometry draws at 0x0, and the surface radius and effects follow the ring.
+    // Show the borders and refresh everything derived from them. The four steps are always wanted together: a ring that
+    // exists but was never given a geometry draws at 0x0, and the surface radius and effects follow the ring.
     void showDecorations(bool enabled);
-    // Record the dimensions currently rendered by the scene. Client geometry
-    // can lag a layout configure, so presentation consumers must not infer
-    // their size independently from the committed geometry.
+    // Record the dimensions currently rendered by the scene. Client geometry can lag a layout configure, so
+    // presentation consumers must not infer their size independently from the committed geometry.
     void trackPresentedSize(int width, int height);
-    // Re-apply the effective fade, rule, and drag opacity to surface buffers.
-    // wlroots scene surface reconfigure (on commit or clip change) resets
-    // buffer opacity, so this must run afterward while opacity is below 1.
+    // Re-apply the effective fade, rule, and drag opacity to surface buffers. wlroots scene surface reconfigure (on
+    // commit or clip change) resets buffer opacity, so this must run afterward while opacity is below 1.
     [[nodiscard]] float effectiveOpacity() const { return m_fadeAlpha * m_ruleOpacity * m_dragOpacity; }
     void applyEffectiveOpacity();
     void beginCloseAnimation();
@@ -249,10 +239,9 @@ namespace umbriel {
     // The output this view is presented on: its workspace group's output, or
     // the server's preferred output while unassigned (scratchpad, pre-map).
     [[nodiscard]] Output* currentOutput() const;
-    // Push the current output's scale to every surface of this toplevel
-    // (fractional-scale + preferred buffer scale, popups included). Clients
-    // like xwayland-satellite size and map pointer coordinates by this, so it
-    // must follow the view across outputs and track scale changes.
+    // Push the current output's scale to every surface of this toplevel (fractional-scale + preferred buffer scale,
+    // popups included). Clients like xwayland-satellite size and map pointer coordinates by this, so it must follow the
+    // view across outputs and track scale changes.
     void notifyOutputScale();
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
@@ -269,18 +258,14 @@ namespace umbriel {
     void enterForeignOutput();
     void leaveForeignOutput();
     void applyWindowRules(const ResolvedWindowRule& initiallyApplied);
-    // `resolved` lets a caller that already resolved the rules pass them in.
-    // Rule resolution runs every regex in the config, and applyDynamicRules is
-    // reached on focus changes and on every title change, so resolving twice per
-    // pass is work a terminal that retitles per command pays repeatedly.
+    // `resolved` lets a caller that already resolved the rules pass them in. Rule resolution runs every regex in the
+    // config, and applyDynamicRules is reached on focus changes and on every title change, so resolving twice per pass
+    // is work a terminal that retitles per command pays repeatedly.
     void applyDynamicRules(const ResolvedWindowRule* resolved = nullptr);
-    // Window rules, resolved at most once per (config, app-id, title, focus).
-    //
-    // Resolution runs every rule's regexes, and it is reached on focus changes
-    // and on every title change; a terminal that retitles per command would
-    // otherwise pay the whole rule set on each one. All four inputs are part of
-    // the key: `match.is_focused` makes focus a matching criterion, not just a
-    // consumer of the result.
+    // Window rules, resolved at most once per (config, app-id, title, focus). Resolution runs every rule's regexes, and
+    // it is reached on focus changes and on every title change; a terminal that retitles per command would otherwise
+    // pay the whole rule set on each one. All four inputs are part of the key: `match.is_focused` makes focus a
+    // matching criterion, not just a consumer of the result.
     [[nodiscard]] const ResolvedWindowRule& resolvedRules();
 
     // Cache for resolvedRules(); m_rulesGeneration 0 means never resolved.
@@ -311,16 +296,13 @@ namespace umbriel {
     bool m_tiled = false;
     bool m_pinned = false;
     bool m_restoreTiledAfterUnpin = false;
-    // Set when a float toggle drops fullscreen: re-tiling restores fullscreen
-    // BEFORE the layout attach, so the client never receives a transient
-    // column-sized configure (game engines latch it for input mapping and go
-    // dead outside it). Cleared whenever fullscreen is left by any other path,
-    // so a client that chose windowed mode while floating re-tiles as a
-    // regular column.
+    // Set when a float toggle drops fullscreen: re-tiling restores fullscreen BEFORE the layout attach, so the client
+    // never receives a transient column-sized configure (game engines latch it for input mapping and go dead outside
+    // it). Cleared whenever fullscreen is left by any other path, so a client that chose windowed mode while floating
+    // re-tiles as a regular column.
     bool m_refullscreenOnTile = false;
-    // Set while an unfullscreen configure with size 0x0 is in flight: the
-    // layout must not impose the column size until the client commits its
-    // non-fullscreen state (or re-requests fullscreen, avoiding any resize).
+    // Set while an unfullscreen configure with size 0x0 is in flight: the layout must not impose the column size until
+    // the client commits its non-fullscreen state (or re-requests fullscreen, avoiding any resize).
     bool m_pendingUnfullscreenSize = false;
     // 0 until the first frame tick after arming; the grace deadline counts
     // from there so a stalled frame clock cannot expire it instantly.

@@ -1,23 +1,12 @@
-// Drives a virtual pointer against a running compositor, for the harness.
-//
-// The headless backend has no input devices (wlroots 0.20 dropped
-// wlr_headless_add_input_device), so this is the only way to exercise pointer
-// hit-testing without a physical mouse: bind zwp_virtual_pointer_manager_v1,
-// create a pointer, and feed it absolute motion and button events. The
-// compositor attaches it to its wlr_cursor like any other pointer, so these
-// events run the same path a real mouse does.
-//
-// Usage: pointer-client <width> <height> <command>...
-//   move <x> <y>        absolute motion within the given extent
-//   click <button>      press and release (button is an evdev BTN_* code)
-//   press <button>
-//   release <button>
-//   notch <dir>         one vertical wheel notch, -1 up / 1 down
-//   mod <name|none>     hold one modifier (shift, control, alt, or logo)
-//   pause <ms>          keep the pointer connection and current button state
-//
-// Commands run in order, each followed by a frame and a roundtrip so the
-// compositor has processed one before the next is sent.
+// Drives a virtual pointer against a running compositor, for the harness. The headless backend has no input devices
+// (wlroots 0.20 dropped wlr_headless_add_input_device), so this is the only way to exercise pointer hit-testing without
+// a physical mouse: bind zwp_virtual_pointer_manager_v1, create a pointer, and feed it absolute motion and button
+// events. The compositor attaches it to its wlr_cursor like any other pointer, so these events run the same path a real
+// mouse does. Usage: pointer-client <width> <height> <command>... move <x> <y> absolute motion within the given extent
+// click <button> press and release (button is an evdev BTN_* code) press <button> release <button> notch <dir> one
+// vertical wheel notch, -1 up / 1 down mod <name|none> hold one modifier (shift, control, alt, or logo) pause <ms> keep
+// the pointer connection and current button state Commands run in order, each followed by a frame and a roundtrip so
+// the compositor has processed one before the next is sent.
 
 #include "virtual-keyboard-unstable-v1-client-protocol.h"
 #include "wlr-virtual-pointer-unstable-v1-client-protocol.h"
@@ -234,9 +223,8 @@ int main(int argc, char** argv) {
       needs(1);
       const int dir = std::atoi(args[i + 1].c_str()) < 0 ? -1 : 1;
       i += 1;
-      // A real wheel sends the smooth value and the discrete step together.
-      // The overview counts notches, so the discrete half is the one that
-      // matters here, but sending only that is not something a wheel does.
+      // A real wheel sends the smooth value and the discrete step together. The overview counts notches, so the
+      // discrete half is the one that matters here, but sending only that is not something a wheel does.
       zwlr_virtual_pointer_v1_axis_discrete(
           pointer, nextTime(), WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(dir * 15.0), dir
       );

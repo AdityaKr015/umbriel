@@ -55,8 +55,7 @@ namespace {
 
 } // namespace
 
-// ---- column bookkeeping ----
-
+// column bookkeeping
 UMBRIEL_TEST(insertAndRemoveTracksColumns) {
   Fixture fixture;
   fixture.addColumns(3);
@@ -95,8 +94,7 @@ UMBRIEL_TEST(moveColumnReorders) {
   CHECK_EQ(fixture.layout.columnOf(stub(2)), 1);
 }
 
-// ---- consume and expel ----
-
+// consume and expel
 UMBRIEL_TEST(consumeLeftStacksIntoThePreviousColumn) {
   Fixture fixture;
   fixture.addColumns(2);
@@ -149,8 +147,7 @@ UMBRIEL_TEST(moveViewVerticalReordersWithinAColumn) {
   CHECK(!fixture.layout.moveViewVertical(stub(1), -1));
 }
 
-// ---- width math ----
-
+// width math
 UMBRIEL_TEST(halfWidthColumnMatchesTheGapAwareFormula) {
   Fixture fixture;
   fixture.addColumns(1);
@@ -339,8 +336,7 @@ UMBRIEL_TEST(clearFullWidthStateDropsTheRestorePoint) {
   CHECK(!fixture.layout.isFullWidth(0));
 }
 
-// ---- constraints ----
-
+// constraints
 UMBRIEL_TEST(clientMinWidthWidensAColumn) {
   Fixture fixture;
   fixture.addColumns(1);
@@ -385,12 +381,10 @@ UMBRIEL_TEST(unsetConstraintsMeanUnconstrained) {
   CHECK(!fixture.layout.isFullWidth(0));
 }
 
-// ---- initial sizing ----
-
+// initial sizing
 UMBRIEL_TEST(initialSizeMatchesWhatArrangeWillAssign) {
-  // The invariant: the size a view is configured with before it joins the
-  // layout must equal the size the layout gives it once it has. Any drift and
-  // the client's first buffer is wrong and the window resizes on first paint.
+  // The invariant: the size a view is configured with before it joins the layout must equal the size the layout gives
+  // it once it has. Any drift and the client's first buffer is wrong and the window resizes on first paint.
   Fixture fixture;
   const Layout::InitialSize initial = fixture.layout.initialSize(kUsable, std::nullopt);
 
@@ -420,8 +414,7 @@ UMBRIEL_TEST(initialSizeUsesTheDefaultFractionWhenNoRuleApplies) {
   CHECK_EQ(fixture.layout.initialSize(kUsable, std::nullopt).height, 700);
 }
 
-// ---- scrolling ----
-
+// scrolling
 UMBRIEL_TEST(maxScrollIsZeroWhileEverythingFits) {
   Fixture fixture;
   fixture.addColumns(2);
@@ -434,13 +427,10 @@ UMBRIEL_TEST(maxScrollGrowsWithOverflowingColumns) {
   CHECK(fixture.layout.maxScroll(kViewport) > 0);
 }
 
-// ---- re-anchoring when a column closes off-screen ----
-//
-// Removing a column closes the space it held, so everything to its right moves
-// left by its width plus a gap. When that space was off-screen to the left, the
-// user did not ask to see it happen: a window closing several columns back
-// should not shift the one being read. These pin the compensation that keeps
-// the visible strip still, and the cases where there is deliberately none.
+// re-anchoring when a column closes off-screen: Removing a column closes the space it held, so everything to its right
+// moves left by its width plus a gap. When that space was off-screen to the left, the user did not ask to see it
+// happen: a window closing several columns back should not shift the one being read. These pin the compensation that
+// keeps the visible strip still, and the cases where there is deliberately none.
 
 // Screen position of a column: layout coordinate minus the scroll offset.
 int screenX(const ScrollingLayout& layout, int column) {
@@ -516,11 +506,10 @@ UMBRIEL_TEST(anOutOfRangeColumnShiftsNothing) {
 }
 
 UMBRIEL_TEST(setScrollStoresVerbatimAndDoesNotClamp) {
-  // Pinning current behavior, not endorsing it: setScroll is a raw setter, and
-  // every caller is responsible for clamping to [0, maxScroll] itself. See the
-  // hand-rolled clamp in Server::executeKeybindAction (layout-scroll-*), which
-  // exists because overscroll here parks the strip past an edge and seeds
-  // sub-pixel scroll residue. The clamp belongs in the layout.
+  // Pinning current behavior, not endorsing it: setScroll is a raw setter, and every caller is responsible for clamping
+  // to [0, maxScroll] itself. See the hand-rolled clamp in Server::executeKeybindAction (layout-scroll-*), which exists
+  // because overscroll here parks the strip past an edge and seeds sub-pixel scroll residue. The clamp belongs in the
+  // layout.
   Fixture fixture;
   fixture.addColumns(6);
 
@@ -567,9 +556,8 @@ UMBRIEL_TEST(ensureVisibleIsANoOpForAnAlreadyVisibleColumn) {
 }
 
 UMBRIEL_TEST(ensureVisibleKeepsAFlushRightColumnInPlace) {
-  // Two half-width columns plus a third: the second column is fully visible
-  // flush against the viewport edge, so focusing it must not nudge the strip
-  // to reveal a sliver of the third column.
+  // Two half-width columns plus a third: the second column is fully visible flush against the viewport edge, so
+  // focusing it must not nudge the strip to reveal a sliver of the third column.
   Fixture fixture;
   fixture.addColumns(3);
   fixture.layout.setScroll(0);
@@ -609,8 +597,7 @@ UMBRIEL_TEST(ensureVisibleAlignsInsertedHalfWidthColumnToTheRightEdge) {
   CHECK_EQ(rightEdge, kViewport);
 }
 
-// ---- arrange and targetBox ----
-
+// arrange and targetBox
 UMBRIEL_TEST(arrangePlacesColumnsSideBySide) {
   Fixture fixture;
   fixture.addColumns(2);
@@ -680,8 +667,7 @@ UMBRIEL_TEST(arrangeOnAnEmptyLayoutIsHarmless) {
   CHECK_EQ(fixture.layout.maxScroll(kViewport), 0);
 }
 
-// ---- row weights ----
-
+// row weights
 UMBRIEL_TEST(heightWeightsDefaultToOneAndTrackViews) {
   Fixture fixture;
   fixture.addColumns(2);

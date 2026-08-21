@@ -67,13 +67,11 @@ struct wlr_virtual_pointer_v1;
 namespace umbriel {
   struct ConfigEffects;
 
-  // Slow tick that ferries wl_surface.frame callbacks to toplevels that are
-  // mapped but not on the active workspace. wlroots' scene helper only walks
-  // enabled scene nodes, so a hidden view otherwise never receives another
-  // frame_done and any client that gates its game/network loop on the frame
-  // callback stalls until it becomes visible again (Overwatch under
-  // Proton-CachyOS times out its server heartbeat within ~30 s of alt-tab).
-  // 10 Hz keeps game logic and networking alive at negligible cost.
+  // Slow tick that ferries wl_surface.frame callbacks to toplevels that are mapped but not on the active workspace.
+  // wlroots' scene helper only walks enabled scene nodes, so a hidden view otherwise never receives another frame_done
+  // and any client that gates its game/network loop on the frame callback stalls until it becomes visible again
+  // (Overwatch under Proton-CachyOS times out its server heartbeat within ~30 s of alt-tab). 10 Hz keeps game logic and
+  // networking alive at negligible cost.
   inline constexpr int kBackgroundFrameIntervalMs = 100;
 
   enum class WheelDirection;
@@ -153,9 +151,8 @@ namespace umbriel {
     bool tickAnimations(uint64_t nowMsec);
     [[nodiscard]] bool animationsActive() const;
     [[nodiscard]] bool animationsActiveFor(const Output* output) const;
-    // Owners register themselves for the frame tick. The registry is kept in
-    // phase order, so the three traversals above never re-state which owners
-    // exist or in what order they run.
+    // Owners register themselves for the frame tick. The registry is kept in phase order, so the three traversals above
+    // never re-state which owners exist or in what order they run.
     void registerAnimatable(Animatable* animatable);
     void unregisterAnimatable(Animatable* animatable);
     [[nodiscard]] HintRect& insertHint();
@@ -185,9 +182,8 @@ namespace umbriel {
     [[nodiscard]] uint32_t modKey() const;
     [[nodiscard]] std::string_view modKeyName() const;
 
-    // Read-only iteration over the registries. These replace the friend list:
-    // callers can walk the registry without reaching into Server's internals or
-    // being able to add to and remove from it.
+    // Read-only iteration over the registries. These replace the friend list: callers can walk the registry without
+    // reaching into Server's internals or being able to add to and remove from it.
     [[nodiscard]] std::span<const std::unique_ptr<Output>> outputs() const { return m_outputs; }
     [[nodiscard]] std::span<const std::unique_ptr<View>> views() const { return m_registry.all(); }
     [[nodiscard]] ViewRegistry& registry() { return m_registry; }
@@ -196,9 +192,8 @@ namespace umbriel {
 
     // Runs a parsed action. Shared by the keybind path and the IPC `msg` command.
     bool executeKeybindAction(const Keybind& bind, std::string* error = nullptr);
-    // Record that something server-wide became stale. The work happens once, in
-    // a fixed order, at the top of the next frame (see Output::flushDirty).
-    // Schedules a frame on every output, so recording is always enough.
+    // Record that something server-wide became stale. The work happens once, in a fixed order, at the top of the next
+    // frame (see Output::flushDirty). Schedules a frame on every output, so recording is always enough.
     void markDirty(Dirty what);
     // Hand the pending set to the flush and clear it.
     [[nodiscard]] Dirty takeDirty() {
@@ -222,13 +217,11 @@ namespace umbriel {
       std::vector<std::string> names;
       uint32_t currentIndex = 0;
     };
-    // The layout names and effective group index of the first physical
-    // keyboard, the same device keyboardLayoutState callers observe cycling.
-    // Nullopt when no physical keyboard exists.
+    // The layout names and effective group index of the first physical keyboard, the same device keyboardLayoutState
+    // callers observe cycling. Nullopt when no physical keyboard exists.
     [[nodiscard]] std::optional<KeyboardLayoutState> keyboardLayoutState() const;
-    // Fires the IPC keyboard-layout event when the effective group of a
-    // physical keyboard actually changed. Config reloads re-send the current
-    // state even when the group did not move.
+    // Fires the IPC keyboard-layout event when the effective group of a physical keyboard actually changed. Config
+    // reloads re-send the current state even when the group did not move.
     void notifyKeyboardLayoutIpc();
     void notifyOverviewChanged();
     // Coalesced windows-event notification: at most one idle callback per frame
@@ -257,19 +250,16 @@ namespace umbriel {
     [[nodiscard]] std::optional<Keybind> releaseModifierTap(const void* source, uint32_t keycode);
     void cancelModifierTap() { m_modifierTap.cancel(); }
     void arrangeLayers(wlr_output* output);
-    // Re-send every surface's output scale (views, layer surfaces, popups).
-    // Run after anything that changes an output's scale or moves surfaces
-    // between outputs outside setWorkspace; the notifies dedup, so extra calls
-    // are cheap.
+    // Re-send every surface's output scale (views, layer surfaces, popups). Run after anything that changes an output's
+    // scale or moves surfaces between outputs outside setWorkspace; the notifies dedup, so extra calls are cheap.
     void refreshSurfaceScales();
     [[nodiscard]] wlr_output* preferredOutput() const;
     [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
     [[nodiscard]] Output* outputFromName(const std::string& name) const;
     [[nodiscard]] wlr_box usableAreaAt(double lx, double ly) const;
     void updateOutputManagerConfig();
-    // Recompute the mapping for every tablet: focused window, focused output,
-    // named output, or full layout. Called at the start of every tablet event so
-    // dynamic targets reflect current focus without signal hooks.
+    // Recompute the mapping for every tablet: focused window, focused output, named output, or full layout. Called at
+    // the start of every tablet event so dynamic targets reflect current focus without signal hooks.
     void remapTablets();
     // The tablet-v2 handle for a wlroots tablet, or nullptr when unknown.
     [[nodiscard]] wlr_tablet_v2_tablet* tabletV2FromWlr(const wlr_tablet* tablet) const;

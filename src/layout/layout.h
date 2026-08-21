@@ -45,9 +45,8 @@ namespace umbriel {
     }
   };
 
-  // Layouts treat View as an opaque identity. They still need its constraints,
-  // so the owning Workspace supplies the lookup rather than layout/ depending on
-  // View's definition. Unset means unconstrained, which is what the geometry
+  // Layouts treat View as an opaque identity. They still need its constraints, so the owning Workspace supplies the
+  // lookup rather than layout/ depending on View's definition. Unset means unconstrained, which is what the geometry
   // tests want.
   using LayoutConstraintsFn = LayoutConstraints (*)(const View*);
 
@@ -60,9 +59,8 @@ namespace umbriel {
     double savedWidthFrac = 0.0;
   };
 
-  // Layout-owned interactive resize session. Cursor feeds a pointer delta; the
-  // session mutates only its layout's geometry state (split ratios, width
-  // fractions, row weights). Protocol calls and arrange() stay in Cursor.
+  // Layout-owned interactive resize session. Cursor feeds a pointer delta; the session mutates only its layout's
+  // geometry state (split ratios, width fractions, row weights). Protocol calls and arrange() stay in Cursor.
   struct ResizeGrab {
     virtual ~ResizeGrab() = default;
     virtual void applyDelta(double dx, double dy, const wlr_box& usable) = 0;
@@ -106,12 +104,10 @@ namespace umbriel {
       int height = 0;
     };
 
-    // Size for the very first configure, before the view has joined the layout.
-    // It must agree with what arrange() will later assign, or the client's first
-    // buffer is the wrong size and the window visibly resizes on its first paint
-    // (Electron and friends keep that buffer until they redraw).
-    // `ruleWidthFraction` is a window rule's default_width, which is a viewport
-    // fraction and so means nothing to a splitting layout.
+    // Size for the very first configure, before the view has joined the layout. It must agree with what arrange() will
+    // later assign, or the client's first buffer is the wrong size and the window visibly resizes on its first paint
+    // (Electron and friends keep that buffer until they redraw). `ruleWidthFraction` is a window rule's default_width,
+    // which is a viewport fraction and so means nothing to a splitting layout.
     [[nodiscard]] virtual InitialSize
     initialSize(const wlr_box& usable, std::optional<double> ruleWidthFraction) const = 0;
 
@@ -123,8 +119,7 @@ namespace umbriel {
     virtual void clearFullWidthState(int columnIndex) = 0;
     [[nodiscard]] virtual double widthFraction(int columnIndex) const = 0;
 
-    // ---- Interactive resize ----
-    // Edges grabbable at a pointer position (0 = none). Base = not resizable.
+    // Interactive resize    // Edges grabbable at a pointer position (0 = none). Base = not resizable.
     [[nodiscard]] virtual uint32_t resizeEdgesAt(const View* /*view*/, double /*cx*/, double /*cy*/) const { return 0; }
     // Drop edges this layout cannot resize. Base = unchanged.
     [[nodiscard]] virtual uint32_t sanitizeResizeEdges(const View* /*view*/, uint32_t edges) const { return edges; }
@@ -148,17 +143,15 @@ namespace umbriel {
     // Whether a column occupies the full viewport, however each layout gets there.
     [[nodiscard]] virtual bool isFullWidth(int columnIndex) const = 0;
 
-    // Anything only one layout can answer lives on that layout. Reach it through
-    // the single downcast seam, Workspace::scrollingLayout(), rather than by
-    // asking every layout a question most of them have no answer to.
+    // Anything only one layout can answer lives on that layout. Reach it through the single downcast seam,
+    // Workspace::scrollingLayout(), rather than by asking every layout a question most of them have no answer to.
 
   protected:
     // The usable area minus edge padding on both axes: the box the layout has
     // to fill.
     [[nodiscard]] wlr_box contentArea(const wlr_box& usable) const;
-    // Gap-aware width of a column occupying `fraction` of the viewport. Solving
-    // sum(w) + (N-1)g = V with w = p*(V+g) - g makes N columns whose fractions
-    // sum to 1 tile the viewport exactly.
+    // Gap-aware width of a column occupying `fraction` of the viewport. Solving sum(w) + (N-1)g = V with w = p*(V+g) -
+    // g makes N columns whose fractions sum to 1 tile the viewport exactly.
     [[nodiscard]] int fractionalWidth(int viewportWidth, double fraction) const;
 
     const ResolvedLayoutConfig* m_config = nullptr;

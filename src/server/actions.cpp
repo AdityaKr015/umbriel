@@ -50,9 +50,8 @@ namespace umbriel {
       return true;
     }
 
-    // Resolve `<workspace>` or `<workspace>/<output>` against the current output
-    // layout. Qualified selectors address exactly one group; unqualified ones
-    // prefer the focused output, then a unique match anywhere.
+    // Resolve `<workspace>` or `<workspace>/<output>` against the current output layout. Qualified selectors address
+    // exactly one group; unqualified ones prefer the focused output, then a unique match anywhere.
     std::expected<Workspace*, std::string> resolveWorkspaceSelector(Server& server, const Keybind& bind) {
       const auto* selector = payloadIf<WorkspaceArg>(bind);
       if (selector == nullptr) {
@@ -129,9 +128,8 @@ namespace umbriel {
       return scratchpad != nullptr && scratchpad->hasFocus(server.outputFromWlr(server.preferredOutput()));
     }
 
-    // Move `view` to `target` (possibly on another output), activate the target
-    // workspace, and focus the view. Floats land proportionally via their
-    // remembered usable-area fraction.
+    // Move `view` to `target` (possibly on another output), activate the target workspace, and focus the view. Floats
+    // land proportionally via their remembered usable-area fraction.
     void moveViewToWorkspace(Server& server, View& view, Workspace& target) {
       const bool floating = view.floating();
       if (floating) {
@@ -192,8 +190,7 @@ namespace umbriel {
       server.cursor()->warpTo(usable.x + usable.width / 2.0, usable.y + usable.height / 2.0);
     }
 
-    // ---- Session ----
-
+    // Session
     bool actionSpawn(Server& server, const Keybind& bind, std::string* /*error*/) {
       const auto* arg = payloadIf<SpawnArg>(bind);
       server.spawn(arg != nullptr ? arg->command.c_str() : "");
@@ -239,9 +236,7 @@ namespace umbriel {
       return true;
     }
 
-    // ---- Window ----
-
-    // Window ids are the ext-foreign-toplevel identifiers, the same strings
+    // Window IDs are ext-foreign-toplevel identifiers, the same strings
     // clients receive from the protocol and the IPC surface reuses.
     View* viewByForeignIdentifier(Server& server, std::string_view id) {
       for (const auto& view : server.views()) {
@@ -455,8 +450,7 @@ namespace umbriel {
       return true;
     }
 
-    // ---- Workspaces ----
-
+    // Workspaces
     bool actionWorkspace(Server& server, const Keybind& bind, std::string* error) {
       const std::expected<Workspace*, std::string> target = resolveWorkspaceSelector(server, bind);
       if (!target.has_value()) {
@@ -526,8 +520,7 @@ namespace umbriel {
       return true;
     }
 
-    // ---- Outputs ----
-
+    // Outputs
     template <wlr_direction D> bool actionOutputFocus(Server& server, const Keybind& /*bind*/, std::string* error) {
       std::string message;
       Output* target = adjacentOutput(server, D, &message);
@@ -627,9 +620,8 @@ namespace umbriel {
       Workspace* destination = targetGroup->createWorkspace(source->name().c_str());
       View* focused = source->focusedView();
 
-      // Snapshot the source contents first: every setWorkspace below triggers
-      // reconcileDynamic on both groups, and iterating the live layout while
-      // it rebuilds would be use-after-free.
+      // Snapshot the source contents first: every setWorkspace below triggers reconcileDynamic on both groups, and
+      // iterating the live layout while it rebuilds would be use-after-free.
       struct ColumnSnapshot {
         std::vector<View*> views;
         double widthFrac = 0.5;
@@ -678,8 +670,7 @@ namespace umbriel {
       return true;
     }
 
-    // ---- Overlays ----
-
+    // Overlays
     bool actionOverviewToggle(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       server.overview()->toggle();
       return true;
@@ -716,8 +707,7 @@ namespace umbriel {
       return true;
     }
 
-    // ---- Scratchpad ----
-
+    // Scratchpad
     bool actionMoveToScratchpad(Server& server, const Keybind& bind, std::string* error) {
       Output* output = scratchpadOutput(server, bind, error);
       if (output == nullptr) {

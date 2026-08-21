@@ -1,6 +1,5 @@
-// Maps a small layer surface and starts a Wayland data-device drag when its
-// left mouse button is pressed. The headless harness drives that press through
-// pointer-client, then observes whether the compositor terminates the drag.
+// Maps a small layer surface and starts a Wayland data-device drag when its left mouse button is pressed. The headless
+// harness drives that press through pointer-client, then observes whether the compositor terminates the drag.
 
 #include <wayland-client.h>
 

@@ -1,19 +1,5 @@
 #!/usr/bin/env bash
-# The cheatsheet renders without taking the compositor down, and a pointer press
-# dismisses it.
-#
-# Its render path walks every configured keybind, builds a label per bind from
-# the action spec and the bind's payload, then lays the result out with pango.
-# None of that is observable over IPC, so this cannot assert what is drawn. What
-# it can assert is that building and tearing down the overlay repeatedly leaves
-# a live, responsive compositor, which is what a bad label lookup or a null
-# payload would break.
-#
-# Visibility is not observable either, so the dismissal is observed through the
-# press it consumes: while the overlay is up, a click over an unfocused window
-# must not move focus (the press is swallowed), and the next click must (the
-# overlay is gone). One assertion alone would pass with the dismissal missing or
-# with the swallow missing; the pair only passes when both happen.
+# The cheatsheet renders without taking the compositor down, and a pointer press dismisses it. Its render path walks every configured keybind, builds a label per bind from the action spec and the bind's payload, then lays the result out with pango. None of that is observable over IPC, so this cannot assert what is drawn. What it can assert is that building and tearing down the overlay repeatedly leaves a live, responsive compositor, which is what a bad label lookup or a null payload would break. Visibility is not observable either, so the dismissal is observed through the press it consumes: while the overlay is up, a click over an unfocused window must not move focus (the press is swallowed), and the next click must (the overlay is gone). One assertion alone would pass with the dismissal missing or with the swallow missing; the pair only passes when both happen.
 set -euo pipefail
 
 readonly BTN_LEFT=272 # evdev BTN_LEFT

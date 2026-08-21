@@ -54,9 +54,8 @@ namespace umbriel {
         .height = decHeight,
     };
 
-    // Data-side confinement: shrink the node so it never extends past the clamp
-    // box instead of clipping at draw time. The hole shifts by the same amount
-    // so it stays aligned with the window.
+    // Data-side confinement: shrink the node so it never extends past the clamp box instead of clipping at draw time.
+    // The hole shifts by the same amount so it stays aligned with the window.
     if (clampBox != nullptr) {
       int parentX = 0;
       int parentY = 0;

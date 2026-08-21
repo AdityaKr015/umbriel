@@ -34,9 +34,8 @@ namespace umbriel {
     m_target = to;
     m_durationMsec = static_cast<uint64_t>(std::max(1, durationMs));
     m_easing = easing;
-    // The clock starts on the first tick, not here: an animation created while
-    // the compositor is idle would otherwise burn its whole duration before the
-    // first frame arrives and visibly snap to the end.
+    // The clock starts on the first tick, not here: an animation created while the compositor is idle would otherwise
+    // burn its whole duration before the first frame arrives and visibly snap to the end.
     m_startMsec = 0;
     m_animating = true;
   }

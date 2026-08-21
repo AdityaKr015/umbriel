@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
-# Pointer hit-testing: a click focuses the window under the cursor.
-#
-# This is the check that was missing when a change to View's base classes moved
-# its SceneNode subobject off offset zero, so Server::viewAt returned null for
-# every window and click-to-focus, interactive move, and interactive resize all
-# stopped working. Nothing else in the harness touches that path: every other
-# check drives the compositor through IPC actions, which never hit-test.
-#
-# The headless backend has no input devices, so the cursor is driven through
-# zwlr_virtual_pointer_v1 by tests/harness/pointer_client.cpp. The compositor
-# attaches it to its wlr_cursor like a physical mouse, so these events take the
-# same path real input does.
+# Pointer hit-testing: a click focuses the window under the cursor. This is the check that was missing when a change to View's base classes moved its SceneNode subobject off offset zero, so Server::viewAt returned null for every window and click-to-focus, interactive move, and interactive resize all stopped working. Nothing else in the harness touches that path: every other check drives the compositor through IPC actions, which never hit-test. The headless backend has no input devices, so the cursor is driven through zwlr_virtual_pointer_v1 by tests/harness/pointer_client.cpp. The compositor attaches it to its wlr_cursor like a physical mouse, so these events take the same path real input does.
 set -euo pipefail
 
 readonly BTN_LEFT=272 # evdev BTN_LEFT

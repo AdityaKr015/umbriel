@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# session-quit asks for confirmation; session-quit:skip-confirmation does not.
-#
-# The shared harness instance must survive, so this check boots its own
-# headless compositor (same containment as verify.sh): plain session-quit must
-# leave it answering IPC, a second session-quit must terminate it cleanly, and
-# the bypass form must terminate a fresh instance cleanly in one call.
+# session-quit asks for confirmation; session-quit:skip-confirmation does not. The shared harness instance must survive, so this check boots its own headless compositor (same containment as verify.sh): plain session-quit must leave it answering IPC, a second session-quit must terminate it cleanly, and the bypass form must terminate a fresh instance cleanly in one call.
 set -euo pipefail
 
 BINARY=$UMBRIEL

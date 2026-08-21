@@ -117,7 +117,7 @@ namespace umbriel {
     return 1.0 - m_progress * (1.0 - configured);
   }
 
-  // ---------------------------------------------------------------- geometry
+  // -: geometry
 
   bool Overview::rowMetrics(const OutputState& state, const Server& server, double zoom, RowMetrics& out) {
     wlr_box outputBox{};
@@ -143,10 +143,9 @@ namespace umbriel {
   wlr_box Overview::worldBoxOf(const View* view, const wlr_box& outputBox) const {
     const wlr_box& geometry = view->toplevel()->base->geometry;
     if (view->toplevel()->current.fullscreen && geometry.width > 0 && geometry.height > 0) {
-      // Fullscreen content keeps its committed size and centering, but a tiled
-      // fullscreen column still belongs to the horizontal strip. Keeping it
-      // pinned to the output lets its topmost card cover adjacent columns as
-      // the overview scrolls underneath it.
+      // Fullscreen content keeps its committed size and centering, but a tiled fullscreen column still belongs to the
+      // horizontal strip. Keeping it pinned to the output lets its topmost card cover adjacent columns as the overview
+      // scrolls underneath it.
       int stripOffset = 0;
       if (const Workspace* workspace = view->workspace(); workspace != nullptr) {
         const int column = workspace->layout().columnOf(view);
@@ -154,10 +153,9 @@ namespace umbriel {
             && workspace->layout().mode() == LayoutMode::Scrolling
             && workspace->group() != nullptr
             && workspace->group()->output() != nullptr) {
-          // Use the last arranged target rather than the live scroll value.
-          // ensureVisible updates scroll before arrange notifies the overview;
-          // reading it here would let an unrelated relayout snap the card to
-          // its destination before onWorkspaceArranged can arm the animation.
+          // Use the last arranged target rather than the live scroll value. ensureVisible updates scroll before arrange
+          // notifies the overview; reading it here would let an unrelated relayout snap the card to its destination
+          // before onWorkspaceArranged can arm the animation.
           const wlr_box target = workspace->layout().targetBox(view);
           const wlr_box& usable = workspace->group()->output()->usableArea();
           const int stripOrigin = usable.width > 0 ? usable.x : outputBox.x;
@@ -220,9 +218,8 @@ namespace umbriel {
     wlr_scene_node_set_position(&card.tree->node, card.box.x, card.box.y);
     const float cardOpacity = &card == m_dragCard ? View::kDragOpacity : 1.0F;
 
-    // Rows overhang the output box by design (adjacent workspaces peek in), so
-    // every piece is clipped to the owning output; on a stacked multi-head
-    // layout the overhang would otherwise bleed onto the neighbour.
+    // Rows overhang the output box by design (adjacent workspaces peek in), so every piece is clipped to the owning
+    // output; on a stacked multi-head layout the overhang would otherwise bleed onto the neighbour.
     const bool clipped = &card != m_dragCard;
     wlr_box visible = card.box;
     if (clipped && !wlr_box_intersection(&visible, &card.box, &metrics.outputBox)) {
@@ -234,9 +231,9 @@ namespace umbriel {
     const auto& appearance = config().appearance;
     const int total = appearance.totalBorderWidth();
     const bool decorated = total > 0 && !view->toplevel()->current.fullscreen;
-    // Scale the radius and each thickness once, then derive the rings from those
-    // scaled values. Rounding the outer radius on its own drifts from the ring's
-    // own thickness at fractional zoom, so the curve stops matching the stroke.
+    // Scale the radius and each thickness once, then derive the rings from those scaled values. Rounding the outer
+    // radius on its own drifts from the ring's own thickness at fractional zoom, so the curve stops matching the
+    // stroke.
     const int radius = decorated ? static_cast<int>(std::lround(appearance.cornerRadius * z)) : 0;
     const wlr_box* clip = clipped ? &metrics.outputBox : nullptr;
     const auto paintRing = [&](wlr_scene_rect* rect, int thickness, const std::array<float, 4>& base) {
@@ -256,9 +253,8 @@ namespace umbriel {
     // The outer ring spans both widths so the inner ring tucks into it without a
     // seam, exactly as ViewDecoration draws a real window.
     paintRing(card.outerBorder, appearance.outerBorderWidth > 0 ? total : 0, appearance.outerBorderColor);
-    // Every row advertises its own focused window, not just the active one: the
-    // filmstrip is a browsing aid, and the border is what tells you where each
-    // workspace will land you when you zoom into it.
+    // Every row advertises its own focused window, not just the active one: the filmstrip is a browsing aid, and the
+    // border is what tells you where each workspace will land you when you zoom into it.
     const Workspace* workspace = view->workspace();
     const bool focused = workspace != nullptr && workspace->focusedView() == view && m_dragCard != &card;
     paintRing(card.border, appearance.borderWidth, focused ? appearance.borderFocused : appearance.borderUnfocused);
@@ -291,9 +287,8 @@ namespace umbriel {
         wlr_scene_buffer_set_dest_size(entry->buffer, sub.width, sub.height);
         continue;
       }
-      // Root surface: crop to the committed window geometry so CSD shadow
-      // padding never leaks into the thumbnail, then scale the visible part of
-      // that region onto the card.
+      // Root surface: crop to the committed window geometry so CSD shadow padding never leaks into the thumbnail, then
+      // scale the visible part of that region onto the card.
       wlr_fbox base{};
       wlr_surface_get_buffer_source_box(surface, &base);
       const double bx = base.width / surface->current.width;
@@ -380,7 +375,7 @@ namespace umbriel {
     }
   }
 
-  // ------------------------------------------------------------------- cards
+  // -: cards
 
   void Overview::syncCardBuffer(CardSurface& entry) {
     wlr_surface* surface = entry.surface;
@@ -397,21 +392,18 @@ namespace umbriel {
       options.wait_timeline = sync->acquire_timeline;
       options.wait_point = sync->acquire_point;
     }
-    // A scene buffer may clear its `buffer` pointer after importing a texture
-    // and releasing the client buffer. The surface retains the authoritative
-    // committed buffer, including for hidden workspaces.
+    // A scene buffer may clear its `buffer` pointer after importing a texture and releasing the client buffer. The
+    // surface retains the authoritative committed buffer, including for hidden workspaces.
     wlr_buffer* committed = surface->buffer != nullptr ? &surface->buffer->base : nullptr;
     if (committed == nullptr) {
       options.damage = nullptr;
     }
     wlr_scene_buffer_set_buffer_with_options(entry.buffer, committed, &options);
 
-    // Presentation state comes from the surface's committed state, NEVER from
-    // the view's scene buffers: workspace slides clip those (setOutputClip →
-    // applyPresentedCrop), and a window parked on a hidden workspace keeps the
-    // final sliver crop. Copying it smears subsurface-presented content (games)
-    // into a single stretched line. layoutCard then re-crops the root surface
-    // and re-scales every entry for the thumbnail.
+    // Presentation state comes from the surface's committed state, NEVER from the view's scene buffers: workspace
+    // slides clip those (setOutputClip → applyPresentedCrop), and a window parked on a hidden workspace keeps the final
+    // sliver crop. Copying it smears subsurface-presented content (games) into a single stretched line. layoutCard then
+    // re-crops the root surface and re-scales every entry for the thumbnail.
     wlr_fbox src{};
     wlr_surface_get_buffer_source_box(surface, &src);
     wlr_scene_buffer_set_source_box(entry.buffer, &src);
@@ -697,7 +689,7 @@ namespace umbriel {
     }
   }
 
-  // -------------------------------------------------------------- open/close
+  // -: open/close
 
   bool Overview::beginPresentation() {
     if (m_active) {
@@ -706,9 +698,8 @@ namespace umbriel {
     if (m_server->sessionLocked()) {
       return false;
     }
-    // A data-device drag owns wlroots' pointer and keyboard grabs until the
-    // initiating button is released. Taking overview input ownership now would
-    // hide that release from the drag and leave both grabs active.
+    // A data-device drag owns wlroots' pointer and keyboard grabs until the initiating button is released. Taking
+    // overview input ownership now would hide that release from the drag and leave both grabs active.
     if (m_server->seat()->wlr()->drag != nullptr) {
       kLog.debug("overview open ignored during active client drag");
       return false;
@@ -943,7 +934,7 @@ namespace umbriel {
     m_server->reconcileDynamicWorkspaces();
   }
 
-  // ----------------------------------------------------------------- gesture
+  // -: gesture
 
   void Overview::gestureUpdate(double progress) {
     if (!m_active) {
@@ -971,7 +962,7 @@ namespace umbriel {
     beginClose(nullptr);
   }
 
-  // ------------------------------------------------------------------- hooks
+  // -: hooks
 
   void Overview::onViewMapped(View* view) {
     if (!m_active || view == nullptr || !view->mapped()) {
@@ -1013,11 +1004,10 @@ namespace umbriel {
     Workspace* workspace = view->workspace();
     OutputState* state = stateForWorkspace(workspace);
     dropCard(view);
-    // The closed window may have been the focused one. The overview keeps the
-    // focus chrome while it owns the seat, so reassign to a survivor now rather
-    // than leaving the workspace focused on a dead view until zoom-out (or a
-    // later destroy) happens to refocus. Prefer a tiled survivor, mirroring
-    // Workspace::removeView; fall back to any remaining mapped window.
+    // The closed window may have been the focused one. The overview keeps the focus chrome while it owns the seat, so
+    // reassign to a survivor now rather than leaving the workspace focused on a dead view until zoom-out (or a later
+    // destroy) happens to refocus. Prefer a tiled survivor, mirroring Workspace::removeView; fall back to any remaining
+    // mapped window.
     if (workspace != nullptr && workspace->focusedView() == view) {
       View* replacement = nullptr;
       for (View* candidate : workspace->allViews()) {
@@ -1102,9 +1092,8 @@ namespace umbriel {
     if (state == nullptr) {
       return;
     }
-    // Renumbering rows on one side of the active workspace must shift the
-    // filmstrip scroll by the same amount, otherwise every surviving card
-    // visibly jumps even though its workspace identity did not move.
+    // Renumbering rows on one side of the active workspace must shift the filmstrip scroll by the same amount,
+    // otherwise every surviving card visibly jumps even though its workspace identity did not move.
     if (Workspace* active = group->active()) {
       const double delta = static_cast<double>(active->index()) - state->rowTo;
       state->rowScroll += delta;
@@ -1164,7 +1153,7 @@ namespace umbriel {
     }
   }
 
-  // ------------------------------------------------------------- hit testing
+  // -: hit testing
 
   Overview::Card* Overview::cardAt(double lx, double ly) {
     // Topmost first: later outputs and later cards paint over earlier ones.
@@ -1222,9 +1211,8 @@ namespace umbriel {
       }
       const size_t rowCount = std::min(group->workspaceCount(), state->workspaceBackgrounds.size());
       for (size_t index = 0; index < rowCount; ++index) {
-        // Index zero has no preceding preview. Its insertion gap begins at
-        // the output edge, so dynamic workspaces can also be inserted before
-        // the first preview.
+        // Index zero has no preceding preview. Its insertion gap begins at the output edge, so dynamic workspaces can
+        // also be inserted before the first preview.
         const int upperBottom =
             index == 0 ? metrics.outputBox.y : rowTop(metrics, state->rowScroll, index - 1) + metrics.rowH;
         const int lowerTop = rowTop(metrics, state->rowScroll, index);
@@ -1265,7 +1253,7 @@ namespace umbriel {
     return output->workspaceGroup()->active();
   }
 
-  // ------------------------------------------------------------------- input
+  // -: input
 
   bool Overview::handleButton(uint32_t button, bool pressed, double lx, double ly) {
     if (!interactive()) {
@@ -1410,7 +1398,7 @@ namespace umbriel {
     }
   }
 
-  // -------------------------------------------------------------------- drag
+  // -: drag
 
   void Overview::beginDrag() {
     Card* card = m_pressCard;

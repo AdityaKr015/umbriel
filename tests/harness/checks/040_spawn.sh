@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
-# A spawned application inherits a clean signal state.
-#
-# The compositor handles SIGINT and SIGTERM on the event loop, which means
-# libwayland blocks both process-wide via sigprocmask. A blocked signal mask
-# survives fork and exec, so without an explicit reset in the child every
-# application launched from a keybind would silently ignore Ctrl+C and
-# systemd's stop signal.
+# A spawned application inherits a clean signal state. The compositor handles SIGINT and SIGTERM on the event loop, which means libwayland blocks both process-wide via sigprocmask. A blocked signal mask survives fork and exec, so without an explicit reset in the child every application launched from a keybind would silently ignore Ctrl+C and systemd's stop signal.
 set -euo pipefail
 
 MARKER="umbriel-harness-spawn-$$"

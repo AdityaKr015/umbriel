@@ -328,11 +328,9 @@ namespace umbriel {
       bool middleClickPaste = true;
 
       struct Keyboard {
-        // Comma-separated XKB layout list ("us,de"); the first entry is active
-        // at startup. `options` carries XKB option names such as
-        // `grp:alt_shift_toggle`, which is what makes a second layout reachable
-        // from the keyboard itself rather than only through the
-        // `keyboard-layout-next` action.
+        // Comma-separated XKB layout list ("us,de"); the first entry is active at startup. `options` carries XKB option
+        // names such as `grp:alt_shift_toggle`, which is what makes a second layout reachable from the keyboard itself
+        // rather than only through the `keyboard-layout-next` action.
         std::string layout;
         std::string variant;
         std::string options;

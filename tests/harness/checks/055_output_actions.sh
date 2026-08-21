@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# The new output, workspace, and window actions: parse + dispatch reach the
-# handlers (an unregistered action would say "unknown action"), and the
-# behaviors that work on a single headless output are asserted by their
-# observable transitions.
+# The new output, workspace, and window actions: parse + dispatch reach the handlers (an unregistered action would say "unknown action"), and the behaviors that
+# work on a single headless output are asserted by their observable transitions.
 set -euo pipefail
 
 CLIENT_PIDS=()
@@ -51,10 +49,8 @@ wait_for_windows() {
   return 1
 }
 
-# --- Single-output rejection ---
-# The harness has exactly one headless output, so every directional output
-# action must fail with a "no output" message. This also proves parse +
-# dispatch reach the handler.
+# Single-output rejection: The harness has exactly one headless output, so every directional output action must fail with a "no output" message. This also
+# proves parse + dispatch reach the handler.
 for action in \
   output-focus-left output-focus-right output-focus-up output-focus-down \
   window-move-to-output-left window-move-to-output-right window-move-to-output-up window-move-to-output-down \
@@ -63,8 +59,7 @@ for action in \
   rejects_with "$action" "no output"
 done
 
-# --- workspace-next / workspace-previous ---
-spawn_client ws-flip
+# workspace-next / workspace-previousspawn_client ws-flip
 wait_for_windows 1
 
 if [[ $("$UMBRIEL" windows --json | jq -r '.[0].active') != true ]]; then
@@ -92,10 +87,8 @@ if [[ $active_now != true ]]; then
   exit 1
 fi
 
-# --- window-modify-width ---
-# Headless output is 1280x720 with the shipped defaults (gap 8, border 2):
-# viewport 1260, so -0.2 shrinks a column by about 252px. The exact geometry
-# math lives in 030_layout.sh (624 wide at 0.5).
+# window-modify-width: Headless output is 1280x720 with the shipped defaults (gap 8, border 2): viewport 1260, so -0.2 shrinks a column by about 252px.
+# The exact geometry math lives in 030_layout.sh (624 wide at 0.5).
 before_w=$(jq -r '.[0].w' <<< "$("$UMBRIEL" windows --json)")
 accepts "window-modify-width:-0.2"
 after_w=$before_w
@@ -120,8 +113,7 @@ if [[ $restored_w -ne $before_w ]]; then
   exit 1
 fi
 
-# --- window-center ---
-accepts "window-toggle-floating"
+# window-centeraccepts "window-toggle-floating"
 for _ in $(seq 40); do
   floating=$(jq -r '.[0].floating' <<< "$("$UMBRIEL" windows --json)")
   [[ $floating == true ]] && break
@@ -153,8 +145,7 @@ if [[ $dx -lt -3 || $dx -gt 3 || $dy -lt -3 || $dy -gt 3 ]]; then
 fi
 accepts "window-toggle-floating" # restore tiled
 
-# --- workspace-set-layout ---
-spawn_client dwindle-b
+# workspace-set-layoutspawn_client dwindle-b
 spawn_client dwindle-c
 wait_for_windows 3
 

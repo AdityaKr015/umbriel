@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# Real clients map into the scrolling layout and land on the geometry the layout
-# math predicts.
-#
-# This is the regression net for the layout sizing path. The size a view is
-# first configured with and the size the layout arranges it to must agree, or
-# windows visibly resize on first paint.
+# Real clients map into the scrolling layout and land on the geometry the layout math predicts. This is the regression net for the layout sizing path. The size a
+# view is first configured with and the size the layout arranges it to must agree, or windows visibly resize on first paint.
 set -euo pipefail
 
 CLIENT_PIDS=()
@@ -34,12 +30,7 @@ wait_for_windows() {
   return 1
 }
 
-# Output is 1280x720 (WLR_HEADLESS_OUTPUTS default mode). With the shipped
-# defaults (gap 8, border 2, no outer border) the derived layout metrics are:
-#   totalBorderWidth = 2, edgePad = gap + border = 10, totalGap = gap + 2*border = 12
-#   viewport = 1280 - 2*edgePad = 1260, height = 720 - 2*edgePad = 700
-# A 0.5 fraction column is then:
-#   round(0.5 * (viewport + totalGap)) - totalGap = round(636) - 12 = 624
+# Output is 1280x720 (WLR_HEADLESS_OUTPUTS default mode). With the shipped defaults (gap 8, border 2, no outer border) the derived layout metrics are: totalBorderWidth = 2, edgePad = gap + border = 10, totalGap = gap + 2*border = 12 viewport = 1280 - 2*edgePad = 1260, height = 720 - 2*edgePad = 700 A 0.5 fraction column is then: round(0.5 * (viewport + totalGap)) - totalGap = round(636) - 12 = 624
 readonly EXPECT_W=624
 readonly EXPECT_H=700
 

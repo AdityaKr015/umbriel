@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# New clients must see the primary-selection global only while middle-click
-# paste is enabled. This exercises the per-client protocol filter across live
-# config reloads.
+# New clients must see the primary-selection global only while middle-click paste is enabled. This exercises the per-client protocol filter across live config
+# reloads.
 set -euo pipefail
 
 readonly GLOBAL_CLIENT="${UMBRIEL_GLOBAL_CLIENT:-./build-debug/global-client}"

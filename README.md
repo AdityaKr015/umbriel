@@ -6,7 +6,9 @@ window rules, blur, shadows, and fluid animations.
 It runs independently and can be paired with [Noctalia](https://github.com/noctalia-dev/noctalia), which provides a
 first-class desktop shell experience for Umbriel. Umbriel is built in C++23 on
 [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) and [SceneFX](https://github.com/wlrfx/scenefx), with
-Xwayland support provided by [xwayland-satellite](https://github.com/Supreeeme/xwayland-satellite).
+Xwayland support provided by [xwayland-satellite](https://github.com/Supreeeme/xwayland-satellite) and portal screen
+capture and sharing by [xdg-desktop-portal-umbriel](https://github.com/noctalia-dev/xdg-desktop-portal-umbriel), an
+xdg-desktop-portal backend for Umbriel.
 
 > [!IMPORTANT]
 > Umbriel is young and actively evolving. It is usable today, but configuration keys, keybinds, and behavior may change
@@ -109,6 +111,10 @@ start-umbriel
 
 From an existing Wayland or X11 session, Umbriel opens a nested window (mod = Alt).
 From a TTY it takes over the seat (mod = Super).
+
+Apps that capture the screen through xdg-desktop-portal (browser screen sharing, OBS, portal-aware screenshot
+tools) are served by [xdg-desktop-portal-umbriel](https://github.com/noctalia-dev/xdg-desktop-portal-umbriel), which
+implements the Screencast and Screenshot interfaces for Umbriel.
 
 ```sh
 just run debug kitty

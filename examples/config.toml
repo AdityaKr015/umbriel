@@ -221,10 +221,9 @@ follows_mouse = false
 # focus_on_activate = true
 
 # [[window_rule]]
-# match.app_id = "pavucontrol"
-# default_floating = true
-# default_size = [800, 600]
-# default_position = { x = 32, y = 32, anchor = "bottom_right" }
+# match.title = "^notificationtoasts_.+_desktop"
+# default_position = { x = 0, y = 0, anchor = "bottom_right" }
+# default_focused = false
 
 [[window_rule]]
 match.app_id = "^dev.noctalia.Noctalia$"

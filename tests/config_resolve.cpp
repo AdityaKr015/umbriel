@@ -134,6 +134,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   app.appIdRegex = std::regex(app.appIdPattern);
   app.opacity = 0.5;
   app.blur = true;
+  app.defaultFocused = false;
   app.focusOnActivate = false;
   app.defaultPosition = umbriel::WindowPosition{
       .x = 12,
@@ -162,6 +163,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK_EQ(resolved.defaultPosition->x, 12);
   CHECK_EQ(resolved.defaultPosition->y, 24);
   CHECK(resolved.defaultPosition->anchor == umbriel::WindowPositionAnchor::TopRight);
+  CHECK(resolved.defaultFocused && !*resolved.defaultFocused);
   CHECK(resolved.focusOnActivate && *resolved.focusOnActivate);
 
   const auto focused = umbriel::resolveWindowRules(config, "foot", "project shell", true);

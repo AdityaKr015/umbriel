@@ -146,6 +146,9 @@ namespace umbriel {
       if (rule.defaultMaximize) {
         resolved.defaultMaximize = rule.defaultMaximize;
       }
+      if (rule.defaultFocused) {
+        resolved.defaultFocused = rule.defaultFocused;
+      }
       if (rule.focusOnActivate) {
         resolved.focusOnActivate = rule.focusOnActivate;
       }

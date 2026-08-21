@@ -1424,7 +1424,7 @@ namespace umbriel {
 
     updateForeignIdentity();
     updateForeignState();
-    if (m_onActiveWorkspace && !m_server->sessionLocked()) {
+    if (m_onActiveWorkspace && !m_server->sessionLocked() && rule.defaultFocused.value_or(true)) {
       m_server->focusView(this);
     }
     if (m_onActiveWorkspace) {

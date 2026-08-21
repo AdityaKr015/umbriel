@@ -216,6 +216,7 @@ follows_mouse = false
 # match.app_id = "firefox"
 # match.title = "^Library$"
 # default_floating = true
+# default_focused = false
 # focus_on_activate = true
 
 # [[window_rule]]

@@ -1031,6 +1031,7 @@ namespace umbriel {
         keys.boolean("default_floating", rule.defaultFloating)
             .boolean("default_fullscreen", rule.defaultFullscreen)
             .boolean("default_maximize", rule.defaultMaximize)
+            .boolean("default_focused", rule.defaultFocused)
             .boolean("focus_on_activate", rule.focusOnActivate)
             .boolean("blur", rule.blur)
             .boolean("blur_popups", rule.blurPopups)

@@ -145,6 +145,7 @@ namespace umbriel {
     std::optional<int> defaultWorkspace; // 1-64
     std::optional<bool> defaultFullscreen;
     std::optional<bool> defaultMaximize;
+    std::optional<bool> defaultFocused;
     std::optional<bool> focusOnActivate;
     std::optional<double> opacity; // 0.0-1.0
     std::optional<bool> blur;
@@ -166,6 +167,7 @@ namespace umbriel {
           && defaultWorkspace == other.defaultWorkspace
           && defaultFullscreen == other.defaultFullscreen
           && defaultMaximize == other.defaultMaximize
+          && defaultFocused == other.defaultFocused
           && focusOnActivate == other.focusOnActivate
           && opacity == other.opacity
           && blur == other.blur
@@ -185,6 +187,7 @@ namespace umbriel {
     std::optional<int> defaultWorkspace;
     std::optional<bool> defaultFullscreen;
     std::optional<bool> defaultMaximize;
+    std::optional<bool> defaultFocused;
     std::optional<bool> focusOnActivate;
     std::optional<double> opacity;
     std::optional<bool> blur;

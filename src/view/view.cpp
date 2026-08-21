@@ -10,6 +10,7 @@
 #include "output/output.h"
 #include "overview/overview.h"
 #include "server/server.h"
+#include "view/maximize.h"
 #include "view/output_clip.h"
 #include "view/xdg_size.h"
 // clang-format off
@@ -1735,13 +1736,13 @@ namespace umbriel {
       return;
     }
     if (m_tiled && m_workspace != nullptr) {
-      if (m_maximizedToEdges || m_toplevel->requested.maximized) {
+      const int column = m_workspace->layout().columnOf(this);
+      const bool columnFullWidth = column >= 0 && m_workspace->layout().isFullWidth(column);
+      if (maximizeRequestTargetsEdges(m_maximizedToEdges, columnFullWidth, m_toplevel->requested.maximized)) {
         setMaximizedToEdges(m_toplevel->requested.maximized);
         return;
       }
-      const int column = m_workspace->layout().columnOf(this);
-      const bool maximized = column >= 0 && m_workspace->layout().isFullWidth(column);
-      wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+      wlr_xdg_toplevel_set_maximized(m_toplevel, columnFullWidth);
       updateForeignState();
       return;
     }

@@ -198,8 +198,8 @@ namespace umbriel {
   }
 
   void Cursor::updateHideTimer() {
-    const int timeoutSeconds = config().input.cursor.hideTimeout;
-    if (timeoutSeconds == 0) {
+    const int timeoutMs = config().input.cursor.hideTimeoutMs;
+    if (timeoutMs == 0) {
       if (m_hideTimer != nullptr) {
         wl_event_source_timer_update(m_hideTimer, 0);
       }
@@ -220,7 +220,7 @@ namespace umbriel {
       }
     }
     if (!m_cursorHidden) {
-      wl_event_source_timer_update(m_hideTimer, timeoutSeconds * 1000);
+      wl_event_source_timer_update(m_hideTimer, timeoutMs);
     }
   }
 

@@ -525,7 +525,7 @@ UMBRIEL_TEST(cursorHideTimeoutLoads) {
   const TempConfig file;
   file.write(R"(
 [input.cursor]
-hide_timeout = 15
+hide_timeout_ms = 1500
 )");
 
   ConfigStore& store = umbriel::configStore();
@@ -533,8 +533,13 @@ hide_timeout = 15
   const umbriel::ConfigReloadResult result = store.reload();
 
   CHECK(result.success);
-  CHECK_EQ(store.config().input.cursor.hideTimeout, 15);
-  CHECK(!containsDiagnostic(store, "unknown key input.cursor.hide_timeout"));
+  CHECK_EQ(store.config().input.cursor.hideTimeoutMs, 1500);
+  CHECK(!containsDiagnostic(store, "unknown key input.cursor.hide_timeout_ms"));
+
+  file.write("[input.cursor]\nhide_timeout = 15\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().input.cursor.hideTimeoutMs, 0);
+  CHECK(containsDiagnostic(store, "unknown key input.cursor.hide_timeout"));
 }
 
 UMBRIEL_TEST(invalidCustomAccelerationCurveIsRejected) {

@@ -373,8 +373,8 @@ namespace umbriel {
         std::string theme;
         int size = 24;
         bool hardwareCursor = true;
-        // Seconds without pointer activity before hiding the cursor. Zero disables it.
-        int hideTimeout = 0;
+        // Milliseconds without pointer activity before hiding the cursor. Zero disables it.
+        int hideTimeoutMs = 0;
         bool operator==(const Cursor&) const = default;
       } cursor;
 

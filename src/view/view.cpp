@@ -937,7 +937,7 @@ namespace umbriel {
   }
 
   void View::updateShadow() {
-    if (m_toplevel->scheduled.fullscreen) {
+    if (m_toplevel->scheduled.fullscreen || m_maximizedToEdges) {
       m_decoration.hideShadow();
       return;
     }
@@ -1442,6 +1442,8 @@ namespace umbriel {
     const bool ruleMaximized = rule.defaultMaximize && *rule.defaultMaximize;
     if (ruleMaximized || (!m_tiled && m_toplevel->requested.maximized)) {
       setMaximized(true);
+    } else if (m_tiled && m_toplevel->requested.maximized) {
+      setMaximizedToEdges(true);
     }
 
     // Fullscreen after workspace + focus so the view lands in the right place.
@@ -1456,6 +1458,7 @@ namespace umbriel {
 
   void View::handleUnmap() {
     setUrgent(false);
+    m_maximizedToEdges = false;
     if (m_pinned) {
       m_pinned = false;
       m_restoreTiledAfterUnpin = false;
@@ -1682,6 +1685,9 @@ namespace umbriel {
 
   void View::setMaximized(bool maximized) {
     if (m_tiled && m_workspace != nullptr) {
+      if (m_maximizedToEdges) {
+        setMaximizedToEdges(false);
+      }
       const int column = m_workspace->layout().columnOf(this);
       if (column >= 0 && m_workspace->layout().isFullWidth(column) != maximized) {
         m_workspace->layout().toggleFullWidth(column);
@@ -1729,6 +1735,10 @@ namespace umbriel {
       return;
     }
     if (m_tiled && m_workspace != nullptr) {
+      if (m_maximizedToEdges || m_toplevel->requested.maximized) {
+        setMaximizedToEdges(m_toplevel->requested.maximized);
+        return;
+      }
       const int column = m_workspace->layout().columnOf(this);
       const bool maximized = column >= 0 && m_workspace->layout().isFullWidth(column);
       wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
@@ -1737,6 +1747,41 @@ namespace umbriel {
     }
     setMaximized(m_toplevel->requested.maximized);
   }
+
+  void View::setMaximizedToEdges(bool maximized) {
+    if (!m_toplevel->base->initialized || maximized == m_maximizedToEdges) {
+      return;
+    }
+    if (maximized && m_toplevel->scheduled.fullscreen) {
+      setFullscreen(false);
+      m_pendingUnfullscreenSize = false;
+      m_unfullscreenGraceStartMsec = 0;
+    }
+    cancelSizeAnimation();
+    if (m_tiled && m_workspace != nullptr && maximized) {
+      const int column = m_workspace->layout().columnOf(this);
+      if (column >= 0 && m_workspace->layout().isFullWidth(column)) {
+        m_workspace->layout().clearFullWidthState(column);
+      }
+    }
+
+    m_maximizedToEdges = maximized;
+    if (m_tiled) {
+      wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+    } else {
+      setMaximized(maximized);
+    }
+    showDecorations(!maximized && !m_toplevel->scheduled.fullscreen);
+    if (m_workspace != nullptr) {
+      if (maximized) {
+        m_workspace->ensureFocusedVisible();
+      }
+      m_workspace->markArrange(false);
+    }
+    updateForeignState();
+  }
+
+  void View::toggleMaximizedToEdges() { setMaximizedToEdges(!m_maximizedToEdges); }
 
   void View::handleRequestFullscreen() {
     if (!m_toplevel->base->initialized) {
@@ -1864,6 +1909,9 @@ namespace umbriel {
     const bool wantTiled = !floating;
     if (m_tiled == wantTiled) {
       return;
+    }
+    if (m_maximizedToEdges) {
+      setMaximizedToEdges(false);
     }
     if (!floating && m_pinned) {
       m_pinned = false;
@@ -2025,6 +2073,9 @@ namespace umbriel {
         m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?", static_cast<const void*>(this), fullscreen, m_tiled,
         m_workspace != nullptr && m_workspace->active()
     );
+    if (fullscreen && m_maximizedToEdges) {
+      setMaximizedToEdges(false);
+    }
     // Any leave-fullscreen invalidates a pending float-toggle restore: the
     // float path re-sets the flag right after its own setFullscreen(false).
     if (!fullscreen) {

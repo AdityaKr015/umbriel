@@ -40,6 +40,7 @@ namespace umbriel {
           .maxWidth = hints.maxWidth,
           .maxHeight = hints.maxHeight,
           .fullscreen = view != nullptr && view->layoutFullscreen(),
+          .maximizedToEdges = view != nullptr && view->maximizedToEdges(),
       };
     }
   } // namespace
@@ -358,10 +359,10 @@ namespace umbriel {
       if (view->awaitingUnfullscreenSize()) {
         continue;
       }
-      const wlr_box target = m_layout->targetBox(view);
+      const wlr_box target = tiledTargetBox(view, usable);
       const XdgSizeHints hints = xdgSizeHints(view->toplevel());
-      const int width = clampXdgWidth(target.width, hints);
-      const int height = clampXdgHeight(target.height, hints);
+      const int width = view->maximizedToEdges() ? target.width : clampXdgWidth(target.width, hints);
+      const int height = view->maximizedToEdges() ? target.height : clampXdgHeight(target.height, hints);
       const auto& scheduled = view->toplevel()->scheduled;
       if (scheduled.width != width || scheduled.height != height) {
         wlr_xdg_toplevel_set_size(view->toplevel(), width, height);
@@ -401,6 +402,10 @@ namespace umbriel {
     Output* output = m_group->output();
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
+    wlr_box usable = output->usableArea();
+    if (usable.width <= 0 || usable.height <= 0) {
+      usable = outputBox;
+    }
 
     // Clip against the node's CURRENT position, not the layout target: during position animations (column swaps, drag
     // drops) the node lags the target, and clips computed at the target land displaced on screen (cut-off borders that
@@ -444,7 +449,7 @@ namespace umbriel {
         // Floating views follow committed geometry; tiled ones follow the box
         // the layout assigned them.
         const wlr_box sized =
-            m_layout->columnOf(view) < 0 ? view->toplevel()->base->geometry : m_layout->targetBox(view);
+            m_layout->columnOf(view) < 0 ? view->toplevel()->base->geometry : tiledTargetBox(view, usable);
         target = {node.x, node.y + m_slideOffsetY, sized.width, sized.height};
         decorated = grow(target, view->presentedWidth(target), view->presentedHeight(target));
       }
@@ -463,6 +468,10 @@ namespace umbriel {
     Output* output = m_group->output();
     wlr_box outputBox{};
     wlr_output_layout_get_box(m_group->server()->outputLayout(), output->wlr(), &outputBox);
+    wlr_box usable = output->usableArea();
+    if (usable.width <= 0 || usable.height <= 0) {
+      usable = outputBox;
+    }
     const int viewportWidth = std::max(1, output->usableArea().width - 2 * m_layoutConfig.edgePad);
 
     // Position first, then let syncViewPresentation derive enable + clip from
@@ -495,7 +504,7 @@ namespace umbriel {
         syncViewPresentation(view);
         continue;
       }
-      wlr_box target = m_layout->targetBox(view);
+      wlr_box target = tiledTargetBox(view, usable);
       if (animate) {
         view->animateTo(target.x, target.y);
       } else {
@@ -503,6 +512,22 @@ namespace umbriel {
       }
       syncViewPresentation(view);
     }
+  }
+
+  wlr_box Workspace::tiledTargetBox(const View* view, const wlr_box& usable) const {
+    wlr_box target = m_layout->targetBox(view);
+    if (view == nullptr || !view->maximizedToEdges()) {
+      return target;
+    }
+    if (scrollingLayout() != nullptr) {
+      target.x -= m_layoutConfig.edgePad;
+    } else {
+      target.x = usable.x;
+    }
+    target.y = usable.y;
+    target.width = usable.width;
+    target.height = usable.height;
+    return target;
   }
 
   View* Workspace::focusAdjacent(int direction) const {
@@ -568,6 +593,9 @@ namespace umbriel {
   }
 
   bool Workspace::cycleFocusedWidth() {
+    if (m_focusedView != nullptr && m_focusedView->maximizedToEdges()) {
+      m_focusedView->setMaximizedToEdges(false);
+    }
     const int column = m_layout->columnOf(m_focusedView);
     if (!m_layout->cycleWidth(column)) {
       return false;
@@ -579,6 +607,9 @@ namespace umbriel {
   }
 
   bool Workspace::setFocusedWidth(double fraction) {
+    if (m_focusedView != nullptr && m_focusedView->maximizedToEdges()) {
+      m_focusedView->setMaximizedToEdges(false);
+    }
     const int column = m_layout->columnOf(m_focusedView);
     if (!m_layout->setWidthFraction(column, fraction)) {
       return false;
@@ -600,6 +631,9 @@ namespace umbriel {
   }
 
   bool Workspace::toggleFocusedFullWidth() {
+    if (m_focusedView != nullptr && m_focusedView->maximizedToEdges()) {
+      m_focusedView->setMaximizedToEdges(false);
+    }
     const int column = m_layout->columnOf(m_focusedView);
     if (column < 0) {
       return false;
@@ -608,6 +642,14 @@ namespace umbriel {
     wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), fullWidth);
     ensureFocusedVisible();
     markArrange();
+    return true;
+  }
+
+  bool Workspace::toggleFocusedMaximizedToEdges() {
+    if (m_focusedView == nullptr || !m_focusedView->mapped()) {
+      return false;
+    }
+    m_focusedView->toggleMaximizedToEdges();
     return true;
   }
 

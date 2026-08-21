@@ -19,6 +19,7 @@ Use this short description for package metadata:
 | License         | MIT ([LICENSE](LICENSE))                                          |
 | Version         | Meson `project(... version: ...)` in [`meson.build`](meson.build) |
 | Binary          | `umbriel`                                                         |
+| Session launcher | `start-umbriel`                                                   |
 | Wayland session | `umbriel.desktop`                                                 |
 
 Umbriel is Linux-only. The project flake builds `x86_64-linux` and
@@ -91,11 +92,15 @@ Distribution package names vary.
 | Dependency                                 | Role                                                       |
 | ------------------------------------------ | ---------------------------------------------------------- |
 | `xwayland-satellite`                       | X11 application support when `general.xwayland` is enabled |
+| `systemd`                                  | Managed session and `environment.d` support, optional      |
 | A usable font stack                        | Internal overlays and configuration diagnostics            |
 | A Wayland-capable graphics and input stack | DRM or nested compositor operation through wlroots         |
 
 `xwayland-satellite` must be discoverable on `PATH`. It may be omitted when a
 package or installation deliberately disables Xwayland in the configuration.
+
+On systems with a working systemd user manager, `start-umbriel` runs the
+compositor as `umbriel.service`. Other init systems use the direct fallback.
 
 The packaged config contains a `spawn:kitty` keybind as an editable example.
 Kitty is not an Umbriel runtime dependency and does not need to be forced into
@@ -105,18 +110,21 @@ the compositor package.
 
 ```text
 <prefix>/bin/umbriel
+<prefix>/bin/start-umbriel
 <prefix>/share/umbriel/config.toml
 <prefix>/share/wayland-sessions/umbriel.desktop
+<prefix>/lib/systemd/user/umbriel.service
 <prefix>/lib/systemd/user/umbriel-session.target
+<prefix>/lib/systemd/user/umbriel-shutdown.target
 ```
 
 `share/umbriel/config.toml` is required. It is installed directly from
 [`examples/config.toml`](examples/config.toml) and serves as the default when
 no user or system configuration exists.
 
-The desktop entry must launch the installed `umbriel` binary. Packages using a
-nonstandard executable location may rewrite its `Exec` field, as the Nix
-package does.
+The desktop entry must launch `start-umbriel`. The generated launcher and
+`umbriel.service` contain the configured absolute path to the `umbriel` binary.
+Packages using nonstandard paths must preserve all three references.
 
 ## Configuration lookup
 
@@ -161,14 +169,14 @@ file.
 ## Session integration
 
 Install `umbriel.desktop` under `share/wayland-sessions` so display managers
-can discover the session. The systemd user target is installed under
-`lib/systemd/user` and binds the compositor session to
-`graphical-session.target`.
+can discover the session. It invokes `start-umbriel`, which uses the systemd
+user manager when available and directly executes Umbriel otherwise.
 
-Before starting that target, Umbriel synchronizes its complete environment
-with the systemd user manager and D-Bus activation. This includes display,
-session, configured environment, and runtime-specific variables inherited from
-the display manager. Packages do not need to provide a session wrapper.
+The managed path imports the display manager environment and starts
+`umbriel.service`. The service naturally inherits variables generated from
+`environment.d`. Once ready, Umbriel publishes only its graphical-session
+variables and starts `umbriel-session.target`. The launcher activates
+`umbriel-shutdown.target` and removes those variables after Umbriel exits.
 
 No display manager or desktop shell is required by Umbriel itself. It can be
 paired with [Noctalia](https://github.com/noctalia-dev/noctalia) for panels,

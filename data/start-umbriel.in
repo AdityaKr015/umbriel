@@ -1,0 +1,42 @@
+#!/bin/sh
+
+if [ -n "${MANAGERPID:-}" ] && [ "${SYSTEMD_EXEC_PID:-}" = "$$" ]; then
+  exec @UMBRIEL_EXECUTABLE@ "$@"
+fi
+
+if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -n "${WAYLAND_SOCKET:-}" ] ||
+  [ -n "${DISPLAY:-}" ]; then
+  exec @UMBRIEL_EXECUTABLE@ "$@"
+fi
+
+if ! command -v systemctl >/dev/null 2>&1 ||
+  ! systemctl --user show-environment >/dev/null 2>&1; then
+  exec @UMBRIEL_EXECUTABLE@ "$@"
+fi
+
+if systemctl --user --quiet is-active umbriel.service; then
+  echo "An Umbriel session is already running." >&2
+  exit 1
+fi
+
+systemctl --user reset-failed
+systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP \
+  XDG_SESSION_DESKTOP XDG_SESSION_TYPE UMBRIEL_SOCKET
+awk 'BEGIN {
+  for (name in ENVIRON) {
+    if (name ~ /^[A-Za-z_][A-Za-z0-9_]*$/)
+      print name
+  }
+}' </dev/null | xargs -r systemctl --user import-environment
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+  dbus-update-activation-environment --all
+fi
+
+systemctl --user --wait start umbriel.service
+umbriel_status=$?
+
+systemctl --user start --job-mode=replace-irreversibly umbriel-shutdown.target
+systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP \
+  XDG_SESSION_DESKTOP XDG_SESSION_TYPE UMBRIEL_SOCKET
+
+exit "$umbriel_status"

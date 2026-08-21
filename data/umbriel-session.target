@@ -2,5 +2,6 @@
 Description=Umbriel compositor session
 Documentation=man:systemd.special(7)
 BindsTo=graphical-session.target
-Wants=graphical-session.target
+Wants=graphical-session.target xdg-desktop-autostart.target
 After=graphical-session-pre.target
+Before=xdg-desktop-autostart.target

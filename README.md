@@ -97,6 +97,16 @@ just debug
 
 ## Running
 
+Installed display-manager sessions start through `start-umbriel`. On systemd,
+it runs the compositor as a user service so applications inherit
+`environment.d`; other init systems fall back to the compositor binary.
+
+Start an installed native session from a TTY with:
+
+```sh
+start-umbriel
+```
+
 From an existing Wayland or X11 session, Umbriel opens a nested window (mod = Alt).
 From a TTY it takes over the seat (mod = Super).
 

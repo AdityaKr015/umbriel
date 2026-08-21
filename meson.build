@@ -380,8 +380,29 @@ install_data(
   install_dir: get_option('datadir') / 'wayland-sessions',
 )
 
+umbriel_session_config = configuration_data()
+umbriel_session_config.set(
+  'UMBRIEL_EXECUTABLE',
+  get_option('prefix') / get_option('bindir') / 'umbriel',
+)
+configure_file(
+  input: 'data/start-umbriel.in',
+  output: 'start-umbriel',
+  configuration: umbriel_session_config,
+  install: true,
+  install_dir: get_option('bindir'),
+  install_mode: 'rwxr-xr-x',
+)
+configure_file(
+  input: 'data/umbriel.service.in',
+  output: 'umbriel.service',
+  configuration: umbriel_session_config,
+  install_dir: get_option('prefix') / 'lib' / 'systemd' / 'user',
+)
+
 install_data(
   'data/umbriel-session.target',
+  'data/umbriel-shutdown.target',
   install_dir: get_option('prefix') / 'lib' / 'systemd' / 'user',
 )
 

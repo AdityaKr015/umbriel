@@ -64,9 +64,12 @@ namespace umbriel {
 
     void synchronizeSessionEnvironment() {
       constexpr std::string_view command =
-          "if command -v systemctl >/dev/null 2>&1; then systemctl --user import-environment; fi; "
+          "variables='WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE "
+          "UMBRIEL_SOCKET'; "
+          "if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then "
+          "systemctl --user import-environment $variables; fi; "
           "if command -v dbus-update-activation-environment >/dev/null 2>&1; then "
-          "dbus-update-activation-environment --all; fi";
+          "dbus-update-activation-environment $variables; fi";
       const int status = std::system(command.data());
       if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         kLog.warn("failed to synchronize the session environment");
@@ -425,7 +428,10 @@ namespace umbriel {
       synchronizeSessionEnvironment();
       // Notify systemd that the graphical session is ready so user services
       // gated on graphical-session.target (xdg-desktop-portal, etc.) can start.
-      spawn("systemctl --user start --no-block umbriel-session.target");
+      spawn(
+          "if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; "
+          "then systemctl --user start --no-block umbriel-session.target; fi"
+      );
     }
     if (startupCmd != nullptr) {
       spawn(startupCmd);

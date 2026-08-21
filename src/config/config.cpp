@@ -8,6 +8,7 @@
 #include "config/store.h"
 #include "config/value_parse.h"
 #include "core/log.h"
+#include "umbriel_build_config.h"
 
 // clang-format off
 #include <linux/input-event-codes.h>
@@ -75,7 +76,7 @@ namespace umbriel {
       emitDiag(ConfigDiagnostic::Severity::Error, &src, std::format(fmt, std::forward<A>(args)...));
     }
 
-    std::filesystem::path defaultConfigPath() {
+    std::filesystem::path userConfigPath() {
       if (const char* xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
           xdgConfigHome != nullptr && xdgConfigHome[0] != '\0') {
         return std::filesystem::path(xdgConfigHome) / "umbriel/config.toml";
@@ -84,6 +85,41 @@ namespace umbriel {
         return std::filesystem::path(home) / ".config/umbriel/config.toml";
       }
       return std::filesystem::path(".config/umbriel/config.toml");
+    }
+
+    bool configPathExists(const std::filesystem::path& path) {
+      std::error_code error;
+      return std::filesystem::exists(path, error) && !error;
+    }
+
+    std::filesystem::path defaultConfigPath() {
+      const std::filesystem::path userPath = userConfigPath();
+      if (configPathExists(userPath)) {
+        return userPath;
+      }
+
+      const char* configuredDirs = std::getenv("XDG_CONFIG_DIRS");
+      const std::string_view configDirs = configuredDirs != nullptr && configuredDirs[0] != '\0'
+          ? std::string_view(configuredDirs)
+          : std::string_view("/etc/xdg");
+      size_t offset = 0;
+      while (offset <= configDirs.size()) {
+        const size_t separator = configDirs.find(':', offset);
+        const std::string_view directory = configDirs.substr(offset, separator - offset);
+        if (!directory.empty()) {
+          const std::filesystem::path candidate = std::filesystem::path(directory) / "umbriel/config.toml";
+          if (configPathExists(candidate)) {
+            return candidate;
+          }
+        }
+        if (separator == std::string_view::npos) {
+          break;
+        }
+        offset = separator + 1;
+      }
+
+      const std::filesystem::path packaged = std::filesystem::path(kDataDir) / "umbriel/config.toml";
+      return configPathExists(packaged) ? packaged : userPath;
     }
 
     std::optional<LayoutMode> readLayoutMode(Section& section, std::string_view context) {

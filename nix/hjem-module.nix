@@ -23,11 +23,12 @@ in
     };
 
     settings = mkOption {
-      type = toml.type;
-      default = { };
+      type = lib.types.nullOr toml.type;
+      default = null;
       description = ''
         Configuration written to {file}`$XDG_CONFIG_HOME/umbriel/config.toml`.
-        See {file}`example.toml` in the Umbriel repository for every available option.
+        Leave null to use the configuration packaged with Umbriel.
+        See {file}`examples/config.toml` in the Umbriel repository for every available option.
       '';
       example = lib.literalExpression ''
         general.autostart = [ "noctalia" ];
@@ -43,7 +44,7 @@ in
   config = mkIf cfg.enable {
     packages = optional (cfg.package != null) cfg.package;
 
-    xdg.config.files = {
+    xdg.config.files = mkIf (cfg.settings != null) {
       "umbriel/config.toml".source = toml.generate "umbriel-config.toml" cfg.settings;
     };
   };

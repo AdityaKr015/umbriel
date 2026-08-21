@@ -128,7 +128,7 @@ Conventions:
 - Each directory owns one domain. Add new sources to the matching directory and register them in `meson.build`.
 - Vendored Wayland protocol XML lives in `protocols/` and is code-generated via `wayland-scanner` in `meson.build`.
 - User-facing configuration documentation lives in [`docs/user/`](docs/user/). Update it when adding or changing
-  config options. The reference pages are linked from [`example.toml`](example.toml) and the
+  config options. The reference pages are linked from [`examples/config.toml`](examples/config.toml) and the
   [README](README.md#configuration). Maintainer design notes live in [`docs/design/`](docs/design/).
 
 ## SceneFX submodule

@@ -1,6 +1,7 @@
 #include "check.h"
 #include "config/store.h"
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -57,7 +58,77 @@ namespace {
     std::filesystem::path m_path;
     std::filesystem::path m_includePath;
   };
+
+  class TempConfigTree {
+  public:
+    TempConfigTree()
+        : m_path(std::filesystem::temp_directory_path() / ("umbriel-config-tree-" + std::to_string(getpid()))) {
+      std::filesystem::remove_all(m_path);
+      std::filesystem::create_directories(m_path);
+    }
+    ~TempConfigTree() { std::filesystem::remove_all(m_path); }
+
+    void write(const std::filesystem::path& relativePath, const std::string& contents) const {
+      const std::filesystem::path path = m_path / relativePath;
+      std::filesystem::create_directories(path.parent_path());
+      std::ofstream stream(path);
+      stream << contents;
+    }
+
+    [[nodiscard]] std::filesystem::path path(const std::filesystem::path& relativePath) const {
+      return m_path / relativePath;
+    }
+
+  private:
+    std::filesystem::path m_path;
+  };
+
+  class ScopedEnvironment {
+  public:
+    ScopedEnvironment(const char* name, const std::string& value) : m_name(name) {
+      if (const char* previous = std::getenv(name)) {
+        m_previous = previous;
+      }
+      setenv(name, value.c_str(), 1);
+    }
+    ~ScopedEnvironment() {
+      if (m_previous) {
+        setenv(m_name.c_str(), m_previous->c_str(), 1);
+      } else {
+        unsetenv(m_name.c_str());
+      }
+    }
+
+  private:
+    std::string m_name;
+    std::optional<std::string> m_previous;
+  };
 } // namespace
+
+UMBRIEL_TEST(defaultConfigLookupPrefersUserThenSystem) {
+  const TempConfigTree tree;
+  const std::filesystem::path userHome = tree.path("user");
+  const std::filesystem::path systemDir = tree.path("system");
+  const std::filesystem::path systemConfig = systemDir / "umbriel/config.toml";
+  const std::filesystem::path userConfig = userHome / "umbriel/config.toml";
+  tree.write("system/umbriel/config.toml", "[layout]\ngap = 17\n");
+  const ScopedEnvironment configHome("XDG_CONFIG_HOME", userHome.string());
+  const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
+
+  ConfigStore& store = umbriel::configStore();
+  store.load(nullptr);
+
+  CHECK_EQ(store.rootPath(), systemConfig);
+  CHECK_EQ(store.config().layout.gap, 17);
+  CHECK(!store.fileMissing());
+
+  tree.write("user/umbriel/config.toml", "[layout]\ngap = 19\n");
+  store.load(nullptr);
+
+  CHECK_EQ(store.rootPath(), userConfig);
+  CHECK_EQ(store.config().layout.gap, 19);
+  CHECK(!store.fileMissing());
+}
 
 UMBRIEL_TEST(sharedLayoutAndNumberReadersPreserveConfigBehavior) {
   const TempConfig file;

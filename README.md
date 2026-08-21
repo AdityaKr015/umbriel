@@ -52,6 +52,9 @@ To understand the values and philosophy guiding the project, read our [ethos](ht
 
 ## Building
 
+Distribution maintainers should also read [PACKAGING.md](PACKAGING.md) for the
+installed layout, dependency notes, SceneFX requirements, and config fallback.
+
 After cloning, initialize the patched SceneFX fork tracked in `subprojects/scenefx`:
 
 ```sh
@@ -125,17 +128,18 @@ Inside the session:
 
 `kitty` is an optional startup command. Replace it with another command, or omit it by running `just run debug`
 or `./build-debug/umbriel`. There is no default spawn keybind, so add one under `[keybinds]` (see
-[`example.toml`](example.toml)) to open more terminals from inside the session, e.g. `"Mod+Return" = "spawn:kitty"`.
+[`examples/config.toml`](examples/config.toml)) to open more terminals from inside the session, e.g. `"Mod+Return" = "spawn:kitty"`.
 
 Stop with mod+Escape or `Ctrl+C` from the parent terminal.
 
 ## Configuration
 
-Umbriel loads `$XDG_CONFIG_HOME/umbriel/config.toml` (normally `~/.config/umbriel/config.toml`) at startup.
-Pass `-c path/to/config.toml` to use another file. Config files can include other TOML files with
+Umbriel first checks `$XDG_CONFIG_HOME/umbriel/config.toml`, then `$XDG_CONFIG_DIRS`, and finally its packaged
+`share/umbriel/config.toml`. Pass `-c path/to/config.toml` to use another file. Config files can include files with
 `[include] files = ["theme.toml", "keybinds.toml"]`; later files and the main file override earlier values.
 
-See [`example.toml`](example.toml) for defaults and [`docs/user/`](docs/user/) for the full reference:
+See [`examples/config.toml`](examples/config.toml) for the packaged starting configuration and
+[`docs/user/`](docs/user/) for the full reference:
 
 - [Configuration](docs/user/configuration.md): general, appearance, layout, input
 - [Keybinds](docs/user/keybinds.md): chords, submaps, Noctalia integration
@@ -172,7 +176,8 @@ programs.umbriel = {
 };
 ```
 
-`settings` also accepts a raw TOML string or a path to a `.toml` file. A hjem module is exported as
+When `settings` is omitted, the Home Manager and hjem modules leave the user path untouched so Umbriel loads its
+packaged configuration. Home Manager also accepts a raw TOML string or a path. The hjem module is exported as
 `inputs.umbriel.hjemModules.default`.
 
 ## Contributing

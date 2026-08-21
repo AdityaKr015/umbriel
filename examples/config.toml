@@ -1,5 +1,5 @@
-# Umbriel example config
-# Copy to ~/.config/umbriel/config.toml or pass with `umbriel -c example.toml`.
+# Umbriel default config
+# Copy this file to ~/.config/umbriel/config.toml to customize it.
 # Changes apply on save. See docs/user/ for the full reference.
 #
 # [include] merges extra files into this one. Included files are parsed first,
@@ -28,13 +28,13 @@ back_and_forth = false
 # Colors ---------------------------------------------------------------------
 
 [colors]
-background = "#141419F0"
-text_primary = "#E8E8EAFF"
-text_muted = "#8A8A92FF"
-accent_primary = "#7AA3FFFF"
-accent_secondary = "#F5C96BFF"
-warning = "#F5C96BFF"
-error = "#FF6B6BFF"
+# background = "#141419F0"
+# text_primary = "#E8E8EAFF"
+# text_muted = "#8A8A92FF"
+# accent_primary = "#7AA3FFFF"
+# accent_secondary = "#F5C96BFF"
+# warning = "#F5C96BFF"
+# error = "#FF6B6BFF"
 
 # Appearance -----------------------------------------------------------------
 
@@ -43,13 +43,13 @@ prefer_no_csd = true
 border_width = 2               # 0-100
 outer_border_width = 0         # 0-100
 corner_radius = 10             # 0-500
-border_focused = "#7AA3FFFF"
-border_unfocused = "#292933FF"
-scratchpad_border_focused = "#E5C07BFF"
-scratchpad_border_unfocused = "#5C4A2AFF"
-outer_border_color = "#1A1A1FFF"
-insert_hint_color = "#7FC8FF80"
-backdrop_color = "#000000FF"
+# border_focused = "#7AA3FFFF"
+# border_unfocused = "#292933FF"
+# scratchpad_border_focused = "#E5C07BFF"
+# scratchpad_border_unfocused = "#5C4A2AFF"
+# outer_border_color = "#1A1A1FFF"
+# insert_hint_color = "#7FC8FF80"
+# backdrop_color = "#000000FF"
 animation_ms = 250             # 1-10000
 
 [appearance.blur]
@@ -67,14 +67,14 @@ enabled = true
 softness = 10                  # 0-200, 0 = hard edge
 offset_x = 2                   # -200 to 200
 offset_y = 2
-color = "#0000008C"
+# color = "#0000008C"
 
 # Overview -------------------------------------------------------------------
 
 [overview]
 zoom = 0.5                     # 0.1-0.75
-background_tint = "#10101430"
-workspace_background = "#00000044" # set alpha to FF for an opaque background
+# background_tint = "#10101430"
+# workspace_background = "#00000044" # set alpha to FF for an opaque background
 
 # Hot corners ---------------------------------------------------------------
 
@@ -83,20 +83,20 @@ enabled = true
 delay_ms = 500                # 0-10000, 0 activates immediately
 action = "overview-open"
 
-# [hot_corners.top_right]
-# enabled = false
-# delay_ms = 500
-# action = "overview-close"
+[hot_corners.top_right]
+enabled = false
+delay_ms = 500
+action = "overview-close"
 
-# [hot_corners.bottom_left]
-# enabled = false
-# delay_ms = 500
-# action = "overview-toggle"
+[hot_corners.bottom_left]
+enabled = false
+delay_ms = 500
+action = "overview-toggle"
 
-# [hot_corners.bottom_right]
-# enabled = false
-# delay_ms = 500
-# action = "spawn:notify-send 'Bottom right'"
+[hot_corners.bottom_right]
+enabled = false
+delay_ms = 500
+action = "spawn:notify-send 'Bottom right'"
 
 # Layout ---------------------------------------------------------------------
 

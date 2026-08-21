@@ -19,6 +19,14 @@ add_project_arguments(
   '-DUMBRIEL_VERSION="' + meson.project_version() + '"',
   language: 'cpp',
 )
+umbriel_data_dir = get_option('prefix') / get_option('datadir')
+umbriel_build_config = configuration_data()
+umbriel_build_config.set_quoted('UMBRIEL_DATA_DIR', umbriel_data_dir)
+configure_file(
+  input: 'src/config/build_config.h.in',
+  output: 'umbriel_build_config.h',
+  configuration: umbriel_build_config,
+)
 add_project_arguments(
   '-DWLR_USE_UNSTABLE',
   language: 'c',
@@ -375,4 +383,9 @@ install_data(
 install_data(
   'data/umbriel-session.target',
   install_dir: get_option('prefix') / 'lib' / 'systemd' / 'user',
+)
+
+install_data(
+  'examples/config.toml',
+  install_dir: get_option('datadir') / 'umbriel',
 )

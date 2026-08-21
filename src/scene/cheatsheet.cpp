@@ -360,7 +360,7 @@ namespace {
           "\n<span foreground='{}'>no config found \xc2\xb7 showing built-in defaults</span>", palette.warning
       );
       titleMarkup += std::format(
-          "\n<span foreground='{}'>copy example.toml to ~/.config/umbriel/config.toml</span>", palette.textMuted
+          "\n<span foreground='{}'>copy examples/config.toml to ~/.config/umbriel/config.toml</span>", palette.textMuted
       );
     }
     const std::string footerMarkup = std::format(

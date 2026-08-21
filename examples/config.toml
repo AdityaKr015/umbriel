@@ -224,6 +224,7 @@ follows_mouse = false
 # match.title = "^notificationtoasts_.+_desktop"
 # default_position = { x = 0, y = 0, anchor = "bottom_right" }
 # default_focused = false
+# default_pinned = true
 
 [[window_rule]]
 match.app_id = "^dev.noctalia.Noctalia$"

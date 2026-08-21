@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "input/cursor.h"
+#include "input/seat.h"
 #include "layout/scrolling.h"
 #include "output/output.h"
 #include "overview/overview.h"
@@ -126,6 +127,14 @@ namespace umbriel {
     bool scratchpadHoldsFocus(Server& server) {
       ScratchpadManager* scratchpad = server.scratchpadManager();
       return scratchpad != nullptr && scratchpad->hasFocus(server.outputFromWlr(server.preferredOutput()));
+    }
+
+    View* focusedWindow(Server& server) {
+      if (View* view = View::fromSurface(server.seat()->wlr()->keyboard_state.focused_surface)) {
+        return view;
+      }
+      Workspace* workspace = activeWorkspace(server);
+      return workspace != nullptr ? workspace->focusedView() : nullptr;
     }
 
     // Move `view` to `target` (possibly on another output), activate the target workspace, and focus the view. Floats
@@ -406,10 +415,8 @@ namespace umbriel {
       if (scratchpadHoldsFocus(server)) {
         return true;
       }
-      if (Workspace* workspace = activeWorkspace(server)) {
-        if (View* view = workspace->focusedView()) {
-          view->togglePinned();
-        }
+      if (View* view = focusedWindow(server)) {
+        view->togglePinned();
       }
       return true;
     }

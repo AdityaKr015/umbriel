@@ -135,6 +135,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   app.opacity = 0.5;
   app.blur = true;
   app.defaultFocused = false;
+  app.defaultPinned = true;
   app.focusOnActivate = false;
   app.defaultPosition = umbriel::WindowPosition{
       .x = 12,
@@ -148,6 +149,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   title.titleRegex = std::regex(title.titlePattern);
   title.opacity = 0.8;
   title.focusOnActivate = true;
+  title.defaultPinned = false;
   config.windowRules.push_back(std::move(title));
 
   WindowRule unfocused;
@@ -164,7 +166,11 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK_EQ(resolved.defaultPosition->y, 24);
   CHECK(resolved.defaultPosition->anchor == umbriel::WindowPositionAnchor::TopRight);
   CHECK(resolved.defaultFocused && !*resolved.defaultFocused);
+  CHECK(resolved.defaultPinned && !*resolved.defaultPinned);
   CHECK(resolved.focusOnActivate && *resolved.focusOnActivate);
+
+  const auto appOnly = umbriel::resolveWindowRules(config, "foot", "editor", false);
+  CHECK(appOnly.defaultPinned && *appOnly.defaultPinned);
 
   const auto focused = umbriel::resolveWindowRules(config, "foot", "project shell", true);
   CHECK(focused.opacity && *focused.opacity == 0.8);

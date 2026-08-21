@@ -1033,6 +1033,7 @@ namespace umbriel {
             .boolean("default_fullscreen", rule.defaultFullscreen)
             .boolean("default_maximize", rule.defaultMaximize)
             .boolean("default_focused", rule.defaultFocused)
+            .boolean("default_pinned", rule.defaultPinned)
             .boolean("focus_on_activate", rule.focusOnActivate)
             .boolean("blur", rule.blur)
             .boolean("blur_popups", rule.blurPopups)

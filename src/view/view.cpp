@@ -1404,6 +1404,9 @@ namespace umbriel {
         setOnActiveWorkspace(true);
       }
     }
+    if (rule.defaultPinned && *rule.defaultPinned) {
+      setPinned(true, false);
+    }
     if (!m_tiled) {
       // The initial commit already applied default_size. Re-requesting it here
       // races the client's first content-driven resize.
@@ -1798,17 +1801,19 @@ namespace umbriel {
     raiseToTop();
   }
 
-  void View::togglePinned() {
+  void View::togglePinned() { setPinned(!m_pinned, true); }
+
+  void View::setPinned(bool pinned, bool focus) {
     if (!m_mapped
         || !m_toplevel->base->initialized
-        || m_toplevel->scheduled.fullscreen
-        || m_toplevel->current.fullscreen) {
+        || (pinned && (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen))
+        || pinned == m_pinned) {
       return;
     }
-    if (!m_pinned) {
+    if (pinned) {
       m_restoreTiledAfterUnpin = m_tiled;
       if (m_tiled) {
-        setFloating(true);
+        setFloating(true, false);
       }
       m_pinned = true;
       restorePinnedSceneParent();
@@ -1818,7 +1823,9 @@ namespace umbriel {
       if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
         wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
       }
-      m_server->focusView(this);
+      if (focus) {
+        m_server->focusView(this);
+      }
       return;
     }
 
@@ -1826,7 +1833,7 @@ namespace umbriel {
     m_restoreTiledAfterUnpin = false;
     m_pinned = false;
     if (restoreTiled) {
-      setFloating(false);
+      setFloating(false, focus);
       return;
     }
     if (m_workspace != nullptr) {
@@ -1839,7 +1846,7 @@ namespace umbriel {
     setNodeEnabled(m_onActiveWorkspace);
   }
 
-  void View::setFloating(bool floating) {
+  void View::setFloating(bool floating, bool focus) {
     if (!m_mapped || !m_toplevel->base->initialized) {
       return;
     }
@@ -1961,7 +1968,9 @@ namespace umbriel {
       syncFloatingSurfaceClip();
       // Keep the focus ring when floating a tiled window.
       showDecorations(true);
-      m_server->focusView(this);
+      if (focus) {
+        m_server->focusView(this);
+      }
       updateForeignState();
       return;
     }
@@ -1998,7 +2007,9 @@ namespace umbriel {
     }
     applyCornerRadius();
     updateShadow();
-    m_server->focusView(this);
+    if (focus) {
+      m_server->focusView(this);
+    }
     // setFullscreen(true) is not re-run on this path, so its scroll snap does not happen; without it the strip can rest
     // showing the neighbor column beside a viewport-wide fullscreen column.
     if (wantFullscreen && m_workspace != nullptr) {
@@ -2123,6 +2134,10 @@ namespace umbriel {
       if (target != nullptr && target != m_workspace) {
         setWorkspace(target);
       }
+    }
+
+    if (changedInitialRule(rule.defaultPinned, initiallyApplied.defaultPinned)) {
+      setPinned(*rule.defaultPinned, false);
     }
 
     ScrollingLayout* scrolling = m_workspace != nullptr ? m_workspace->scrollingLayout() : nullptr;

@@ -149,6 +149,9 @@ namespace umbriel {
       if (rule.defaultFocused) {
         resolved.defaultFocused = rule.defaultFocused;
       }
+      if (rule.defaultPinned) {
+        resolved.defaultPinned = rule.defaultPinned;
+      }
       if (rule.focusOnActivate) {
         resolved.focusOnActivate = rule.focusOnActivate;
       }

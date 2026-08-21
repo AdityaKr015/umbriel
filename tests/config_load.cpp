@@ -399,6 +399,7 @@ focus_on_activate = true
 [[window_rule]]
 match.app_id = "^game$"
 default_focused = false
+default_pinned = true
 focus_on_activate = false
 default_position = { x = 32, y = 48, anchor = "bottom_left" }
 
@@ -416,6 +417,8 @@ default_position = { x = 0, y = 0 }
   CHECK_EQ(store.config().windowRules.size(), size_t{2});
   CHECK(store.config().windowRules[0].defaultFocused.has_value());
   CHECK(!*store.config().windowRules[0].defaultFocused);
+  CHECK(store.config().windowRules[0].defaultPinned.has_value());
+  CHECK(*store.config().windowRules[0].defaultPinned);
   CHECK(store.config().windowRules[0].focusOnActivate.has_value());
   CHECK(!*store.config().windowRules[0].focusOnActivate);
   CHECK(store.config().windowRules[0].defaultPosition.has_value());

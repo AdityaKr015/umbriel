@@ -173,6 +173,7 @@ enabled = true                 # false disables the tablet and its pads
 theme = ""
 size = 24                      # 1-512
 hardware_cursor = true         # false forces software cursor composition
+hide_when_typing = false       # hide after a non-modifier key press
 hide_timeout_ms = 0            # 0-3600000, 0 disables hiding
 
 [input.focus]

@@ -510,6 +510,7 @@ UMBRIEL_TEST(hardwareCursorCanBeDisabled) {
   file.write(R"(
 [input.cursor]
 hardware_cursor = false
+hide_when_typing = true
 )");
 
   ConfigStore& store = umbriel::configStore();
@@ -518,7 +519,9 @@ hardware_cursor = false
 
   CHECK(result.success);
   CHECK(!store.config().input.cursor.hardwareCursor);
+  CHECK(store.config().input.cursor.hideWhenTyping);
   CHECK(!containsDiagnostic(store, "unknown key input.cursor.hardware_cursor"));
+  CHECK(!containsDiagnostic(store, "unknown key input.cursor.hide_when_typing"));
 }
 
 UMBRIEL_TEST(cursorHideTimeoutLoads) {

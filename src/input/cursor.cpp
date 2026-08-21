@@ -197,6 +197,12 @@ namespace umbriel {
     updateHideTimer();
   }
 
+  void Cursor::noteTyping() {
+    if (config().input.cursor.hideWhenTyping) {
+      hideCursor();
+    }
+  }
+
   void Cursor::updateHideTimer() {
     const int timeoutMs = config().input.cursor.hideTimeoutMs;
     if (timeoutMs == 0) {

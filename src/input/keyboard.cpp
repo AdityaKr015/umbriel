@@ -169,6 +169,7 @@ namespace umbriel {
     const xkb_layout_index_t layout = xkb_state_key_get_layout(m_keyboard->xkb_state, keycode);
     const int nraw = xkb_keymap_key_get_syms_by_level(keymap, keycode, layout, 0, &rawSyms);
     const uint32_t rawSym = nraw > 0 ? rawSyms[0] : XKB_KEY_NoSymbol;
+    const bool modifierOnly = nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R;
 
     bool handled = false;
     std::optional<Keybind> modifierTap;
@@ -176,6 +177,9 @@ namespace umbriel {
     // against the combined seat-wide state so those chords behave like keys on one device.
     uint32_t modifiers = m_server->keyboardModifiers();
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+      if (!modifierOnly && nsyms > 0) {
+        m_server->cursor()->noteTyping();
+      }
       m_server->armModifierTap(
           this, event->keycode, std::span<const uint32_t>(syms, nsyms > 0 ? static_cast<size_t>(nsyms) : 0), modifiers
       );
@@ -188,7 +192,6 @@ namespace umbriel {
       // stay intact.
       bool quitConfirmConsumed = false;
       if (QuitConfirm* confirm = m_server->quitConfirm(); confirm != nullptr && confirm->visible()) {
-        const bool modifierOnly = nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R;
         if (!modifierOnly) {
           bool confirmed = false;
           for (int i = 0; i < nsyms; ++i) {
@@ -240,7 +243,6 @@ namespace umbriel {
       // that just toggled it.
       if (Cheatsheet* sheet = m_server->cheatsheet(); sheet != nullptr && sheet->visible()) {
         const bool cheatsheetBind = matched != nullptr && isCheatsheetAction(matched->action);
-        const bool modifierOnly = nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R;
         if (!cheatsheetBind && !modifierOnly) {
           sheet->hide();
         }

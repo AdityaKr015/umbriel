@@ -120,6 +120,8 @@ namespace umbriel {
     void clearConstraint();
     // Recompute compositor cursor (mod-held resize/move affordance, or active grab).
     void refreshInteractiveCursor();
+    // Hide immediately after a non-modifier key press when configured.
+    void noteTyping();
     // Compositor-owned cursor override for grabs the Cursor does not track
     // (overview drag). nullptr restores the client cursor.
     void overrideCursor(const char* name) { setCompositorCursor(name); }

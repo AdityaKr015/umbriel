@@ -592,6 +592,23 @@ UMBRIEL_TEST(ensureVisibleKeepsAFlushLeftColumnInPlace) {
   CHECK_EQ(fixture.layout.scrollAmountToEnsureVisible(1, kViewport), 0.0);
 }
 
+UMBRIEL_TEST(ensureVisibleAlignsInsertedHalfWidthColumnToTheRightEdge) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(0, 1.0));
+  CHECK(fixture.layout.setWidthFraction(1, 1.0));
+
+  // A new column opens immediately after the focused left browser, placing it
+  // between the two existing full-width columns.
+  fixture.layout.insertView(stub(2), 1);
+  fixture.layout.ensureVisible(1, kViewport);
+
+  const int rightEdge = fixture.layout.columnX(1, kViewport)
+      + fixture.layout.columnWidth(1, kViewport)
+      - static_cast<int>(std::lround(fixture.layout.scroll()));
+  CHECK_EQ(rightEdge, kViewport);
+}
+
 // ---- arrange and targetBox ----
 
 UMBRIEL_TEST(arrangePlacesColumnsSideBySide) {

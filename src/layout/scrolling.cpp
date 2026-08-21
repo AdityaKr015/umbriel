@@ -325,50 +325,17 @@ namespace umbriel {
     }
     const int x = columnX(columnIndex, viewportWidth);
     const int width = columnWidth(columnIndex, viewportWidth);
-    // Already fully on screen: never move the strip. The neighbor-peek bounds
-    // below describe the landing spot when a scroll is actually required;
-    // enforcing them on a visible column shifts the strip for no reason (e.g.
-    // a column flush against the right edge would jump to reveal a sliver of
-    // the next one).
+    // Already fully on screen: never move the strip. In particular, a column
+    // flush against an edge must not jump when it receives focus.
     if (m_scroll <= static_cast<double>(x) && m_scroll >= static_cast<double>(x + width - viewportWidth)) {
       return m_scroll;
     }
-    // Full-width (Super+F) fills the viewport: no neighbor peek, so sloppy focus
-    // cannot land on a peek strip of another column.
-    if (isFullWidth(columnIndex) || width >= viewportWidth) {
-      const auto scroll = static_cast<double>(x);
-      const double max = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
-      return std::clamp(scroll, 0.0, max);
-    }
 
-    // Leave a strip of each neighbor on-screen so the pointer can reach it.
-    const int peek = std::max(m_config->gap * 2, 32);
-    const bool hasPrev = columnIndex > 0;
-    const bool hasNext = columnIndex + 1 < static_cast<int>(m_columns.size());
-
-    auto minScroll = static_cast<double>(x + width - viewportWidth);
-    auto maxScroll = static_cast<double>(x);
-    if (hasNext) {
-      minScroll += static_cast<double>(peek);
-    }
-    if (hasPrev) {
-      maxScroll -= static_cast<double>(peek);
-    }
-
-    double scroll = m_scroll;
-    if (minScroll > maxScroll) {
-      if (hasPrev && !hasNext) {
-        scroll = maxScroll;
-      } else if (hasNext && !hasPrev) {
-        scroll = minScroll;
-      } else if (hasPrev && hasNext) {
-        scroll = m_scroll <= static_cast<double>(x) ? maxScroll : minScroll;
-      } else {
-        scroll = std::clamp(m_scroll, static_cast<double>(x + width - viewportWidth), static_cast<double>(x));
-      }
-    } else {
-      scroll = std::clamp(m_scroll, minScroll, maxScroll);
-    }
+    // Move by the shortest distance that reveals the whole column. A column
+    // entering from the right lands flush against the right edge, while one
+    // entering from the left lands flush against the left edge. Do not reserve
+    // space for a neighboring sliver after focus has moved.
+    const double scroll = std::clamp(m_scroll, static_cast<double>(x + width - viewportWidth), static_cast<double>(x));
     const double max = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
     return std::clamp(scroll, 0.0, max);
   }

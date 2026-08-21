@@ -273,6 +273,12 @@ both axes. Mod+Right-click in the center region starts no resize and instead
 scrolls the focused window into view. When a tiled resize ends, the focused
 scrolling column animates back into view.
 
+When focus moves to a partially or fully hidden column, Umbriel scrolls by the
+shortest distance needed to reveal it completely. A column entering from the
+right aligns with the right viewport edge, and a column entering from the left
+aligns with the left edge. Focus never reserves a visible sliver for the next
+column.
+
 Resizing a column recenters an underfull strip immediately.
 
 Dragged windows become translucent so the insertion preview remains visible.

@@ -47,7 +47,7 @@ asan: (build "asan")
 release: (build "release")
 
 install: (build "release")
-    meson install -C build-release
+    meson install -C build-release --no-rebuild
 
 run m=mode startup="": (build m)
     #!/usr/bin/env bash

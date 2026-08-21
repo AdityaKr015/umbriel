@@ -34,6 +34,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <sys/wait.h>
 #include <unistd.h>
 
 namespace umbriel {
@@ -58,6 +59,17 @@ namespace umbriel {
         if (setenv(name.c_str(), value.c_str(), 1) != 0) {
           kLog.warn("failed to export environment variable {}", name);
         }
+      }
+    }
+
+    void synchronizeSessionEnvironment() {
+      constexpr std::string_view command =
+          "if command -v systemctl >/dev/null 2>&1; then systemctl --user import-environment; fi; "
+          "if command -v dbus-update-activation-environment >/dev/null 2>&1; then "
+          "dbus-update-activation-environment --all; fi";
+      const int status = std::system(command.data());
+      if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        kLog.warn("failed to synchronize the session environment");
       }
     }
 
@@ -385,6 +397,8 @@ namespace umbriel {
     );
     m_ipc = std::make_unique<Ipc>(*this, m_socketName);
     setenv("XDG_CURRENT_DESKTOP", "umbriel", 1);
+    setenv("XDG_SESSION_DESKTOP", "umbriel", 1);
+    setenv("XDG_SESSION_TYPE", "wayland", 1);
 
     // Export cursor settings so X11 clients (via xwayland-satellite) and
     // toolkit clients pick up the compositor's configured cursor.
@@ -405,13 +419,10 @@ namespace umbriel {
       m_xwayland->start();
     }
 
-    // Propagate session variables so D-Bus-activated services (portal backends,
-    // etc.) see the Wayland/X11 displays and cursor settings.
+    // Synchronize before starting the target so its services inherit the
+    // compositor environment rather than stale login manager values.
     if (!m_nested) {
-      spawn(
-          "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY"
-          " XDG_CURRENT_DESKTOP XCURSOR_SIZE XCURSOR_THEME UMBRIEL_SOCKET"
-      );
+      synchronizeSessionEnvironment();
       // Notify systemd that the graphical session is ready so user services
       // gated on graphical-session.target (xdg-desktop-portal, etc.) can start.
       spawn("systemctl --user start --no-block umbriel-session.target");

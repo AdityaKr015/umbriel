@@ -165,6 +165,11 @@ can discover the session. The systemd user target is installed under
 `lib/systemd/user` and binds the compositor session to
 `graphical-session.target`.
 
+Before starting that target, Umbriel synchronizes its complete environment
+with the systemd user manager and D-Bus activation. This includes display,
+session, configured environment, and runtime-specific variables inherited from
+the display manager. Packages do not need to provide a session wrapper.
+
 No display manager or desktop shell is required by Umbriel itself. It can be
 paired with [Noctalia](https://github.com/noctalia-dev/noctalia) for panels,
 notifications, launching, locking, and other desktop-shell services and [noctalia-greeter](https://github.com/noctalia-dev/noctalia-greeter) as the display manager (using greetd).

@@ -91,6 +91,7 @@ Distribution package names vary.
 | Dependency                                 | Role                                                       |
 | ------------------------------------------ | ---------------------------------------------------------- |
 | `xwayland-satellite`                       | X11 application support when `general.xwayland` is enabled |
+| `xdg-desktop-portal-umbriel`               | Screencast and Screenshot portal interfaces for portal-based screen capture |
 | A usable font stack                        | Internal overlays and configuration diagnostics            |
 | A Wayland-capable graphics and input stack | DRM or nested compositor operation through wlroots         |
 
@@ -172,7 +173,10 @@ the display manager. Packages do not need to provide a session wrapper.
 
 No display manager or desktop shell is required by Umbriel itself. It can be
 paired with [Noctalia](https://github.com/noctalia-dev/noctalia) for panels,
-notifications, launching, locking, and other desktop-shell services and [noctalia-greeter](https://github.com/noctalia-dev/noctalia-greeter) as the display manager (using greetd).
+notifications, launching, locking, and other desktop-shell services,
+[noctalia-greeter](https://github.com/noctalia-dev/noctalia-greeter) as the display manager (using greetd), and
+[xdg-desktop-portal-umbriel](https://github.com/noctalia-dev/xdg-desktop-portal-umbriel) for portal screen capture
+and sharing.
 
 ## Contact
 

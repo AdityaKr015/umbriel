@@ -24,7 +24,8 @@ systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP \
   XDG_SESSION_DESKTOP XDG_SESSION_TYPE UMBRIEL_SOCKET
 awk 'BEGIN {
   for (name in ENVIRON) {
-    if (name ~ /^[A-Za-z_][A-Za-z0-9_]*$/)
+    if (name != "AWKPATH" && name != "AWKLIBPATH" &&
+        name ~ /^[A-Za-z_][A-Za-z0-9_]*$/)
       print name
   }
 }' </dev/null | xargs -r systemctl --user import-environment

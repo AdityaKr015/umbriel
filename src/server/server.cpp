@@ -491,7 +491,10 @@ namespace umbriel {
 
   void Server::run() { wl_display_run(m_display); }
 
-  void Server::stop() { wl_display_terminate(m_display); }
+  void Server::stop() {
+    m_stopping = true;
+    wl_display_terminate(m_display);
+  }
 
   uint32_t Server::modKey() const {
     if (!config().general.modKey) {

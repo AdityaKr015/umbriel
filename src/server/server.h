@@ -112,6 +112,7 @@ namespace umbriel {
     bool start(const char* startupCmd = nullptr);
     void run();
     void stop();
+    [[nodiscard]] bool stopping() const { return m_stopping; }
 
     [[nodiscard]] wl_display* display() const { return m_display; }
     [[nodiscard]] wlr_backend* backend() const { return m_backend; }
@@ -482,6 +483,7 @@ namespace umbriel {
     std::unique_ptr<QuitConfirm> m_quitConfirm;
 
     bool m_nested = false;
+    bool m_stopping = false;
     std::string m_socketName;
 
     std::unique_ptr<XwaylandSupervisor> m_xwayland;

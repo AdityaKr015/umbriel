@@ -443,6 +443,12 @@ namespace umbriel {
   }
 
   void Output::handleFrame() {
+    // A failed DRM commit can immediately queue another frame after logind revokes device access.
+    // Stop before that retry loop can keep the final event-loop dispatch alive.
+    if (m_server->stopping()) {
+      return;
+    }
+
     flushDirty();
     if (m_hasDeferredMode) {
       m_hasDeferredMode = false;

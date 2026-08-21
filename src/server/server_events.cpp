@@ -444,14 +444,14 @@ namespace umbriel {
     wlr_renderer* newRenderer = fx_renderer_create(m_backend);
     if (newRenderer == nullptr) {
       kLog.error("could not recreate fx_renderer after GPU reset, terminating");
-      wl_display_terminate(m_display);
+      stop();
       return;
     }
     wlr_allocator* newAllocator = wlr_allocator_autocreate(m_backend, newRenderer);
     if (newAllocator == nullptr) {
       kLog.error("could not recreate allocator after GPU reset, terminating");
       wlr_renderer_destroy(newRenderer);
-      wl_display_terminate(m_display);
+      stop();
       return;
     }
 

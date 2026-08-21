@@ -166,6 +166,9 @@ animation_ms = 250             # 1-10000
 
 Colors are `#RRGGBB` or `#RRGGBBAA`.
 
+See [Scratchpads](scratchpad.md) for how scratchpad windows behave and use the
+dedicated border colors.
+
 ### Blur
 
 ```toml

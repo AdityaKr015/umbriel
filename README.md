@@ -42,7 +42,8 @@ To understand the values and philosophy guiding the project, read our [ethos](ht
   resizing and tiled reordering
 - Independent workspaces per output, with hotplug support and configurable modes, positions, scales, and transforms
 - Floating, pinned, and fullscreen windows with configurable placement, focus, sizing, opacity, and visual effects
-- Per-output scratchpads for temporarily hiding windows, with toggle, move, restore, and focus-next actions targetable at any output
+- [Per-output scratchpads](docs/user/scratchpad.md) for temporarily hiding
+  windows, with toggle, move, restore, and focus-next actions
 - An animated overview, directional focus, configurable keybinds, submaps, and activation policy
 - Blur, shadows, rounded corners, double borders, opacity, and animated position, size, and fade transitions
 - Keyboard, pointer, touch, touchpad gestures, XKB configuration, and text-input-v3/input-method-v2 input method support
@@ -159,6 +160,7 @@ See [`examples/config.toml`](examples/config.toml) for the packaged starting con
 
 - [Configuration](docs/user/configuration.md): general, appearance, layout, input
 - [Keybinds](docs/user/keybinds.md): chords, submaps, Noctalia integration
+- [Scratchpads](docs/user/scratchpad.md): setup, workflow, and multi-output behavior
 - [Window and Layer Rules](docs/user/rules.md): matching, effects, blur
 - [Outputs](docs/user/outputs.md): monitors, workspaces, workspace layout overrides
 - [Maintainer design notes](docs/design/README.md): reloads, workspaces, and overview rendering

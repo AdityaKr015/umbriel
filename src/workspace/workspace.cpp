@@ -352,6 +352,9 @@ namespace umbriel {
                 || view->toplevel()->scheduled.height != fullArea.height)) {
           wlr_xdg_toplevel_set_size(view->toplevel(), fullArea.width, fullArea.height);
         }
+        if (animate) {
+          view->beginResizeAnimation(fullArea.width, fullArea.height, true);
+        }
         continue;
       }
       // An unfullscreen configure with client-chosen size is in flight; the
@@ -369,7 +372,7 @@ namespace umbriel {
         // Start the presentation animation when the compositor changes the assigned size. Client geometry can differ
         // from a stable configure, notably with Chromium CSD, and must not replay the resize on focus.
         if (animate) {
-          view->beginResizeAnimation(width, height);
+          view->beginResizeAnimation(width, height, view->toplevel()->current.fullscreen);
         }
       }
     }
@@ -482,18 +485,18 @@ namespace umbriel {
       }
       if (view->layoutFullscreen()) {
         const int col = m_layout->columnOf(view);
+        wlr_box target = outputBox;
         if (col >= 0) {
-          wlr_box target = outputBox; // fullscreen fills the whole output, not the dwindle tile box
           if (const ScrollingLayout* scrolling = scrollingLayout()) {
             target.x = outputBox.x
                 + scrolling->columnX(col, viewportWidth)
                 - static_cast<int>(std::lround(scrolling->scroll()));
           }
-          if (animate) {
-            view->animateTo(target.x, target.y);
-          } else {
-            view->setPosition(target.x, target.y);
-          }
+        }
+        if (animate) {
+          view->animateTo(target.x, target.y);
+        } else {
+          view->setPosition(target.x, target.y);
         }
         syncViewPresentation(view);
         continue;

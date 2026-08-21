@@ -334,8 +334,8 @@ namespace umbriel {
   }
 
   void View::scheduleFrame() {
-    if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-      wlr_output_schedule_frame(m_workspace->group()->output()->wlr());
+    if (Output* output = currentOutput()) {
+      wlr_output_schedule_frame(output->wlr());
     }
   }
 
@@ -376,11 +376,14 @@ namespace umbriel {
   }
 
   int View::presentedWidth(const wlr_box& target) const {
-    if (m_toplevel->current.fullscreen || sizeGrabActive()) {
+    if (sizeGrabActive()) {
       return target.width;
     }
     if (sizeAnimating()) {
       return m_presentation.width();
+    }
+    if (m_toplevel->current.fullscreen) {
+      return target.width;
     }
     return std::min(m_toplevel->base->geometry.width, target.width);
   }
@@ -388,18 +391,20 @@ namespace umbriel {
   void View::trackPresentedSize(int width, int height) { m_presentation.track(width, height); }
 
   int View::presentedHeight(const wlr_box& target) const {
-    if (m_toplevel->current.fullscreen || sizeGrabActive()) {
+    if (sizeGrabActive()) {
       return target.height;
     }
     if (sizeAnimating()) {
       return m_presentation.height();
     }
+    if (m_toplevel->current.fullscreen) {
+      return target.height;
+    }
     return std::min(m_toplevel->base->geometry.height, target.height);
   }
 
-  // Fullscreen presentation follows the client's committed state, not the scheduled intent. The backdrop and centering
-  // only appear once the client actually committed fullscreen, so a client mid-transition (wine flipping modes) never
-  // renders as a mismatched pair of stale buffer + fullscreen chrome. Never scale buffers (wrong aspect).
+  // Fullscreen chrome follows committed state. Transitions may scale the old buffer, while settled mismatched buffers
+  // remain centered and cropped without distortion.
 
   void View::updateFullscreenPresentation(int width, int height) {
     m_presentation.updateFullscreen(
@@ -506,12 +511,11 @@ namespace umbriel {
     }
   }
 
-  void View::beginResizeAnimation(int width, int height) {
+  void View::beginResizeAnimation(int width, int height, bool allowFullscreen) {
     if (!m_mapped
         || !m_onActiveWorkspace
-        || m_workspace == nullptr
-        || m_toplevel->scheduled.fullscreen
-        || m_toplevel->current.fullscreen
+        || (m_workspace == nullptr && !allowFullscreen)
+        || (!allowFullscreen && (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen))
         || width <= 0
         || height <= 0) {
       return;
@@ -1250,7 +1254,7 @@ namespace umbriel {
     return fs ? m_server->fullscreenTree() : m_server->xdgTree();
   }
 
-  void View::applyFullscreenLayout() {
+  void View::applyFullscreenLayout(bool animate) {
     Output* output = nullptr;
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {
       output = m_workspace->group()->output();
@@ -1267,25 +1271,26 @@ namespace umbriel {
     if (m_toplevel->scheduled.width != fullArea.width || m_toplevel->scheduled.height != fullArea.height) {
       wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
     }
-    clipForSnapMove(fullArea.x, fullArea.y);
-    wlr_scene_node_set_position(&m_sceneTree->node, fullArea.x, fullArea.y);
-    m_decoration.setShadowPosition(fullArea.x, fullArea.y);
-    updateFullscreenPresentation(fullArea.width, fullArea.height);
-    // Oversized buffers (client mid mode-change) get cropped to the output.
-    const wlr_box& geo = m_toplevel->base->geometry;
-    if (geo.width > fullArea.width || geo.height > fullArea.height) {
-      const wlr_box clip{
-          geo.x - std::min(0, m_presentation.offsetX()),
-          geo.y - std::min(0, m_presentation.offsetY()),
-          std::min(geo.width, fullArea.width),
-          std::min(geo.height, fullArea.height),
-      };
-      setSurfaceTreeClip(&clip);
-    } else {
-      setSurfaceTreeClip(nullptr);
+    if (animate) {
+      beginResizeAnimation(fullArea.width, fullArea.height, true);
+      animateTo(fullArea.x, fullArea.y);
+    } else if (!m_posX.animating() && !m_posY.animating()) {
+      clipForSnapMove(fullArea.x, fullArea.y);
+      setPosition(fullArea.x, fullArea.y);
     }
-    updateBlur();
-    updateShadow();
+
+    const wlr_box target{
+        m_sceneTree->node.x,
+        m_sceneTree->node.y,
+        fullArea.width,
+        fullArea.height,
+    };
+    wlr_box intersection{};
+    if (wlr_box_intersection(&intersection, &target, &fullArea)) {
+      setOutputClip(&intersection, target, fullArea);
+    } else {
+      setOutputClip(nullptr, target, fullArea);
+    }
   }
 
   void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
@@ -1460,6 +1465,7 @@ namespace umbriel {
   void View::handleUnmap() {
     setUrgent(false);
     m_maximizedToEdges = false;
+    m_hasFullscreenRestoreBox = false;
     if (m_pinned) {
       m_pinned = false;
       m_restoreTiledAfterUnpin = false;
@@ -1595,7 +1601,7 @@ namespace umbriel {
       m_pendingUnfullscreenSize = false;
       m_unfullscreenGraceStartMsec = 0;
       if (m_mapped && m_tiled && m_workspace != nullptr) {
-        m_workspace->markArrange(false);
+        m_workspace->markArrange(true);
       }
     }
     // Re-apply output clip after configure ack so Super+F / resize sizes show
@@ -1821,7 +1827,7 @@ namespace umbriel {
       m_pendingUnfullscreenSize = false;
       m_unfullscreenGraceStartMsec = 0;
       if (m_tiled && m_workspace != nullptr) {
-        m_workspace->markArrange(false);
+        m_workspace->markArrange(true);
       }
     }
   }
@@ -2077,6 +2083,17 @@ namespace umbriel {
     if (fullscreen && m_maximizedToEdges) {
       setMaximizedToEdges(false);
     }
+    if (fullscreen && !m_tiled && !m_toplevel->current.fullscreen) {
+      const wlr_box& geometry = m_toplevel->base->geometry;
+      m_fullscreenRestoreBox = {
+          .x = m_sceneTree->node.x,
+          .y = m_sceneTree->node.y,
+          .width = geometry.width,
+          .height = geometry.height,
+      };
+      m_hasFullscreenRestoreBox = geometry.width > 0 && geometry.height > 0;
+    }
+    const bool restoreFloating = !fullscreen && !m_tiled && m_hasFullscreenRestoreBox;
     // Any leave-fullscreen invalidates a pending float-toggle restore: the
     // float path re-sets the flag right after its own setFullscreen(false).
     if (!fullscreen) {
@@ -2103,9 +2120,9 @@ namespace umbriel {
       }
       m_floating.clearSizeRequest();
     }
+    cancelSizeAnimation();
     wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
     updateFullscreenPresentation(0, 0);
-    cancelSizeAnimation();
     if (fullscreen) {
       // scheduled.fullscreen is set; reparent to fullscreen layer.
       wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
@@ -2114,16 +2131,23 @@ namespace umbriel {
       if (m_workspace != nullptr) {
         m_workspace->ensureFocusedVisible();
         // arrange() sends the full-output size even when this workspace is hidden.
-        m_workspace->markArrange(false);
+        m_workspace->markArrange(true);
       }
       if (!m_tiled || m_workspace == nullptr) {
         // Floating fullscreen is not part of the layout; size it directly.
-        applyFullscreenLayout();
+        applyFullscreenLayout(true);
       }
     } else {
       wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
       if (!m_tiled && m_workspace != nullptr) {
         m_workspace->restackFloatingViews();
+      }
+      if (restoreFloating) {
+        requestFloatingSize(m_fullscreenRestoreBox.width, m_fullscreenRestoreBox.height);
+        beginResizeAnimation(m_fullscreenRestoreBox.width, m_fullscreenRestoreBox.height, true);
+        animateTo(m_fullscreenRestoreBox.x, m_fullscreenRestoreBox.y);
+      } else if (m_tiled) {
+        m_hasFullscreenRestoreBox = false;
       }
     }
     m_decoration.setBordersEnabled(!fullscreen);
@@ -2146,8 +2170,8 @@ namespace umbriel {
           // The grace countdown runs on frame ticks; make sure one is coming.
           scheduleFrame();
         }
-        m_workspace->markArrange(false);
-      } else {
+        m_workspace->markArrange(!m_xwayland);
+      } else if (!restoreFloating) {
         placeInUsableArea();
       }
     } else {

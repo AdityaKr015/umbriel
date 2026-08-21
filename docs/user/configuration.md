@@ -187,6 +187,8 @@ saturation = 1.1  # 0.0-2.0
 [window rules](rules.md) or [layer rules](rules.md#layer-rules).
 Blur only renders where a surface is transparent. Sampling remains confined to
 the surface's owning output when a window overflows into a neighbouring output.
+Disabling the master switch also releases SceneFX's per-output blur render
+targets.
 
 | Key          | Type  | Default | Description                                                              |
 | ------------ | ----- | ------- | ------------------------------------------------------------------------ |
@@ -207,7 +209,7 @@ enabled = true
 softness = 10      # 0-200
 offset_x = 2       # -200 to 200
 offset_y = 2
-color = "#0000008C"
+color = "#0000007F"
 ```
 
 Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
@@ -218,7 +220,7 @@ Drop shadow behind windows (tiled and floating). Hidden while fullscreen.
 | `softness` | int   | `10`        | Gaussian blur sigma in pixels (0-200). 0 produces a hard-edged shadow. |
 | `offset_x` | int   | `2`         | Horizontal shadow offset (-200 to 200).                                |
 | `offset_y` | int   | `2`         | Vertical shadow offset (-200 to 200).                                  |
-| `color`    | color | `#0000008C` | Shadow color.                                                          |
+| `color`    | color | `#0000007F` | Shadow color.                                                          |
 
 ## Overview
 

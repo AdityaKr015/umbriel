@@ -263,7 +263,7 @@ namespace umbriel {
         int softness = 10;
         int offsetX = 2;
         int offsetY = 2;
-        std::array<float, 4> color{0.0F, 0.0F, 0.0F, 0.55F};
+        std::array<float, 4> color{0.0F, 0.0F, 0.0F, 0.50F};
         bool operator==(const Shadow&) const = default;
       } shadow;
       bool preferNoCsd = true;

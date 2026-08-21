@@ -8,9 +8,6 @@ your last working configuration and continues watching included files. Save a
 corrected file to try the reload again. Options that require a restart are
 marked in the reference tables below.
 
-For the exact reload guarantees, see the
-[configuration reload design note](design/configuration-reload.md).
-
 ## Include
 
 ```toml
@@ -235,9 +232,6 @@ before you drop the window.
 Overview cards use the same borders, corner radius, transparency, and blur as
 their windows. `workspace_background` adds a rounded background behind each
 workspace. Its alpha can produce anything from a light tint to an opaque fill.
-
-See the [overview rendering design note](design/overview-rendering.md) for
-clipping, opacity, and decoration details.
 
 | Key                    | Type  | Default     | Description                                                                                    |
 | ---------------------- | ----- | ----------- | ---------------------------------------------------------------------------------------------- |

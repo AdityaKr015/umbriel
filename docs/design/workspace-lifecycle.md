@@ -1,7 +1,7 @@
 # Workspace lifecycle
 
 This note records the workspace state transitions behind the shorter user guide
-in [`outputs.md`](../outputs.md).
+in [`outputs.md`](../../user/outputs.md).
 
 ## Dynamic inventory
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Sync docs/*.md into ../noctalia-docs/src/content/docs/umbriel/ as .mdx.
-# The design/ subdirectory is never matched by the top-level glob.
+# Sync docs/user/*.md into ../noctalia-docs/src/content/docs/umbriel/ as .mdx.
+# docs/design/ holds maintainer notes and is never synced.
 #
 # Existing .mdx files keep their hand-written frontmatter (title, description);
 # only the body is refreshed from the source .md. New files get a title derived
@@ -8,9 +8,18 @@
 # from the body, mirroring the convention in the docs site.
 #
 # index.mdx is hand-authored in the docs site (it imports Astro components),
-# so a future docs/index.md is ignored rather than synced over it.
+# so a future docs/user/index.md is ignored rather than synced over it.
 #
-# Usage: scripts/sync-docs.sh [docs-site-root]
+# Source docs use relative .md links so they render correctly on GitHub. The
+# docs site serves pages at /umbriel/<name>/, so links are rewritten here:
+# sibling docs become site URLs. Design notes (docs/design) are maintainer-only
+# and are never synced, so links to them must not appear in user docs. Any .md
+# link that survives the rewrite is reported, since it would 404 on the site.
+#
+# After syncing, rebuild the site (npm run build) before previewing: astro
+# preview serves the prebuilt dist/ and does not pick up new .mdx.
+#
+# Usage: tools/sync-docs.sh [docs-site-root]
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,7 +28,25 @@ dest_dir="$site_root/src/content/docs/umbriel"
 
 mkdir -p "$dest_dir"
 
+# Build the link rewrite table from the actual doc inventory. User docs are
+# copied to the site at /umbriel/<name>/. Design notes stay maintainer-only in
+# the repo and must not be linked from user docs; the leftover check below
+# flags any that slip in.
+link_exprs=()
+for md in "$repo_root"/docs/user/*.md; do
+    [[ -e "$md" ]] || continue
+    base="$(basename "$md" .md)"
+    [[ "$base" == "index" ]] && continue
+    link_exprs+=(-e "s|]($base.md)|](/umbriel/$base/)|g")
+    link_exprs+=(-e "s|]($base.md#|](/umbriel/$base/#|g")
+done
+
 for md in "$repo_root"/docs/*.md; do
+    [[ -e "$md" ]] || continue
+    printf 'sync-docs: warning: %s is not under docs/user/, not synced\n' "$(basename "$md")" >&2
+done
+
+for md in "$repo_root"/docs/user/*.md; do
     [[ -e "$md" ]] || continue
     base="$(basename "$md" .md)"
     [[ "$base" == "index" ]] && continue
@@ -57,8 +84,15 @@ title: $title
             seen == 0 && $0 == ("# " title) { seen = 1; dropped = 1; next }
             dropped == 1 && /^$/ { dropped = 0; seen = 1; next }
             { seen = 1; print }
-        ' "$md"
+        ' "$md" | sed "${link_exprs[@]}"
     } > "$mdx.tmp"
+
+    leftover="$(grep -Eo '\]\([^)]*\.md[^)]*\)' "$mdx.tmp" | grep -Ev '\]\(https?://' || true)"
+    if [[ -n "$leftover" ]]; then
+        printf 'sync-docs: warning: %s has unsynced .md links:\n' "$base.md" >&2
+        sed 's/^/  /' <<<"$leftover" >&2
+    fi
+
     mv "$mdx.tmp" "$mdx"
     printf 'synced %s -> %s\n' "$base.md" "${mdx#"$site_root"/}"
 done

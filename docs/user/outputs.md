@@ -97,7 +97,7 @@ monitor in that direction. `window-move-to-output-*` and
 the adjacent monitor's active workspace. `workspace-move-to-output-*` instead
 creates a new workspace on the adjacent monitor and moves every window of the
 active workspace into it, preserving column order and widths. See
-[keybinds.md](keybinds.md) for the full list and their exact semantics.
+[keybinds](keybinds.md) for the full list and their exact semantics.
 
 ## Multi-monitor example
 
@@ -179,10 +179,7 @@ position. Windows from a removed workspace move to the nearest remaining one.
 Switching to dynamic workspaces keeps populated and active workspaces,
 renumbers them, and adds an empty workspace at the end.
 
-The [workspace lifecycle design note](design/workspace-lifecycle.md) records
-the exact state transitions. The
-[configuration reload design note](design/configuration-reload.md) explains
-which other output and layout settings are refreshed during a reload.
+Other output and layout settings are refreshed during a reload as well.
 
 ## Workspace rules
 

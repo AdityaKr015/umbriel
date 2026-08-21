@@ -135,12 +135,12 @@ Umbriel loads `$XDG_CONFIG_HOME/umbriel/config.toml` (normally `~/.config/umbrie
 Pass `-c path/to/config.toml` to use another file. Config files can include other TOML files with
 `[include] files = ["theme.toml", "keybinds.toml"]`; later files and the main file override earlier values.
 
-See [`example.toml`](example.toml) for defaults and [`docs/`](docs/) for the full reference:
+See [`example.toml`](example.toml) for defaults and [`docs/user/`](docs/user/) for the full reference:
 
-- [Configuration](docs/configuration.md): general, appearance, layout, input
-- [Keybinds](docs/keybinds.md): chords, submaps, Noctalia integration
-- [Window and Layer Rules](docs/rules.md): matching, effects, blur
-- [Outputs](docs/outputs.md): monitors, workspaces, workspace layout overrides
+- [Configuration](docs/user/configuration.md): general, appearance, layout, input
+- [Keybinds](docs/user/keybinds.md): chords, submaps, Noctalia integration
+- [Window and Layer Rules](docs/user/rules.md): matching, effects, blur
+- [Outputs](docs/user/outputs.md): monitors, workspaces, workspace layout overrides
 - [Maintainer design notes](docs/design/README.md): reloads, workspaces, and overview rendering
 
 ### Nix (home-manager / NixOS)

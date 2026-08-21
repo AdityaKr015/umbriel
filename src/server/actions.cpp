@@ -481,6 +481,10 @@ namespace umbriel {
         }
       }
       group->select(*target);
+      Output* destination = group->output();
+      if (destination != nullptr && destination != server.outputFromWlr(server.preferredOutput())) {
+        warpToOutputCenter(server, *destination);
+      }
       return true;
     }
 

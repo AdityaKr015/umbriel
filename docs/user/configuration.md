@@ -146,7 +146,7 @@ scratchpad_border_unfocused = "#5C4A2AFF"
 outer_border_color = "#1A1A1FFF"
 insert_hint_color = "#7FC8FF80"
 backdrop_color = "#000000FF"
-animation_ms = 250             # 1-10000
+animation_ms = 200             # 1-10000
 ```
 
 | Key                           | Type  | Default     | Description                                                                                                                                       |
@@ -162,7 +162,7 @@ animation_ms = 250             # 1-10000
 | `outer_border_color`          | color | `#1A1A1FFF` | Outer border color (no focus variant).                                                                                                            |
 | `insert_hint_color`           | color | `#7FC8FF80` | Drop-target preview during drag.                                                                                                                  |
 | `backdrop_color`              | color | `#000000FF` | Background for fullscreen gaps and lock screen.                                                                                                   |
-| `animation_ms`                | int   | `250`       | Animation duration in milliseconds (1-10000).                                                                                                     |
+| `animation_ms`                | int   | `200`       | Animation duration in milliseconds (1-10000).                                                                                                     |
 
 Colors are `#RRGGBB` or `#RRGGBBAA`.
 

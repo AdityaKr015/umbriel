@@ -33,7 +33,12 @@ namespace umbriel {
     m_destroy.notify = onDestroy;
     wl_signal_add(&device->events.destroy, &m_destroy);
 
-    wlr_seat_set_keyboard(m_server->seat()->wlr(), m_keyboard);
+    // A virtual keyboard is announced before its client necessarily provides a
+    // keymap. Do not replace the seat's usable physical keyboard with that
+    // incomplete device. Its first modifiers or key event selects it below.
+    if (!m_virtual) {
+      wlr_seat_set_keyboard(m_server->seat()->wlr(), m_keyboard);
+    }
   }
   void Keyboard::applyConfig() {
     cancelRepeat();

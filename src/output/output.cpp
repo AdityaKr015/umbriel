@@ -247,6 +247,10 @@ namespace umbriel {
   }
 
   Output::~Output() {
+    if (m_animationRenderLocked) {
+      wlr_output_lock_attach_render(m_output, false);
+      m_animationRenderLocked = false;
+    }
     if (m_softwareCursorLocked) {
       wlr_output_lock_software_cursors(m_output, false);
       m_softwareCursorLocked = false;
@@ -502,6 +506,15 @@ namespace umbriel {
     const uint64_t nowMsec = static_cast<uint64_t>(now.tv_sec) * 1000 + static_cast<uint64_t>(now.tv_nsec) / 1'000'000;
     m_server->tickAnimations(nowMsec);
 
+    // A direct-scanned fullscreen client may stop submitting as soon as it loses focus. On VRR outputs that can leave
+    // the first workspace-switch frame waiting on the old client, so the compositor never gets a vblank to advance the
+    // slide. Keep animated outputs on the render path until their final composed frame has settled.
+    const bool animationsActive = m_server->animationsActiveFor(this);
+    if (animationsActive != m_animationRenderLocked) {
+      wlr_output_lock_attach_render(m_output, animationsActive);
+      m_animationRenderLocked = animationsActive;
+    }
+
     if (m_output->width <= 0 || m_output->height <= 0) {
       // Output not configured yet; no clients can be presenting on it either.
       return;
@@ -562,7 +575,7 @@ namespace umbriel {
     }
 
     // Keep this output ticking on the next vblank while it owns an animation.
-    if (m_server->animationsActiveFor(this)) {
+    if (animationsActive) {
       wlr_output_schedule_frame(m_output);
     }
 

@@ -107,6 +107,7 @@ namespace umbriel {
     bool m_hasDeferredMode = false;
     bool m_gammaDirty = false;
     bool m_softwareCursorLocked = false;
+    bool m_animationRenderLocked = false;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;
 

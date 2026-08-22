@@ -18,6 +18,19 @@ A dynamic output maintains numbered workspaces with these invariants:
 Dynamic reconciliation waits while a workspace slide or the overview is active.
 This prevents the workspace list from changing underneath those interactions.
 
+## Switching interaction
+
+A workspace slide keeps the outgoing workspace's scene enabled until the
+animation finishes. Those views are render-only once their workspace becomes
+inactive: pointer hit-testing must ignore them even though their buffers remain
+visible. Otherwise a click during the slide can focus an outgoing window,
+reactivate the workspace the user just left, and return keyboard or text-input
+focus to that client.
+
+The incoming active workspace remains interactive throughout the transition.
+Pinned windows and scratchpad windows do not inherit this inactive-workspace
+restriction.
+
 ## Static inventory
 
 A number or ordered name list defines an exact static inventory. During a
@@ -60,3 +73,5 @@ Configuration resolution and change classification are covered by
 [`tests/config_change.cpp`](../../tests/config_change.cpp). Live workspace
 selection is exercised by
 [`tests/harness/checks/050_workspace.sh`](../../tests/harness/checks/050_workspace.sh).
+Pointer isolation during a wheel-triggered workspace transition is covered by
+[`tests/harness/checks/113_workspace_transition_focus.sh`](../../tests/harness/checks/113_workspace_transition_focus.sh).

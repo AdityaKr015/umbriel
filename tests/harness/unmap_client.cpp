@@ -2,7 +2,8 @@
 // therefore keeps the View registered and unmapped, which is what makes this client useful: closing a window this way
 // never reaches Server::removeView, so any focus reassignment the compositor performs must happen at unmap time, the
 // same point a card disappears from the overview. Prints "mapped" once the toplevel is up and "unmapped" once the close
-// request lands, then keeps the connection alive until the harness kills it.
+// request lands, then keeps the connection alive until the harness kills it. Usage: unmap-client [title [width
+// height]]. The optional dimensions let pointer checks expose a surface that fills its assigned tile.
 
 #include "xdg-shell-client-protocol.h"
 
@@ -16,8 +17,6 @@
 #include <wayland-client.h>
 
 namespace {
-
-  constexpr int kSurfaceSize = 64;
 
   struct Buffer {
     wl_buffer* resource = nullptr;
@@ -34,14 +33,16 @@ namespace {
     xdg_surface* xdgSurface = nullptr;
     xdg_toplevel* toplevel = nullptr;
     Buffer buffer;
+    int width = 64;
+    int height = 64;
     bool mapped = false;
     bool closed = false;
   };
 
   Buffer createBuffer(State& state) {
     Buffer buffer;
-    const int stride = kSurfaceSize * 4;
-    buffer.size = static_cast<size_t>(stride * kSurfaceSize);
+    const int stride = state.width * 4;
+    buffer.size = static_cast<size_t>(stride * state.height);
     const int fd = memfd_create("umbriel-unmap-client", MFD_CLOEXEC);
     if (fd < 0 || ftruncate(fd, static_cast<off_t>(buffer.size)) < 0) {
       if (fd >= 0) {
@@ -58,7 +59,7 @@ namespace {
     std::fill_n(static_cast<uint32_t*>(buffer.pixels), buffer.size / sizeof(uint32_t), 0xFF5577AA);
 
     wl_shm_pool* pool = wl_shm_create_pool(state.shm, fd, static_cast<int>(buffer.size));
-    buffer.resource = wl_shm_pool_create_buffer(pool, 0, kSurfaceSize, kSurfaceSize, stride, WL_SHM_FORMAT_ARGB8888);
+    buffer.resource = wl_shm_pool_create_buffer(pool, 0, state.width, state.height, stride, WL_SHM_FORMAT_ARGB8888);
     wl_shm_pool_destroy(pool);
     close(fd);
     return buffer;
@@ -72,7 +73,7 @@ namespace {
     }
     state.mapped = true;
     wl_surface_attach(state.surface, state.buffer.resource, 0, 0);
-    wl_surface_damage_buffer(state.surface, 0, 0, kSurfaceSize, kSurfaceSize);
+    wl_surface_damage_buffer(state.surface, 0, 0, state.width, state.height);
     wl_surface_commit(state.surface);
     std::println("mapped");
     std::fflush(stdout);
@@ -144,6 +145,12 @@ namespace {
 
 int main(int argc, char** argv) {
   State state;
+  if (argc > 2) {
+    state.width = std::max(1, std::atoi(argv[2]));
+  }
+  if (argc > 3) {
+    state.height = std::max(1, std::atoi(argv[3]));
+  }
   state.display = wl_display_connect(nullptr);
   if (state.display == nullptr) {
     std::println(stderr, "unmap-client: cannot connect to WAYLAND_DISPLAY");

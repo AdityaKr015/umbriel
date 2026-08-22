@@ -464,6 +464,7 @@ namespace umbriel {
     add(KeybindAction::WindowConsumeLeft, XKB_KEY_comma);
     add(KeybindAction::WindowExpelRight, XKB_KEY_period);
     add(KeybindAction::WindowCycleWidth, XKB_KEY_r);
+    add(KeybindAction::WindowCycleWidthBack, XKB_KEY_r, WLR_MODIFIER_SHIFT);
     add(KeybindAction::ToggleFullscreen, XKB_KEY_f);
     add(KeybindAction::ToggleMaximize, XKB_KEY_f, WLR_MODIFIER_CTRL);
     add(KeybindAction::ToggleMaximizeToEdges, XKB_KEY_m);

@@ -582,14 +582,6 @@ namespace umbriel {
 
     // Unconditional: see comment above. Never gate this on commit success.
     wlr_scene_output_send_frame_done(m_sceneOutput, &now);
-    // A newly mapped client can submit a transparent bootstrap buffer before SceneFX assigns its scene node to an
-    // output. Complete that first frame on the known home output so the client can submit visible content. This is
-    // one-shot per map; steady-state callbacks remain visibility-throttled by the scene helper above.
-    for (const auto& view : m_server->views()) {
-      if (view->mapped()) {
-        view->sendInitialFrameDone(this, &now);
-      }
-    }
   }
 
   void Output::handleRequestState(void* data) {

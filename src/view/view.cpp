@@ -240,6 +240,7 @@ namespace umbriel {
       setOnActiveWorkspace(true);
     }
     notifyOutputScale();
+    syncSurfaceOutput();
     if (m_mapped && m_onActiveWorkspace) {
       enterForeignOutput();
     }
@@ -1070,6 +1071,50 @@ namespace umbriel {
     wlr_xdg_surface_for_each_popup_surface(m_toplevel->base, &Output::notifySurfaceScaleIter, output);
   }
 
+  void View::syncSurfaceOutput() {
+    if (m_toplevel == nullptr || m_toplevel->base == nullptr) {
+      return;
+    }
+    Output* output = m_mapped ? currentOutput() : nullptr;
+    wlr_output* desired = output != nullptr ? output->wlr() : nullptr;
+    if (desired == m_surfaceOutput) {
+      return;
+    }
+    if (m_surfaceOutput != nullptr) {
+      wlr_xdg_surface_for_each_surface(
+          m_toplevel->base,
+          [](wlr_surface* surface, int /*sx*/, int /*sy*/, void* data) {
+            wlr_surface_send_leave(surface, static_cast<wlr_output*>(data));
+          },
+          m_surfaceOutput
+      );
+    }
+    m_surfaceOutput = desired;
+    if (m_surfaceOutput != nullptr) {
+      wlr_xdg_surface_for_each_surface(
+          m_toplevel->base,
+          [](wlr_surface* surface, int /*sx*/, int /*sy*/, void* data) {
+            wlr_surface_send_enter(surface, static_cast<wlr_output*>(data));
+          },
+          m_surfaceOutput
+      );
+    }
+  }
+
+  void View::sendInitialFrameDone(Output* output, const timespec* when) {
+    if (!m_initialFramePending || output == nullptr || output != currentOutput() || when == nullptr) {
+      return;
+    }
+    m_initialFramePending = false;
+    wlr_xdg_surface_for_each_surface(
+        m_toplevel->base,
+        [](wlr_surface* surface, int /*sx*/, int /*sy*/, void* data) {
+          wlr_surface_send_frame_done(surface, static_cast<timespec*>(data));
+        },
+        const_cast<timespec*>(when)
+    );
+  }
+
   void View::unconstrainPopup(wlr_xdg_popup* popup) {
     if (popup == nullptr || m_sceneTree == nullptr) {
       return;
@@ -1306,6 +1351,7 @@ namespace umbriel {
 
   void View::handleMap() {
     m_mapped = true;
+    m_initialFramePending = true;
     m_server->scheduleIpcWindowsEvent();
     m_tiled = looksTiled(m_toplevel);
     const wlr_box& mapGeo = m_toplevel->base->geometry;
@@ -1352,6 +1398,10 @@ namespace umbriel {
         m_workspace->syncViewPresentation(this);
       }
     }
+
+    // Chromium splash windows can begin with a transparent buffer and wait for their first frame before submitting
+    // visible content. Establish the known home output now, then let scene-derived membership converge afterward.
+    syncSurfaceOutput();
 
     // Apply rule opacity: flush to scene buffers immediately so views on
     // inactive workspaces get the correct opacity when they become visible.
@@ -1421,6 +1471,8 @@ namespace umbriel {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
     }
     m_mapped = false;
+    m_initialFramePending = false;
+    syncSurfaceOutput();
     m_server->updateIdleInhibit();
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {
       m_workspace->group()->output()->updateVrr();

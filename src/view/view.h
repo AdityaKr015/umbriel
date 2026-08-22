@@ -249,6 +249,10 @@ namespace umbriel {
     // popups included). Clients like xwayland-satellite size and map pointer coordinates by this, so it must follow the
     // view across outputs and track scale changes.
     void notifyOutputScale();
+    // Keep the mapped toplevel associated with its home output before scene visibility has converged.
+    void syncSurfaceOutput();
+    // One-shot first-frame fallback for mapped clients whose bootstrap buffer has no scene output membership yet.
+    void sendInitialFrameDone(Output* output, const timespec* when);
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
     void requestFloatingSize(int width, int height);
@@ -301,6 +305,8 @@ namespace umbriel {
     Workspace* m_workspace = nullptr;
     bool m_mapped = false;
     bool m_xwayland = false;
+    wlr_output* m_surfaceOutput = nullptr;
+    bool m_initialFramePending = false;
     // False until the first setPosition/animateTo places the node; the initial
     // placement snaps (avoids animating from the default (0,0) world origin).
     bool m_positioned = false;

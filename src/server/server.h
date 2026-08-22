@@ -208,6 +208,9 @@ namespace umbriel {
     void relayoutQuitConfirm();
     void spawn(const char* command);
     void handleConfigReload();
+    // Re-evaluate application idle inhibitors after a surface's presentation
+    // visibility changes.
+    void updateIdleInhibit();
     // Rotate the view registry until the front is a mapped view on the active
     // workspace, and focus it. Repeated calls walk the list.
     bool focusNextWindow();
@@ -363,7 +366,6 @@ namespace umbriel {
     void showConfigDiagnostics();
     void clearNormalFocus() { m_focus.clearNormalFocus(); }
     void setLockBlankEnabled(bool enabled);
-    void updateIdleInhibit();
     void handleWorkspaceCommit(void* data);
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     void applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly);

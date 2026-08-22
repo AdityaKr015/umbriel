@@ -61,15 +61,14 @@ run m=mode startup="": (build m)
     fi
     exec ./build-{{m}}/umbriel "${args[@]}"
 
-test m=mode: (_ensure-configured m)
+test m=mode: (configure m)
+    meson compile -C build-{{m}} unit-tests
     meson test -C build-{{m}} --print-errorlogs
 
 verify m=mode filter="": (build m)
     #!/usr/bin/env bash
     set -euo pipefail
-    # The harness drives the cursor through a virtual-pointer client.
-    meson compile -C build-{{m}} pointer-client
-    meson compile -C build-{{m}} unmap-client
+    meson compile -C build-{{m}} harness-clients
     bash tests/harness/verify.sh ./build-{{m}}/umbriel "{{filter}}"
 
 format:

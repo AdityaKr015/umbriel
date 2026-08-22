@@ -18,6 +18,10 @@ pkgs.mkShell {
     gnused
     findutils
     gdb
+    grim
+    jq
+    foot
+    python3
     xwayland-satellite
   ];
 

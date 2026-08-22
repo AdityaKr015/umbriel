@@ -85,6 +85,16 @@ Extra environment variables exported to Umbriel and all spawned commands.
 All values must be strings. Applied once at startup; changing this section
 requires a restart.
 
+## Idle inhibition
+
+Umbriel supports application idle inhibitors and idle notifications. An
+application inhibits screen blanking, locking, and other idle actions only
+while its associated surface is mapped and visible. Switching away from its
+workspace, hiding a scratchpad window, disabling its output, or locking the
+session stops honoring that inhibitor until the surface becomes visible
+again. A visible lock surface may provide its own inhibitor while the session
+is locked.
+
 ## Workspaces
 
 ```toml

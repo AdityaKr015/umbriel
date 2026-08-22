@@ -151,6 +151,31 @@ xdg_shell_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+idle_inhibit_client_h = custom_target(
+  'idle-inhibit-unstable-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/idle-inhibit/idle-inhibit-unstable-v1.xml',
+  output: 'idle-inhibit-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+idle_inhibit_client_c = custom_target(
+  'idle-inhibit-unstable-v1-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/idle-inhibit/idle-inhibit-unstable-v1.xml',
+  output: 'idle-inhibit-unstable-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+ext_idle_notify_client_h = custom_target(
+  'ext-idle-notify-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-idle-notify/ext-idle-notify-v1.xml',
+  output: 'ext-idle-notify-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+ext_idle_notify_client_c = custom_target(
+  'ext-idle-notify-v1-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-idle-notify/ext-idle-notify-v1.xml',
+  output: 'ext-idle-notify-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 
 output_mgmt_client_h = custom_target(
   'wlr-output-management-unstable-v1-client-protocol.h',
@@ -365,7 +390,7 @@ unit_tests = [
 
 # Harness helper, not a unit test: drives virtual pointer and modifier input against a running compositor. The headless backend has no input devices, so protocol
 # input is the only way to exercise pointer hit-testing and grabs.
-executable(
+pointer_client = executable(
   'pointer-client',
   [
     'tests/harness/pointer_client.cpp',
@@ -378,7 +403,7 @@ executable(
 )
 
 # Harness helper that reproduces the keyboard ownership of a real input method.
-executable(
+input_method_client = executable(
   'input-method-client',
   [
     'tests/harness/input_method_client.cpp',
@@ -391,7 +416,7 @@ executable(
 )
 
 # Harness helper that owns a mapped surface and initiates a data-device drag.
-executable(
+drag_client = executable(
   'drag-client',
   ['tests/harness/drag_client.cpp', layer_shell_client_h, layer_shell_client_c, xdg_shell_client_c],
   dependencies: [wayland_client_dep],
@@ -399,14 +424,14 @@ executable(
 
 # Harness helper that checks whether a Wayland global is visible to a newly
 # connected client.
-executable(
+global_client = executable(
   'global-client',
   'tests/harness/global_client.cpp',
   dependencies: [wayland_client_dep],
 )
 
 # Harness helper that reports the active workspace through ext-workspace-v1.
-executable(
+workspace_client = executable(
   'workspace-client',
   ['tests/harness/workspace_client.cpp', ext_workspace_client_h, ext_workspace_client_c],
   dependencies: [wayland_client_dep],
@@ -414,12 +439,40 @@ executable(
 
 # Harness helper that unmaps its toplevel on a close request without destroying
 # it, so the compositor keeps the View registered but unmapped.
-executable(
+unmap_client = executable(
   'unmap-client',
   ['tests/harness/unmap_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper that keeps an idle inhibitor attached to a mapped toplevel and
+# reports when the compositor starts honoring its idle notification.
+idle_inhibit_client = executable(
+  'idle-inhibit-client',
+  [
+    'tests/harness/idle_inhibit_client.cpp',
+    xdg_shell_client_h,
+    xdg_shell_client_c,
+    idle_inhibit_client_h,
+    idle_inhibit_client_c,
+    ext_idle_notify_client_h,
+    ext_idle_notify_client_c,
+  ],
+  dependencies: [wayland_client_dep],
+)
+
+alias_target(
+  'harness-clients',
+  pointer_client,
+  input_method_client,
+  drag_client,
+  global_client,
+  workspace_client,
+  unmap_client,
+  idle_inhibit_client,
+)
+
+unit_test_targets = []
 foreach unit_test : unit_tests
   test_exe = executable(
     unit_test[0] + '-test',
@@ -427,8 +480,11 @@ foreach unit_test : unit_tests
     include_directories: include_directories('tests'),
     dependencies: [umbriel_pure_dep] + unit_test[2],
   )
+  unit_test_targets += test_exe
   test(unit_test[0], test_exe)
 endforeach
+
+alias_target('unit-tests', unit_test_targets)
 
 install_data(
   'data/umbriel.desktop',

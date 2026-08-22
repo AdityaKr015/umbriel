@@ -138,6 +138,7 @@ namespace umbriel {
       kLog.error("output '{}': failed to commit configured state", m_output->name);
       return;
     }
+    m_server->updateIdleInhibit();
     if (enabled) {
       kLog.info(
           "output '{}': applied mode={}x{}@{}mHz scale={} transform={}", m_output->name, m_output->width,

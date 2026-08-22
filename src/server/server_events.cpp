@@ -817,7 +817,38 @@ namespace umbriel {
   }
 
   void Server::updateIdleInhibit() {
-    const bool inhibited = !wl_list_empty(&m_idleInhibitManager->inhibitors);
+    bool inhibited = false;
+    wlr_idle_inhibitor_v1* inhibitor;
+    wl_list_for_each(inhibitor, &m_idleInhibitManager->inhibitors, link) {
+      wlr_surface* root = wlr_surface_get_root_surface(inhibitor->surface);
+      if (root == nullptr) {
+        continue;
+      }
+
+      if (m_sessionLocked) {
+        wlr_session_lock_surface_v1* lockSurface = wlr_session_lock_surface_v1_try_from_wlr_surface(root);
+        inhibited =
+            lockSurface != nullptr && root->mapped && lockSurface->output != nullptr && lockSurface->output->enabled;
+      } else if (View* view = View::fromSurface(root)) {
+        int x = 0;
+        int y = 0;
+        inhibited = view->mapped() && wlr_scene_node_coords(&view->sceneTree()->node, &x, &y);
+      } else if (wlr_layer_surface_v1* wlrLayer = wlr_layer_surface_v1_try_from_wlr_surface(root)) {
+        auto* layer = static_cast<LayerSurface*>(wlrLayer->data);
+        Output* output = layer != nullptr ? layer->output() : nullptr;
+        int x = 0;
+        int y = 0;
+        inhibited = layer != nullptr
+            && layer->mapped()
+            && output != nullptr
+            && output->wlr()->enabled
+            && wlr_scene_node_coords(&layer->scene()->tree->node, &x, &y);
+      }
+
+      if (inhibited) {
+        break;
+      }
+    }
     wlr_idle_notifier_v1_set_inhibited(m_idleNotifier, inhibited);
   }
 
@@ -842,6 +873,7 @@ namespace umbriel {
     m_cursor->resetMode();
     m_cursor->clearConstraint();
     clearNormalFocus();
+    updateIdleInhibit();
     updateLockBlank();
     setLockBlankEnabled(true);
     raiseLockTree();
@@ -850,6 +882,7 @@ namespace umbriel {
 
   void Server::unlockSession() {
     m_sessionLocked = false;
+    updateIdleInhibit();
     wlr_scene_node_set_enabled(&m_lockBlank->node, false);
     if (View* recent = m_registry.mostRecent()) {
       focusView(recent);

@@ -228,6 +228,7 @@ namespace umbriel {
 
   void LayerSurface::handleMap() {
     m_mapped = true;
+    m_server->updateIdleInhibit();
     if (Output* out = output()) {
       out->markDirty(Dirty::LayerArrange);
       if (m_layerSurface->current.layer == ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
@@ -244,6 +245,7 @@ namespace umbriel {
   void LayerSurface::handleUnmap() {
     const bool hadFocus = hasKeyboardFocus();
     m_mapped = false;
+    m_server->updateIdleInhibit();
     m_blur.hide();
     // Avoid sending configures while unmapping (wrong serial / client abort).
     m_arrangingOut = true;

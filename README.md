@@ -98,6 +98,23 @@ nix develop
 just debug
 ```
 
+### Testing
+
+The development shell includes the clients and command-line tools used by the
+test suite. Run unit tests and the contained headless compositor harness with:
+
+```sh
+nix develop
+just test
+just verify
+```
+
+Pass a check-name fragment to run one harness check while iterating:
+
+```sh
+just verify debug 120_idle_inhibit_visibility
+```
+
 ## Running
 
 Installed display-manager sessions start through `start-umbriel`. On systemd,

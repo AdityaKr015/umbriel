@@ -292,6 +292,7 @@ namespace umbriel {
   void View::setNodeEnabled(bool enabled) {
     wlr_scene_node_set_enabled(&m_sceneTree->node, enabled);
     m_decoration.setShadowEnabled(enabled);
+    m_server->updateIdleInhibit();
   }
 
   void View::raiseToTop() {
@@ -1386,6 +1387,7 @@ namespace umbriel {
     if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
       overview->onViewMapped(this);
     }
+    m_server->updateIdleInhibit();
   }
 
   void View::handleUnmap() {
@@ -1419,6 +1421,7 @@ namespace umbriel {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
     }
     m_mapped = false;
+    m_server->updateIdleInhibit();
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {
       m_workspace->group()->output()->updateVrr();
     }

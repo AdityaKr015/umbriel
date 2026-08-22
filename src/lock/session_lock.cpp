@@ -95,7 +95,10 @@ namespace umbriel {
     self->handleOutputCommit();
   }
 
-  void LockSurface::handleMap() { focus(); }
+  void LockSurface::handleMap() {
+    focus();
+    m_server->updateIdleInhibit();
+  }
 
   void LockSurface::handleDestroy() {
     wl_list_remove(&m_map.link);

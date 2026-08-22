@@ -59,7 +59,8 @@ for action in \
   rejects_with "$action" "no output"
 done
 
-# workspace-next / workspace-previousspawn_client ws-flip
+# workspace-next / workspace-previous
+spawn_client ws-flip
 wait_for_windows 1
 
 if [[ $("$UMBRIEL" windows --json | jq -r '.[0].active') != true ]]; then
@@ -113,7 +114,8 @@ if [[ $restored_w -ne $before_w ]]; then
   exit 1
 fi
 
-# window-centeraccepts "window-toggle-floating"
+# window-center
+accepts "window-toggle-floating"
 for _ in $(seq 40); do
   floating=$(jq -r '.[0].floating' <<< "$("$UMBRIEL" windows --json)")
   [[ $floating == true ]] && break
@@ -145,7 +147,8 @@ if [[ $dx -lt -3 || $dx -gt 3 || $dy -lt -3 || $dy -gt 3 ]]; then
 fi
 accepts "window-toggle-floating" # restore tiled
 
-# workspace-set-layoutspawn_client dwindle-b
+# workspace-set-layout
+spawn_client dwindle-b
 spawn_client dwindle-c
 wait_for_windows 3
 

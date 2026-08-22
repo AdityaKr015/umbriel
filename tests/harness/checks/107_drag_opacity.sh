@@ -61,8 +61,12 @@ measure_drag_green() {
     grim "$screenshot"
 
   local green
-  green=$(magick "$screenshot" -crop 40x40+680+430 -colorspace RGB \
-    -format '%[fx:round(255*mean.g)]' info:)
+  # Read the pixel as encoded, deliberately without -colorspace RGB. The thresholds below are the composite this check
+  # reasons about, and that arithmetic lives in the same encoding grim wrote: an opaque card at kDragOpacity 0.75 over
+  # pure green leaves 255 * 0.25 = 64. Linearizing reads that very pixel as 13 and fails the check on correct output.
+  # The sibling checks linearize harmlessly: they sample saturated colors, where both encodings agree, or compare two
+  # crops against each other, where any monotone transform cancels.
+  green=$(magick "$screenshot" -crop 40x40+680+430 -format '%[fx:round(255*mean.g)]' info:)
   wait "$POINTER_PID"
   POINTER_PID=
   "$UMBRIEL" msg overview-close > /dev/null

@@ -53,9 +53,16 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 | `just clean <mode>` | Remove a build directory |
 | `just rebuild <mode>` | Clean and rebuild a build directory |
 
-`verify.sh` boots a single headless output, which most of its checks assume. Multi-output containment (a window that
-overflows onto a neighbouring output must not render or send `wl_surface.enter` there) has its own two-output harness,
-run directly: `bash tests/harness/two-output-containment.sh ./build-debug/umbriel`.
+`verify.sh` boots one compositor with a single headless output and runs every script in `tests/harness/checks/`
+against it. Two rules follow:
+
+- A check must pass in a plain `just verify` run, with no environment overrides.
+- A check that needs more outputs, or its own compositor lifecycle, boots a private instance. See `025_session_quit`
+  and `116_output_disable`.
+
+Keep the shared instance at one output: `055_output_actions` asserts that directional output actions are rejected
+when there is nowhere to move. Two-output rendering has its own harness, run directly:
+`bash tests/harness/two-output-containment.sh ./build-debug/umbriel`.
 
 ## Code Style
 

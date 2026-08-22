@@ -42,6 +42,7 @@ namespace umbriel {
   namespace {
 
     constexpr Logger kLog("server");
+    constexpr size_t kWaylandClientBufferSize = 1024 * 1024;
 
     bool filterGlobal(const wl_client*, const wl_global* global, void*) {
       const wl_interface* interface = wl_global_get_interface(global);
@@ -98,6 +99,7 @@ namespace umbriel {
     if (m_display == nullptr) {
       throw std::runtime_error("failed to create wl_display");
     }
+    wl_display_set_default_max_buffer_size(m_display, kWaylandClientBufferSize);
 
     m_backend = wlr_backend_autocreate(wl_display_get_event_loop(m_display), &m_session);
     if (m_backend == nullptr) {

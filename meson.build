@@ -32,7 +32,7 @@ add_project_arguments(
   language: 'c',
 )
 
-wayland_server_dep = dependency('wayland-server')
+wayland_server_dep = dependency('wayland-server', version: '>=1.23')
 wayland_client_dep = dependency('wayland-client')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
 wlroots_dep = dependency('wlroots-0.20')

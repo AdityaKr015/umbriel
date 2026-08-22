@@ -25,6 +25,12 @@ namespace umbriel {
     }
   }
 
+  void Server::refreshVrr() {
+    for (const auto& output : m_outputs) {
+      output->updateVrr();
+    }
+  }
+
   wlr_output* Server::preferredOutput() const {
     wlr_output* output = wlr_output_layout_output_at(m_outputLayout, m_cursor->wlr()->x, m_cursor->wlr()->y);
     if (output != nullptr) {

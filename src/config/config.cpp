@@ -44,6 +44,20 @@ namespace umbriel {
       return lowered;
     }
 
+    std::optional<VrrMode> readVrrMode(const toml::node& node) {
+      const auto value = node.value<std::string>();
+      if (value == "disabled") {
+        return VrrMode::Disabled;
+      }
+      if (value == "always") {
+        return VrrMode::Always;
+      }
+      if (value == "fullscreen") {
+        return VrrMode::Fullscreen;
+      }
+      return std::nullopt;
+    }
+
     void emitDiag(ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
       ConfigDiagnostic diag;
       diag.severity = severity;
@@ -854,13 +868,8 @@ namespace umbriel {
         keys.real("scale", 0.25, 4.0, rule.scale);
 
         if (const toml::node* vrrNode = keys.take("vrr")) {
-          const auto value = vrrNode->value<std::string>();
-          if (value == "disabled") {
-            rule.vrr = VrrMode::Disabled;
-          } else if (value == "always") {
-            rule.vrr = VrrMode::Always;
-          } else if (value == "fullscreen") {
-            rule.vrr = VrrMode::Fullscreen;
+          if (const auto value = readVrrMode(*vrrNode)) {
+            rule.vrr = *value;
           } else {
             warnAt(vrrNode->source(), "ignoring output.{}.vrr (expected disabled|always|fullscreen)", name);
           }
@@ -1040,6 +1049,13 @@ namespace umbriel {
             .boolean("blur_optimized", rule.blurOptimized)
             .real("opacity", 0.0, 1.0, rule.opacity)
             .real("blur_ignore_alpha", 0.0, 1.0, rule.blurIgnoreAlpha);
+        if (const toml::node* vrrNode = keys.take("vrr")) {
+          if (const auto value = readVrrMode(*vrrNode)) {
+            rule.vrr = *value;
+          } else {
+            warnAt(vrrNode->source(), "ignoring window_rule.vrr (expected disabled|always|fullscreen)");
+          }
+        }
         if (const toml::node* n = keys.take("default_output")) {
           if (const auto value = n->value<std::string>()) {
             rule.defaultOutput = *value;

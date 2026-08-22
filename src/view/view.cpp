@@ -2193,6 +2193,9 @@ namespace umbriel {
     if (m_workspace != nullptr) {
       m_workspace->syncViewPresentation(this);
     }
+    if (m_mapped) {
+      m_server->refreshVrr();
+    }
   }
 
 } // namespace umbriel

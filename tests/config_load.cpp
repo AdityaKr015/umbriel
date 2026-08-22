@@ -290,6 +290,23 @@ UMBRIEL_TEST(outputVrrPolicyLoadsAndDefaultsDisabled) {
   CHECK(store.config().outputs[0].vrr == VrrMode::Disabled);
 }
 
+UMBRIEL_TEST(windowVrrPolicyLoadsAndRejectsInvalidValues) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[[window_rule]]\nmatch.app_id = \"^game$\"\nvrr = \"always\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().windowRules.size(), size_t{1});
+  CHECK(store.config().windowRules[0].vrr == VrrMode::Always);
+
+  file.write("[[window_rule]]\nvrr = \"sometimes\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().windowRules.size(), size_t{1});
+  CHECK(!store.config().windowRules[0].vrr);
+  CHECK(containsDiagnostic(store, "ignoring window_rule.vrr"));
+}
+
 UMBRIEL_TEST(outputEnabledFlagParsesAndDefaultsTrue) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

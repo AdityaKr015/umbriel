@@ -141,6 +141,7 @@ namespace umbriel {
 
   private:
     friend class Cursor;
+    friend class Output;
     friend class Server;
     friend class Popup;
     friend class Overview;

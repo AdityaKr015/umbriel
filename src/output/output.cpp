@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "core/log.h"
+#include "input/seat.h"
 #include "layer/layer_surface.h"
 #include "scene/node.h"
 #include "server/server.h"
@@ -149,15 +150,22 @@ namespace umbriel {
 
   bool Output::configuredVrrEnabled() const {
     const OutputRule* rule = findRule(m_output->name);
-    if (rule == nullptr) {
-      return false;
-    }
+    const VrrMode outputMode = rule != nullptr ? rule->vrr : VrrMode::Disabled;
     const Workspace* workspace = m_workspaceGroup != nullptr ? m_workspaceGroup->active() : nullptr;
     const bool fullscreen =
         workspace != nullptr && std::ranges::any_of(workspace->allViews(), [](const View* view) {
           return view->mapped() && (view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen);
         });
-    return vrrEnabled(rule->vrr, fullscreen);
+
+    std::optional<VrrMode> focusedMode;
+    bool focusedFullscreen = false;
+    if (wlr_surface* surface = m_server->seat()->wlr()->keyboard_state.focused_surface) {
+      if (View* view = View::fromSurface(surface); view != nullptr && view->mapped() && view->currentOutput() == this) {
+        focusedMode = view->resolvedRules().vrr;
+        focusedFullscreen = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
+      }
+    }
+    return effectiveVrrEnabled(outputMode, fullscreen, focusedMode, focusedFullscreen);
   }
 
   void Output::updateVrr() {

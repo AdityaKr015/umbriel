@@ -10,6 +10,7 @@ using umbriel::Config;
 using umbriel::LayerRule;
 using umbriel::LayoutMode;
 using umbriel::OutputRule;
+using umbriel::VrrMode;
 using umbriel::WindowRule;
 using umbriel::WorkspaceConfig;
 
@@ -137,6 +138,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   app.defaultFocused = false;
   app.defaultPinned = true;
   app.focusOnActivate = false;
+  app.vrr = VrrMode::Disabled;
   app.defaultPosition = umbriel::WindowPosition{
       .x = 12,
       .y = 24,
@@ -149,6 +151,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   title.titleRegex = std::regex(title.titlePattern);
   title.opacity = 0.8;
   title.focusOnActivate = true;
+  title.vrr = VrrMode::Always;
   title.defaultPinned = false;
   config.windowRules.push_back(std::move(title));
 
@@ -168,14 +171,24 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK(resolved.defaultFocused && !*resolved.defaultFocused);
   CHECK(resolved.defaultPinned && !*resolved.defaultPinned);
   CHECK(resolved.focusOnActivate && *resolved.focusOnActivate);
+  CHECK(resolved.vrr == VrrMode::Always);
 
   const auto appOnly = umbriel::resolveWindowRules(config, "foot", "editor", false);
   CHECK(appOnly.defaultPinned && *appOnly.defaultPinned);
+  CHECK(appOnly.vrr == VrrMode::Disabled);
 
   const auto focused = umbriel::resolveWindowRules(config, "foot", "project shell", true);
   CHECK(focused.opacity && *focused.opacity == 0.8);
   CHECK(!focused.defaultFloating);
   CHECK(umbriel::anyWindowRuleHasTitlePattern(config));
+}
+
+UMBRIEL_TEST(windowVrrRuleOverridesTheOutputPolicy) {
+  CHECK(umbriel::effectiveVrrEnabled(VrrMode::Disabled, false, VrrMode::Always, false));
+  CHECK(!umbriel::effectiveVrrEnabled(VrrMode::Always, false, VrrMode::Disabled, false));
+  CHECK(!umbriel::effectiveVrrEnabled(VrrMode::Disabled, false, VrrMode::Fullscreen, false));
+  CHECK(umbriel::effectiveVrrEnabled(VrrMode::Disabled, false, VrrMode::Fullscreen, true));
+  CHECK(umbriel::effectiveVrrEnabled(VrrMode::Fullscreen, true, std::nullopt, false));
 }
 
 UMBRIEL_TEST(layerRulesMergeMatchingFieldsInOrder) {

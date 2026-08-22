@@ -50,6 +50,9 @@ VRR accepts these policies:
 With `"fullscreen"`, switching away from the fullscreen workspace, leaving
 fullscreen, or closing the window disables VRR again.
 
+A focused window can override this output policy with the window-rule `vrr`
+key. See [window rules](rules.md#settings-updated-while-a-window-is-open).
+
 ```toml
 [output.DP-1]
 mode = "2560x1440@165"

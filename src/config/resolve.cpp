@@ -155,6 +155,9 @@ namespace umbriel {
       if (rule.focusOnActivate) {
         resolved.focusOnActivate = rule.focusOnActivate;
       }
+      if (rule.vrr) {
+        resolved.vrr = rule.vrr;
+      }
       if (rule.opacity) {
         resolved.opacity = rule.opacity;
       }

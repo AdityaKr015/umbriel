@@ -146,6 +146,7 @@ namespace umbriel {
     } else {
       wlr_seat_keyboard_notify_enter(seat, surface, nullptr, 0, nullptr);
     }
+    m_server->refreshVrr();
   }
 
   SurfaceBlurOptions LayerSurface::blurOptions() const {

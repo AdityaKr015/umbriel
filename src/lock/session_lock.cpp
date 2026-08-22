@@ -58,6 +58,7 @@ namespace umbriel {
     if (wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat)) {
       wlr_seat_keyboard_notify_enter(seat, surface, keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
     }
+    m_server->refreshVrr();
   }
 
   void LockSurface::configure() {

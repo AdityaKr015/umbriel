@@ -220,6 +220,7 @@ follows_mouse = false
 # default_floating = true
 # default_focused = false
 # focus_on_activate = true
+# vrr = "always"                # override the output VRR policy while focused
 
 # [[window_rule]]
 # match.title = "^notificationtoasts_.+_desktop"

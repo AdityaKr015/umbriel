@@ -97,6 +97,11 @@ namespace umbriel {
   [[nodiscard]] constexpr bool vrrEnabled(VrrMode mode, bool fullscreen) {
     return mode == VrrMode::Always || (mode == VrrMode::Fullscreen && fullscreen);
   }
+  [[nodiscard]] constexpr bool effectiveVrrEnabled(
+      VrrMode outputMode, bool outputFullscreen, std::optional<VrrMode> windowMode, bool windowFullscreen
+  ) {
+    return windowMode ? vrrEnabled(*windowMode, windowFullscreen) : vrrEnabled(outputMode, outputFullscreen);
+  }
   struct OutputRule {
     std::string name;
     // False powers the monitor off, removes it from the layout, and hides its
@@ -148,6 +153,7 @@ namespace umbriel {
     std::optional<bool> defaultFocused;
     std::optional<bool> defaultPinned;
     std::optional<bool> focusOnActivate;
+    std::optional<VrrMode> vrr;
     std::optional<double> opacity; // 0.0-1.0
     std::optional<bool> blur;
     std::optional<bool> blurPopups;
@@ -171,6 +177,7 @@ namespace umbriel {
           && defaultFocused == other.defaultFocused
           && defaultPinned == other.defaultPinned
           && focusOnActivate == other.focusOnActivate
+          && vrr == other.vrr
           && opacity == other.opacity
           && blur == other.blur
           && blurPopups == other.blurPopups
@@ -192,6 +199,7 @@ namespace umbriel {
     std::optional<bool> defaultFocused;
     std::optional<bool> defaultPinned;
     std::optional<bool> focusOnActivate;
+    std::optional<VrrMode> vrr;
     std::optional<double> opacity;
     std::optional<bool> blur;
     std::optional<bool> blurPopups;

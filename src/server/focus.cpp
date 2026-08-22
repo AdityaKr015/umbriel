@@ -96,6 +96,7 @@ namespace umbriel {
     if (workspace != nullptr && (!view->pinned() || workspace->active())) {
       workspace->setFocusedView(view);
     }
+    m_server.refreshVrr();
     if (overviewActive) {
       m_server.overview()->onFocusChanged();
     }
@@ -197,6 +198,7 @@ namespace umbriel {
   void FocusManager::clearKeyboardFocus() {
     deactivateViews(nullptr);
     wlr_seat_keyboard_notify_clear_focus(m_server.seat()->wlr());
+    m_server.refreshVrr();
   }
 
   void FocusManager::clearNormalFocus() {

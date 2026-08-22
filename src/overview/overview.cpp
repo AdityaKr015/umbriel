@@ -315,8 +315,8 @@ namespace umbriel {
       wlr_scene_node_set_position(&entry->buffer->node, visible.x - card.box.x, visible.y - card.box.y);
       wlr_scene_buffer_set_source_box(entry->buffer, &src);
       wlr_scene_buffer_set_dest_size(entry->buffer, visible.width, visible.height);
-      // A card cut by the output edge drops the radius on the cut corners, the
-      // same rule View applies to a window that spans outputs.
+      // Cards are resized to their visible part, not scissored like windows, so the corners the output edge cuts have
+      // to lose their radius or the cut reads as a smaller rounded card.
       wlr_scene_buffer_set_corner_radii(
           entry->buffer, cornerRadiiForVisible(card.box, visible, corner_radii_all(radius))
       );

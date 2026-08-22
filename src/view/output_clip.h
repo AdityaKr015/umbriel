@@ -6,8 +6,9 @@ extern "C" {
 }
 
 namespace umbriel {
-  // Scene clipping resizes the rendered buffer to its visible part. Remove the radius from every cut edge so that the
-  // new boundary reads as a clip, not as a smaller rounded window.
+  // For a node that was resized down to its visible part (overview cards and their border rings, not windows: those are
+  // scissored by their output's clipped scene root and keep their full size). Remove the radius from every cut edge so
+  // the new boundary reads as a cut and not as a smaller rounded rectangle.
   [[nodiscard]] constexpr fx_corner_radii
   cornerRadiiForVisible(const wlr_box& full, const wlr_box& visible, fx_corner_radii corners) {
     const bool left = visible.x > full.x;

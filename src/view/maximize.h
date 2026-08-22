@@ -2,9 +2,6 @@
 
 namespace umbriel {
 
-  [[nodiscard]] constexpr bool
-  maximizeRequestTargetsEdges(bool edgesActive, bool columnFullWidth, bool requestedMaximized) {
-    return edgesActive || (requestedMaximized && !columnFullWidth);
-  }
+  [[nodiscard]] constexpr bool maximizeRequestTargetsEdges(bool edgesActive) { return edgesActive; }
 
 } // namespace umbriel

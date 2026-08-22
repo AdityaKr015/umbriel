@@ -1360,13 +1360,11 @@ namespace umbriel {
       scheduleFrame();
     }
 
-    // Tiled maximize is compositor-owned so client restore-state churn cannot
-    // resize a column. Window rules and floating client requests still apply.
+    // Rules and restored client state both request ordinary maximization. Edge maximization is entered only through
+    // Umbriel's explicit action.
     const bool ruleMaximized = rule.defaultMaximize && *rule.defaultMaximize;
-    if (ruleMaximized || (!m_tiled && m_toplevel->requested.maximized)) {
+    if (ruleMaximized || m_toplevel->requested.maximized) {
       setMaximized(true);
-    } else if (m_tiled && m_toplevel->requested.maximized) {
-      setMaximizedToEdges(true);
     }
 
     // Fullscreen after workspace + focus so the view lands in the right place.
@@ -1667,14 +1665,11 @@ namespace umbriel {
       return;
     }
     if (m_tiled && m_workspace != nullptr) {
-      const int column = m_workspace->layout().columnOf(this);
-      const bool columnFullWidth = column >= 0 && m_workspace->layout().isFullWidth(column);
-      if (maximizeRequestTargetsEdges(m_maximizedToEdges, columnFullWidth, m_toplevel->requested.maximized)) {
+      if (maximizeRequestTargetsEdges(m_maximizedToEdges)) {
         setMaximizedToEdges(m_toplevel->requested.maximized);
         return;
       }
-      wlr_xdg_toplevel_set_maximized(m_toplevel, columnFullWidth);
-      updateForeignState();
+      setMaximized(m_toplevel->requested.maximized);
       return;
     }
     setMaximized(m_toplevel->requested.maximized);

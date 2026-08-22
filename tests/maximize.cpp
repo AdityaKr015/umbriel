@@ -4,10 +4,8 @@
 
 using umbriel::maximizeRequestTargetsEdges;
 
-UMBRIEL_TEST(defaultMaximizedColumnStaysColumnMaximized) { CHECK(!maximizeRequestTargetsEdges(false, true, true)); }
+UMBRIEL_TEST(freshClientMaximizeTargetsColumn) { CHECK(!maximizeRequestTargetsEdges(false)); }
 
-UMBRIEL_TEST(freshClientMaximizeTargetsEdges) { CHECK(maximizeRequestTargetsEdges(false, false, true)); }
-
-UMBRIEL_TEST(clientCanLeaveEdgesMaximize) { CHECK(maximizeRequestTargetsEdges(true, true, false)); }
+UMBRIEL_TEST(clientCanLeaveEdgesMaximize) { CHECK(maximizeRequestTargetsEdges(true)); }
 
 int main() { return RUN_TESTS(); }

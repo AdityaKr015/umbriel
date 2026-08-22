@@ -45,6 +45,19 @@ done
 
 umb() { env -u WAYLAND_DISPLAY -u DISPLAY XDG_RUNTIME_DIR="$RUNTIME_DIR" "$BINARY" "$@"; }
 shot() { env -u DISPLAY XDG_RUNTIME_DIR="$RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 grim -o "$1" "$2"; }
+# Animations (overview zoom, card motion) mean a single grab can catch a moving frame and make comparisons flaky. Grab
+# until two consecutive frames match, so every baseline and result below is a settled frame.
+shot_settled() {
+  local output=$1 dest=$2 previous=$RUNTIME_DIR/.settle.png
+  for _ in $(seq 24); do
+    shot "$output" "$previous"
+    sleep 0.25
+    shot "$output" "$dest"
+    cmp -s "$previous" "$dest" && return 0
+  done
+  echo "  $output never settled"
+  return 1
+}
 spawn() {
   env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR="$RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
     foot --title="$1" sh -c 'sleep 300' > /dev/null 2>&1 &
@@ -82,12 +95,20 @@ home_x=$(output_x "$home")
 echo "windows land on $home (x=$home_x), watching $neighbour (x=$(output_x "$neighbour"))"
 
 sleep 1
-shot "$neighbour" "$RUNTIME_DIR/neighbour-base.png"
-shot "$home" "$RUNTIME_DIR/home-base.png"
+shot_settled "$neighbour" "$RUNTIME_DIR/neighbour-base.png"
+shot_settled "$home" "$RUNTIME_DIR/home-base.png"
 # The rightmost on-strip column ends just short of the shared edge, so this crop is window content when the strip is
 # populated and backdrop when it is empty.
 edge_crop=20x600+1246+60
 home_base_edge=$(region_mean "$RUNTIME_DIR/home-base.png" "$edge_crop")
+
+# Overview baseline while the home output holds a single card: its filmstrip cannot overhang the shared edge yet, so
+# this is the neighbour showing nothing but its own filmstrip.
+umb msg overview-open > /dev/null
+sleep 2
+shot_settled "$neighbour" "$RUNTIME_DIR/neighbour-ov-base.png"
+umb msg overview-close > /dev/null
+sleep 1.5
 
 # 624-wide columns on a 1280-wide output fit two at a time. Focusing the leftmost column scrolls the surplus off the
 # RIGHT edge, which in a side-by-side layout is exactly where the neighbouring output lives.
@@ -102,8 +123,8 @@ over=$(umb windows --json | jq --argjson e "$edge" '[.[] | select(.x + .w > $e)]
 echo "columns reaching past the shared edge at x=$edge: $over"
 [[ $over -gt 0 ]] || { echo "SETUP FAIL: nothing reaches past the shared edge"; exit 1; }
 
-shot "$neighbour" "$RUNTIME_DIR/neighbour-full.png"
-shot "$home" "$RUNTIME_DIR/home-full.png"
+shot_settled "$neighbour" "$RUNTIME_DIR/neighbour-full.png"
+shot_settled "$home" "$RUNTIME_DIR/home-full.png"
 
 neighbour_same=$(cmp -s "$RUNTIME_DIR/neighbour-base.png" "$RUNTIME_DIR/neighbour-full.png" && echo same || echo changed)
 home_same=$(cmp -s "$RUNTIME_DIR/home-base.png" "$RUNTIME_DIR/home-full.png" && echo same || echo changed)
@@ -133,6 +154,16 @@ for action in window-toggle-fullscreen window-toggle-fullscreen workspace-next w
   done
 done
 check "no bleed onto $neighbour across transitions" "$transition_drift" 0
+
+# Same output, now with a populated and scrolled strip: cards for off-strip columns land past the shared edge. The
+# neighbour must look exactly as it did with one card next door.
+umb msg overview-open > /dev/null
+sleep 2
+shot_settled "$neighbour" "$RUNTIME_DIR/neighbour-ov-full.png"
+overview_same=$(cmp -s "$RUNTIME_DIR/neighbour-ov-base.png" "$RUNTIME_DIR/neighbour-ov-full.png" && echo same || echo changed)
+umb msg overview-close > /dev/null
+sleep 1
+check "no bleed onto $neighbour with the overview open" "$overview_same" same
 
 if [[ $rc -ne 0 ]]; then
   cp "$RUNTIME_DIR"/*.png /tmp/ 2>/dev/null || true

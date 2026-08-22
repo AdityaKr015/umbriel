@@ -6,21 +6,6 @@ extern "C" {
 }
 
 namespace umbriel {
-  // For a node that was resized down to its visible part (overview cards and their border rings, not windows: those are
-  // scissored by their output's clipped scene root and keep their full size). Remove the radius from every cut edge so
-  // the new boundary reads as a cut and not as a smaller rounded rectangle.
-  [[nodiscard]] constexpr fx_corner_radii
-  cornerRadiiForVisible(const wlr_box& full, const wlr_box& visible, fx_corner_radii corners) {
-    const bool left = visible.x > full.x;
-    const bool right = visible.x + visible.width < full.x + full.width;
-    const bool top = visible.y > full.y;
-    const bool bottom = visible.y + visible.height < full.y + full.height;
-    return corner_radii_new(
-        left || top ? 0 : corners.top_left, right || top ? 0 : corners.top_right,
-        right || bottom ? 0 : corners.bottom_right, left || bottom ? 0 : corners.bottom_left
-    );
-  }
-
   // Offset centering a client buffer of `contentSize` in a fullscreen tile of `tileSize`. Negative when the buffer is
   // the larger of the two, which crops it equally on both sides; a fullscreen buffer is never scaled, because scaling a
   // client that is mid mode-change shows it at the wrong aspect ratio.

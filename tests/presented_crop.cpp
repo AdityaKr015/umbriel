@@ -1,18 +1,6 @@
-#include "view/output_clip.h"
+#include "view/presented_crop.h"
 
 #include "check.h"
-
-UMBRIEL_TEST(surfaceCornersSquareTheClippedRightEdge) {
-  const wlr_box content{1520, 100, 800, 600};
-  const wlr_box visible{1520, 100, 400, 600};
-  constexpr int kRadius = 12;
-
-  const fx_corner_radii corners = umbriel::cornerRadiiForVisible(content, visible, corner_radii_all(kRadius));
-  CHECK_EQ(corners.top_left, kRadius);
-  CHECK_EQ(corners.top_right, 0);
-  CHECK_EQ(corners.bottom_right, 0);
-  CHECK_EQ(corners.bottom_left, kRadius);
-}
 
 UMBRIEL_TEST(fullscreenCentersASmallerBuffer) {
   // A client that has not yet committed the fullscreen size sits centered in the

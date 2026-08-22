@@ -11,7 +11,6 @@
 #include "overview/overview.h"
 #include "server/server.h"
 #include "view/maximize.h"
-#include "view/output_clip.h"
 #include "view/xdg_size.h"
 // clang-format off
 #include <algorithm>

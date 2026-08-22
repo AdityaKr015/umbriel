@@ -1,7 +1,7 @@
 #include "view/presentation.h"
 
 #include "config/config.h"
-#include "view/output_clip.h"
+#include "view/presented_crop.h"
 
 // clang-format off
 #include <algorithm>

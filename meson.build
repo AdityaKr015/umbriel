@@ -316,7 +316,7 @@ umbriel = executable(
 # Unit tests. Each entry is [name, test sources, extra dependencies]. Every test gets umbriel_pure_dep; add umbriel_core_dep to the third field for a test that
 # needs compositor code. Either way a test never lists or recompiles a source.
 unit_tests = [
-  ['output-clip', ['tests/output_clip.cpp'], []],
+  ['presented-crop', ['tests/presented_crop.cpp'], []],
   ['scene-node', ['tests/scene_node.cpp'], []],
   ['scene-clip', ['tests/scene_clip.cpp'], [wayland_server_dep]],
   ['value-parse', ['tests/value_parse.cpp'], []],

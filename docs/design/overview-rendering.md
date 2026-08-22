@@ -17,10 +17,13 @@ transition.
 Cards carry the same inner border, outer border, and corner radius as their
 windows. These values scale with the card.
 
-Cards are clipped to the logical bounds of their output by their own manual
-card clipping, not by the per-output scene roots windows live under. If a
-workspace row pushes a card beyond an output edge, the clipped edge loses its
-corner radius so the cut reads as a clip and not as a smaller rounded card.
+Each output's overview tree carries a `wlr_scene_tree_set_clip` of that
+output's logical bounds, the same primitive windows use. A workspace row that
+pushes a card past an output edge is scissored there: cards, border rings,
+workspace backgrounds and blur are all contained by that one clip, and none of
+them trims its own geometry. The dragged card is reparented out to the
+unclipped overview root so it can span outputs, exactly as a dragged window
+does.
 
 Each workspace has a rounded background behind its cards. The configured alpha
 controls whether this is a light tint, a translucent panel, or an opaque fill.
@@ -55,5 +58,7 @@ The relevant checks are:
   for the visible prepend target on an overflowing scrolling strip.
 - [`tests/harness/checks/112_overview_refocus.sh`](../../tests/harness/checks/112_overview_refocus.sh)
   for focus reassignment when the focused window closes in the overview.
-- [`tests/output_clip.cpp`](../../tests/output_clip.cpp) for the card corner
-  squaring and presented-crop math in logical coordinates.
+- [`tests/harness/two-output-containment.sh`](../../tests/harness/two-output-containment.sh)
+  for cards staying off a neighbouring output, overview included.
+- [`tests/presented_crop.cpp`](../../tests/presented_crop.cpp) for the
+  presented-crop math shared with window presentation.

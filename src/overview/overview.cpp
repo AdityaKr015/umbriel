@@ -11,7 +11,6 @@
 #include "scene/color.h"
 #include "scene/hint_rect.h"
 #include "server/server.h"
-#include "view/output_clip.h"
 #include "view/view.h"
 // clang-format off
 #include <algorithm>
@@ -44,35 +43,22 @@ namespace umbriel {
       return out;
     }
     void layoutWorkspaceBackground(
-        wlr_scene_rect* background, const wlr_box& full, const wlr_box& clip, int radius,
-        const std::array<float, 4>& color
+        wlr_scene_rect* background, const wlr_box& box, int radius, const std::array<float, 4>& color
     ) {
       if (background == nullptr) {
         return;
       }
-      wlr_box visible{};
-      if (color[3] <= 0.001F || !wlr_box_intersection(&visible, &full, &clip)) {
+      if (color[3] <= 0.001F) {
         wlr_scene_node_set_enabled(&background->node, false);
         return;
       }
 
       wlr_scene_node_set_enabled(&background->node, true);
-      wlr_scene_node_set_position(&background->node, visible.x, visible.y);
-      wlr_scene_rect_set_size(background, visible.width, visible.height);
+      wlr_scene_node_set_position(&background->node, box.x, box.y);
+      wlr_scene_rect_set_size(background, box.width, box.height);
       wlr_scene_rect_set_color(background, color.data());
       wlr_scene_rect_set_clipped_region(background, clipped_region_get_default());
-
-      const bool trimLeft = visible.x > full.x;
-      const bool trimRight = visible.x + visible.width < full.x + full.width;
-      const bool trimTop = visible.y > full.y;
-      const bool trimBottom = visible.y + visible.height < full.y + full.height;
-      wlr_scene_rect_set_corner_radii(
-          background,
-          corner_radii_new(
-              trimLeft || trimTop ? 0 : radius, trimRight || trimTop ? 0 : radius, trimRight || trimBottom ? 0 : radius,
-              trimLeft || trimBottom ? 0 : radius
-          )
-      );
+      wlr_scene_rect_set_corner_radii(background, corner_radii_all(radius));
     }
 
     // Cards are pure output: hit testing runs off Overview's own boxes, so scene
@@ -218,16 +204,6 @@ namespace umbriel {
     wlr_scene_node_set_position(&card.tree->node, card.box.x, card.box.y);
     const float cardOpacity = &card == m_dragCard ? View::kDragOpacity : 1.0F;
 
-    // Rows overhang the output box by design (adjacent workspaces peek in), so every piece is clipped to the owning
-    // output; on a stacked multi-head layout the overhang would otherwise bleed onto the neighbour.
-    const bool clipped = &card != m_dragCard;
-    wlr_box visible = card.box;
-    if (clipped && !wlr_box_intersection(&visible, &card.box, &metrics.outputBox)) {
-      card.blur.hide();
-      wlr_scene_node_set_enabled(&card.tree->node, false);
-      return;
-    }
-
     const auto& appearance = config().appearance;
     const int total = appearance.totalBorderWidth();
     const bool decorated = total > 0 && !view->toplevel()->current.fullscreen;
@@ -235,17 +211,15 @@ namespace umbriel {
     // radius on its own drifts from the ring's own thickness at fractional zoom, so the curve stops matching the
     // stroke.
     const int radius = decorated ? static_cast<int>(std::lround(appearance.cornerRadius * z)) : 0;
-    const wlr_box* clip = clipped ? &metrics.outputBox : nullptr;
     const auto paintRing = [&](wlr_scene_rect* rect, int thickness, const std::array<float, 4>& base) {
       if (rect == nullptr) {
         return;
       }
       const int scaled = thickness > 0 ? std::max(1, static_cast<int>(std::lround(thickness * z))) : 0;
-      const bool visible = decorated
-          && scaled > 0
-          && applyBorderRing(rect, makeBorderRing(contentW, contentH, radius, scaled), card.box.x, card.box.y, clip);
+      const bool visible = decorated && scaled > 0;
       wlr_scene_node_set_enabled(&rect->node, visible);
       if (visible) {
+        applyBorderRing(rect, makeBorderRing(contentW, contentH, radius, scaled));
         const std::array<float, 4> color = tint(base, cardOpacity);
         wlr_scene_rect_set_color(rect, color.data());
       }
@@ -277,11 +251,6 @@ namespace umbriel {
             std::max(1, static_cast<int>(std::lround(surface->current.width * fx))),
             std::max(1, static_cast<int>(std::lround(surface->current.height * fy))),
         };
-        wlr_box subVisible{};
-        if (clipped && !wlr_box_intersection(&subVisible, &sub, &metrics.outputBox)) {
-          wlr_scene_node_set_enabled(&entry->buffer->node, false);
-          continue;
-        }
         wlr_scene_node_set_enabled(&entry->buffer->node, true);
         wlr_scene_node_set_position(&entry->buffer->node, sub.x - card.box.x, sub.y - card.box.y);
         wlr_scene_buffer_set_dest_size(entry->buffer, sub.width, sub.height);
@@ -293,10 +262,7 @@ namespace umbriel {
       wlr_surface_get_buffer_source_box(surface, &base);
       const double bx = base.width / surface->current.width;
       const double by = base.height / surface->current.height;
-      // Surface-local region backing `visible`.
-      const double sx = geometry.x + (visible.x - card.box.x) / fx;
-      const double sy = geometry.y + (visible.y - card.box.y) / fy;
-      wlr_fbox src{base.x + sx * bx, base.y + sy * by, (visible.width / fx) * bx, (visible.height / fy) * by};
+      wlr_fbox src{base.x + geometry.x * bx, base.y + geometry.y * by, geometry.width * bx, geometry.height * by};
       if (src.x < base.x) {
         src.width -= base.x - src.x;
         src.x = base.x;
@@ -312,23 +278,13 @@ namespace umbriel {
         continue;
       }
       wlr_scene_node_set_enabled(&entry->buffer->node, true);
-      wlr_scene_node_set_position(&entry->buffer->node, visible.x - card.box.x, visible.y - card.box.y);
+      wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
       wlr_scene_buffer_set_source_box(entry->buffer, &src);
-      wlr_scene_buffer_set_dest_size(entry->buffer, visible.width, visible.height);
-      // Cards are resized to their visible part, not scissored like windows, so the corners the output edge cuts have
-      // to lose their radius or the cut reads as a smaller rounded card.
-      wlr_scene_buffer_set_corner_radii(
-          entry->buffer, cornerRadiiForVisible(card.box, visible, corner_radii_all(radius))
-      );
+      wlr_scene_buffer_set_dest_size(entry->buffer, contentW, contentH);
+      wlr_scene_buffer_set_corner_radii(entry->buffer, corner_radii_all(radius));
       const wlr_box blurBox{0, 0, contentW, contentH};
-      const wlr_box blurClip{
-          visible.x - card.box.x,
-          visible.y - card.box.y,
-          visible.width,
-          visible.height,
-      };
       card.blur.setAlpha(entry->buffer->opacity);
-      card.blur.update(card.tree, surface, blurBox, geometry, radius, &blurClip, view->blurOptions(), entry->buffer);
+      card.blur.update(card.tree, surface, blurBox, geometry, radius, nullptr, view->blurOptions(), entry->buffer);
       blurUpdated = true;
     }
     if (!blurUpdated) {
@@ -342,6 +298,11 @@ namespace umbriel {
       return;
     }
 
+    // Rows overhang the output by design (adjacent workspaces peek in). One clip on this output's overview tree
+    // contains every card, ring, background and blur below it, so nothing here needs to trim its own geometry. The
+    // dragged card is reparented out to the unclipped overview root, which is what lets it span outputs.
+    wlr_scene_tree_set_clip(state.tree, &metrics.outputBox);
+
     wlr_scene_node_set_position(&state.backgroundTint->node, metrics.outputBox.x, metrics.outputBox.y);
     wlr_scene_rect_set_size(state.backgroundTint, metrics.outputBox.width, metrics.outputBox.height);
     const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, m_progress);
@@ -354,7 +315,7 @@ namespace umbriel {
     for (size_t row = 0; row < state.workspaceBackgrounds.size(); ++row) {
       wlr_scene_rect* background = state.workspaceBackgrounds[row];
       const wlr_box full{metrics.rowX, rowTop(metrics, state.rowScroll, row), metrics.rowW, metrics.rowH};
-      layoutWorkspaceBackground(background, full, metrics.outputBox, backgroundRadius, backgroundColor);
+      layoutWorkspaceBackground(background, full, backgroundRadius, backgroundColor);
     }
 
     for (const auto& card : state.cards) {
@@ -1156,10 +1117,21 @@ namespace umbriel {
   // -: hit testing
 
   Overview::Card* Overview::cardAt(double lx, double ly) {
-    // Topmost first: later outputs and later cards paint over earlier ones.
+    // Topmost first: later outputs and later cards paint over earlier ones. The part of a card that the output clip
+    // scissors away is not on screen, so it must not be clickable either; the dragged card is unclipped and hits
+    // everywhere.
     for (const auto& state : std::views::reverse(m_outputs)) {
+      wlr_box outputBox{};
+      wlr_output_layout_get_box(m_server->outputLayout(), state->output->wlr(), &outputBox);
       for (const auto& card : std::views::reverse(state->cards)) {
-        if (card->tree != nullptr && card->tree->node.enabled && boxContains(card->box, lx, ly)) {
+        if (card->tree == nullptr || !card->tree->node.enabled) {
+          continue;
+        }
+        wlr_box hit = card->box;
+        if (card.get() != m_dragCard && !wlr_box_intersection(&hit, &card->box, &outputBox)) {
+          continue;
+        }
+        if (boxContains(hit, lx, ly)) {
           return card.get();
         }
       }

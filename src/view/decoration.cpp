@@ -41,8 +41,7 @@ namespace umbriel {
     const auto& appearance = config().appearance;
     if (m_borderRect != nullptr) {
       applyBorderRing(
-          m_borderRect, makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.borderWidth), 0,
-          0, nullptr
+          m_borderRect, makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.borderWidth)
       );
     }
 
@@ -53,8 +52,7 @@ namespace umbriel {
         // The outer color tucks under the inner ring, leaving no gap between them.
         applyBorderRing(
             m_outerBorderRect,
-            makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth()), 0, 0,
-            nullptr
+            makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth())
         );
         wlr_scene_rect_set_color(m_outerBorderRect, appearance.outerBorderColor.data());
       }

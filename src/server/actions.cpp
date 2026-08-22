@@ -554,6 +554,27 @@ namespace umbriel {
       return true;
     }
 
+    template <int Direction>
+    bool actionWindowMoveToWorkspaceAdjacent(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      Workspace* workspace = activeWorkspace(server);
+      if (workspace == nullptr || workspace->group() == nullptr) {
+        return true;
+      }
+      WorkspaceGroup* group = workspace->group();
+      const size_t index = workspace->index();
+      if (Direction < 0 && index == 0) {
+        return true;
+      }
+      Workspace* target = group->workspaceAt(index + static_cast<size_t>(Direction));
+      if (target == nullptr || target == workspace) {
+        return true;
+      }
+      if (View* view = workspace->focusedView()) {
+        moveViewToWorkspace(server, *view, *target);
+      }
+      return true;
+    }
+
     bool actionWorkspaceSetLayout(Server& server, const Keybind& bind, std::string* /*error*/) {
       Workspace* workspace = activeWorkspace(server);
       if (workspace == nullptr) {
@@ -834,6 +855,8 @@ namespace umbriel {
         &actionFocusNext,
         &actionWorkspace,
         &actionWorkspace,
+        &actionWindowMoveToWorkspaceAdjacent<1>,
+        &actionWindowMoveToWorkspaceAdjacent<-1>,
         &actionConfigReload,
         &actionKeyboardLayoutNext,
         &actionLayoutScroll<-1>,

@@ -207,6 +207,8 @@ follows_mouse = false
 # Output, workspace, and window movement actions.
 # "Mod+Comma" = "workspace-previous"
 # "Mod+Period" = "workspace-next"
+# "Mod+Shift+Comma" = "window-move-to-workspace-previous"
+# "Mod+Shift+Period" = "window-move-to-workspace-next"
 # "Mod+Ctrl+H" = "output-focus-left"
 # "Mod+Minus" = "window-modify-width:-0.1"
 # "Mod+C" = "window-center"

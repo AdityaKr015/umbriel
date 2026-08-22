@@ -88,6 +88,37 @@ if [[ $active_now != true ]]; then
   exit 1
 fi
 
+# Moving to an adjacent workspace follows the focused window. At either end
+# the corresponding action remains a silent no-op.
+start_workspace=$("$UMBRIEL" windows --json | jq -r '.[0].workspace')
+accepts "window-move-to-workspace-next"
+moved_workspace=$start_workspace
+for _ in $(seq 40); do
+  moved_workspace=$("$UMBRIEL" windows --json | jq -r '.[0].workspace')
+  [[ $moved_workspace != "$start_workspace" ]] && break
+  sleep 0.1
+done
+if [[ $moved_workspace == "$start_workspace" ]]; then
+  echo "expected the focused window to move to the next workspace"
+  exit 1
+fi
+if [[ $("$UMBRIEL" windows --json | jq -r '.[0].active') != true ]]; then
+  echo "expected the moved window to remain active on the next workspace"
+  exit 1
+fi
+
+accepts "window-move-to-workspace-previous"
+returned_workspace=$moved_workspace
+for _ in $(seq 40); do
+  returned_workspace=$("$UMBRIEL" windows --json | jq -r '.[0].workspace')
+  [[ $returned_workspace == "$start_workspace" ]] && break
+  sleep 0.1
+done
+if [[ $returned_workspace != "$start_workspace" ]]; then
+  echo "expected the focused window to return to $start_workspace, got $returned_workspace"
+  exit 1
+fi
+
 # window-modify-width: Headless output is 1280x720 with the shipped defaults (gap 8, border 2): viewport 1260, so -0.2 shrinks a column by about 252px.
 # The exact geometry math lives in 030_layout.sh (624 wide at 0.5).
 before_w=$(jq -r '.[0].w' <<< "$("$UMBRIEL" windows --json)")
@@ -212,4 +243,4 @@ for _ in $(seq 40); do
 done
 accepts "workspace-switch:1"
 
-echo "directional actions reject on one output; next/prev, width delta, center, and layout mode all behave"
+echo "directional actions reject on one output; workspace navigation and moves, width delta, center, and layout mode all behave"

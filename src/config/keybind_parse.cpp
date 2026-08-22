@@ -194,6 +194,8 @@ namespace umbriel {
          ActionArgKind::OptionalOutput},
         {"window-move-to-workspace", "<workspace>[/<output>]", KeybindAction::WindowMoveToWorkspace,
          ActionArgKind::Workspace},
+        {"window-move-to-workspace-next", "", KeybindAction::WindowMoveToWorkspaceNext},
+        {"window-move-to-workspace-previous", "", KeybindAction::WindowMoveToWorkspacePrevious},
         {"window-move-up", "", KeybindAction::WindowMoveUp},
         {"window-restore-from-scratchpad", "[<output>]", KeybindAction::WindowRestoreFromScratchpad,
          ActionArgKind::OptionalOutput},

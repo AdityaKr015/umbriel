@@ -302,6 +302,8 @@ namespace {
       return Group::Windows;
     case A::WorkspaceSwitch:
     case A::WindowMoveToWorkspace:
+    case A::WindowMoveToWorkspaceNext:
+    case A::WindowMoveToWorkspacePrevious:
     case A::WorkspaceNext:
     case A::WorkspacePrevious:
     case A::WorkspaceSetLayout:

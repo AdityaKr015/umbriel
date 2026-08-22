@@ -47,6 +47,8 @@ namespace umbriel {
     WindowFocusNext,
     WorkspaceSwitch,
     WindowMoveToWorkspace,
+    WindowMoveToWorkspaceNext,
+    WindowMoveToWorkspacePrevious,
     ConfigReload,
     KeyboardLayoutNext,
     LayoutScrollLeft,

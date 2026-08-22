@@ -326,6 +326,12 @@ UMBRIEL_TEST(parsesArgumentFreeNewActions) {
   CHECK(parseAction("workspace-previous", bind));
   CHECK(bind.action == KeybindAction::WorkspacePrevious);
 
+  CHECK(parseAction("window-move-to-workspace-next", bind));
+  CHECK(bind.action == KeybindAction::WindowMoveToWorkspaceNext);
+
+  CHECK(parseAction("window-move-to-workspace-previous", bind));
+  CHECK(bind.action == KeybindAction::WindowMoveToWorkspacePrevious);
+
   CHECK(parseAction("output-focus-left", bind));
   CHECK(bind.action == KeybindAction::OutputFocusLeft);
   CHECK(parseAction("output-focus-right", bind));
@@ -339,6 +345,8 @@ UMBRIEL_TEST(parsesArgumentFreeNewActions) {
 
   // Argument-free actions reject arguments.
   CHECK(!parseAction("workspace-next:1", bind));
+  CHECK(!parseAction("window-move-to-workspace-next:1", bind));
+  CHECK(!parseAction("window-move-to-workspace-previous:1", bind));
   CHECK(!parseAction("output-focus-left:DP-1", bind));
   CHECK(!parseAction("window-center:x", bind));
   CHECK(!parseAction("window-toggle-maximize-to-edges:x", bind));

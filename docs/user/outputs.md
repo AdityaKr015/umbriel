@@ -99,6 +99,10 @@ creates a new workspace on the adjacent monitor and moves every window of the
 active workspace into it, preserving column order and widths. See
 [keybinds](keybinds.md) for the full list and their exact semantics.
 
+Direction is determined from output centers in logical layout coordinates.
+Small overlaps caused by fractional scaling and coordinate rounding therefore
+do not prevent vertically or horizontally arranged outputs from being found.
+
 ## Multi-monitor example
 
 A triple-monitor setup with a 4K primary, a 1440p top monitor, and a 1080p

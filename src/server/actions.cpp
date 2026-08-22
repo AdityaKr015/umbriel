@@ -4,6 +4,7 @@
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layout/scrolling.h"
+#include "output/direction.h"
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
@@ -18,6 +19,7 @@
 #include <array>
 #include <expected>
 #include <utility>
+#include <vector>
 
 namespace umbriel {
 
@@ -162,10 +164,52 @@ namespace umbriel {
         }
         return nullptr;
       }
-      wlr_output* adjacent = wlr_output_layout_adjacent_output(
-          server.outputLayout(), direction, reference->wlr(), server.cursor()->wlr()->x, server.cursor()->wlr()->y
-      );
-      if (adjacent == nullptr || adjacent == reference->wlr()) {
+
+      OutputDirection outputDirection;
+      switch (direction) {
+      case WLR_DIRECTION_LEFT:
+        outputDirection = OutputDirection::Left;
+        break;
+      case WLR_DIRECTION_RIGHT:
+        outputDirection = OutputDirection::Right;
+        break;
+      case WLR_DIRECTION_UP:
+        outputDirection = OutputDirection::Up;
+        break;
+      case WLR_DIRECTION_DOWN:
+        outputDirection = OutputDirection::Down;
+        break;
+      default:
+        if (error != nullptr) {
+          *error = "no output in that direction";
+        }
+        return nullptr;
+      }
+
+      std::vector<Output*> outputs;
+      std::vector<OutputBox> boxes;
+      size_t referenceIndex = 0;
+      bool foundReference = false;
+      for (const auto& output : server.outputs()) {
+        wlr_box box{};
+        wlr_output_layout_get_box(server.outputLayout(), output->wlr(), &box);
+        if (box.width <= 0 || box.height <= 0) {
+          continue;
+        }
+        if (output.get() == reference) {
+          referenceIndex = boxes.size();
+          foundReference = true;
+        }
+        outputs.push_back(output.get());
+        boxes.push_back({box.x, box.y, box.width, box.height});
+      }
+
+      const std::optional<size_t> adjacent = foundReference
+          ? adjacentOutputIndex(
+                boxes, referenceIndex, outputDirection, server.cursor()->wlr()->x, server.cursor()->wlr()->y
+            )
+          : std::nullopt;
+      if (!adjacent) {
         if (error != nullptr) {
           const char* name = nullptr;
           switch (direction) {
@@ -189,7 +233,7 @@ namespace umbriel {
         }
         return nullptr;
       }
-      return server.outputFromWlr(adjacent);
+      return outputs[*adjacent];
     }
 
     // Warp the cursor to the center of `output`'s usable area so subsequent

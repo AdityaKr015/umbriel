@@ -119,6 +119,15 @@ namespace umbriel {
     m_toplevel->base->data = m_sceneTree;
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
     m_presentation.createBackdrop(m_sceneTree);
+
+    // A scene-node capture uses the node's scene as its render source. Keep a
+    // second scene containing only the client surfaces so transparency cannot
+    // reveal the wallpaper, another window, or compositor effects.
+    m_captureScene = wlr_scene_create();
+    if (m_captureScene != nullptr) {
+      m_captureScene->restack_xwayland_surfaces = false;
+      wlr_scene_xdg_surface_create(&m_captureScene->tree, m_toplevel->base);
+    }
     notifyOutputScale();
 
     m_commit.notify = onCommit;
@@ -197,7 +206,13 @@ namespace umbriel {
       wl_list_remove(&m_captureSourceDestroy.link);
       m_captureSource = nullptr;
     }
+    if (m_captureScene != nullptr) {
+      wlr_scene_node_destroy(&m_captureScene->tree.node);
+      m_captureScene = nullptr;
+    }
   }
+
+  wlr_scene_tree* View::captureTree() const { return m_captureScene != nullptr ? &m_captureScene->tree : nullptr; }
 
   void View::setWorkspace(Workspace* workspace, bool attachToLayout) {
     if (workspace != nullptr
@@ -1413,6 +1428,13 @@ namespace umbriel {
   }
 
   void View::handleCommit() {
+    if (m_captureScene != nullptr) {
+      // Restrict the capture to the xdg window geometry. Client subsurfaces
+      // remain visible, while buffer content outside the declared window is
+      // excluded. Window-owned popups are separate children and remain part
+      // of the isolated scene.
+      wlr_scene_subsurface_tree_set_clip(&m_captureScene->tree.node, &m_toplevel->base->geometry);
+    }
     if (m_toplevel->base->initial_commit) {
       // Resolve window rules early to influence initial tiled/float decision and size.
       const ResolvedWindowRule rule = resolvedRules();

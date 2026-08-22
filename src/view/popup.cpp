@@ -27,13 +27,16 @@ namespace umbriel {
     }
   } // namespace
 
-  Popup::Popup(wlr_xdg_popup* popup, wlr_scene_tree* parentTree) : m_popup(popup) {
+  Popup::Popup(wlr_xdg_popup* popup, wlr_scene_tree* parentTree, wlr_scene_tree* captureTree) : m_popup(popup) {
     if (parentTree == nullptr) {
       wlr_xdg_surface* parent = wlr_xdg_surface_try_from_wlr_surface(m_popup->parent);
       assert(parent != nullptr);
       parentTree = static_cast<wlr_scene_tree*>(parent->data);
     }
     m_popup->base->data = wlr_scene_xdg_surface_create(parentTree, m_popup->base);
+    if (captureTree != nullptr) {
+      wlr_scene_xdg_surface_create(captureTree, m_popup->base);
+    }
 
     m_commit.notify = onCommit;
     wl_signal_add(&m_popup->base->surface->events.commit, &m_commit);

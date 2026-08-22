@@ -19,6 +19,7 @@ struct wlr_ext_foreign_toplevel_handle_v1;
 struct wlr_ext_image_capture_source_v1;
 struct wlr_foreign_toplevel_handle_v1;
 struct wlr_output;
+struct wlr_scene;
 struct wlr_scene_tree;
 struct wlr_scene_rect;
 struct wlr_xdg_popup;
@@ -40,6 +41,7 @@ namespace umbriel {
 
     [[nodiscard]] wlr_xdg_toplevel* toplevel() const { return m_toplevel; }
     [[nodiscard]] wlr_scene_tree* sceneTree() const { return m_sceneTree; }
+    [[nodiscard]] wlr_scene_tree* captureTree() const;
     [[nodiscard]] bool mapped() const { return m_mapped; }
     [[nodiscard]] bool xwayland() const { return m_xwayland; }
     [[nodiscard]] Workspace* workspace() const { return m_workspace; }
@@ -283,6 +285,9 @@ namespace umbriel {
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
     wlr_scene_tree* m_sceneTree = nullptr;
+    // A separate scene containing only client-owned surfaces. Window capture
+    // must never sample the composited desktop behind translucent content.
+    wlr_scene* m_captureScene = nullptr;
     ViewDecoration m_decoration;
     ViewPresentation m_presentation;
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;

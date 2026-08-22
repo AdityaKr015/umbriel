@@ -10,7 +10,7 @@ namespace umbriel {
 
   class Popup {
   public:
-    explicit Popup(wlr_xdg_popup* popup, wlr_scene_tree* parentTree = nullptr);
+    explicit Popup(wlr_xdg_popup* popup, wlr_scene_tree* parentTree = nullptr, wlr_scene_tree* captureTree = nullptr);
     ~Popup();
 
     Popup(const Popup&) = delete;

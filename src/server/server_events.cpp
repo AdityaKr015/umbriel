@@ -529,7 +529,8 @@ namespace umbriel {
     if (popup->parent == nullptr || wlr_xdg_surface_try_from_wlr_surface(popup->parent) == nullptr) {
       return;
     }
-    new Popup(popup);
+    View* owner = View::fromSurface(popup->parent);
+    new Popup(popup, nullptr, owner != nullptr ? owner->captureTree() : nullptr);
   }
 
   void Server::onNewXdgDecoration(wl_listener* listener, void* data) {
@@ -1484,8 +1485,12 @@ namespace umbriel {
 
     // Reuse a cached capture source when one already exists for this view.
     if (view->m_captureSource == nullptr) {
+      wlr_scene_tree* captureTree = view->captureTree();
+      if (captureTree == nullptr) {
+        return;
+      }
       view->m_captureSource = wlr_ext_image_capture_source_v1_create_with_scene_node(
-          &view->sceneTree()->node, wl_display_get_event_loop(self->m_display), self->m_allocator, self->m_renderer
+          &captureTree->node, wl_display_get_event_loop(self->m_display), self->m_allocator, self->m_renderer
       );
       if (view->m_captureSource == nullptr) {
         return;

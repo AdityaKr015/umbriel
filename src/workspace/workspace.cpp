@@ -960,11 +960,10 @@ namespace umbriel {
     if (target < 0 || target >= static_cast<std::ptrdiff_t>(m_workspaces.size())) {
       return false;
     }
-    if (m_dynamic) {
-      const bool activeIsTrailingEmpty = index == m_workspaces.size() - 1 && !m_active->hasViews();
-      const bool targetIsTrailingEmpty = static_cast<size_t>(target) == m_workspaces.size() - 1.0
+    if (m_dynamic && direction > 0) {
+      const bool targetIsTrailingEmpty = static_cast<size_t>(target) == m_workspaces.size() - 1
           && !m_workspaces[static_cast<size_t>(target)]->hasViews();
-      if (activeIsTrailingEmpty || (direction > 0 && targetIsTrailingEmpty)) {
+      if (targetIsTrailingEmpty) {
         return false;
       }
     }

@@ -88,6 +88,8 @@ namespace umbriel {
     WorkspaceSetLayout,
     DpmsOff,
     DpmsOn,
+    WorkspaceMoveDown,
+    WorkspaceMoveUp,
     Count,
   };
 

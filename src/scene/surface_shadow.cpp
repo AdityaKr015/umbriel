@@ -2,7 +2,6 @@
 
 #include "config/config.h"
 // clang-format off
-#include <algorithm>
 #include <cstring> // IWYU pragma: keep
 #include "wlr.h"
 // clang-format on
@@ -10,8 +9,7 @@
 namespace umbriel {
 
   void SurfaceShadow::update(
-      wlr_scene_tree* parent, int contentWidth, int contentHeight, int borderTotal, int cornerRadius,
-      const wlr_box* clampBox
+      wlr_scene_tree* parent, int contentWidth, int contentHeight, int borderTotal, int cornerRadius
   ) {
     const auto& cfg = config().appearance.shadow;
     const int sigma = cfg.softness;
@@ -53,26 +51,6 @@ namespace umbriel {
         .width = decWidth,
         .height = decHeight,
     };
-
-    // Data-side confinement: shrink the node so it never extends past the clamp box instead of clipping at draw time.
-    // The hole shifts by the same amount so it stays aligned with the window.
-    if (clampBox != nullptr) {
-      int parentX = 0;
-      int parentY = 0;
-      wlr_scene_node_coords(&parent->node, &parentX, &parentY);
-      const int absX = parentX + nodeX;
-      const int absY = parentY + nodeY;
-      const int left = std::clamp(clampBox->x - absX, 0, nodeWidth);
-      const int right = std::clamp(absX + nodeWidth - (clampBox->x + clampBox->width), 0, nodeWidth);
-      const int top = std::clamp(clampBox->y - absY, 0, nodeHeight);
-      const int bottom = std::clamp(absY + nodeHeight - (clampBox->y + clampBox->height), 0, nodeHeight);
-      nodeX += left;
-      nodeY += top;
-      nodeWidth = std::max(0, nodeWidth - left - right);
-      nodeHeight = std::max(0, nodeHeight - top - bottom);
-      hole.x -= left;
-      hole.y -= top;
-    }
 
     wlr_scene_node_set_position(&m_node->node, nodeX, nodeY);
     if (m_node->width != nodeWidth || m_node->height != nodeHeight) {

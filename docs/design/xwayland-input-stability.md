@@ -20,20 +20,28 @@ real output.
 wlroots emits enter/leave from scene-node visibility with a 10% overlap
 threshold. Two situations cross it:
 
-- Unanimated snap moves (`View::setPosition`) jump a node while its previous
-  output clip still applies, exposing the overhang for one scene update
-  (observed: a strip snap during a fullscreen fight re-homed a game to the
-  neighboring output's origin).
+- Any window whose layout box reaches past its output: a scrolling column
+  scrolled off the shared edge, an unanimated snap move that jumps a node,
+  a workspace slide, a close-fade snapshot (observed: a strip snap during a
+  fullscreen fight re-homed a game to the neighboring output's origin).
 - Interactive drags legitimately span monitors; every boundary graze latches
   the neighbor's origin and scale mid-drag. This is accepted as inherent to
   a drag (the drop's final enter re-homes correctly), see below.
 
 Defense:
 
-**Snap pre-clips** (`View::clipForSnapMove`): before an unanimated move, the
-surface is clipped to the region visible on the home output at both
-endpoints, so even the single scene update inside
-`wlr_scene_node_set_position` cannot graze a neighbor.
+**Per-output clipped scene roots** (`Output::viewRoot`, `fullscreenRoot`,
+`pinnedRoot`, `pinnedShadowRoot`): each output owns four scene trees carrying
+a `wlr_scene_tree_set_clip` of that output's layout box, and every workspace
+tree, fullscreen tree, pinned view and close snapshot hangs under them.
+Umbriel's SceneFX fork folds an ancestor tree clip into the visibility walk
+(`_scene_nodes_in_box` accumulates the clip, `scene_node_update_iterator`
+intersects `node->visible` with it), so a node that reaches past its own
+output has no visible region there at all: no rendering, no damage, no
+membership, no enter event. There is no window position or move sequence that
+can graze a neighbor, so no per-move mitigation is needed and none exists.
+The drag tree is deliberately outside those roots, which is what lets a
+dragged window span both outputs.
 
 A rejected approach, for whoever considers it next: pinning scene nodes to a
 single output at the SceneFX level (filtering `active_outputs` in
@@ -43,7 +51,8 @@ asserts on buffers rendered on an output they are not members of (SIGABRT
 when a pinned window is dragged fully onto another output), and anything
 keyed on `primary_output` (drop attribution, frame scheduling, dmabuf
 feedback) silently misbehaves. Membership must stay derived from real scene
-geometry.
+geometry, which is exactly why the clip changes that geometry instead of
+filtering its result.
 
 ## X11 games never survive a windowed resize round trip
 
@@ -91,9 +100,22 @@ behavior, not something the compositor can mask.
 
 ## Verifying changes here
 
-The headless harness cannot exercise satellite or multi-output X coordinate
-spaces, so changes to these paths need a running session with an X11 game
-(Steam plus any fake-fullscreen title reproduces within two toggles). The
-signature to watch for on the game's X window during any toggle is a
-ConfigureNotify pair through a non-fullscreen size; a passive
-`StructureNotifyMask` monitor on `DISPLAY=:0` shows it directly.
+The clip primitive itself is covered by
+[`tests/scene_clip.cpp`](../../tests/scene_clip.cpp): two headless outputs, a
+buffer straddling the shared edge, and assertions on the enter/leave stream,
+the primary output and hit testing as the clip is set, nested, and cleared.
+
+Compositor-level containment is covered by
+[`tests/harness/two-output-containment.sh`](../../tests/harness/two-output-containment.sh),
+which boots its own two-output headless instance (`verify.sh` boots one
+output) and compares real framebuffers while a strip overflows the shared
+edge. Run it as `bash tests/harness/two-output-containment.sh
+./build-debug/umbriel`.
+
+The rest cannot be automated here. The headless harness cannot exercise
+satellite or multi-output X coordinate spaces, so changes to these paths need
+a running session with an X11 game (Steam plus any fake-fullscreen title
+reproduces within two toggles). The signature to watch for on the game's X
+window during any toggle is a ConfigureNotify pair through a non-fullscreen
+size; a passive `StructureNotifyMask` monitor on `DISPLAY=:0` shows it
+directly.

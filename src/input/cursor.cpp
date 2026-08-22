@@ -1549,7 +1549,7 @@ namespace umbriel {
     // A window dragged across a monitor boundary must span both outputs, not be
     // clipped to one. Native per-output rendering draws each half.
     view->setNodeEnabled(true);
-    view->clearOutputClip();
+    view->resetSurfaceClip();
   }
 
   void Cursor::updateDropTarget() {

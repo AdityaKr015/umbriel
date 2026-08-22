@@ -84,38 +84,6 @@ namespace umbriel {
     }
   }
 
-  void
-  ViewDecoration::clipBorders(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight) {
-    if (m_borderTree == nullptr) {
-      return;
-    }
-
-    const auto clipRing = [&](wlr_scene_rect* rect, int thickness) {
-      if (rect == nullptr) {
-        return;
-      }
-      if (thickness <= 0) {
-        wlr_scene_rect_set_size(rect, 0, 0);
-        return;
-      }
-      applyBorderRing(
-          rect, makeBorderRing(contentWidth, contentHeight, config().appearance.cornerRadius, thickness), target.x,
-          target.y, &outputBox
-      );
-    };
-
-    if (config().appearance.outerBorderWidth > 0) {
-      clipRing(m_outerBorderRect, config().appearance.totalBorderWidth());
-    } else if (m_outerBorderRect != nullptr) {
-      wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
-    }
-    clipRing(m_borderRect, config().appearance.borderWidth);
-
-    if (m_borderRect != nullptr) {
-      wlr_scene_node_raise_to_top(&m_borderRect->node);
-    }
-  }
-
   bool ViewDecoration::borderGeometryStale(int contentWidth, int contentHeight) const {
     if (m_borderTree == nullptr) {
       return false;
@@ -221,18 +189,10 @@ namespace umbriel {
     if (m_shadowContainer == nullptr) {
       return;
     }
-    m_shadow.update(m_shadowContainer, contentWidth, contentHeight, borderInset, cornerRadius, shadowClip());
+    m_shadow.update(m_shadowContainer, contentWidth, contentHeight, borderInset, cornerRadius);
   }
 
   void ViewDecoration::hideShadow() { m_shadow.hide(); }
-
-  void ViewDecoration::setShadowOutputClip(const wlr_box& clip) {
-    if (m_shadowContainer == nullptr) {
-      return;
-    }
-    m_shadowOutputClip = clip;
-    m_hasShadowOutputClip = true;
-  }
 
   void ViewDecoration::setAlpha(float alpha) {
     m_shadow.setAlpha(alpha);

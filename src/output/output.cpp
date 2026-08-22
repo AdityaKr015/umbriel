@@ -54,6 +54,10 @@ namespace umbriel {
       m_layerTrees[layer] = wlr_scene_tree_create(m_server->shellLayerTree(layer));
     }
     m_popupTree = wlr_scene_tree_create(m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY));
+    m_viewRoot = wlr_scene_tree_create(m_server->xdgTree());
+    m_fullscreenRoot = wlr_scene_tree_create(m_server->fullscreenTree());
+    m_pinnedRoot = wlr_scene_tree_create(m_server->pinnedTree());
+    m_pinnedShadowRoot = wlr_scene_tree_create(m_server->pinnedShadowTree());
     arrangeLayers();
     m_workspaceGroup = std::make_unique<WorkspaceGroup>(*m_server, *this);
   }
@@ -244,6 +248,18 @@ namespace umbriel {
       wl_list_remove(&m_requestState.link);
       wl_list_remove(&m_destroy.link);
     }
+    // Workspace destructors reparent leftover views onto the server trees, so the group has to go before the roots it
+    // hangs under.
+    m_workspaceGroup.reset();
+    for (wlr_scene_tree* root : {m_viewRoot, m_fullscreenRoot, m_pinnedRoot, m_pinnedShadowRoot}) {
+      if (root != nullptr) {
+        wlr_scene_node_destroy(&root->node);
+      }
+    }
+    m_viewRoot = nullptr;
+    m_fullscreenRoot = nullptr;
+    m_pinnedRoot = nullptr;
+    m_pinnedShadowRoot = nullptr;
   }
 
   wlr_scene_tree* Output::layerTree(uint32_t layer) const {
@@ -305,6 +321,19 @@ namespace umbriel {
       wlr_scene_node_set_position(&m_layerTree->node, m_sceneOutput->x, m_sceneOutput->y);
     }
     wlr_scene_node_set_position(&m_popupTree->node, m_sceneOutput->x, m_sceneOutput->y);
+
+    // Content roots are clipped to this output's layout box, not repositioned: views are laid out in layout
+    // coordinates. A disabled output never gets here (fullArea is empty above), and its workspaces have already been
+    // evacuated, so the stale clip it keeps has nothing under it.
+    const wlr_box outputBox = {
+        .x = m_sceneOutput->x,
+        .y = m_sceneOutput->y,
+        .width = fullArea.width,
+        .height = fullArea.height,
+    };
+    for (wlr_scene_tree* root : {m_viewRoot, m_fullscreenRoot, m_pinnedRoot, m_pinnedShadowRoot}) {
+      wlr_scene_tree_set_clip(root, &outputBox);
+    }
 
     // Usable area is stored in layout coordinates for xdg placement.
     m_usableArea = {

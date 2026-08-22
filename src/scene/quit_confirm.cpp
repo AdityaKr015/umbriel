@@ -98,7 +98,7 @@ namespace umbriel {
     // Shadow, then the rounded panel, then the text: same stacking as the
     // cheatsheet panel, with the configured corner radius.
     const int cornerRadius = config().appearance.cornerRadius;
-    m_shadow.update(m_tree, rendered.logicalWidth, rendered.logicalHeight, 0, cornerRadius, nullptr);
+    m_shadow.update(m_tree, rendered.logicalWidth, rendered.logicalHeight, 0, cornerRadius);
 
     float panelColor[4]{};
     premultiplied(panelColor, colors.background, 1.0F);

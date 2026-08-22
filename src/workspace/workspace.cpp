@@ -59,12 +59,12 @@ namespace umbriel {
     wlr_ext_workspace_handle_v1_set_name(m_handle, m_name.c_str());
     const uint32_t coords[1] = {static_cast<uint32_t>(m_index)};
     wlr_ext_workspace_handle_v1_set_coordinates(m_handle, coords, 1);
-    m_tree = wlr_scene_tree_create(m_group->server()->xdgTree());
+    m_tree = wlr_scene_tree_create(m_group->output()->viewRoot());
     // Focus raises only within a layer: floating views can never fall below tiles.
     m_shadowLayer = wlr_scene_tree_create(m_tree);
     m_tiledLayer = wlr_scene_tree_create(m_tree);
     m_floatingLayer = wlr_scene_tree_create(m_tree);
-    m_fullscreenTree = wlr_scene_tree_create(m_group->server()->fullscreenTree());
+    m_fullscreenTree = wlr_scene_tree_create(m_group->output()->fullscreenRoot());
   }
 
   Workspace::~Workspace() {
@@ -167,7 +167,10 @@ namespace umbriel {
     m_views.push_back(view);
     updateUrgent();
     const bool fs = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
-    if (!view->pinned()) {
+    if (view->pinned()) {
+      // Cross-output moves have to rehome the pinned view onto the new output's clipped roots.
+      view->restorePinnedSceneParent();
+    } else {
       wlr_scene_node_reparent(&view->sceneTree()->node, fs ? m_fullscreenTree : viewLayer(view->tiled()));
       view->reparentShadow(m_shadowLayer);
     }
@@ -397,8 +400,8 @@ namespace umbriel {
     if (view == nullptr || !view->mapped() || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
-    // A window under an interactive move spans outputs unclipped; leave it as
-    // clipGrabbedViewToOutput set it (re-clipping mid-drag flickers A<->B).
+    // A window under an interactive move spans outputs unclipped; leave it as presentGrabbedViewSpanning set it
+    // (re-deriving presentation mid-drag flickers A<->B).
     if (Cursor* cursor = m_group->server()->cursor(); cursor != nullptr && cursor->isDraggingView(view)) {
       return;
     }
@@ -410,26 +413,20 @@ namespace umbriel {
       usable = outputBox;
     }
 
-    // Clip against the node's CURRENT position, not the layout target: during position animations (column swaps, drag
-    // drops) the node lags the target, and clips computed at the target land displaced on screen (cut-off borders that
-    // reappear as the window settles).
+    // Position from the node's CURRENT position, not the layout target: during position animations (column swaps, drag
+    // drops) the node lags the target, and presentation derived from the target lands displaced on screen (cut-off
+    // borders that reappear as the window settles).
     const wlr_scene_node& node = view->sceneTree()->node;
-    const int border = config().appearance.totalBorderWidth();
-    const auto grow = [border](const wlr_box& box, int width, int height) {
-      return wlr_box{box.x - border, box.y - border, width + 2 * border, height + 2 * border};
-    };
 
-    // Each case only decides two boxes: the region the view occupies, and the
-    // region its decorations occupy. Everything after is common.
+    // Each case only decides the region the view occupies; everything after is common. Keeping that region off the
+    // neighbouring output is the job of the output's clipped scene roots, not of this function.
     wlr_box target{};
-    wlr_box decorated{};
 
     if (view->pinned()) {
       // Pinned views sit outside the workspace, so no slide offset applies, and
       // they are sized from committed geometry rather than the presented size.
       const wlr_box& geometry = view->toplevel()->base->geometry;
       target = {node.x, node.y, geometry.width, geometry.height};
-      decorated = grow(target, target.width, target.height);
     } else {
       if (!m_active && !m_inSwitchTransition) {
         return;
@@ -447,21 +444,17 @@ namespace umbriel {
         }
         // Fullscreen covers the output and draws no decorations.
         target = {node.x, node.y + m_slideOffsetY, outputBox.width, outputBox.height};
-        decorated = target;
       } else {
         // Floating views follow committed geometry; tiled ones follow the box
         // the layout assigned them.
         const wlr_box sized =
             m_layout->columnOf(view) < 0 ? view->toplevel()->base->geometry : tiledTargetBox(view, usable);
         target = {node.x, node.y + m_slideOffsetY, sized.width, sized.height};
-        decorated = grow(target, view->presentedWidth(target), view->presentedHeight(target));
       }
     }
 
-    wlr_box intersection{};
-    const bool visible = wlr_box_intersection(&intersection, &decorated, &outputBox);
-    view->setNodeEnabled(visible);
-    view->setOutputClip(visible ? &intersection : nullptr, target, outputBox);
+    view->setNodeEnabled(true);
+    view->applyPresentation(target);
   }
 
   void Workspace::applyPositions(bool animate) {
@@ -743,10 +736,8 @@ namespace umbriel {
   }
 
   void Workspace::endSwitchTransition() {
-    // Refresh every view at its resting position while transition visibility is still active. Once m_inSwitchTransition
-    // is cleared, an inactive workspace deliberately skips presentation sync and could retain an off-surface clip from
-    // the final slide frame. Its border tree would then reappear without window content the next time the workspace
-    // becomes visible.
+    // Put every view back at its resting position while transition visibility is still active: an inactive workspace
+    // deliberately skips presentation sync once m_inSwitchTransition is cleared.
     setSlideOffset(0);
     m_inSwitchTransition = false;
     for (View* view : m_switchViews) {

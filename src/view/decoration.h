@@ -36,9 +36,6 @@ namespace umbriel {
     void updateBorderGeometry(int contentWidth, int contentHeight);
     // `alpha` premultiplies the border color so a fading view's ring fades with it.
     void setBorderColor(bool focused, bool scratchpad, float alpha);
-    // Trim the ring to the part of `outputBox` it occupies, for a view straddling two outputs. Corners on a trimmed
-    // side are squared off so the ring does not appear to round at the cut.
-    void clipBorders(const wlr_box& target, const wlr_box& outputBox, int contentWidth, int contentHeight);
     // True when the drawn ring no longer matches the given content size, i.e. a
     // client commit changed geometry behind the layout's back.
     [[nodiscard]] bool borderGeometryStale(int contentWidth, int contentHeight) const;
@@ -66,10 +63,6 @@ namespace umbriel {
     void raiseShadowToTop();
     void updateShadow(int contentWidth, int contentHeight, int borderInset, int cornerRadius);
     void hideShadow();
-    // Confine the shadow to one output, so a view spanning a boundary does not
-    // bleed its shadow onto the neighbour.
-    void setShadowOutputClip(const wlr_box& clip);
-    void clearShadowOutputClip() { m_hasShadowOutputClip = false; }
 
     // Blur and shadow together, for fade animations.
     void setAlpha(float alpha);
@@ -77,8 +70,6 @@ namespace umbriel {
     void hideEffects();
 
   private:
-    [[nodiscard]] const wlr_box* shadowClip() const { return m_hasShadowOutputClip ? &m_shadowOutputClip : nullptr; }
-
     wlr_scene_tree* m_borderTree = nullptr;
     wlr_scene_rect* m_borderRect = nullptr;
     wlr_scene_rect* m_outerBorderRect = nullptr;
@@ -87,8 +78,6 @@ namespace umbriel {
     SurfaceBlurOptions m_popupBlurOptions;
     SurfaceShadow m_shadow;
     wlr_scene_tree* m_shadowContainer = nullptr; // child of workspace shadow layer
-    bool m_hasShadowOutputClip = false;
-    wlr_box m_shadowOutputClip{}; // global (scene-root), valid when m_hasShadowOutputClip
   };
 
 } // namespace umbriel

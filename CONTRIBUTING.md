@@ -53,6 +53,10 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 | `just clean <mode>` | Remove a build directory |
 | `just rebuild <mode>` | Clean and rebuild a build directory |
 
+`verify.sh` boots a single headless output, which most of its checks assume. Multi-output containment (a window that
+overflows onto a neighbouring output must not render or send `wl_surface.enter` there) has its own two-output harness,
+run directly: `bash tests/harness/two-output-containment.sh ./build-debug/umbriel`.
+
 ## Code Style
 
 This project uses [clang-format](https://clang.llvm.org/docs/ClangFormat.html) for formatting, with the same

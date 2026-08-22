@@ -425,8 +425,8 @@ namespace umbriel {
   }
 
   void View::applyPresentedSize() {
-    // Buffer scale + crop is derived in setOutputClip (applyPresentedCrop) via syncViewPresentation below, so the
-    // animated size and the output clip are always applied together instead of fighting over dest_size.
+    // Buffer scale + crop is derived in applyPresentation (applyPresentedCrop) via syncViewPresentation below, so the
+    // animated size and the presented crop are always applied together instead of fighting over dest_size.
     const int width = m_presentation.width();
     const int height = m_presentation.height();
     updateBorderGeometry(width, height);
@@ -476,7 +476,7 @@ namespace umbriel {
     wlr_scene_node_reparent(&m_sceneTree->node, m_server->dragTree());
     reparentShadow(m_server->dragShadowTree());
     setNodeEnabled(true);
-    clearOutputClip();
+    resetSurfaceClip();
     raiseToTop();
   }
 
@@ -534,59 +534,10 @@ namespace umbriel {
     scheduleFrame();
   }
 
-  void View::clipForSnapMove(int x, int y) {
-    if (!m_mapped
-        || m_workspace == nullptr
-        || m_workspace->group() == nullptr
-        || m_workspace->group()->output() == nullptr) {
-      return;
-    }
-    // Drags intentionally span outputs; entering the neighbor is the point.
-    if (m_server->cursor() != nullptr && m_server->cursor()->isDraggingView(this)) {
-      return;
-    }
-    const int oldX = m_sceneTree->node.x;
-    const int oldY = m_sceneTree->node.y;
-    const wlr_box& geo = m_toplevel->base->geometry;
-    if ((oldX == x && oldY == y) || geo.width <= 0 || geo.height <= 0) {
-      return;
-    }
-    wlr_box outputBox{};
-    wlr_output_layout_get_box(m_server->outputLayout(), m_workspace->group()->output()->wlr(), &outputBox);
-    if (wlr_box_empty(&outputBox)) {
-      return;
-    }
-    // The union of the content footprint at both endpoints bounds every box the
-    // move can produce; inside the home output means no neighbor can be grazed.
-    const wlr_box moveUnion{
-        std::min(oldX, x),
-        std::min(oldY, y),
-        geo.width + std::max(x, oldX) - std::min(x, oldX),
-        geo.height + std::max(y, oldY) - std::min(y, oldY),
-    };
-    wlr_box contained{};
-    if (wlr_box_intersection(&contained, &moveUnion, &outputBox) && wlr_box_equal(&contained, &moveUnion)) {
-      return;
-    }
-    // Clip to the region visible on the home output at BOTH endpoints (surface-local output box at node position p is
-    // outputBox - p + geo offset). The caller re-derives the exact clip right after the move.
-    const wlr_box atOld{outputBox.x - oldX + geo.x, outputBox.y - oldY + geo.y, outputBox.width, outputBox.height};
-    const wlr_box atNew{outputBox.x - x + geo.x, outputBox.y - y + geo.y, outputBox.width, outputBox.height};
-    wlr_box pre{};
-    if (!wlr_box_intersection(&pre, &atOld, &atNew)) {
-      // Not visible at both endpoints at once: park the clip off-surface (an
-      // empty box would mean "unclip" to wlroots and flash the full buffer).
-      constexpr int kFarAway = 1 << 20;
-      pre = {-kFarAway, -kFarAway, 1, 1};
-    }
-    setSurfaceTreeClip(&pre);
-  }
-
   void View::setPosition(int x, int y) {
     m_posX.snap(x);
     m_posY.snap(y);
     m_positioned = true;
-    clipForSnapMove(x, y);
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
     m_decoration.setShadowPosition(x, y);
   }
@@ -997,7 +948,15 @@ namespace umbriel {
       return;
     }
 
-    wlr_scene_tree* snap = wlr_scene_tree_create(m_server->xdgTree());
+    Output* output =
+        m_workspace != nullptr && m_workspace->group() != nullptr ? m_workspace->group()->output() : nullptr;
+    if (output == nullptr) {
+      return;
+    }
+
+    // Under the output's clipped root, so a snapshot of a view straddling the shared edge stays contained while it
+    // fades. Server::removeOutput purges this output's snapshots before the Output is destroyed.
+    wlr_scene_tree* snap = wlr_scene_tree_create(output->viewRoot());
     if (snap == nullptr) {
       return;
     }
@@ -1047,12 +1006,6 @@ namespace umbriel {
       return;
     }
 
-    Output* output =
-        m_workspace != nullptr && m_workspace->group() != nullptr ? m_workspace->group()->output() : nullptr;
-    if (output == nullptr) {
-      wlr_scene_node_destroy(&snap->node);
-      return;
-    }
     m_server->animateCloseSnapshot(output, snap, std::move(snapRects));
     wlr_output_schedule_frame(output->wlr());
   }
@@ -1150,7 +1103,7 @@ namespace umbriel {
     return nullptr;
   }
 
-  void View::clearOutputClip() {
+  void View::resetSurfaceClip() {
     // Fullscreen must not keep a copied tile clip (that freezes usable-area size and leaves a bar-sized gap). Use
     // scheduled (not current): on leave, scheduled clears immediately while current lags until the client acks.
     const bool fullscreen = m_toplevel->scheduled.fullscreen;
@@ -1166,7 +1119,6 @@ namespace umbriel {
     setSurfaceTreeClip(clip);
     applyCornerRadius();
     updateBorderGeometry();
-    m_decoration.clearShadowOutputClip();
     updateBlur();
     updateShadow();
   }
@@ -1241,7 +1193,6 @@ namespace umbriel {
     } else {
       setSurfaceTreeClip(nullptr);
     }
-    m_decoration.clearShadowOutputClip();
     updateBlur();
     updateShadow();
   }
@@ -1275,7 +1226,6 @@ namespace umbriel {
       beginResizeAnimation(fullArea.width, fullArea.height, true);
       animateTo(fullArea.x, fullArea.y);
     } else if (!m_posX.animating() && !m_posY.animating()) {
-      clipForSnapMove(fullArea.x, fullArea.y);
       setPosition(fullArea.x, fullArea.y);
     }
 
@@ -1285,21 +1235,14 @@ namespace umbriel {
         fullArea.width,
         fullArea.height,
     };
-    wlr_box intersection{};
-    if (wlr_box_intersection(&intersection, &target, &fullArea)) {
-      setOutputClip(&intersection, target, fullArea);
-    } else {
-      setOutputClip(nullptr, target, fullArea);
-    }
+    applyPresentation(target);
   }
 
-  void View::setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox) {
+  void View::applyPresentation(const wlr_box& target) {
     updateFullscreenPresentation(target.width, target.height);
-    if (m_toplevel->current.fullscreen && screenIntersection != nullptr) {
-      m_presentation.setBackdropBox(
-          screenIntersection->x - target.x, screenIntersection->y - target.y, screenIntersection->width,
-          screenIntersection->height
-      );
+    if (m_toplevel->current.fullscreen) {
+      // The whole tile: the output's clipped root scissors whatever hangs over the shared edge.
+      m_presentation.setBackdropBox(0, 0, target.width, target.height);
     }
     const wlr_box& geometry = m_toplevel->base->geometry;
     // Stay inside the tile while geometry lags configure (Electron often stays wide).
@@ -1310,69 +1253,26 @@ namespace umbriel {
         .height = presentedHeight(target),
     };
     trackPresentedSize(content.width, content.height);
-    const int border = borderInset();
-    wlr_box decorated = content;
-    decorated.x -= border;
-    decorated.y -= border;
-    decorated.width += 2 * border;
-    decorated.height += 2 * border;
-    wlr_box decoratedVisible{};
-    if (screenIntersection == nullptr
-        || !wlr_box_intersection(&decoratedVisible, &decorated, &outputBox)
-        || decoratedVisible.width <= 0
-        || decoratedVisible.height <= 0) {
-      setNodeEnabled(false);
-      return;
-    }
 
-    wlr_box contentVisible{};
-    const bool contentOnOutput = wlr_box_intersection(&contentVisible, &content, &outputBox);
-    const bool decoratedFullyVisible = wlr_box_equal(&decoratedVisible, &decorated);
-    if (contentOnOutput) {
-      const wlr_box surfaceClip =
-          surfaceClipForOutput(geometry, content, contentVisible, m_presentation.offsetX(), m_presentation.offsetY());
-      // Crop the toplevel surface to the visible tile; popup children are unclipped in
-      // setSurfaceTreeClip so context menus can extend past the window edge.
-      setSurfaceTreeClip(&surfaceClip);
-      applyCornerRadii(cornerRadiiForVisible(content, contentVisible, corner_radii_all(surfaceRadius())));
-      if (sizeAnimating() || sizeGrabActive()) {
-        // The clip crops 1:1 in surface coordinates and caps the destination at the committed surface size, so it
-        // cannot express an animated or interactive presented size. Program the buffer directly; the clip above keeps
-        // the buffer node positioned at the visible box origin.
-        applyPresentedCrop(content, surfaceClip);
-      }
-    } else {
-      // Only the border/decoration remains on this output. Hide the surface with a non-empty clip placed outside the
-      // surface box: wlroots treats an empty clip box as "remove the clip" and would re-enable the full-size buffer,
-      // flashing the surface onto the neighbor output for a frame (end of a workspace slide). A non-intersecting clip
-      // instead disables the buffer node.
-      constexpr int kFarAway = 1 << 20;
-      const wlr_box offSurface{-kFarAway, -kFarAway, 1, 1};
-      setSurfaceTreeClip(&offSurface);
+    // The presented box in surface coordinates. The fullscreen offsets center a buffer that does not match the tile.
+    // Popup children stay unclipped in setSurfaceTreeClip so context menus can extend past the window edge.
+    const wlr_box surfaceClip{
+        .x = geometry.x - m_presentation.offsetX(),
+        .y = geometry.y - m_presentation.offsetY(),
+        .width = content.width,
+        .height = content.height,
+    };
+    setSurfaceTreeClip(&surfaceClip);
+    applyCornerRadius();
+    if (sizeAnimating() || sizeGrabActive()) {
+      // The clip crops 1:1 in surface coordinates and caps the destination at the committed surface size, so it cannot
+      // express an animated or interactive presented size. Program the buffer directly; the clip above keeps the buffer
+      // node positioned at the visible box origin.
+      applyPresentedCrop(content, surfaceClip);
     }
-    if (decoratedFullyVisible) {
-      updateBorderGeometry(content.width, content.height);
-    } else {
-      m_decoration.clipBorders(target, outputBox, content.width, content.height);
-    }
-    m_decoration.setShadowOutputClip(outputBox);
+    updateBorderGeometry(content.width, content.height);
     updateShadow();
-
-    const wlr_box nodeBox{0, 0, content.width, content.height};
-    if (!contentOnOutput) {
-      m_decoration.hideBlur();
-      return;
-    }
-
-    const int bleed = std::max(0, config().appearance.blur.radius) * std::max(1, config().appearance.blur.passes);
-    const wlr_box blurClip = blurClipForOutput(nodeBox, contentVisible, outputBox, target, bleed);
-    if (blurClip.width <= 0 || blurClip.height <= 0) {
-      m_decoration.hideBlur();
-      return;
-    }
-    m_decoration.updateBlur(
-        m_sceneTree, m_toplevel->base->surface, nodeBox, geometry, surfaceRadius(), &blurClip, effectiveOpacity()
-    );
+    updateBlur(content.width, content.height);
   }
 
   void View::handleMap() {
@@ -1381,7 +1281,7 @@ namespace umbriel {
     m_tiled = looksTiled(m_toplevel);
     const wlr_box& mapGeo = m_toplevel->base->geometry;
     m_presentation.setSize(mapGeo.width, mapGeo.height);
-    clearOutputClip();
+    resetSurfaceClip();
 
     // Resolve window rules and apply one-shot effects. Copied, not referenced: the calls below can reach
     // setBorderFocused and re-resolve into the same cache slot, which would change this value underneath the code still
@@ -1845,10 +1745,15 @@ namespace umbriel {
     if (!m_pinned) {
       return;
     }
+    Output* output = currentOutput();
+    if (output == nullptr) {
+      return;
+    }
+    // Ordering stays on the server-level trees; only the content hangs under the output's clipped roots.
     wlr_scene_node_place_above(&m_server->pinnedShadowTree()->node, &m_server->fullscreenTree()->node);
     wlr_scene_node_place_above(&m_server->pinnedTree()->node, &m_server->pinnedShadowTree()->node);
-    wlr_scene_node_reparent(&m_sceneTree->node, m_server->pinnedTree());
-    reparentShadow(m_server->pinnedShadowTree());
+    wlr_scene_node_reparent(&m_sceneTree->node, output->pinnedRoot());
+    reparentShadow(output->pinnedShadowRoot());
     setNodeEnabled(true);
     raiseToTop();
   }

@@ -2,18 +2,6 @@
 
 #include "check.h"
 
-UMBRIEL_TEST(clipsToTheRightEdgeOfTheOutput) {
-  const wlr_box geometry{0, 0, 1200, 900};
-  const wlr_box content{-501, 40, 1200, 900};
-  const wlr_box visible{0, 40, 700, 900};
-
-  const wlr_box clip = umbriel::surfaceClipForOutput(geometry, content, visible, 0, 0);
-
-  CHECK_EQ(clip.x, 501);
-  CHECK_EQ(clip.width, 700);
-  CHECK_EQ(clip.x + clip.width, 1201);
-}
-
 UMBRIEL_TEST(surfaceCornersSquareTheClippedRightEdge) {
   const wlr_box content{1520, 100, 800, 600};
   const wlr_box visible{1520, 100, 400, 600};
@@ -24,88 +12,6 @@ UMBRIEL_TEST(surfaceCornersSquareTheClippedRightEdge) {
   CHECK_EQ(corners.top_right, 0);
   CHECK_EQ(corners.bottom_right, 0);
   CHECK_EQ(corners.bottom_left, kRadius);
-}
-
-UMBRIEL_TEST(offsetGeometryShiftsTheClipOrigin) {
-  const wlr_box geometry{4, 7, 1200, 900};
-  const wlr_box content{-501, 40, 1200, 900};
-  const wlr_box visible{0, 40, 700, 900};
-
-  const wlr_box clip = umbriel::surfaceClipForOutput(geometry, content, visible, 3, 5);
-
-  CHECK_EQ(clip.x, 502);
-  CHECK_EQ(clip.y, 2);
-  CHECK_EQ(clip.width, visible.width);
-  CHECK_EQ(clip.height, visible.height);
-}
-
-UMBRIEL_TEST(blurClipStaysInsideTheNodeAndTheOutput) {
-  // Node fully inside a large output: nothing to trim, nothing to inset.
-  const wlr_box nodeBox{0, 0, 800, 600};
-  const wlr_box target{100, 100, 800, 600};
-  const wlr_box contentVisible{100, 100, 800, 600};
-  const wlr_box outputBox{0, 0, 1920, 1080};
-
-  const wlr_box clip = umbriel::blurClipForOutput(nodeBox, contentVisible, outputBox, target, 0);
-
-  CHECK_EQ(clip.x, 0);
-  CHECK_EQ(clip.y, 0);
-  CHECK_EQ(clip.width, 800);
-  CHECK_EQ(clip.height, 600);
-}
-
-UMBRIEL_TEST(blurInsetsOnlyTheEdgesTouchingTheOutput) {
-  // A view flush against the output's left edge. Blur sampling would reach onto
-  // the neighbouring output there, so only that edge is pulled in.
-  const wlr_box nodeBox{0, 0, 800, 600};
-  const wlr_box target{0, 100, 800, 600};
-  const wlr_box contentVisible{0, 100, 800, 600};
-  const wlr_box outputBox{0, 0, 1920, 1080};
-  constexpr int kBleed = 20;
-
-  const wlr_box clip = umbriel::blurClipForOutput(nodeBox, contentVisible, outputBox, target, kBleed);
-
-  CHECK_EQ(clip.x, kBleed);
-  CHECK_EQ(clip.width, 800 - kBleed);
-  // The other three edges are nowhere near the output bounds.
-  CHECK_EQ(clip.y, 0);
-  CHECK_EQ(clip.height, 600);
-}
-
-UMBRIEL_TEST(blurClipIsEmptyWhenTheViewIsOffTheOutput) {
-  const wlr_box nodeBox{0, 0, 800, 600};
-  const wlr_box target{3000, 100, 800, 600};
-  const wlr_box contentVisible{3000, 100, 800, 600};
-  const wlr_box outputBox{0, 0, 1920, 1080};
-
-  const wlr_box clip = umbriel::blurClipForOutput(nodeBox, contentVisible, outputBox, target, 0);
-
-  CHECK(clip.width <= 0 || clip.height <= 0);
-}
-
-UMBRIEL_TEST(blurClipIsEmptyWhenTheBleedSwallowsIt) {
-  // A sliver narrower than twice the bleed has nothing safe left to sample.
-  const wlr_box nodeBox{0, 0, 10, 600};
-  const wlr_box target{0, 0, 10, 600};
-  const wlr_box contentVisible{0, 0, 10, 600};
-  const wlr_box outputBox{0, 0, 10, 600};
-
-  const wlr_box clip = umbriel::blurClipForOutput(nodeBox, contentVisible, outputBox, target, 40);
-
-  CHECK(clip.width <= 0 || clip.height <= 0);
-}
-
-UMBRIEL_TEST(blurClipTrimsToThePartOnThisOutput) {
-  // Half the view hangs off the right edge of a 1920 output.
-  const wlr_box nodeBox{0, 0, 800, 600};
-  const wlr_box target{1520, 100, 800, 600};
-  const wlr_box contentVisible{1520, 100, 400, 600};
-  const wlr_box outputBox{0, 0, 1920, 1080};
-
-  const wlr_box clip = umbriel::blurClipForOutput(nodeBox, contentVisible, outputBox, target, 0);
-
-  CHECK_EQ(clip.x, 0);
-  CHECK_EQ(clip.width, 400);
 }
 
 UMBRIEL_TEST(fullscreenCentersASmallerBuffer) {

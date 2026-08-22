@@ -6,18 +6,6 @@ extern "C" {
 }
 
 namespace umbriel {
-  [[nodiscard]] constexpr wlr_box surfaceClipForOutput(
-      const wlr_box& geometry, const wlr_box& content, const wlr_box& visible, int fullscreenOffsetX,
-      int fullscreenOffsetY
-  ) {
-    return {
-        .x = geometry.x + visible.x - content.x - fullscreenOffsetX,
-        .y = geometry.y + visible.y - content.y - fullscreenOffsetY,
-        .width = visible.width,
-        .height = visible.height,
-    };
-  }
-
   // Scene clipping resizes the rendered buffer to its visible part. Remove the radius from every cut edge so that the
   // new boundary reads as a clip, not as a smaller rounded window.
   [[nodiscard]] constexpr fx_corner_radii
@@ -86,65 +74,5 @@ namespace umbriel {
       return {};
     }
     return src;
-  }
-
-  [[nodiscard]] constexpr wlr_box intersect(const wlr_box& a, const wlr_box& b) {
-    const int x = a.x > b.x ? a.x : b.x;
-    const int y = a.y > b.y ? a.y : b.y;
-    const int right = a.x + a.width < b.x + b.width ? a.x + a.width : b.x + b.width;
-    const int bottom = a.y + a.height < b.y + b.height ? a.y + a.height : b.y + b.height;
-    return {.x = x, .y = y, .width = right - x, .height = bottom - y};
-  }
-
-  // The region of a view's node that blur is allowed to sample, in coordinates local to the node. `target` is the
-  // node's origin in layout space. SceneFX samples past the node's own bounds by roughly radius*passes pixels, so a
-  // view sitting flush against an output edge would pull in whatever is on the neighbouring output. Insetting by that
-  // bleed on any edge that touches the output boundary keeps the sample inside. Returns an empty box (width or height
-  // <= 0) when nothing may be blurred and the effect must be hidden.
-  [[nodiscard]] constexpr wlr_box blurClipForOutput(
-      const wlr_box& nodeBox, const wlr_box& contentVisible, const wlr_box& outputBox, const wlr_box& target, int bleed
-  ) {
-    const wlr_box outputLocal{
-        .x = outputBox.x - target.x,
-        .y = outputBox.y - target.y,
-        .width = outputBox.width,
-        .height = outputBox.height,
-    };
-    const wlr_box contentLocal{
-        .x = contentVisible.x - target.x,
-        .y = contentVisible.y - target.y,
-        .width = contentVisible.width,
-        .height = contentVisible.height,
-    };
-
-    wlr_box clip = intersect(nodeBox, contentLocal);
-    if (clip.width <= 0 || clip.height <= 0) {
-      return {};
-    }
-    clip = intersect(clip, outputLocal);
-    if (clip.width <= 0 || clip.height <= 0) {
-      return {};
-    }
-
-    if (bleed > 0) {
-      if (clip.x <= outputLocal.x) {
-        clip.x += bleed;
-        clip.width -= bleed;
-      }
-      if (clip.y <= outputLocal.y) {
-        clip.y += bleed;
-        clip.height -= bleed;
-      }
-      if (clip.x + clip.width >= outputLocal.x + outputLocal.width) {
-        clip.width -= bleed;
-      }
-      if (clip.y + clip.height >= outputLocal.y + outputLocal.height) {
-        clip.height -= bleed;
-      }
-    }
-    if (clip.width <= 0 || clip.height <= 0) {
-      return {};
-    }
-    return clip;
   }
 } // namespace umbriel

@@ -17,9 +17,10 @@ transition.
 Cards carry the same inner border, outer border, and corner radius as their
 windows. These values scale with the card.
 
-Cards are clipped to the logical bounds of their output. If a workspace row
-pushes a card beyond an output edge, the clipped edge loses its corner radius,
-matching the treatment of a window clipped between outputs.
+Cards are clipped to the logical bounds of their output by their own manual
+card clipping, not by the per-output scene roots windows live under. If a
+workspace row pushes a card beyond an output edge, the clipped edge loses its
+corner radius so the cut reads as a clip and not as a smaller rounded card.
 
 Each workspace has a rounded background behind its cards. The configured alpha
 controls whether this is a light tint, a translucent panel, or an opaque fill.
@@ -54,5 +55,5 @@ The relevant checks are:
   for the visible prepend target on an overflowing scrolling strip.
 - [`tests/harness/checks/112_overview_refocus.sh`](../../tests/harness/checks/112_overview_refocus.sh)
   for focus reassignment when the focused window closes in the overview.
-- [`tests/output_clip.cpp`](../../tests/output_clip.cpp) for output clipping in
-  logical coordinates.
+- [`tests/output_clip.cpp`](../../tests/output_clip.cpp) for the card corner
+  squaring and presented-crop math in logical coordinates.

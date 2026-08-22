@@ -94,12 +94,6 @@ namespace umbriel {
     // Move the scene nodes without touching the position animation: an
     // interactive drag tracks the pointer 1:1 and owns the position itself.
     void setDragPosition(int x, int y);
-    // Tighten the subsurface clip before a snap move so the surface never transits a neighboring output. wlroots
-    // recomputes surface->output membership inside wlr_scene_node_set_position, before the caller can re-derive the
-    // clip for the new position; a stale (wider) clip then grazes the neighbor for one scene update. xwayland-satellite
-    // latches wl_surface.enter permanently (leave never reverts it), so a single transient enter re-homes X11 windows
-    // to the wrong output.
-    void clipForSnapMove(int x, int y);
     // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
     void clampFloatingPosition();
     // Record the floating position as a fraction of the current usable area,
@@ -112,10 +106,13 @@ namespace umbriel {
     // Animate the presented size toward a layout-assigned size. Called by Workspace::arrange when it configures the
     // client, so the animation owns the presented size before the clip can report the final size.
     void beginResizeAnimation(int width, int height, bool allowFullscreen = false);
-    void setOutputClip(const wlr_box* screenIntersection, const wlr_box& target, const wlr_box& outputBox);
-    // Drop the per-output clip so the view renders unclipped (e.g. a window
-    // dragged across a monitor boundary spans both outputs).
-    void clearOutputClip();
+    // Apply the presentation state derived from the view's layout box `target`: fullscreen backdrop, presented size and
+    // surface crop, borders, shadow and blur. Containment on the view's own output is the job of the output's clipped
+    // scene roots, so nothing here depends on where the output edges are.
+    void applyPresentation(const wlr_box& target);
+    // Re-derive the surface clip from committed state alone (tile geometry when tiled, none otherwise), for the paths
+    // that leave presentation-driven cropping behind: map, drag entry, drag drop.
+    void resetSurfaceClip();
     void setFadeAlpha(float alpha);
     void cancelFadeAnimation();
     void cancelPositionAnimation();

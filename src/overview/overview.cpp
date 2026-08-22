@@ -401,7 +401,7 @@ namespace umbriel {
     wlr_scene_buffer_set_buffer_with_options(entry.buffer, committed, &options);
 
     // Presentation state comes from the surface's committed state, NEVER from the view's scene buffers: workspace
-    // slides clip those (setOutputClip → applyPresentedCrop), and a window parked on a hidden workspace keeps the final
+    // slides clip those (applyPresentation → applyPresentedCrop), and a window parked on a hidden workspace keeps the
     // sliver crop. Copying it smears subsurface-presented content (games) into a single stretched line. layoutCard then
     // re-crops the root surface and re-scales every entry for the thumbnail.
     wlr_fbox src{};

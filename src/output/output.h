@@ -37,6 +37,13 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_output* sceneOutput() const { return m_sceneOutput; }
     [[nodiscard]] wlr_scene_tree* layerTree(uint32_t layer) const;
     [[nodiscard]] wlr_scene_tree* popupTree() const { return m_popupTree; }
+    // Clipped roots for this output's window content. Every descendant is scissored to the output's layout box, which
+    // is what keeps a scrolled or animating view from rendering on, or entering, a neighbouring output. Positioned at
+    // the layout origin, so root-local coordinates are layout coordinates.
+    [[nodiscard]] wlr_scene_tree* viewRoot() const { return m_viewRoot; }
+    [[nodiscard]] wlr_scene_tree* fullscreenRoot() const { return m_fullscreenRoot; }
+    [[nodiscard]] wlr_scene_tree* pinnedRoot() const { return m_pinnedRoot; }
+    [[nodiscard]] wlr_scene_tree* pinnedShadowRoot() const { return m_pinnedShadowRoot; }
     [[nodiscard]] wlr_box usableArea() const { return m_usableArea; }
     [[nodiscard]] WorkspaceGroup* workspaceGroup() const { return m_workspaceGroup.get(); }
 
@@ -84,6 +91,10 @@ namespace umbriel {
     wlr_scene_output* m_sceneOutput = nullptr;
     wlr_scene_tree* m_layerTrees[kLayerCount]{};
     wlr_scene_tree* m_popupTree = nullptr;
+    wlr_scene_tree* m_viewRoot = nullptr;
+    wlr_scene_tree* m_fullscreenRoot = nullptr;
+    wlr_scene_tree* m_pinnedRoot = nullptr;
+    wlr_scene_tree* m_pinnedShadowRoot = nullptr;
     wlr_scene_optimized_blur* m_optimizedBlur = nullptr;
     std::unique_ptr<WorkspaceGroup> m_workspaceGroup;
     wlr_box m_usableArea{};

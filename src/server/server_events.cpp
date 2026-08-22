@@ -1395,6 +1395,11 @@ namespace umbriel {
     Server* self;
     self = wl_container_of(listener, self, m_outputLayoutChange);
     self->markDirty(Dirty::Backdrop);
+    // A neighbour appearing, moving, or resizing changes where every output's content clip has to sit, and the clip is
+    // refreshed from arrangeLayers.
+    for (const auto& output : self->m_outputs) {
+      output->markDirty(Dirty::LayerArrange);
+    }
     self->updateOutputManagerConfig();
   }
 

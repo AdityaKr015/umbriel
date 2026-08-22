@@ -194,6 +194,7 @@ namespace umbriel {
       view->reparentShadow(nullptr);
     }
     const int removedColumn = m_layout->columnOf(view);
+    View* adjacentReplacement = m_focusedView == view ? focusReplacementForRemoval(view) : nullptr;
     detachFromLayout(view);
     std::erase(m_views, view);
     updateUrgent();
@@ -224,15 +225,8 @@ namespace umbriel {
           }
         }
       }
-      if (removedColumn >= 0) {
-        if (replacement == nullptr) {
-          for (View* v : m_views) {
-            if (v->tiled() && m_layout->columnOf(v) >= 0) {
-              replacement = v;
-              break;
-            }
-          }
-        }
+      if (replacement == nullptr && removedColumn >= 0) {
+        replacement = adjacentReplacement;
       }
       m_focusedView = replacement;
     }
@@ -548,6 +542,62 @@ namespace umbriel {
     const auto& views = m_layout->columns()[static_cast<size_t>(column)].views;
     const int target = row + direction;
     return target < 0 || target >= static_cast<int>(views.size()) ? nullptr : views[static_cast<size_t>(target)];
+  }
+
+  View* Workspace::focusReplacementForRemoval(const View* view) const {
+    if (view == nullptr) {
+      return nullptr;
+    }
+
+    const int columnIndex = m_layout->columnOf(view);
+    const int rowIndex = m_layout->rowOf(view);
+    const auto& columns = m_layout->columns();
+    const auto mappedCandidate = [view](View* candidate) {
+      return candidate != nullptr && candidate != view && candidate->mapped();
+    };
+
+    if (columnIndex >= 0 && columnIndex < static_cast<int>(columns.size())) {
+      const auto& column = columns[static_cast<size_t>(columnIndex)].views;
+      for (int row = rowIndex - 1; row >= 0; --row) {
+        if (View* candidate = column[static_cast<size_t>(row)]; mappedCandidate(candidate)) {
+          return candidate;
+        }
+      }
+      for (int row = rowIndex + 1; row < static_cast<int>(column.size()); ++row) {
+        if (View* candidate = column[static_cast<size_t>(row)]; mappedCandidate(candidate)) {
+          return candidate;
+        }
+      }
+      for (int targetColumn = columnIndex - 1; targetColumn >= 0; --targetColumn) {
+        for (View* candidate : columns[static_cast<size_t>(targetColumn)].views) {
+          if (mappedCandidate(candidate)) {
+            return candidate;
+          }
+        }
+      }
+      for (int targetColumn = columnIndex + 1; targetColumn < static_cast<int>(columns.size()); ++targetColumn) {
+        for (View* candidate : columns[static_cast<size_t>(targetColumn)].views) {
+          if (mappedCandidate(candidate)) {
+            return candidate;
+          }
+        }
+      }
+    }
+
+    const auto current = std::ranges::find(m_views, view);
+    if (current != m_views.end()) {
+      for (auto candidate = std::make_reverse_iterator(current); candidate != m_views.rend(); ++candidate) {
+        if (mappedCandidate(*candidate)) {
+          return *candidate;
+        }
+      }
+      for (auto candidate = std::next(current); candidate != m_views.end(); ++candidate) {
+        if (mappedCandidate(*candidate)) {
+          return *candidate;
+        }
+      }
+    }
+    return nullptr;
   }
 
   bool Workspace::moveFocusedColumn(int direction) {

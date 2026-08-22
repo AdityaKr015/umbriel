@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Closing the focused window while the overview is open re-focuses a survivor. The overview keeps the focus chrome while it owns the seat, so an unmap must move the workspace's focused view to a remaining window immediately: the card border is what shows where each row will land, and a dead focused view leaves no card highlighted until zoom-out happens to refocus. The closed window is closed through unmap-client, which unmaps on the close request without destroying the surface, so Server::removeView's destroy-time refocus can never mask a missing unmap-time reassignment.
+# Closing the focused window while the overview is open focuses its nearest predecessor. The overview keeps the focus chrome while it owns the seat, so an unmap must move the workspace's focused view immediately: the card border is what shows where each row will land, and a dead focused view leaves no card highlighted until zoom-out happens to refocus. The closed window is closed through unmap-client, which unmaps on the close request without destroying the surface, so Server::removeView's destroy-time refocus can never mask a missing unmap-time reassignment.
 set -euo pipefail
 
 readonly UNMAP_CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
@@ -15,9 +15,10 @@ cleanup() {
 trap cleanup EXIT
 
 spawn_survivor() {
+  local title=$1
   env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
     XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
-    foot --title="overview-refocus-survivor" sh -c 'sleep 120' > /dev/null 2>&1 &
+    "$UNMAP_CLIENT" "$title" > /dev/null 2>&1 &
   CLIENT_PIDS+=($!)
 }
 
@@ -33,9 +34,12 @@ wait_for_windows() {
   return 1
 }
 
-# The survivor maps first so the unmap-client, mapping later, is the focused one.
-spawn_survivor
+# Two survivors map first so the unmap-client, mapping last, is the focused one. The second survivor is adjacent to it,
+# which distinguishes the intended predecessor from an incorrect scan beginning at the first window.
+spawn_survivor "overview-refocus-first"
 wait_for_windows 1
+spawn_survivor "overview-refocus-adjacent"
+wait_for_windows 2
 
 CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/unmap-client.log"
 env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
@@ -52,12 +56,12 @@ if ! grep -q '^mapped$' "$CLIENT_LOG"; then
   echo "unmap-client never mapped: $(cat "$CLIENT_LOG")"
   exit 1
 fi
-wait_for_windows 2
+wait_for_windows 3
 
 unmap_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "unmap-client") | .id')
-survivor_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "overview-refocus-survivor") | .id')
-if [[ -z $unmap_id || -z $survivor_id ]]; then
-  echo "could not resolve both window ids: $("$UMBRIEL" windows --json)"
+adjacent_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "overview-refocus-adjacent") | .id')
+if [[ -z $unmap_id || -z $adjacent_id ]]; then
+  echo "could not resolve the closing and adjacent window ids: $("$UMBRIEL" windows --json)"
   exit 1
 fi
 
@@ -84,24 +88,24 @@ if ! kill -0 "$UNMAP_PID" 2>/dev/null; then
   exit 1
 fi
 
-# Focus must move to the survivor while the overview is still open.
+# Focus must move to the adjacent predecessor while the overview is still open.
 focused=""
 for _ in $(seq 40); do
-  focused=$("$UMBRIEL" windows --json | jq -r --arg id "$survivor_id" '.[] | select(.id == $id) | .focused')
+  focused=$("$UMBRIEL" windows --json | jq -r --arg id "$adjacent_id" '.[] | select(.id == $id) | .focused')
   [[ $focused == true ]] && break
   sleep 0.1
 done
 if [[ $focused != true ]]; then
-  echo "survivor is not focused after closing the focused window in the overview: $("$UMBRIEL" windows --json)"
+  echo "adjacent predecessor is not focused after closing the focused window in the overview: $("$UMBRIEL" windows --json)"
   exit 1
 fi
 
 # Zooming back in must land on the same window and keep it focused.
 "$UMBRIEL" msg overview-close > /dev/null
 sleep 0.6
-if [[ $("$UMBRIEL" windows --json | jq -r --arg id "$survivor_id" '.[] | select(.id == $id) | .focused') != true ]]; then
-  echo "survivor lost focus after zooming out of the overview: $("$UMBRIEL" windows --json)"
+if [[ $("$UMBRIEL" windows --json | jq -r --arg id "$adjacent_id" '.[] | select(.id == $id) | .focused') != true ]]; then
+  echo "adjacent predecessor lost focus after zooming out of the overview: $("$UMBRIEL" windows --json)"
   exit 1
 fi
 
-echo "closing the focused window in the overview re-focuses a survivor"
+echo "closing the focused window in the overview focuses its adjacent predecessor"

@@ -44,9 +44,9 @@ Each workspace has a rounded background behind its cards. The configured alpha
 controls whether this is a light tint, a translucent panel, or an opaque fill.
 
 The focused border tracks the workspace's focused view, so each row shows where
-it will land when zoomed into. Closing the focused window reassigns focus to a
-remaining window on that workspace while the overview stays open; the border
-moves with it.
+it will land when zoomed into. Closing the focused window reassigns focus to its
+nearest predecessor while the overview stays open, or to the next neighbor when
+there is no predecessor. The border moves with it.
 
 ## Dragging
 
@@ -72,7 +72,8 @@ The relevant checks are:
 - [`tests/harness/checks/111_drag_left_hint.sh`](../../tests/harness/checks/111_drag_left_hint.sh)
   for the visible prepend target on an overflowing scrolling strip.
 - [`tests/harness/checks/112_overview_refocus.sh`](../../tests/harness/checks/112_overview_refocus.sh)
-  for focus reassignment when the focused window closes in the overview.
+  for adjacent focus reassignment when the focused window closes in the
+  overview.
 - [`tests/harness/two-output-containment.sh`](../../tests/harness/two-output-containment.sh)
   for cards staying off a neighbouring output, overview included.
 - [`tests/presented_crop.cpp`](../../tests/presented_crop.cpp) for the

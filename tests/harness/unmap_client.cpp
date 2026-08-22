@@ -142,7 +142,7 @@ namespace {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
   State state;
   state.display = wl_display_connect(nullptr);
   if (state.display == nullptr) {
@@ -171,7 +171,7 @@ int main() {
   xdg_surface_add_listener(state.xdgSurface, &kXdgSurfaceListener, &state);
   state.toplevel = xdg_surface_get_toplevel(state.xdgSurface);
   xdg_toplevel_add_listener(state.toplevel, &kToplevelListener, &state);
-  xdg_toplevel_set_title(state.toplevel, "unmap-client");
+  xdg_toplevel_set_title(state.toplevel, argc > 1 ? argv[1] : "unmap-client");
   wl_surface_commit(state.surface);
 
   while (wl_display_dispatch(state.display) >= 0) {

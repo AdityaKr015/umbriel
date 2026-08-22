@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <linux/input-event-codes.h>
+#include <ranges>
 #include <xkbcommon/xkbcommon.h>
 #include "wlr.h"
 // clang-format on

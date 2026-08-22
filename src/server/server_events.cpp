@@ -1352,6 +1352,7 @@ namespace umbriel {
       if (workspace->focusedView() == view
           && config().input.focus.followsMouse
           && view->tiled()
+          && workspace->scrollingLayout() == nullptr
           && workspace->active()
           && m_cursor != nullptr
           && output != nullptr

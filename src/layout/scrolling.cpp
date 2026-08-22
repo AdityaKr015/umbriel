@@ -325,17 +325,19 @@ namespace umbriel {
     }
     const int x = columnX(columnIndex, viewportWidth);
     const int width = columnWidth(columnIndex, viewportWidth);
-    // Already fully on screen: never move the strip. In particular, a column
-    // flush against an edge must not jump when it receives focus.
+    const double max = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
+    // Already fully on screen: never move the strip. In particular, a column flush against an edge must not jump when
+    // it receives focus. Still bounded: a touchpad swipe parks the strip past an edge on purpose, and the edge column
+    // stays fully visible while it does, so returning that overscroll verbatim would make every reveal a no-op and
+    // leave the strip resting outside its own range.
     if (m_scroll <= static_cast<double>(x) && m_scroll >= static_cast<double>(x + width - viewportWidth)) {
-      return m_scroll;
+      return std::clamp(m_scroll, 0.0, max);
     }
 
     // Move by the shortest distance that reveals the whole column. A column entering from the right lands flush against
     // the right edge, while one entering from the left lands flush against the left edge. Do not reserve space for a
     // neighboring sliver after focus has moved.
     const double scroll = std::clamp(m_scroll, static_cast<double>(x + width - viewportWidth), static_cast<double>(x));
-    const double max = static_cast<double>(std::max(0, totalWidth(viewportWidth) - viewportWidth));
     return std::clamp(scroll, 0.0, max);
   }
 

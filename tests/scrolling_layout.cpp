@@ -592,6 +592,43 @@ UMBRIEL_TEST(ensureVisibleKeepsAFlushLeftColumnInPlace) {
   CHECK_EQ(fixture.layout.scrollAmountToEnsureVisible(1, kViewport), 0.0);
 }
 
+UMBRIEL_TEST(ensureVisibleGivesBackLeftOverscroll) {
+  // A three-finger swipe past the left edge parks the strip at a negative scroll on purpose, and column 0 stays fully
+  // visible while it does. Gesture release settles through ensureVisible alone, so if the visible-column path handed
+  // that overscroll back the strip would rest outside its own range with no spring-back.
+  Fixture fixture;
+  fixture.addColumns(3);
+  const double overscroll = -126.0; // The gesture caps overscroll at 0.1 * viewport.
+  fixture.layout.setScroll(overscroll);
+  // Pin the path under test: the column is fully visible, so the reveal branch never runs.
+  const auto left = static_cast<double>(fixture.layout.columnX(0, kViewport));
+  const auto right =
+      static_cast<double>(fixture.layout.columnX(0, kViewport) + fixture.layout.columnWidth(0, kViewport) - kViewport);
+  CHECK(overscroll <= left);
+  CHECK(overscroll >= right);
+
+  fixture.layout.ensureVisible(0, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), 0.0);
+}
+
+UMBRIEL_TEST(ensureVisibleGivesBackRightOverscroll) {
+  // Mirrors the left extremity: past max scroll the last column is still fully visible, so the bound is what pulls the
+  // strip back rather than the reveal.
+  Fixture fixture;
+  fixture.addColumns(3);
+  const double maxScroll = fixture.layout.maxScroll(kViewport);
+  const double overscroll = maxScroll + 126.0;
+  fixture.layout.setScroll(overscroll);
+  const auto left = static_cast<double>(fixture.layout.columnX(2, kViewport));
+  const auto right =
+      static_cast<double>(fixture.layout.columnX(2, kViewport) + fixture.layout.columnWidth(2, kViewport) - kViewport);
+  CHECK(overscroll <= left);
+  CHECK(overscroll >= right);
+
+  fixture.layout.ensureVisible(2, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), maxScroll);
+}
+
 UMBRIEL_TEST(ensureVisibleAlignsInsertedHalfWidthColumnToTheRightEdge) {
   Fixture fixture;
   fixture.addColumns(2);

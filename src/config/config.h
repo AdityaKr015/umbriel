@@ -367,7 +367,7 @@ namespace umbriel {
       } keyboard;
 
       struct Touchpad {
-        std::optional<bool> tap;
+        std::optional<bool> tap = true;
         std::optional<bool> naturalScroll;
         bool operator==(const Touchpad&) const = default;
       } touchpad;

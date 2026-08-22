@@ -140,7 +140,7 @@ repeat_rate = 25               # 0-1000 Hz
 repeat_delay = 600             # 0-10000 ms
 
 [input.touchpad]
-# tap = true
+tap = true                      # enabled by default; false disables tap-to-click
 # natural_scroll = true
 
 [input.mouse]

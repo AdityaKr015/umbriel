@@ -525,6 +525,11 @@ UMBRIEL_TEST(mouseAccelerationDefaultsToFlat) {
   CHECK_EQ(defaults.input.mouse.sensitivity, 0.0);
 }
 
+UMBRIEL_TEST(touchpadTapDefaultsToEnabled) {
+  const umbriel::Config defaults;
+  CHECK(defaults.input.touchpad.tap == std::optional<bool>(true));
+}
+
 UMBRIEL_TEST(hardwareCursorCanBeDisabled) {
   const TempConfig file;
   file.write(R"(

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sync docs/user/*.md into ../noctalia-docs/src/content/docs/umbriel/ as .mdx. docs/design/ holds maintainer notes and is never synced. Existing .mdx files keep their hand-written frontmatter (title, description); only the body is refreshed from the source .md. New files get a title derived from their first H1. A leading H1 matching the frontmatter title is dropped from the body, mirroring the convention in the docs site. index.mdx is hand-authored in the docs site (it imports Astro components), so a future docs/user/index.md is ignored rather than synced over it. Source docs use relative .md links so they render correctly on GitHub. The docs site serves pages at /umbriel/<name>/, so links are rewritten here: sibling docs become site URLs. Design notes (docs/design) are maintainer-only and are never synced, so links to them must not appear in user docs. Any .md link that survives the rewrite is reported, since it would 404 on the site. After syncing, rebuild the site (npm run build) before previewing: astro preview serves the prebuilt dist/ and does not pick up new .mdx. Usage: tools/sync-docs.sh [docs-site-root]
+# Sync docs/user/*.md into ../noctalia-docs/src/content/docs/umbriel/ as .mdx. docs/design/ holds maintainer notes and is never synced. Existing .mdx files keep their hand-written frontmatter (title, description); only the body is refreshed from the source .md. New files get a title derived from their first H1. A leading H1 matching the frontmatter title is dropped from the body, mirroring the convention in the docs site. index.mdx is hand-authored in the docs site (it imports Astro components), so a future docs/user/index.md is ignored rather than synced over it. Source docs use relative .md links so they render correctly on GitHub. The docs site serves pages at /umbriel/<route>/, so links are rewritten here: sibling docs become site URLs. A small explicit map handles source filenames whose established site route differs. Design notes (docs/design) are maintainer-only and are never synced, so links to them must not appear in user docs. Any .md link that survives the rewrite is reported, since it would 404 on the site. After syncing, rebuild the site (npm run build) before previewing: astro preview serves the prebuilt dist/ and does not pick up new .mdx. Usage: tools/sync-docs.sh [docs-site-root]
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,6 +8,13 @@ dest_dir="$site_root/src/content/docs/umbriel"
 
 mkdir -p "$dest_dir"
 
+site_route() {
+    case "$1" in
+        scratchpad) printf '%s' 'scratchpads' ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
 # Build the link rewrite table from the actual doc inventory. User docs are copied to the site at /umbriel/<name>/. Design notes stay maintainer-only in the repo
 # and must not be linked from user docs; the leftover check below flags any that slip in.
 link_exprs=()
@@ -15,8 +22,9 @@ for md in "$repo_root"/docs/user/*.md; do
     [[ -e "$md" ]] || continue
     base="$(basename "$md" .md)"
     [[ "$base" == "index" ]] && continue
-    link_exprs+=(-e "s|]($base.md)|](/umbriel/$base/)|g")
-    link_exprs+=(-e "s|]($base.md#|](/umbriel/$base/#|g")
+    route="$(site_route "$base")"
+    link_exprs+=(-e "s|]($base.md)|](/umbriel/$route/)|g")
+    link_exprs+=(-e "s|]($base.md#|](/umbriel/$route/#|g")
 done
 
 for md in "$repo_root"/docs/*.md; do
@@ -28,7 +36,8 @@ for md in "$repo_root"/docs/user/*.md; do
     [[ -e "$md" ]] || continue
     base="$(basename "$md" .md)"
     [[ "$base" == "index" ]] && continue
-    mdx="$dest_dir/$base.mdx"
+    route="$(site_route "$base")"
+    mdx="$dest_dir/$route.mdx"
 
     h1="$(awk '/^# / { sub(/^# /, ""); print; exit }' "$md")"
 

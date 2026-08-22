@@ -483,6 +483,74 @@ namespace umbriel {
     return raw;
   }
 
+  void Overview::snapshotCardForClose(Card& card) {
+    if (card.tree == nullptr || card.owner == nullptr || card.owner->output == nullptr || card.view == nullptr) {
+      return;
+    }
+
+    wlr_scene_tree* snapshot = wlr_scene_tree_create(m_tree);
+    if (snapshot == nullptr) {
+      return;
+    }
+    wlr_box outputBox{};
+    wlr_output_layout_get_box(m_server->outputLayout(), card.owner->output->wlr(), &outputBox);
+    if (outputBox.width > 0 && outputBox.height > 0) {
+      wlr_scene_tree_set_clip(snapshot, &outputBox);
+    }
+
+    int buffersCopied = 0;
+    for (const auto& entry : card.surfaces) {
+      wlr_scene_buffer* source = entry->buffer;
+      if (source == nullptr || source->buffer == nullptr || !source->node.enabled) {
+        continue;
+      }
+      wlr_scene_buffer* copy = wlr_scene_buffer_create(snapshot, source->buffer);
+      if (copy == nullptr) {
+        continue;
+      }
+      wlr_scene_node_set_position(&copy->node, card.tree->node.x + source->node.x, card.tree->node.y + source->node.y);
+      if (source->dst_width > 0 && source->dst_height > 0) {
+        wlr_scene_buffer_set_dest_size(copy, source->dst_width, source->dst_height);
+      }
+      if (source->src_box.width > 0 && source->src_box.height > 0) {
+        wlr_scene_buffer_set_source_box(copy, &source->src_box);
+      }
+      wlr_scene_buffer_set_transform(copy, source->transform);
+      wlr_scene_buffer_set_corner_radii(copy, source->corners);
+      wlr_scene_buffer_set_opacity(copy, source->opacity);
+      wlr_scene_buffer_set_filter_mode(copy, WLR_SCALE_FILTER_BILINEAR);
+      ++buffersCopied;
+    }
+
+    std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects;
+    const float presentedOpacity = card.view->presentedOpacity();
+    const auto snapshotRect = [&](wlr_scene_rect* source, std::array<float, 4> base) {
+      if (source == nullptr || !source->node.enabled) {
+        return;
+      }
+      wlr_scene_rect* copy = wlr_scene_rect_create(snapshot, source->width, source->height, source->color);
+      if (copy == nullptr) {
+        return;
+      }
+      wlr_scene_node_set_position(&copy->node, card.tree->node.x + source->node.x, card.tree->node.y + source->node.y);
+      wlr_scene_rect_set_corner_radii(copy, source->corners);
+      wlr_scene_rect_set_clipped_region(copy, source->clipped_region);
+      base[3] *= presentedOpacity;
+      rects.emplace_back(copy, base);
+    };
+    const Workspace* workspace = card.view->workspace();
+    const bool focused = workspace != nullptr && workspace->focusedView() == card.view;
+    snapshotRect(card.outerBorder, config().appearance.outerBorderColor);
+    snapshotRect(card.border, focused ? config().appearance.borderFocused : config().appearance.borderUnfocused);
+
+    if (buffersCopied == 0 && rects.empty()) {
+      wlr_scene_node_destroy(&snapshot->node);
+      return;
+    }
+    m_server->animateCloseSnapshot(card.owner->output, snapshot, std::move(rects));
+    wlr_output_schedule_frame(card.owner->output->wlr());
+  }
+
   void Overview::destroyCard(Card* card) {
     for (const auto& entry : card->surfaces) {
       wl_list_remove(&entry->commit.link);
@@ -918,6 +986,9 @@ namespace umbriel {
     }
     Workspace* workspace = view->workspace();
     OutputState* state = stateForWorkspace(workspace);
+    if (Card* card = findCard(view)) {
+      snapshotCardForClose(*card);
+    }
     dropCard(view);
     // The closed window may have been the focused one. The overview keeps the focus chrome while it owns the seat, so
     // reassign to the nearest survivor now rather than leaving the workspace focused on a dead view until zoom-out (or

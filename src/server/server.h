@@ -36,6 +36,7 @@ struct wlr_pointer_gestures_v1;
 struct wlr_relative_pointer_manager_v1;
 struct wlr_renderer;
 struct wlr_scene;
+struct wlr_scene_buffer;
 struct wlr_scene_output_layout;
 struct wlr_scene_rect;
 struct wlr_scene_tree;
@@ -460,6 +461,7 @@ namespace umbriel {
       wlr_scene_tree* m_tree = nullptr;
       Output* m_output = nullptr;
       AnimatedValue m_alpha;
+      std::vector<std::pair<wlr_scene_buffer*, float>> m_buffers;
       std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> m_rects;
     };
     // unique_ptr because the registry holds raw pointers to these: a vector of

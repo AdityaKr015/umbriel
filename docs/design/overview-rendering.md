@@ -27,6 +27,13 @@ filmstrip scrolling, card dragging, and drop hints. Layout movement, resize,
 and fade transitions continue to advance in `View`, so the overview and the
 normal workspace cannot settle through different paths.
 
+Unmap is the one transition that cannot remain live because the client buffer
+may disappear immediately. Before removing an unmapped card, the overview
+freezes its already-scaled buffers and borders into a scene snapshot. That tree
+uses the same `Server::CloseSnapshot` animation owner, easing, half-duration,
+and starting buffer opacity as a close on the normal workspace. Overview owns
+only the projection into card coordinates, not a separate close timeline.
+
 ## Decoration and clipping
 
 Cards carry the same inner border, outer border, and corner radius as their
@@ -74,6 +81,9 @@ The relevant checks are:
 - [`tests/harness/checks/112_overview_refocus.sh`](../../tests/harness/checks/112_overview_refocus.sh)
   for adjacent focus reassignment when the focused window closes in the
   overview.
+- [`tests/harness/checks/114_overview_close_fade.sh`](../../tests/harness/checks/114_overview_close_fade.sh)
+  for a card remaining visible after unmap and disappearing when the shared
+  close snapshot settles.
 - [`tests/harness/two-output-containment.sh`](../../tests/harness/two-output-containment.sh)
   for cards staying off a neighbouring output, overview included.
 - [`tests/presented_crop.cpp`](../../tests/presented_crop.cpp) for the

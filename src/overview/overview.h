@@ -162,6 +162,7 @@ namespace umbriel {
     void buildState();
     void populateCards(OutputState& state);
     Card* createCard(OutputState& state, View* view, size_t row);
+    void snapshotCardForClose(Card& card);
     void destroyCard(Card* card);
     static void syncCardBuffer(CardSurface& entry);
     void dropCard(View* view);

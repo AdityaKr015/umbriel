@@ -594,6 +594,14 @@ namespace umbriel {
       int durationMs
   )
       : m_tree(tree), m_output(output), m_rects(std::move(rects)) {
+    wlr_scene_node_for_each_buffer(
+        &m_tree->node,
+        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+          auto* buffers = static_cast<std::vector<std::pair<wlr_scene_buffer*, float>>*>(data);
+          buffers->emplace_back(buffer, buffer->opacity);
+        },
+        &m_buffers
+    );
     m_alpha.snap(1.0);
     m_alpha.retarget(0.0, durationMs, Easing::EaseOutCubic);
   }
@@ -609,13 +617,9 @@ namespace umbriel {
       return false;
     }
     const auto alpha = static_cast<float>(m_alpha.current());
-    wlr_scene_node_for_each_buffer(
-        &m_tree->node,
-        [](wlr_scene_buffer* buf, int /*sx*/, int /*sy*/, void* data) {
-          wlr_scene_buffer_set_opacity(buf, *static_cast<float*>(data));
-        },
-        const_cast<float*>(&alpha)
-    );
+    for (auto& [buffer, baseOpacity] : m_buffers) {
+      wlr_scene_buffer_set_opacity(buffer, baseOpacity * alpha);
+    }
     for (auto& [rect, base] : m_rects) {
       float color[4];
       premultiplied(color, base, alpha);

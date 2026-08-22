@@ -471,7 +471,7 @@ namespace umbriel {
     cancelPositionAnimation();
     m_dragOpacity = kDragOpacity;
     setFadeAlpha(m_fadeAlpha);
-    m_dragOpacityCommitPending = false;
+    m_effectiveOpacityCommitPending = false;
     wlr_scene_node_reparent(&m_sceneTree->node, m_server->dragTree());
     reparentShadow(m_server->dragShadowTree());
     setNodeEnabled(true);
@@ -481,7 +481,7 @@ namespace umbriel {
 
   void View::restoreHomePresentation() {
     m_dragOpacity = 1.0F;
-    m_dragOpacityCommitPending = false;
+    m_effectiveOpacityCommitPending = false;
     setFadeAlpha(m_fadeAlpha);
     if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
         scratchpad != nullptr && scratchpad->contains(this)) {
@@ -631,9 +631,9 @@ namespace umbriel {
     }
     // The scene helper may process a surface commit after View::handleCommit.
     // Reapply on the ensuing frame, after every commit listener has run.
-    if (m_dragOpacityCommitPending) {
+    if (m_effectiveOpacityCommitPending) {
       applyEffectiveOpacity();
-      m_dragOpacityCommitPending = false;
+      m_effectiveOpacityCommitPending = false;
     }
     return active;
   }
@@ -1527,10 +1527,11 @@ namespace umbriel {
       updateBlur();
       updateShadow();
     }
-    // Workspace presentation deliberately skips a dragged view so it remains unclipped across outputs. A client commit
-    // resets scene-buffer opacity; defer restoration to the frame tick so every commit listener has run.
-    if (m_dragOpacity < 1.0F) {
-      m_dragOpacityCommitPending = true;
+    // A client commit resets scene-buffer opacity. The scene helper performs
+    // that reset after this listener, so restore every compositor-managed
+    // opacity on the following frame once all commit listeners have run.
+    if (effectiveOpacity() < 1.0F) {
+      m_effectiveOpacityCommitPending = true;
     }
     updateForeignState();
   }

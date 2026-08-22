@@ -328,7 +328,10 @@ namespace umbriel {
     bool m_initialRulesSettled = false;
     float m_ruleOpacity = 1.0F;
     float m_dragOpacity = 1.0F;
-    bool m_dragOpacityCommitPending = false;
+    // wlroots restores a committed scene buffer to the client-provided alpha.
+    // Restore any compositor-managed opacity on the frame after all commit
+    // listeners have run.
+    bool m_effectiveOpacityCommitPending = false;
     bool m_hasMaximizeRestoreBox = false;
     wlr_box m_maximizeRestoreBox{};
     FloatingGeometry m_floating;

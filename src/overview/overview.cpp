@@ -127,48 +127,6 @@ namespace umbriel {
     return static_cast<int>(std::lround(metrics.baseY + offset));
   }
 
-  wlr_box Overview::worldBoxOf(const View* view, const wlr_box& outputBox) const {
-    const wlr_box& geometry = view->toplevel()->base->geometry;
-    if (view->toplevel()->current.fullscreen && geometry.width > 0 && geometry.height > 0) {
-      // Fullscreen content keeps its committed size and centering, but a tiled fullscreen column still belongs to the
-      // horizontal strip. Keeping it pinned to the output lets its topmost card cover adjacent columns as the overview
-      // scrolls underneath it.
-      int stripOffset = 0;
-      if (const Workspace* workspace = view->workspace(); workspace != nullptr) {
-        const int column = workspace->layout().columnOf(view);
-        if (column >= 0
-            && workspace->layout().mode() == LayoutMode::Scrolling
-            && workspace->group() != nullptr
-            && workspace->group()->output() != nullptr) {
-          // Use the last arranged target rather than the live scroll value. ensureVisible updates scroll before arrange
-          // notifies the overview; reading it here would let an unrelated relayout snap the card to its destination
-          // before onWorkspaceArranged can arm the animation.
-          const wlr_box target = workspace->layout().targetBox(view);
-          const wlr_box& usable = workspace->group()->output()->usableArea();
-          const int stripOrigin = usable.width > 0 ? usable.x : outputBox.x;
-          if (target.width > 0 && target.height > 0) {
-            stripOffset = target.x - stripOrigin - workspace->layoutConfig().edgePad;
-          }
-        }
-      }
-      return {
-          outputBox.x + stripOffset + (outputBox.width - geometry.width) / 2,
-          outputBox.y + (outputBox.height - geometry.height) / 2,
-          geometry.width,
-          geometry.height,
-      };
-    }
-    if (const Workspace* workspace = view->workspace()) {
-      if (workspace->layout().columnOf(view) >= 0) {
-        const wlr_box target = workspace->layout().targetBox(view);
-        if (target.width > 0 && target.height > 0) {
-          return target;
-        }
-      }
-    }
-    return {view->sceneTree()->node.x, view->sceneTree()->node.y, geometry.width, geometry.height};
-  }
-
   void Overview::layoutCard(Card& card, const RowMetrics& metrics, double rowScroll) {
     View* view = card.view;
     const wlr_box& geometry = view->toplevel()->base->geometry;
@@ -180,24 +138,21 @@ namespace umbriel {
     wlr_scene_node_set_enabled(&card.tree->node, true);
 
     const double z = metrics.zoom;
-    const wlr_box world = worldBoxOf(view, metrics.outputBox);
-    const int presentedW = view->presentedWidth(world);
-    const int presentedH = view->presentedHeight(world);
-    const int contentW = std::max(1, static_cast<int>(std::lround(presentedW * z)));
-    const int contentH = std::max(1, static_cast<int>(std::lround(presentedH * z)));
+    const wlr_box& world = view->presentedBox();
+    if (world.width <= 0 || world.height <= 0) {
+      card.blur.hide();
+      wlr_scene_node_set_enabled(&card.tree->node, false);
+      return;
+    }
+    const int contentW = std::max(1, static_cast<int>(std::lround(world.width * z)));
+    const int contentH = std::max(1, static_cast<int>(std::lround(world.height * z)));
     if (&card == m_dragCard) {
       // The drag owns the card origin; only the scale still tracks progress.
       card.box.width = contentW;
       card.box.height = contentH;
     } else {
-      if (!card.worldXInitialized) {
-        card.worldX.snap(world.x);
-        card.worldXInitialized = true;
-      } else if (!card.worldX.animating()) {
-        card.worldX.snap(world.x);
-      }
       card.box = {
-          .x = metrics.rowX + static_cast<int>(std::lround((card.worldX.current() - metrics.outputBox.x) * z)),
+          .x = metrics.rowX + static_cast<int>(std::lround((world.x - metrics.outputBox.x) * z)),
           .y =
               rowTop(metrics, rowScroll, card.row) + static_cast<int>(std::lround((world.y - metrics.outputBox.y) * z)),
           .width = contentW,
@@ -693,6 +648,20 @@ namespace umbriel {
     m_targetProgress = 0.0;
     m_pendingFocus = nullptr;
     m_server->notifyOverviewChanged();
+
+    // Initialize every View's canonical presentation box before cards consume it. Hidden workspaces normally skip
+    // scene presentation entirely, but while overview is active their hidden nodes carry the same position and size
+    // state that would be shown if the workspace were active.
+    for (const auto& output : m_server->outputs()) {
+      if (WorkspaceGroup* group = output->workspaceGroup()) {
+        for (size_t index = 0; index < group->workspaceCount(); ++index) {
+          if (Workspace* workspace = group->workspaceAt(index)) {
+            workspace->arrange(false);
+          }
+        }
+      }
+    }
+
     wlr_scene_node_set_enabled(&m_server->xdgTree()->node, false);
     wlr_scene_node_set_enabled(&m_server->fullscreenTree()->node, false);
     wlr_scene_node_set_enabled(&m_tree->node, true);
@@ -791,15 +760,6 @@ namespace umbriel {
 
   bool Overview::tickAnimations(uint64_t nowMsec) {
     bool active = m_dropHint != nullptr && m_dropHint->tickAnimations(nowMsec);
-    bool cardsChanged = false;
-    for (const auto& state : m_outputs) {
-      for (const auto& card : state->cards) {
-        if (card->worldX.tick(nowMsec)) {
-          cardsChanged = true;
-          active = card->worldX.animating() || active;
-        }
-      }
-    }
     if (m_anim.tick(nowMsec)) {
       const double value = m_anim.current();
       m_progress = m_progressFrom + (m_targetProgress - m_progressFrom) * value;
@@ -812,7 +772,7 @@ namespace umbriel {
         finishAnimation();
       }
       active = m_anim.animating() || active;
-    } else if (cardsChanged || m_cardPresentationDirty) {
+    } else if (m_cardPresentationDirty) {
       applyProgress();
     }
     m_cardPresentationDirty = false;
@@ -820,17 +780,7 @@ namespace umbriel {
   }
 
   bool Overview::hasActiveAnimations() const {
-    if (m_anim.animating() || (m_dropHint != nullptr && m_dropHint->hasActiveAnimations())) {
-      return true;
-    }
-    for (const auto& state : m_outputs) {
-      for (const auto& card : state->cards) {
-        if (card->worldX.animating()) {
-          return true;
-        }
-      }
-    }
-    return false;
+    return m_anim.animating() || (m_dropHint != nullptr && m_dropHint->hasActiveAnimations());
   }
 
   void Overview::finishAnimation() {
@@ -840,7 +790,6 @@ namespace umbriel {
     }
     View* focus = m_pendingFocus;
     m_pendingFocus = nullptr;
-    m_horizontalWorkspace = nullptr;
     teardown();
     // Real trees are visible again: settle each active workspace so window
     // positions match where the cards landed.
@@ -894,7 +843,6 @@ namespace umbriel {
     m_dragSourceWidth.reset();
     m_drop = {};
     m_dropWorkspaceGroup = nullptr;
-    m_horizontalWorkspace = nullptr;
     m_cardPresentationDirty = false;
     m_gestureOpenedHere = false;
     m_server->reconcileDynamicWorkspaces();
@@ -1029,25 +977,6 @@ namespace umbriel {
       return;
     }
     if (OutputState* state = stateForWorkspace(workspace)) {
-      const bool resizeAnimating = std::ranges::any_of(state->cards, [workspace](const auto& card) {
-        return card->view->workspace() == workspace && card->view->sizeAnimActive();
-      });
-      if (m_horizontalWorkspace == workspace || resizeAnimating) {
-        const int duration = std::max(1, config().appearance.animationMs);
-        RowMetrics metrics{};
-        if (rowMetrics(*state, *m_server, zoom(), metrics)) {
-          for (const auto& card : state->cards) {
-            if (card->view->workspace() != workspace || workspace->layout().columnOf(card->view) < 0) {
-              continue;
-            }
-            const double target = worldBoxOf(card->view, metrics.outputBox).x;
-            if (card->worldXInitialized && std::abs(card->worldX.current() - target) >= 0.5) {
-              card->worldX.retarget(target, duration, Easing::EaseOutCubic);
-            }
-          }
-        }
-        m_horizontalWorkspace = nullptr;
-      }
       layoutOutput(*state);
       wlr_output_schedule_frame(state->output->wlr());
     }
@@ -1352,7 +1281,6 @@ namespace umbriel {
     if (target == nullptr) {
       return false;
     }
-    m_horizontalWorkspace = workspace;
     m_server->focusView(target, FocusReason::Directional);
     return true;
   }

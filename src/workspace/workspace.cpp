@@ -380,20 +380,19 @@ namespace umbriel {
       }
     }
 
-    // Card geometry derives from the layout math above, so it stays correct for
-    // hidden workspaces too (resizes, drag gaps, config-driven relayout).
-    if (Overview* overview = m_group->server()->overview(); overview != nullptr && overview->active()) {
-      overview->onWorkspaceArranged(this);
-    }
-
     // Visual state below (scroll, positions) only applies while visible.
-    if (!m_active && !m_inSwitchTransition) {
+    Overview* overview = m_group->server()->overview();
+    const bool overviewActive = overview != nullptr && overview->active();
+    if (!m_active && !m_inSwitchTransition && !overviewActive) {
       return;
     }
 
     // One positioning path for both layouts: the layout owns the scroll, the
     // targets below already include it, and each view animates or snaps itself.
     applyPositions(animate);
+    if (overviewActive) {
+      overview->onWorkspaceArranged(this);
+    }
   }
 
   void Workspace::syncViewPresentation(View* view) {
@@ -421,6 +420,9 @@ namespace umbriel {
     // Each case only decides the region the view occupies; everything after is common. Keeping that region off the
     // neighbouring output is the job of the output's clipped scene roots, not of this function.
     wlr_box target{};
+    const Overview* overview = m_group->server()->overview();
+    const bool overviewActive = overview != nullptr && overview->active();
+    const bool normallyVisible = view->pinned() || m_active || m_inSwitchTransition;
 
     if (view->pinned()) {
       // Pinned views sit outside the workspace, so no slide offset applies, and
@@ -428,18 +430,14 @@ namespace umbriel {
       const wlr_box& geometry = view->toplevel()->base->geometry;
       target = {node.x, node.y, geometry.width, geometry.height};
     } else {
-      if (!m_active && !m_inSwitchTransition) {
+      if (!normallyVisible && !overviewActive) {
         return;
       }
 
       if (view->layoutFullscreen()) {
         if (m_layout->columnOf(view) < 0) {
-          if (m_active) {
-            view->setNodeEnabled(true);
-            view->applyFullscreenLayout();
-          } else {
-            view->setNodeEnabled(false);
-          }
+          view->applyFullscreenLayout();
+          view->setNodeEnabled(normallyVisible);
           return;
         }
         // Fullscreen covers the output and draws no decorations.
@@ -453,12 +451,14 @@ namespace umbriel {
       }
     }
 
-    view->setNodeEnabled(true);
+    view->setNodeEnabled(normallyVisible);
     view->applyPresentation(target);
   }
 
   void Workspace::applyPositions(bool animate) {
-    if ((!m_active && !m_inSwitchTransition) || m_group == nullptr || m_group->output() == nullptr) {
+    const Overview* overview = m_group != nullptr ? m_group->server()->overview() : nullptr;
+    const bool overviewActive = overview != nullptr && overview->active();
+    if ((!m_active && !m_inSwitchTransition && !overviewActive) || m_group == nullptr || m_group->output() == nullptr) {
       return;
     }
     Output* output = m_group->output();

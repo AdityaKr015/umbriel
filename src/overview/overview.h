@@ -123,10 +123,6 @@ namespace umbriel {
       SurfaceBlur blur;
       std::vector<std::unique_ptr<CardSurface>> surfaces;
       wlr_box box{}; // content box in layout coordinates
-      // Overview-only presentation position. Layout targets still update
-      // immediately, while this follows them with the regular window motion.
-      AnimatedValue worldX;
-      bool worldXInitialized = false;
     };
 
     struct OutputState {
@@ -177,7 +173,6 @@ namespace umbriel {
     void applyProgress();
     void layoutOutput(OutputState& state);
     void layoutCard(Card& card, const RowMetrics& metrics, double rowScroll);
-    [[nodiscard]] wlr_box worldBoxOf(const View* view, const wlr_box& outputBox) const;
 
     void startAnimation(double target, bool closing);
     void finishAnimation();
@@ -211,7 +206,6 @@ namespace umbriel {
     double m_progressFrom = 0;
     AnimatedValue m_anim;
     View* m_pendingFocus = nullptr;
-    Workspace* m_horizontalWorkspace = nullptr;
     bool m_cardPresentationDirty = false;
     bool m_gestureOpenedHere = false;
 

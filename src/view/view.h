@@ -65,9 +65,11 @@ namespace umbriel {
     // Seat-global activation, tracked independently of the per-workspace focus
     // state the IPC `focused` field reports.
     [[nodiscard]] bool activated() const { return m_activated; }
-    [[nodiscard]] bool sizeAnimActive() const { return sizeAnimating(); }
     [[nodiscard]] int presentedWidth(const wlr_box& target) const;
     [[nodiscard]] int presentedHeight(const wlr_box& target) const;
+    // Canonical box currently presented by this view. The normal scene and overview cards both project this state, so
+    // position and size transitions cannot diverge between the two render paths.
+    [[nodiscard]] const wlr_box& presentedBox() const { return m_presentedBox; }
     [[nodiscard]] wlr_scene_tree* homeTree() const;
     // The toplevel view owning `surface` after walking xdg popup parents, or
     // nullptr when the surface is not under a view (layer surfaces, cursors).
@@ -290,6 +292,7 @@ namespace umbriel {
     wlr_scene* m_captureScene = nullptr;
     ViewDecoration m_decoration;
     ViewPresentation m_presentation;
+    wlr_box m_presentedBox{};
     wlr_foreign_toplevel_handle_v1* m_foreign = nullptr;
     wlr_ext_foreign_toplevel_handle_v1* m_extForeign = nullptr;
     wlr_output* m_foreignOutput = nullptr;

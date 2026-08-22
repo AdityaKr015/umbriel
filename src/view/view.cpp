@@ -526,8 +526,10 @@ namespace umbriel {
   }
 
   void View::beginResizeAnimation(int width, int height, bool allowFullscreen) {
+    const Overview* overview = m_server->overview();
+    const bool presentedInOverview = overview != nullptr && overview->active() && m_workspace != nullptr;
     if (!m_mapped
-        || !m_onActiveWorkspace
+        || (!m_onActiveWorkspace && !presentedInOverview)
         || (m_workspace == nullptr && !allowFullscreen)
         || (!allowFullscreen && (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen))
         || width <= 0
@@ -564,7 +566,9 @@ namespace umbriel {
   void View::animateTo(int x, int y) {
     // First placement snaps: the node starts at the default (0,0) world origin, so animating would fly the window
     // across the layout on open. The fade-in covers the appear instead.
-    if (!m_mapped || !m_onActiveWorkspace || !m_positioned) {
+    const Overview* overview = m_server->overview();
+    const bool presentedInOverview = overview != nullptr && overview->active() && m_workspace != nullptr;
+    if (!m_mapped || (!m_onActiveWorkspace && !presentedInOverview) || !m_positioned) {
       setPosition(x, y);
       return;
     }
@@ -605,6 +609,9 @@ namespace umbriel {
       if (m_workspace != nullptr) {
         m_workspace->syncViewPresentation(this);
       }
+      if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+        overview->onViewPresentationChanged(this);
+      }
       active = m_posX.animating() || m_posY.animating();
     }
 
@@ -622,6 +629,9 @@ namespace umbriel {
 
     if (m_fade.tick(nowMsec)) {
       setFadeAlpha(static_cast<float>(m_fade.current()));
+      if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+        overview->onViewPresentationChanged(this);
+      }
       active = active || m_fade.animating();
     }
     // Unfullscreen grace: the compositor asked the client to leave fullscreen with a size-0x0 configure. A compliant
@@ -1269,6 +1279,7 @@ namespace umbriel {
         .width = presentedWidth(target),
         .height = presentedHeight(target),
     };
+    m_presentedBox = content;
     trackPresentedSize(content.width, content.height);
 
     // The presented box in surface coordinates. The fullscreen offsets center a buffer that does not match the tile.

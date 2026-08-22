@@ -12,6 +12,19 @@ swipes move one workspace at a time instead of sliding the live workspace.
 Transparent windows keep their window-rule blur throughout the zoom
 transition.
 
+## Animation ownership
+
+Cards use separate scene buffers because the overview scales and clips each
+window into a workspace row. They do not own a second window animation state.
+Every `View` remains the authority for its currently presented position, size,
+and opacity, including for a hidden workspace while the overview is open. The
+overview projects that presented box through its row and zoom transform.
+
+Only overview-specific motion lives in `Overview`: opening and closing zoom,
+filmstrip scrolling, card dragging, and drop hints. Layout movement, resize,
+and fade transitions continue to advance in `View`, so the overview and the
+normal workspace cannot settle through different paths.
+
 ## Decoration and clipping
 
 Cards carry the same inner border, outer border, and corner radius as their

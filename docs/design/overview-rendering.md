@@ -19,6 +19,8 @@ window into a workspace row. They do not own a second window animation state.
 Every `View` remains the authority for its currently presented position, size,
 and opacity, including for a hidden workspace while the overview is open. The
 overview projects that presented box through its row and zoom transform.
+Card borders consume the same presented opacity as their window content, so
+map fades and window-rule opacity cannot reveal a ring ahead of its surface.
 
 Only overview-specific motion lives in `Overview`: opening and closing zoom,
 filmstrip scrolling, card dragging, and drop hints. Layout movement, resize,

@@ -54,7 +54,6 @@ namespace umbriel {
             m_outerBorderRect,
             makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth())
         );
-        wlr_scene_rect_set_color(m_outerBorderRect, appearance.outerBorderColor.data());
       }
     }
 

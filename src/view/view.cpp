@@ -866,7 +866,7 @@ namespace umbriel {
   void View::setBorderFocused(bool focused) {
     const bool focusChanged = m_borderFocusedState != focused;
     m_borderFocusedState = focused;
-    m_decoration.setBorderColor(focused, m_scratchpadBorder, m_fadeAlpha * m_dragOpacity);
+    m_decoration.setBorderColor(focused, m_scratchpadBorder, effectiveOpacity());
     if (focusChanged && m_mapped) {
       applyDynamicRules();
     }

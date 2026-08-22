@@ -161,6 +161,7 @@ namespace umbriel {
     }
     wlr_scene_node_set_position(&card.tree->node, card.box.x, card.box.y);
     const float cardOpacity = &card == m_dragCard ? View::kDragOpacity : 1.0F;
+    const float presentedOpacity = view->presentedOpacity() * cardOpacity;
 
     const auto& appearance = config().appearance;
     const int total = appearance.totalBorderWidth();
@@ -178,7 +179,7 @@ namespace umbriel {
       wlr_scene_node_set_enabled(&rect->node, visible);
       if (visible) {
         applyBorderRing(rect, makeBorderRing(contentW, contentH, radius, scaled));
-        const std::array<float, 4> color = tint(base, cardOpacity);
+        const std::array<float, 4> color = tint(base, presentedOpacity);
         wlr_scene_rect_set_color(rect, color.data());
       }
     };

@@ -70,6 +70,7 @@ namespace umbriel {
     // Canonical box currently presented by this view. The normal scene and overview cards both project this state, so
     // position and size transitions cannot diverge between the two render paths.
     [[nodiscard]] const wlr_box& presentedBox() const { return m_presentedBox; }
+    [[nodiscard]] float presentedOpacity() const { return effectiveOpacity(); }
     [[nodiscard]] wlr_scene_tree* homeTree() const;
     // The toplevel view owning `surface` after walking xdg popup parents, or
     // nullptr when the surface is not under a view (layer surfaces, cursors).

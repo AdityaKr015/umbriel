@@ -191,6 +191,19 @@ virtual_keyboard_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+input_method_client_h = custom_target(
+  'input-method-unstable-v2-client-protocol.h',
+  input: 'protocols/input-method-unstable-v2.xml',
+  output: 'input-method-unstable-v2-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+input_method_client_c = custom_target(
+  'input-method-unstable-v2-protocol.c',
+  input: 'protocols/input-method-unstable-v2.xml',
+  output: 'input-method-unstable-v2-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 # Logic with no dependency on the compositor: string parsing and layout geometry. Built once and linked by both the compositor and the tests, so a test never recompiles a translation unit and two tests cannot drift in what they cover. Keep this list free of anything needing SceneFX, pango, or a running server; that is what makes these tests cheap and the coverage honest.
 pure_sources = files(
   'src/config/change.cpp',
@@ -349,6 +362,19 @@ executable(
     virtual_keyboard_client_c,
   ],
   dependencies: [wayland_client_dep, xkbcommon_dep],
+)
+
+# Harness helper that reproduces the keyboard ownership of a real input method.
+executable(
+  'input-method-client',
+  [
+    'tests/harness/input_method_client.cpp',
+    input_method_client_h,
+    input_method_client_c,
+    virtual_keyboard_client_h,
+    virtual_keyboard_client_c,
+  ],
+  dependencies: [wayland_client_dep],
 )
 
 # Harness helper that owns a mapped surface and initiates a data-device drag.

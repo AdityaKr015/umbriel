@@ -4,9 +4,9 @@
 // events. The compositor attaches it to its wlr_cursor like any other pointer, so these events run the same path a real
 // mouse does. Usage: pointer-client <width> <height> <command>... move <x> <y> absolute motion within the given extent
 // click <button> press and release (button is an evdev BTN_* code) press <button> release <button> notch <dir> one
-// vertical wheel notch, -1 up / 1 down mod <name|none> hold one modifier (shift, control, alt, or logo) pause <ms> keep
-// the pointer connection and current button state Commands run in order, each followed by a frame and a roundtrip so
-// the compositor has processed one before the next is sent.
+// vertical wheel notch, -1 up / 1 down mod <name|none> hold one modifier (shift, control, alt, or logo) tap <key> press
+// and release one evdev key pause <ms> keep the pointer connection and current input state. Commands run in order,
+// each followed by a frame and a roundtrip so the compositor has processed one before the next is sent.
 
 #include "virtual-keyboard-unstable-v1-client-protocol.h"
 #include "wlr-virtual-pointer-unstable-v1-client-protocol.h"
@@ -185,7 +185,8 @@ int main(int argc, char** argv) {
   }
 
   const std::vector<std::string> args(argv + 3, argv + argc);
-  const bool needsKeyboard = std::ranges::find(args, "mod") != args.end();
+  const bool needsKeyboard =
+      std::ranges::find(args, "mod") != args.end() || std::ranges::find(args, "tap") != args.end();
   VirtualKeyboard keyboard;
   if (needsKeyboard && !initializeKeyboard(keyboard, state, display)) {
     return EXIT_FAILURE;
@@ -233,6 +234,14 @@ int main(int argc, char** argv) {
       const uint32_t depressed = modifierMask(keyboard, args[i + 1]);
       i += 1;
       zwp_virtual_keyboard_v1_modifiers(keyboard.protocol, depressed, 0, 0, 0);
+    } else if (command == "tap") {
+      needs(1);
+      const auto key = static_cast<uint32_t>(std::atoi(args[i + 1].c_str()));
+      i += 1;
+      zwp_virtual_keyboard_v1_key(keyboard.protocol, nextTime(), key, WL_KEYBOARD_KEY_STATE_PRESSED);
+      zwlr_virtual_pointer_v1_frame(pointer);
+      wl_display_roundtrip(display);
+      zwp_virtual_keyboard_v1_key(keyboard.protocol, nextTime(), key, WL_KEYBOARD_KEY_STATE_RELEASED);
     } else if (command == "pause") {
       needs(1);
       const auto duration = std::chrono::milliseconds(std::atoi(args[i + 1].c_str()));

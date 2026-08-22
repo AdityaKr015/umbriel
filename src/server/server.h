@@ -233,6 +233,7 @@ namespace umbriel {
     // Focus lives in FocusManager; these forward so call sites that already
     // hold a Server do not need a second reference.
     void focusView(View* view, FocusReason reason = FocusReason::Startup) { m_focus.focusView(view, reason); }
+    void restoreActivatedViewKeyboardFocus() { m_focus.restoreActivatedViewKeyboardFocus(); }
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr) {
       return m_focus.viewAt(lx, ly, surface, sx, sy, layer);
     }

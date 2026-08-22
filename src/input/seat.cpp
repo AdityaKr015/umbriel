@@ -42,6 +42,9 @@ namespace umbriel {
     wl_list_remove(&m_requestSetPrimarySelection.link);
     wl_list_remove(&m_requestStartDrag.link);
     wl_list_remove(&m_startDrag.link);
+    if (m_dragDestroy.link.next != nullptr) {
+      wl_list_remove(&m_dragDestroy.link);
+    }
   }
 
   void Seat::applyConfig() {
@@ -100,6 +103,11 @@ namespace umbriel {
   void Seat::onStartDrag(wl_listener* listener, void* data) {
     Seat* self = wl_container_of(listener, self, m_startDrag);
     self->handleStartDrag(data);
+  }
+
+  void Seat::onDragDestroy(wl_listener* listener, void* /*data*/) {
+    Seat* self = wl_container_of(listener, self, m_dragDestroy);
+    self->handleDragDestroy();
   }
 
   void Seat::handleRequestCursor(void* data) {
@@ -171,6 +179,11 @@ namespace umbriel {
 
   void Seat::handleStartDrag(void* data) {
     auto* drag = static_cast<wlr_drag*>(data);
+    if (m_dragDestroy.link.next != nullptr) {
+      wl_list_remove(&m_dragDestroy.link);
+    }
+    m_dragDestroy.notify = onDragDestroy;
+    wl_signal_add(&drag->events.destroy, &m_dragDestroy);
     if (drag->icon == nullptr) {
       return;
     }
@@ -180,6 +193,13 @@ namespace umbriel {
         &m_server->dragIconTree()->node, static_cast<int>(m_server->cursor()->wlr()->x),
         static_cast<int>(m_server->cursor()->wlr()->y)
     );
+  }
+
+  void Seat::handleDragDestroy() {
+    wl_list_remove(&m_dragDestroy.link);
+    m_dragDestroy.link.next = nullptr;
+    m_dragDestroy.link.prev = nullptr;
+    m_server->restoreActivatedViewKeyboardFocus();
   }
 
 } // namespace umbriel

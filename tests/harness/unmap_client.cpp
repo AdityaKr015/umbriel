@@ -32,11 +32,69 @@ namespace {
     wl_surface* surface = nullptr;
     xdg_surface* xdgSurface = nullptr;
     xdg_toplevel* toplevel = nullptr;
+    wl_seat* seat = nullptr;
+    wl_keyboard* keyboard = nullptr;
     Buffer buffer;
     int width = 64;
     int height = 64;
     bool mapped = false;
     bool closed = false;
+    bool keyboardFocused = false;
+  };
+
+  void keyboardKeymap(void*, wl_keyboard*, uint32_t, int32_t fd, uint32_t) { close(fd); }
+
+  void keyboardEnter(void* data, wl_keyboard*, uint32_t, wl_surface* surface, wl_array*) {
+    auto& state = *static_cast<State*>(data);
+    state.keyboardFocused = surface == state.surface;
+    if (state.keyboardFocused) {
+      std::println("keyboard-enter");
+      std::fflush(stdout);
+    }
+  }
+
+  void keyboardLeave(void* data, wl_keyboard*, uint32_t, wl_surface* surface) {
+    auto& state = *static_cast<State*>(data);
+    if (surface == state.surface) {
+      state.keyboardFocused = false;
+      std::println("keyboard-leave");
+      std::fflush(stdout);
+    }
+  }
+
+  void keyboardKey(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t keyState) {
+    auto& state = *static_cast<State*>(data);
+    if (state.keyboardFocused) {
+      std::println("key {} {}", key, keyState);
+      std::fflush(stdout);
+    }
+  }
+
+  void keyboardModifiers(void*, wl_keyboard*, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) {}
+  void keyboardRepeatInfo(void*, wl_keyboard*, int32_t, int32_t) {}
+
+  constexpr wl_keyboard_listener kKeyboardListener = {
+      .keymap = keyboardKeymap,
+      .enter = keyboardEnter,
+      .leave = keyboardLeave,
+      .key = keyboardKey,
+      .modifiers = keyboardModifiers,
+      .repeat_info = keyboardRepeatInfo,
+  };
+
+  void seatCapabilities(void* data, wl_seat* seat, uint32_t capabilities) {
+    auto& state = *static_cast<State*>(data);
+    if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) != 0 && state.keyboard == nullptr) {
+      state.keyboard = wl_seat_get_keyboard(seat);
+      wl_keyboard_add_listener(state.keyboard, &kKeyboardListener, &state);
+    }
+  }
+
+  void seatName(void*, wl_seat*, const char*) {}
+
+  constexpr wl_seat_listener kSeatListener = {
+      .capabilities = seatCapabilities,
+      .name = seatName,
   };
 
   Buffer createBuffer(State& state) {
@@ -122,6 +180,9 @@ namespace {
       state.wmBase =
           static_cast<xdg_wm_base*>(wl_registry_bind(registry, name, &xdg_wm_base_interface, std::min(version, 1U)));
       xdg_wm_base_add_listener(state.wmBase, &kWmBaseListener, &state);
+    } else if (std::strcmp(interface, wl_seat_interface.name) == 0) {
+      state.seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, std::min(version, 2U)));
+      wl_seat_add_listener(state.seat, &kSeatListener, &state);
     }
   }
 
@@ -192,6 +253,12 @@ int main(int argc, char** argv) {
   }
   if (state.surface != nullptr) {
     wl_surface_destroy(state.surface);
+  }
+  if (state.keyboard != nullptr) {
+    wl_keyboard_destroy(state.keyboard);
+  }
+  if (state.seat != nullptr) {
+    wl_seat_destroy(state.seat);
   }
   destroyBuffer(state.buffer);
   wl_display_disconnect(state.display);

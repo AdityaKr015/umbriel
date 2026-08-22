@@ -38,6 +38,11 @@ namespace umbriel {
 
     void focusView(View* view, FocusReason reason = FocusReason::Startup);
 
+    // A data-device drag suppresses seat keyboard enters while its grab is
+    // active. Replay the view whose activation chrome already won once that
+    // grab ends, without choosing a new focus target.
+    void restoreActivatedViewKeyboardFocus();
+
     // Pick something to focus after the current window went away. Prefers a view on `preferred` when set, so a
     // workspace switch on one output does not pull focus onto another display.
     void refocus(Output* preferred = nullptr);

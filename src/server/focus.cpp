@@ -123,6 +123,22 @@ namespace umbriel {
     }
   }
 
+  void FocusManager::restoreActivatedViewKeyboardFocus() {
+    if (m_server.sessionLocked() || exclusiveKeyboardLayer() != nullptr) {
+      return;
+    }
+    View* seatFocused = View::fromSurface(m_server.seat()->wlr()->keyboard_state.focused_surface);
+    for (const auto& entry : m_server.registry().all()) {
+      if (entry->mapped() && entry->activated() && (entry->onActiveWorkspace() || entry->pinned())) {
+        if (entry.get() == seatFocused) {
+          return;
+        }
+        focusView(entry.get(), FocusReason::DragDrop);
+        return;
+      }
+    }
+  }
+
   LayerSurface* FocusManager::exclusiveKeyboardLayer() const {
     for (const auto& entry : m_server.layerSurfaces()) {
       if (entry->exclusiveKeyboard()) {

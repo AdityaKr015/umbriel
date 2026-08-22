@@ -31,6 +31,15 @@ The incoming active workspace remains interactive throughout the transition.
 Pinned windows and scratchpad windows do not inherit this inactive-workspace
 restriction.
 
+## Data-device drag focus
+
+Wayland data-device drags install a keyboard grab that deliberately suppresses
+keyboard enters until the drag finishes. Logical focus can still move during
+the grab, for example when focus-follows-mouse crosses onto another output.
+Umbriel updates activation and border state immediately, then replays that
+already selected view into the default seat keyboard grab when the drag is
+destroyed. It does not select the drop target merely because a drag ended.
+
 ## Static inventory
 
 A number or ordered name list defines an exact static inventory. During a
@@ -75,3 +84,8 @@ selection is exercised by
 [`tests/harness/checks/050_workspace.sh`](../../tests/harness/checks/050_workspace.sh).
 Pointer isolation during a wheel-triggered workspace transition is covered by
 [`tests/harness/checks/113_workspace_transition_focus.sh`](../../tests/harness/checks/113_workspace_transition_focus.sh).
+Modifier-wheel switching and the resulting keyboard-focus handoff through an
+input-method keyboard grab are covered by
+[`tests/harness/checks/118_input_method_wheel.sh`](../../tests/harness/checks/118_input_method_wheel.sh).
+Keyboard-focus restoration after a data-device drag is covered by
+[`tests/harness/checks/119_data_drag_focus.sh`](../../tests/harness/checks/119_data_drag_focus.sh).

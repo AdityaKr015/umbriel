@@ -680,8 +680,7 @@ namespace umbriel {
     // Config mouse binds win over the overview and the built-in Mod+drag / Mod+resize grabs. Presses consumed here
     // swallow their paired release so clients never see an unmatched release.
     if (state == WL_POINTER_BUTTON_STATE_PRESSED && !m_server->sessionLocked() && isPassthrough()) {
-      wlr_keyboard* kb = wlr_seat_get_keyboard(m_server->seat()->wlr());
-      const uint32_t modifiers = kb != nullptr ? wlr_keyboard_get_modifiers(kb) : 0;
+      const uint32_t modifiers = m_server->keyboardModifiers();
       const Keybind* bound = m_server->handleMouseBind(button, modifiers);
       // Any press dismisses the cheatsheet, as any key press does, except one that just ran a cheatsheet action. Unlike
       // a key press, an unbound press is consumed: the overlay hides whatever sits under the cursor, so the click that
@@ -813,8 +812,7 @@ namespace umbriel {
       return;
     }
 
-    wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
-    const bool modHeld = keyboard != nullptr && (wlr_keyboard_get_modifiers(keyboard) & m_server->modKey()) != 0;
+    const bool modHeld = (m_server->keyboardModifiers() & m_server->modKey()) != 0;
     if (button == BTN_LEFT && modHeld && view != nullptr) {
       m_server->focusView(view, FocusReason::Grab);
       beginMove(view);
@@ -857,8 +855,7 @@ namespace umbriel {
     m_server->cancelModifierTap();
     cancelHotCorner();
 
-    wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
-    const uint32_t modifiers = keyboard != nullptr ? wlr_keyboard_get_modifiers(keyboard) : 0;
+    const uint32_t modifiers = m_server->keyboardModifiers();
     const uint32_t effective = modifiers & ~(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2);
 
     // Determine this event's signed wheel direction from delta and orientation.
@@ -1831,8 +1828,7 @@ namespace umbriel {
       return;
     }
 
-    wlr_keyboard* keyboard = wlr_seat_get_keyboard(m_server->seat()->wlr());
-    const bool modHeld = keyboard != nullptr && (wlr_keyboard_get_modifiers(keyboard) & m_server->modKey()) != 0;
+    const bool modHeld = (m_server->keyboardModifiers() & m_server->modKey()) != 0;
     if (modHeld && under != nullptr && under->mapped()) {
       const uint32_t edges = hoverResizeEdges(under);
       if (edges != 0) {

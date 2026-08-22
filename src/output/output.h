@@ -46,6 +46,10 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* pinnedShadowRoot() const { return m_pinnedShadowRoot; }
     [[nodiscard]] wlr_box usableArea() const { return m_usableArea; }
     [[nodiscard]] WorkspaceGroup* workspaceGroup() const { return m_workspaceGroup.get(); }
+    // True from the moment a view starts entering fullscreen until its client
+    // has committed the exit. Consumers such as hot corners must not act over
+    // fullscreen content during either transition.
+    [[nodiscard]] bool hasFullscreenView() const;
 
     void arrangeLayers();
     // Record that something on this output became stale; flushed at the top of the next frame. Schedules that frame, so

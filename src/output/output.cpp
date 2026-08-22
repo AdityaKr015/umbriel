@@ -151,11 +151,7 @@ namespace umbriel {
   bool Output::configuredVrrEnabled() const {
     const OutputRule* rule = findRule(m_output->name);
     const VrrMode outputMode = rule != nullptr ? rule->vrr : VrrMode::Disabled;
-    const Workspace* workspace = m_workspaceGroup != nullptr ? m_workspaceGroup->active() : nullptr;
-    const bool fullscreen =
-        workspace != nullptr && std::ranges::any_of(workspace->allViews(), [](const View* view) {
-          return view->mapped() && (view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen);
-        });
+    const bool fullscreen = hasFullscreenView();
 
     std::optional<VrrMode> focusedMode;
     bool focusedFullscreen = false;
@@ -166,6 +162,13 @@ namespace umbriel {
       }
     }
     return effectiveVrrEnabled(outputMode, fullscreen, focusedMode, focusedFullscreen);
+  }
+
+  bool Output::hasFullscreenView() const {
+    const Workspace* workspace = m_workspaceGroup != nullptr ? m_workspaceGroup->active() : nullptr;
+    return workspace != nullptr && std::ranges::any_of(workspace->allViews(), [](const View* view) {
+             return view->mapped() && (view->layoutFullscreen() || view->toplevel()->current.fullscreen);
+           });
   }
 
   void Output::updateVrr() {

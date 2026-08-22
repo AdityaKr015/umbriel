@@ -258,6 +258,10 @@ namespace umbriel {
     if (output == nullptr) {
       return nullptr;
     }
+    if (Output* umbrielOutput = m_server->outputFromWlr(output);
+        umbrielOutput != nullptr && umbrielOutput->hasFullscreenView()) {
+      return nullptr;
+    }
     wlr_output_layout_get_box(m_server->outputLayout(), output, &box);
 
     // A small logical area lets delayed corners remain reachable beside another output.

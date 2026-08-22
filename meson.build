@@ -204,6 +204,19 @@ input_method_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+ext_workspace_client_h = custom_target(
+  'ext-workspace-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-workspace/ext-workspace-v1.xml',
+  output: 'ext-workspace-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+ext_workspace_client_c = custom_target(
+  'ext-workspace-v1-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-workspace/ext-workspace-v1.xml',
+  output: 'ext-workspace-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 # Logic with no dependency on the compositor: string parsing and layout geometry. Built once and linked by both the compositor and the tests, so a test never recompiles a translation unit and two tests cannot drift in what they cover. Keep this list free of anything needing SceneFX, pango, or a running server; that is what makes these tests cheap and the coverage honest.
 pure_sources = files(
   'src/config/change.cpp',
@@ -389,6 +402,13 @@ executable(
 executable(
   'global-client',
   'tests/harness/global_client.cpp',
+  dependencies: [wayland_client_dep],
+)
+
+# Harness helper that reports the active workspace through ext-workspace-v1.
+executable(
+  'workspace-client',
+  ['tests/harness/workspace_client.cpp', ext_workspace_client_h, ext_workspace_client_c],
   dependencies: [wayland_client_dep],
 )
 

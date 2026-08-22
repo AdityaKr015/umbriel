@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
-# The overview steps workspaces from a wheel notch, and stops at the ends. While the overview is up the real window trees are hidden, so switching is a discrete step down the filmstrip rather than the animated slide it is outside. The wheel, the arrow keys and the three-finger swipe all reach that step through Overview::selectRelativeWorkspace. Only the wheel is drivable here: the headless backend has no touchpad, and zwlr_virtual_pointer_v1 carries motion, buttons and axes but no gesture events. So this covers the shared selection path; the gesture state machine on top of it is not reachable without a real device. Asserted through the log rather than through focus: with one window in the session, focus falls back to it whichever workspace is active, so focus does not distinguish a step that happened from one that did not.
+# The overview steps workspaces from a wheel notch, and stops at the ends. While the overview is up the real window trees are hidden, so switching is a discrete step down the filmstrip rather than the animated slide it is outside. The wheel, the arrow keys and the three-finger swipe all reach that step through Overview::selectRelativeWorkspace. Only the wheel is drivable here: the headless backend has no touchpad, and zwlr_virtual_pointer_v1 carries motion, buttons and axes but no gesture events. So this covers the shared selection path; the gesture state machine on top of it is not reachable without a real device. The active workspace is observed through ext-workspace-v1.
 set -euo pipefail
 
 readonly OUTPUT_W=1280
 readonly OUTPUT_H=720
 readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/pointer-client}"
+readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/workspace-client}"
 
 if [[ ! -x $POINTER ]]; then
   echo "pointer client not built at $POINTER"
+  exit 1
+fi
+if [[ ! -x $WORKSPACE ]]; then
+  echo "workspace client not built at $WORKSPACE"
   exit 1
 fi
 
@@ -31,19 +36,20 @@ pointer() {
     "$POINTER" "$OUTPUT_W" "$OUTPUT_H" "$@"
 }
 
-# Lines appended to the log since $1, so each notch is judged on its own.
-log_since() { tail -n +"$1" "$UMBRIEL_LOG"; }
-log_mark() { wc -l < "$UMBRIEL_LOG"; }
+active_workspace() {
+  env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+    XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
+    "$WORKSPACE"
+}
 
 # Send one notch and report which workspace it activated, or "none".
 notch_activates() {
-  local mark
-  mark=$(($(log_mark) + 1))
+  local before after
+  before=$(active_workspace)
   pointer notch "$1"
   for _ in $(seq 20); do
-    local seen
-    seen=$(log_since "$mark" | sed -n 's/.*activate workspace \([0-9]*\) on .*/\1/p' | tail -n 1)
-    [[ -n $seen ]] && { echo "$seen"; return 0; }
+    after=$(active_workspace)
+    [[ $after != "$before" ]] && { echo "$after"; return 0; }
     sleep 0.1
   done
   echo none

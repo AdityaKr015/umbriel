@@ -16,12 +16,25 @@ readonly SECOND_LOG="$UMBRIEL_RUNTIME_DIR/input-second.log"
 CLIENT_PIDS=()
 
 cleanup() {
+  for window_id in $(
+    "$UMBRIEL" windows --json 2>/dev/null \
+      | jq -r '.[] | select(.title == "input-first" or .title == "input-second") | .id' 2>/dev/null
+  ); do
+    "$UMBRIEL" msg "window-close:$window_id" > /dev/null 2>&1 || true
+  done
+  for _ in $(seq 40); do
+    [[ $("$UMBRIEL" windows --json 2>/dev/null | jq 'length' 2>/dev/null) -eq 0 ]] && break
+    sleep 0.05
+  done
   if [[ -f $CONFIG_BACKUP ]]; then
     cp "$CONFIG_BACKUP" "$UMBRIEL_CONFIG"
     "$UMBRIEL" msg config-reload > /dev/null 2>&1 || true
   fi
   for pid in "${CLIENT_PIDS[@]:-}"; do
     kill -KILL "$pid" 2>/dev/null || true
+  done
+  for pid in "${CLIENT_PIDS[@]:-}"; do
+    wait "$pid" 2>/dev/null || true
   done
 }
 trap cleanup EXIT

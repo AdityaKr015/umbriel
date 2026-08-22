@@ -22,6 +22,8 @@ pkgs.mkShell {
     jq
     foot
     python3
+    imagemagick
+    procps
     xwayland-satellite
   ];
 

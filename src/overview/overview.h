@@ -72,6 +72,10 @@ namespace umbriel {
     void onWorkspaceArranged(Workspace* workspace);
     void onWorkspaceInventoryChanged(WorkspaceGroup* group);
     void onFocusChanged();
+    // Coalesce card geometry refreshes from view resize animation ticks. Views
+    // advance before overlays, so the overview consumes the latest presented
+    // size once per frame regardless of how many views resized together.
+    void onViewPresentationChanged(View* view);
     void onOutputRemoved(Output* output);
 
     // Input entry points; called from Cursor/Keyboard while active.
@@ -208,6 +212,7 @@ namespace umbriel {
     AnimatedValue m_anim;
     View* m_pendingFocus = nullptr;
     Workspace* m_horizontalWorkspace = nullptr;
+    bool m_cardPresentationDirty = false;
     bool m_gestureOpenedHere = false;
 
     Card* m_pressCard = nullptr;

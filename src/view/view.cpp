@@ -610,6 +610,9 @@ namespace umbriel {
 
     if (m_presentation.tick(nowMsec)) {
       applyPresentedSize();
+      if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+        overview->onViewPresentationChanged(this);
+      }
       if (sizeAnimating()) {
         active = true;
       } else {

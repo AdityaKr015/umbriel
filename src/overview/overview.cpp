@@ -180,14 +180,16 @@ namespace umbriel {
     wlr_scene_node_set_enabled(&card.tree->node, true);
 
     const double z = metrics.zoom;
-    const int contentW = std::max(1, static_cast<int>(std::lround(geometry.width * z)));
-    const int contentH = std::max(1, static_cast<int>(std::lround(geometry.height * z)));
+    const wlr_box world = worldBoxOf(view, metrics.outputBox);
+    const int presentedW = view->presentedWidth(world);
+    const int presentedH = view->presentedHeight(world);
+    const int contentW = std::max(1, static_cast<int>(std::lround(presentedW * z)));
+    const int contentH = std::max(1, static_cast<int>(std::lround(presentedH * z)));
     if (&card == m_dragCard) {
       // The drag owns the card origin; only the scale still tracks progress.
       card.box.width = contentW;
       card.box.height = contentH;
     } else {
-      const wlr_box world = worldBoxOf(view, metrics.outputBox);
       if (!card.worldXInitialized) {
         card.worldX.snap(world.x);
         card.worldXInitialized = true;
@@ -810,9 +812,10 @@ namespace umbriel {
         finishAnimation();
       }
       active = m_anim.animating() || active;
-    } else if (cardsChanged) {
+    } else if (cardsChanged || m_cardPresentationDirty) {
       applyProgress();
     }
+    m_cardPresentationDirty = false;
     return active;
   }
 
@@ -892,6 +895,7 @@ namespace umbriel {
     m_drop = {};
     m_dropWorkspaceGroup = nullptr;
     m_horizontalWorkspace = nullptr;
+    m_cardPresentationDirty = false;
     m_gestureOpenedHere = false;
     m_server->reconcileDynamicWorkspaces();
   }
@@ -1025,7 +1029,10 @@ namespace umbriel {
       return;
     }
     if (OutputState* state = stateForWorkspace(workspace)) {
-      if (m_horizontalWorkspace == workspace) {
+      const bool resizeAnimating = std::ranges::any_of(state->cards, [workspace](const auto& card) {
+        return card->view->workspace() == workspace && card->view->sizeAnimActive();
+      });
+      if (m_horizontalWorkspace == workspace || resizeAnimating) {
         const int duration = std::max(1, config().appearance.animationMs);
         RowMetrics metrics{};
         if (rowMetrics(*state, *m_server, zoom(), metrics)) {
@@ -1070,6 +1077,12 @@ namespace umbriel {
   void Overview::onFocusChanged() {
     if (m_active) {
       applyProgress();
+    }
+  }
+
+  void Overview::onViewPresentationChanged(View* view) {
+    if (m_active && view != nullptr && stateForWorkspace(view->workspace()) != nullptr) {
+      m_cardPresentationDirty = true;
     }
   }
 

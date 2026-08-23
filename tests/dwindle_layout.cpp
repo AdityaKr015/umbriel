@@ -34,6 +34,7 @@ namespace {
   }
 
   constexpr wlr_box kUsable{0, 0, 1280, 720};
+  constexpr wlr_box kPortraitUsable{0, 0, 1080, 1920};
 
   struct Fixture {
     ResolvedLayoutConfig config = dwindleConfig();
@@ -209,7 +210,7 @@ UMBRIEL_TEST(leavesNeverOverlapOrLeaveTheUsableArea) {
   }
 }
 
-UMBRIEL_TEST(splitsAlternateOrientation) {
+UMBRIEL_TEST(splitsFollowTheLongerEdgeOnALandscapeArea) {
   Fixture fixture;
   fixture.addLeaves(3);
   fixture.layout.arrange(kUsable);
@@ -218,11 +219,49 @@ UMBRIEL_TEST(splitsAlternateOrientation) {
   const wlr_box second = fixture.layout.targetBox(stub(1));
   const wlr_box third = fixture.layout.targetBox(stub(2));
 
-  // First split is horizontal (side by side), the second splits that half
-  // vertically (stacked), so leaves 1 and 2 share a column.
-  CHECK(second.x == third.x);
-  CHECK(second.y != third.y);
+  // 1260x700 is wider than tall, so the first split is horizontal (side by
+  // side). Each 624x700 half is taller than wide, so the second stacks.
   CHECK(first.x != second.x);
+  CHECK_EQ(second.x, third.x);
+  CHECK(second.y != third.y);
+}
+
+UMBRIEL_TEST(splitsFollowTheLongerEdgeOnAPortraitArea) {
+  Fixture fixture;
+  fixture.addLeaves(3);
+  fixture.layout.arrange(kPortraitUsable);
+
+  const wlr_box first = fixture.layout.targetBox(stub(0));
+  const wlr_box second = fixture.layout.targetBox(stub(1));
+  const wlr_box third = fixture.layout.targetBox(stub(2));
+
+  // 1060x1900 is taller than wide, so the first split stacks. Each 1060x944
+  // half is wider than tall, so the second goes side by side.
+  CHECK_EQ(first.x, second.x);
+  CHECK(first.y != second.y);
+  CHECK(second.x != third.x);
+  CHECK_EQ(second.y, third.y);
+}
+
+UMBRIEL_TEST(aResolvedSplitKeepsItsAxisWhenTheAreaChangesShape) {
+  // The axis is chosen once, on the first arrange after the split. Re-deriving
+  // it on every arrange would let a resize rotate a subtree the user never
+  // touched.
+  Fixture fixture;
+  fixture.addLeaves(3);
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.targetBox(stub(1)).x, fixture.layout.targetBox(stub(2)).x);
+
+  // Squeeze leaf 0 so the subtree holding leaves 1 and 2 becomes wider than
+  // tall: 1128x700 instead of 624x700.
+  CHECK(fixture.layout.setResizeBoundary(stub(0), WLR_EDGE_RIGHT, 0.1));
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box second = fixture.layout.targetBox(stub(1));
+  const wlr_box third = fixture.layout.targetBox(stub(2));
+  CHECK(second.width > second.height);
+  CHECK_EQ(second.x, third.x);
+  CHECK(second.y != third.y);
 }
 
 UMBRIEL_TEST(gapsSeparateSiblings) {
@@ -271,6 +310,38 @@ UMBRIEL_TEST(initialSizeShrinksOnceTheTreeIsPopulated) {
   fixture.addLeaves(1);
   const Layout::InitialSize populated = fixture.layout.initialSize(kUsable, std::nullopt);
   CHECK(populated.width < empty.width);
+}
+
+UMBRIEL_TEST(initialSizeMatchesTheSplitArrangeWillMake) {
+  // The size a view is configured with before it joins the layout must equal
+  // the size the layout gives it once it has, or the client's first buffer is
+  // wrong and the window resizes on first paint.
+  Fixture fixture;
+  fixture.addLeaves(1);
+  fixture.layout.arrange(kUsable);
+  const Layout::InitialSize initial = fixture.layout.initialSize(kUsable, std::nullopt);
+
+  fixture.layout.insertView(stub(1), 1);
+  fixture.layout.arrange(kUsable);
+  const wlr_box arranged = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(initial.width, arranged.width);
+  CHECK_EQ(initial.height, arranged.height);
+}
+
+UMBRIEL_TEST(initialSizeSplitsTheHeightOnAPortraitArea) {
+  // Predicting a half-width column on a portrait output configures every new
+  // window against the wrong axis.
+  Fixture fixture;
+  fixture.addLeaves(1);
+  fixture.layout.arrange(kPortraitUsable);
+  const Layout::InitialSize initial = fixture.layout.initialSize(kPortraitUsable, std::nullopt);
+
+  fixture.layout.insertView(stub(1), 1);
+  fixture.layout.arrange(kPortraitUsable);
+  const wlr_box arranged = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(initial.width, arranged.width);
+  CHECK_EQ(initial.height, arranged.height);
+  CHECK(initial.height < initial.width);
 }
 
 UMBRIEL_TEST(initialSizeIgnoresARuleWidthFraction) {

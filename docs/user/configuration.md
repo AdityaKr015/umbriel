@@ -353,6 +353,12 @@ Dropping a window into empty space above or below a vertically resized stack
 consumes that space. Existing windows retain their pixel heights, and the
 dropped window fills the remainder apart from the configured inter-window gap.
 
+In the dwindle layout, a new window splits an existing one along that window's
+longer edge, so a landscape monitor starts side by side and a portrait monitor
+starts stacked. The direction is fixed when the split is created: resizing one
+boundary never reorients another split. Dropping a window on a specific edge
+picks that direction explicitly instead.
+
 Layout fields can be overridden per-workspace; see
 [Workspace Rules](outputs.md#workspace-rules).
 

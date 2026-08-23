@@ -15,7 +15,11 @@ namespace umbriel {
   class DwindleLayout : public Layout {
   public:
     struct Node {
-      enum Type : uint8_t { Leaf, HSplit, VSplit };
+      // AutoSplit is a split whose axis has not been chosen yet: arrange() resolves it to HSplit or VSplit from the
+      // node's real area, then leaves it alone. The tree is built before any arrange (Workspace::applyConfig
+      // batch-inserts on a fresh layout), so the axis cannot be decided at insertion time without guessing the
+      // output's orientation.
+      enum Type : uint8_t { Leaf, AutoSplit, HSplit, VSplit };
       Type type = Leaf;
       std::unique_ptr<Node> left;
       std::unique_ptr<Node> right;
@@ -94,9 +98,7 @@ namespace umbriel {
     [[nodiscard]] static double widthShare(const WidthSplit& split);
     static void setWidthShare(const WidthSplit& split, double share);
     bool applyWidthFraction(const std::vector<WidthSplit>& splits, double fraction);
-    void splitNode(Node* node, View* newView);
-    void splitNodeDirected(Node* node, View* newView, bool horizontal, bool newFirst);
-    [[nodiscard]] bool isHorizontal(const Node* node) const;
+    void splitLeaf(Node* node, View* newView, Node::Type split, bool newFirst);
     [[nodiscard]] Node* boundaryNode(const View* view, uint32_t edge) const;
     void arrangeNode(Node* node, const wlr_box& area);
     void collectColumns(const Node* node);
@@ -109,7 +111,6 @@ namespace umbriel {
     std::unique_ptr<Node> m_root;
     mutable std::vector<Column> m_flatColumns;
     mutable std::vector<Target> m_targets;
-    int m_splitCounter = 0;
   };
 
 } // namespace umbriel

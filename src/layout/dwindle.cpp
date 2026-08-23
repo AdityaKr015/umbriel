@@ -115,26 +115,13 @@ namespace umbriel {
     return true;
   }
 
-  bool DwindleLayout::isHorizontal(const Node* node) const {
-    if (node == nullptr) {
-      return false;
-    }
-    int depth = 0;
-    Node* current = node->parent;
-    while (current != nullptr) {
-      ++depth;
-      current = current->parent;
-    }
-    return (depth % 2) == 0;
-  }
-
-  void DwindleLayout::splitNodeDirected(Node* node, View* newView, bool horizontal, bool newFirst) {
+  void DwindleLayout::splitLeaf(Node* node, View* newView, Node::Type split, bool newFirst) {
     if (node == nullptr) {
       return;
     }
     View* oldView = node->view;
     node->view = nullptr;
-    node->type = horizontal ? Node::HSplit : Node::VSplit;
+    node->type = split;
     node->ratio = 0.5;
 
     auto first = std::make_unique<Node>();
@@ -150,11 +137,6 @@ namespace umbriel {
 
     node->left = std::move(first);
     node->right = std::move(second);
-    ++m_splitCounter;
-  }
-
-  void DwindleLayout::splitNode(Node* node, View* newView) {
-    splitNodeDirected(node, newView, isHorizontal(node), /*newFirst=*/false);
   }
 
   void DwindleLayout::detachNode(Node* node) {
@@ -220,6 +202,13 @@ namespace umbriel {
         });
       }
       return;
+    }
+
+    if (node->type == Node::AutoSplit) {
+      // Split the longer edge, so a portrait output stacks first instead of tiling side by side. Resolved on the first
+      // arrange after the split and then frozen: an interactive resize elsewhere in the tree must never rotate a split
+      // the user is not touching.
+      node->type = area.width >= area.height ? Node::HSplit : Node::VSplit;
     }
 
     const int gap = m_config->totalGap;
@@ -322,11 +311,11 @@ namespace umbriel {
       target = nodeAtFlatIndex(targetIndex);
     }
     if (target != nullptr && target->type == Node::Leaf) {
-      splitNode(target, view);
+      splitLeaf(target, view, Node::AutoSplit, /*newFirst=*/false);
     } else if (targetIndex < count) {
       target = nodeAtFlatIndex(targetIndex);
       if (target != nullptr && target->type == Node::Leaf) {
-        splitNode(target, view);
+        splitLeaf(target, view, Node::AutoSplit, /*newFirst=*/false);
       }
     }
     rebuildFlatColumns();
@@ -434,14 +423,24 @@ namespace umbriel {
   DwindleLayout::initialSize(const wlr_box& usable, std::optional<double> /*ruleWidthFraction*/) const {
     const wlr_box content = contentArea(usable);
     // A window rule's default_width is a viewport fraction, which a splitting layout has no use for. The first leaf
-    // owns the whole area; any later one lands in a split of the target leaf, and half is the closest guess before the
-    // target is known.
+    // owns the whole area.
     if (m_flatColumns.empty()) {
       return {.width = content.width, .height = content.height};
     }
-    return {
-        .width = fractionalWidth(content.width, m_config->scrolling.defaultWidthFraction), .height = content.height
+    // Any later view splits an existing leaf along that leaf's longer edge, so the answer has to follow the same rule
+    // arrange() will apply, or a portrait output configures every new window at half width and full height and the
+    // client visibly resizes on its first paint. The append target is the best available guess: which leaf an insert
+    // lands on depends on the caller's focused column, which the layout cannot see.
+    const Node* target = nodeAtFlatIndex(static_cast<int>(m_flatColumns.size()) - 1);
+    const int width = target != nullptr && target->areaW > 0 ? target->areaW : content.width;
+    const int height = target != nullptr && target->areaH > 0 ? target->areaH : content.height;
+    const auto half = [gap = m_config->totalGap](int span) {
+      return std::max(1, static_cast<int>(std::lround(0.5 * span)) - gap / 2);
     };
+    if (width >= height) {
+      return {.width = half(width), .height = height};
+    }
+    return {.width = width, .height = half(height)};
   }
 
   wlr_box DwindleLayout::targetBox(const View* view) const {
@@ -572,13 +571,13 @@ namespace umbriel {
       return;
     }
     if (edge == 0) {
-      splitNode(target, newView);
+      splitLeaf(target, newView, Node::AutoSplit, /*newFirst=*/false);
       rebuildFlatColumns();
       return;
     }
     const bool horizontal = (edge & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) != 0;
     const bool newFirst = (edge & (WLR_EDGE_LEFT | WLR_EDGE_TOP)) != 0;
-    splitNodeDirected(target, newView, horizontal, newFirst);
+    splitLeaf(target, newView, horizontal ? Node::HSplit : Node::VSplit, newFirst);
     rebuildFlatColumns();
   }
 

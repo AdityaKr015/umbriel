@@ -195,12 +195,16 @@ See [`examples/config.toml`](examples/config.toml) for the packaged starting con
 Declarative configuration uses Nix attrsets serialized to TOML with `pkgs.formats.toml`.
 
 ```nix
-# flake input
+# flake inputs
 umbriel.url = "git+https://github.com/noctalia-dev/umbriel";
+xdg-desktop-portal-umbriel.url = "github:noctalia-dev/xdg-desktop-portal-umbriel";
 
 # NixOS
 imports = [ inputs.umbriel.nixosModules.default ];
-programs.umbriel.enable = true;
+programs.umbriel = {
+  enable = true;
+  portalPackage = inputs.xdg-desktop-portal-umbriel.packages.${pkgs.stdenv.hostPlatform.system}.default;
+};
 
 # home-manager
 imports = [ inputs.umbriel.homeModules.default ];
@@ -218,6 +222,10 @@ programs.umbriel = {
   };
 };
 ```
+
+The portal lives in [a separate repository](https://github.com/noctalia-dev/xdg-desktop-portal-umbriel) and can
+be used via a separate flake input. Setting `portalPackage` will configure the `xdg.portal` backend and install
+the portal configuration, which is required for screencasting.
 
 When `settings` is omitted, the Home Manager and hjem modules leave the user path untouched so Umbriel loads its
 packaged configuration. Home Manager also accepts a raw TOML string or a path. The hjem module is exported as

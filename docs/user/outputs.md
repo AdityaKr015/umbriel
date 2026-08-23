@@ -29,6 +29,8 @@ workspaces = 5
 | `position` | `[x, y]` | (auto) | Layout coordinates. |
 | `scale` | float | (auto) | Output scale (0.25-4.0). |
 | `vrr` | string | `"disabled"` | Variable refresh rate policy: `"disabled"`, `"always"`, or `"fullscreen"`. |
+| `hdr` | string | `"off"` | HDR policy: `"off"`, `"on"`, or `"auto"`. |
+| `sdr_white` | float | `203` | SDR reference white in cd/m2 while the output is in HDR mode (80-1000). |
 | `workspaces` | int, string array, or `"dynamic"` | `"dynamic"` | Dynamic numbered workspaces, a static count from 1 to 64, or a static ordered list of 1 to 64 names. |
 | `transform` | string | `"normal"` | Output rotation/flip. |
 
@@ -62,6 +64,32 @@ vrr = "fullscreen"
 Umbriel logs a warning and keeps VRR disabled if the output does not support
 adaptive sync or rejects the request. Nested Wayland outputs normally depend on
 the parent compositor and may not expose adaptive sync support.
+
+### HDR
+
+HDR accepts these policies:
+
+| Value | Behavior |
+|-------|----------|
+| `"off"` | Keep the output in its normal SDR mode. This is the default. |
+| `"on"` | Keep the output in PQ and BT.2020 continuously. SDR surfaces are mapped to `sdr_white`. |
+| `"auto"` | Enable PQ and BT.2020 while a fullscreen surface already declaring PQ and BT.2020 is visible on the active workspace. |
+
+Automatic HDR tracks the fullscreen surface that triggered the transition.
+Other applications that adopt the HDR output color space after activation do
+not keep HDR enabled. Leaving fullscreen, changing workspace, moving the
+surface to another output, unmapping it, or closing it returns the output to
+SDR.
+
+```toml
+[output.DP-1]
+hdr = "auto"
+sdr_white = 203
+```
+
+Switching between SDR and HDR changes the output format, color space, and HDR
+metadata. Many monitors briefly go black while their display link resynchronizes.
+This is expected for each automatic transition.
 
 ## Disabling an output
 

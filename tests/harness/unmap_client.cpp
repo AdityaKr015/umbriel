@@ -47,6 +47,7 @@ namespace {
     bool requestMaximized = false;
     bool maximizeRequested = false;
     bool requestFullscreen = false;
+    bool fullscreenRequested = false;
     bool requestHdr = false;
     bool imageDescriptionReady = false;
     bool imageDescriptionFailed = false;
@@ -167,6 +168,11 @@ namespace {
       xdg_toplevel_set_maximized(state.toplevel);
       wl_surface_commit(state.surface);
       state.maximizeRequested = true;
+    }
+    if (state.requestFullscreen && !state.fullscreenRequested) {
+      xdg_toplevel_set_fullscreen(state.toplevel, nullptr);
+      wl_surface_commit(state.surface);
+      state.fullscreenRequested = true;
     }
     std::println("mapped");
     std::fflush(stdout);
@@ -312,9 +318,6 @@ int main(int argc, char** argv) {
   state.toplevel = xdg_surface_get_toplevel(state.xdgSurface);
   xdg_toplevel_add_listener(state.toplevel, &kToplevelListener, &state);
   xdg_toplevel_set_title(state.toplevel, argc > 1 ? argv[1] : "unmap-client");
-  if (state.requestFullscreen) {
-    xdg_toplevel_set_fullscreen(state.toplevel, nullptr);
-  }
   wl_surface_commit(state.surface);
 
   while (wl_display_dispatch(state.display) >= 0) {
@@ -326,14 +329,14 @@ int main(int argc, char** argv) {
   if (state.xdgSurface != nullptr) {
     xdg_surface_destroy(state.xdgSurface);
   }
-  if (state.surface != nullptr) {
-    wl_surface_destroy(state.surface);
-  }
   if (state.colorSurface != nullptr) {
     wp_color_management_surface_v1_destroy(state.colorSurface);
   }
   if (state.imageDescription != nullptr) {
     wp_image_description_v1_destroy(state.imageDescription);
+  }
+  if (state.surface != nullptr) {
+    wl_surface_destroy(state.surface);
   }
   if (state.colorManager != nullptr) {
     wp_color_manager_v1_destroy(state.colorManager);

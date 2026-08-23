@@ -53,6 +53,21 @@ print("true" if event.get("data", {}).get("open") is True else "false")
 PY
 }
 
+# The preceding check may have requested an animated overview close. IPC keeps
+# reporting it as open until teardown finishes, and reopening during that
+# transition bypasses the new-presentation drag guard. Establish the state this
+# check actually requires instead of depending on the previous animation's
+# timing.
+"$UMBRIEL" msg overview-close > /dev/null
+for _ in $(seq 50); do
+  [[ $(overview_state) == false ]] && break
+  sleep 0.1
+done
+if [[ $(overview_state) != false ]]; then
+  echo "overview did not close before the client drag check"
+  exit 1
+fi
+
 # Ending a short drag without leaving its source surface must generate fresh pointer input. Clients use that input to restore the hover cursor which they
 # replaced while dragging.
 "${wayland_env[@]}" "$DRAG_CLIENT" cursor-refresh > "$CLIENT_LOG" 2>&1 &

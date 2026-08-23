@@ -454,7 +454,7 @@ namespace umbriel {
       root.sub("appearance", [&](Section& s) {
         s.integer("border_width", 0, 100, a.borderWidth)
             .integer("outer_border_width", 0, 100, a.outerBorderWidth)
-            .integer("corner_radius", 0, 500, a.cornerRadius)
+            .integer("corner_radius", 0, 100, a.cornerRadius)
             .color("border_focused", a.borderFocused)
             .color("border_unfocused", a.borderUnfocused)
             .color("scratchpad_border_focused", a.scratchpadBorderFocused)

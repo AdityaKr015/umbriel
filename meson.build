@@ -445,6 +445,14 @@ unmap_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper whose whole content is drawn by a full-window desynchronized
+# wl_subsurface, the way Firefox presents its chrome and web content.
+subsurface_client = executable(
+  'subsurface-client',
+  ['tests/harness/subsurface_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
+  dependencies: [wayland_client_dep],
+)
+
 # Harness helper that keeps an idle inhibitor attached to a mapped toplevel and
 # reports when the compositor starts honoring its idle notification.
 idle_inhibit_client = executable(
@@ -469,6 +477,7 @@ alias_target(
   global_client,
   workspace_client,
   unmap_client,
+  subsurface_client,
   idle_inhibit_client,
 )
 

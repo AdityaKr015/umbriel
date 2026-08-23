@@ -148,7 +148,7 @@ remain opaque so text stays legible over translucent panels.
 prefer_no_csd = true
 border_width = 2               # 0-100
 outer_border_width = 0         # 0-100
-corner_radius = 10             # 0-500, 0 disables
+corner_radius = 10             # 0-100, 0 disables
 border_focused = "#7AA3FFFF"   # #RRGGBB or #RRGGBBAA
 border_unfocused = "#292933FF"
 scratchpad_border_focused = "#E5C07BFF"
@@ -164,7 +164,7 @@ animation_ms = 200             # 1-10000
 | `prefer_no_csd`               | bool  | `true`      | Ask clients to omit client-side decorations (xdg-decoration). Clients that explicitly request CSD are still honored. Restart apps after changing. |
 | `border_width`                | int   | `2`         | Inner border width in logical pixels (0-100), including around rounded corners.                                                                   |
 | `outer_border_width`          | int   | `0`         | Ring outside the inner border in logical pixels (0-100).                                                                                          |
-| `corner_radius`               | int   | `10`        | Rounded corner radius (0-500). 0 disables.                                                                                                        |
+| `corner_radius`               | int   | `10`        | Rounded corner radius (0-100). 0 disables.                                                                                                        |
 | `border_focused`              | color | `#7AA3FFFF` | Border color for the focused window.                                                                                                              |
 | `border_unfocused`            | color | `#292933FF` | Border color for unfocused windows.                                                                                                               |
 | `scratchpad_border_focused`   | color | `#E5C07BFF` | Border color for the focused scratchpad window.                                                                                                   |

@@ -244,6 +244,22 @@ UMBRIEL_TEST(hotCornersLoadActionsAndValidate) {
   CHECK(containsDiagnostic(store, "hot_corners.top_right.delay_ms = -1"));
 }
 
+UMBRIEL_TEST(cornerRadiusClampsToItsRange) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[appearance]\ncorner_radius = 64\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().appearance.cornerRadius, 64);
+  CHECK(!containsDiagnostic(store, "corner_radius"));
+
+  file.write("[appearance]\ncorner_radius = 500\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().appearance.cornerRadius, 100);
+  CHECK(containsDiagnostic(store, "appearance.corner_radius = 500 out of range, clamped to 100"));
+}
+
 UMBRIEL_TEST(middleClickPasteLoadsAndDefaultsEnabled) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

@@ -884,24 +884,64 @@ namespace umbriel {
     m_server->scheduleIpcWindowsEvent();
   }
 
-  void View::applyCornerRadius() { applyCornerRadii(corner_radii_all(surfaceRadius())); }
-
-  void View::applyCornerRadii(fx_corner_radii corners) {
-    // Every buffer under the tree has to be visited, but only the toplevel's own
-    // surface should round: subsurfaces are separate scene buffers.
+  void View::applyCornerRadius() {
+    // Apps that draw through subsurfaces (Firefox renders all of its chrome and web content into one desynchronized
+    // MozContainer subsurface) leave their content square unless those buffers round too. Every buffer under the
+    // toplevel's surface tree is visited: the main surface rounds unconditionally (its quad is the content box in every
+    // clipped and animated state), a subsurface rounds only the corners where its quad — already cropped to the content
+    // box by setSurfaceTreeClip — actually reaches a content-box corner, so an interior subsurface (embedded video)
+    // stays square. Popups are excluded: their surface is its own root.
+    const int radius = surfaceRadius();
+    // A tiled view's committed geometry lags the layout, so the presented size is the box the corners must match; a
+    // float has no such lag. Same rule as updateShadow().
+    const wlr_box& geometry = m_toplevel->base->geometry;
     struct Ctx {
       View* view;
-      fx_corner_radii corners;
-    } ctx{this, corners};
+      int radius;
+      int contentWidth;
+      int contentHeight;
+      int treeX;
+      int treeY;
+    } ctx{
+        this,
+        radius,
+        m_tiled && m_presentation.width() > 0 ? m_presentation.width() : geometry.width,
+        m_tiled && m_presentation.height() > 0 ? m_presentation.height() : geometry.height,
+        m_sceneTree->node.x,
+        m_sceneTree->node.y,
+    };
     wlr_scene_node_for_each_buffer(
         &m_sceneTree->node,
-        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+        [](wlr_scene_buffer* buffer, int sx, int sy, void* data) {
           auto* ctx = static_cast<Ctx*>(data);
           wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-          if (sceneSurface == nullptr || sceneSurface->surface != ctx->view->m_toplevel->base->surface) {
+          if (sceneSurface == nullptr
+              || wlr_surface_get_root_surface(sceneSurface->surface) != ctx->view->m_toplevel->base->surface) {
             return;
           }
-          wlr_scene_buffer_set_corner_radii(buffer, ctx->corners);
+          if (sceneSurface->surface == ctx->view->m_toplevel->base->surface) {
+            wlr_scene_buffer_set_corner_radii(buffer, corner_radii_all(ctx->radius));
+            return;
+          }
+          // The iterator accumulates positions from the node it was handed, so subtracting the tree's own position
+          // yields tree-local coordinates. The xdg scene helper places the surface tree at (-geometry.x, -geometry.y),
+          // which puts the content box at the tree origin.
+          const int x = sx - ctx->treeX;
+          const int y = sy - ctx->treeY;
+          const int w = buffer->dst_width > 0 ? buffer->dst_width : sceneSurface->surface->current.width;
+          const int h = buffer->dst_height > 0 ? buffer->dst_height : sceneSurface->surface->current.height;
+          const bool left = x == 0;
+          const bool top = y == 0;
+          const bool right = x + w == ctx->contentWidth;
+          const bool bottom = y + h == ctx->contentHeight;
+          const int r = ctx->radius;
+          // Always set, zeros included: a subsurface that moved or resized off a corner must lose its stale radius.
+          wlr_scene_buffer_set_corner_radii(
+              buffer,
+              corner_radii_new(
+                  top && left ? r : 0, top && right ? r : 0, bottom && right ? r : 0, bottom && left ? r : 0
+              )
+          );
         },
         &ctx
     );

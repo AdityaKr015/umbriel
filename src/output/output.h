@@ -4,6 +4,8 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <wayland-server-core.h>
 
 struct wlr_gamma_control_v1;
@@ -62,6 +64,8 @@ namespace umbriel {
     [[nodiscard]] bool setPowered(bool powered);
     [[nodiscard]] bool dpmsOff() const { return m_dpmsOff; }
     [[nodiscard]] bool configuredEnabled() const;
+    [[nodiscard]] bool hdrActive() const;
+    [[nodiscard]] const std::string& hdrFallbackReason() const { return m_hdrFallbackReason; }
     void applyCursorConfig();
     // Re-evaluate fullscreen-controlled VRR after a view or workspace changes.
     void updateVrr();
@@ -89,6 +93,9 @@ namespace umbriel {
     void applyMode(int width, int height);
     [[nodiscard]] bool applyConfiguredState();
     [[nodiscard]] bool configuredVrrEnabled() const;
+    void setHdrFallbackReason(std::string_view reason);
+    void updateSceneSdrWhite();
+    void rejectGammaControl(wlr_gamma_control_v1* control);
     wlr_output_layout_output* addToLayout();
     void arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive);
     void updateOptimizedBlur(const wlr_box& fullArea);
@@ -112,6 +119,8 @@ namespace umbriel {
     bool m_softwareCursorLocked = false;
     bool m_animationRenderLocked = false;
     bool m_dpmsOff = false;
+    bool m_hdrGammaWarningLogged = false;
+    std::string m_hdrFallbackReason;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;
 

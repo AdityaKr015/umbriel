@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
+#include <drm_fourcc.h>
 
 namespace umbriel {
 
@@ -46,6 +47,7 @@ namespace umbriel {
     applyCursorConfig();
     (void)applyConfiguredState();
     m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
+    updateSceneSdrWhite();
     if (configuredEnabled()) {
       wlr_output_layout_output* layoutOutput = addToLayout();
       wlr_scene_output_layout_add_output(m_server->sceneLayout(), layoutOutput, m_sceneOutput);
@@ -67,6 +69,38 @@ namespace umbriel {
     return rule == nullptr || rule->enabled;
   }
 
+  bool Output::hdrActive() const { return m_output->image_description != nullptr; }
+
+  void Output::setHdrFallbackReason(std::string_view reason) {
+    if (m_hdrFallbackReason == reason) {
+      return;
+    }
+    m_hdrFallbackReason = reason;
+    if (!reason.empty()) {
+      kLog.warn("output '{}': HDR unavailable: {}", m_output->name, reason);
+    }
+  }
+
+  void Output::updateSceneSdrWhite() {
+    if (m_sceneOutput == nullptr) {
+      return;
+    }
+    const OutputRule* rule = findRule(m_output->name);
+    const float sdrWhite = hdrActive() && rule != nullptr ? rule->sdrWhite : 0.0F;
+    wlr_scene_output_set_sdr_white_level(m_sceneOutput, sdrWhite);
+  }
+
+  void Output::rejectGammaControl(wlr_gamma_control_v1* control) {
+    if (control != nullptr) {
+      wlr_gamma_control_v1_send_failed_and_destroy(control);
+      if (!m_hdrGammaWarningLogged) {
+        kLog.warn("output '{}': gamma control is unavailable while HDR is active", m_output->name);
+        m_hdrGammaWarningLogged = true;
+      }
+    }
+    m_gammaDirty = false;
+  }
+
   bool Output::applyConfiguredState() {
     const OutputRule* rule = findRule(m_output->name);
     const bool configured = configuredEnabled();
@@ -74,6 +108,10 @@ namespace umbriel {
     wlr_output_state state{};
     wlr_output_state_init(&state);
     wlr_output_state_set_enabled(&state, enabled);
+
+    const bool hdrWasActive = hdrActive();
+    const bool hdrRequested = rule != nullptr && rule->hdr == HdrMode::On;
+    bool hdrAttempted = false;
 
     bool enableVrr = false;
     if (enabled) {
@@ -126,6 +164,39 @@ namespace umbriel {
       } else if (enableVrr) {
         kLog.warn("output '{}': VRR requested but adaptive sync is not supported", m_output->name);
       }
+
+      std::string_view hdrFallback;
+      if (hdrRequested) {
+        if ((m_output->supported_transfer_functions & WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ) == 0) {
+          hdrFallback = "display does not advertise PQ";
+        } else if ((m_output->supported_primaries & WLR_COLOR_NAMED_PRIMARIES_BT2020) == 0) {
+          hdrFallback = "display does not advertise BT.2020 primaries";
+        } else if (!m_server->renderer()->features.output_color_transform) {
+          hdrFallback = "renderer lacks FP16 output transform";
+        } else {
+          const wlr_output_image_description description = {
+              .primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
+              .transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
+              .mastering_display_primaries = {},
+              .mastering_luminance = {},
+              .max_cll = 0,
+              .max_fall = 0,
+          };
+          wlr_output_state_set_render_format(&state, DRM_FORMAT_XRGB2101010);
+          hdrAttempted = wlr_output_state_set_image_description(&state, &description);
+          if (!hdrAttempted) {
+            hdrFallback = "failed to stage HDR image description";
+          }
+        }
+      }
+      if (!hdrFallback.empty()) {
+        setHdrFallbackReason(hdrFallback);
+      }
+    }
+
+    if ((!hdrRequested && hdrWasActive) || (enabled && hdrRequested && !hdrAttempted)) {
+      wlr_output_state_set_image_description(&state, nullptr);
+      wlr_output_state_set_render_format(&state, DRM_FORMAT_XRGB8888);
     }
 
     bool committed = wlr_output_commit_state(m_output, &state);
@@ -134,11 +205,31 @@ namespace umbriel {
       wlr_output_state_set_adaptive_sync_enabled(&state, false);
       committed = wlr_output_commit_state(m_output, &state);
     }
+    if (!committed && hdrAttempted) {
+      setHdrFallbackReason("HDR commit rejected by backend");
+      wlr_output_state_set_image_description(&state, nullptr);
+      wlr_output_state_set_render_format(&state, DRM_FORMAT_XRGB8888);
+      committed = wlr_output_commit_state(m_output, &state);
+    }
     wlr_output_state_finish(&state);
     if (!committed) {
       kLog.error("output '{}': failed to commit configured state", m_output->name);
       return false;
     }
+    const bool hdrIsActive = hdrActive();
+    if (hdrIsActive) {
+      setHdrFallbackReason({});
+      rejectGammaControl(wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output));
+    } else {
+      if (!hdrRequested) {
+        setHdrFallbackReason({});
+      }
+      if (hdrWasActive) {
+        m_gammaDirty = true;
+      }
+      m_hdrGammaWarningLogged = false;
+    }
+    updateSceneSdrWhite();
     m_server->updateIdleInhibit();
     if (enabled) {
       kLog.info(
@@ -441,7 +532,11 @@ namespace umbriel {
     }
   }
 
-  void Output::onGammaChanged(wlr_gamma_control_v1* /*control*/) {
+  void Output::onGammaChanged(wlr_gamma_control_v1* control) {
+    if (hdrActive()) {
+      rejectGammaControl(control);
+      return;
+    }
     // DRM gamma LUT upload is expensive; apply once on change, not every frame.
     m_gammaDirty = true;
     wlr_output_schedule_frame(m_output);
@@ -572,7 +667,9 @@ namespace umbriel {
         // Apply only when dirty: uploading the LUT every frame stalls the compositor.
         bool gammaPending = false;
         if (m_gammaDirty) {
-          if (wlr_output_get_gamma_size(m_output) > 0) {
+          if (hdrActive()) {
+            rejectGammaControl(wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output));
+          } else if (wlr_output_get_gamma_size(m_output) > 0) {
             wlr_gamma_control_v1* control =
                 wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output);
             if (!wlr_gamma_control_v1_apply(control, &state)) {

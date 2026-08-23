@@ -318,6 +318,9 @@ int main(int argc, char** argv) {
   state.toplevel = xdg_surface_get_toplevel(state.xdgSurface);
   xdg_toplevel_add_listener(state.toplevel, &kToplevelListener, &state);
   xdg_toplevel_set_title(state.toplevel, argc > 1 ? argv[1] : "unmap-client");
+  if (const char* appId = std::getenv("APP_ID")) {
+    xdg_toplevel_set_app_id(state.toplevel, appId);
+  }
   wl_surface_commit(state.surface);
 
   while (wl_display_dispatch(state.display) >= 0) {

@@ -120,6 +120,11 @@ namespace umbriel {
     } else {
       applyDynamicRules();
     }
+    if (m_mapped) {
+      if (Output* output = currentOutput()) {
+        output->updateHdr();
+      }
+    }
   }
 
   void View::handleForeignActivate() {

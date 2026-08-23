@@ -291,6 +291,10 @@ namespace umbriel {
         || (!view->layoutFullscreen() && !view->toplevel()->current.fullscreen)) {
       return false;
     }
+    const char* appId = view->toplevel()->app_id;
+    if (appId != nullptr && std::string_view(appId) == "gamescope") {
+      return true;
+    }
     const wlr_image_description_v1_data* description =
         wlr_surface_get_image_description_v1_data(view->toplevel()->base->surface);
     return description != nullptr

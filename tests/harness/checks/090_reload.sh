@@ -167,4 +167,4 @@ cp "$UMBRIEL_CONFIG.bak" "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 rm -f "$RECOVERY_ROOT" "$RECOVERY_INCLUDE"
 
-echo "         no-op reload inert; selective changes and failed-include recovery passed"
+echo "no-op reload inert; selective changes and failed-include recovery passed"

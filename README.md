@@ -109,11 +109,19 @@ just test
 just verify
 ```
 
-Pass a check-name fragment to run one harness check while iterating:
+While iterating, `just check` runs single harness checks by name fragment on the
+default build, and `just checks` lists the available names:
 
 ```sh
-just verify debug 120_idle_inhibit_visibility
+just check 120            # one check
+just check 118 120        # several
+just check 120 -v         # keep the full output of passing checks
 ```
+
+A run reports one line per check with its duration; passing checks are
+summarized to a single dimmed line while failing ones print their whole output.
+A failing run keeps its runtime directory (compositor log, per-client logs) and
+prints the path. `just verify <mode> [fragment ...]` selects another build.
 
 ## Running
 

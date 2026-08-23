@@ -26,6 +26,9 @@ cleanup() {
     [[ $("$UMBRIEL" windows --json 2>/dev/null | jq 'length' 2>/dev/null) -eq 0 ]] && break
     sleep 0.05
   done
+  # The wheel bind under test leaves the session on workspace 2. Later checks in
+  # the shared instance start from workspace 1, so hand it back.
+  "$UMBRIEL" msg workspace-switch:1 > /dev/null 2>&1 || true
   if [[ -f $CONFIG_BACKUP ]]; then
     cp "$CONFIG_BACKUP" "$UMBRIEL_CONFIG"
     "$UMBRIEL" msg config-reload > /dev/null 2>&1 || true

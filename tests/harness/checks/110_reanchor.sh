@@ -97,4 +97,4 @@ if [[ $before != "$after" ]]; then
   exit 1
 fi
 
-echo "closing an off-screen-left window moved nothing: $after"
+echo "closing an off-screen-left window moved nothing"

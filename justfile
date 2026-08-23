@@ -65,11 +65,26 @@ test m=mode: (configure m)
     meson compile -C build-{{m}} unit-tests
     meson test -C build-{{m}} --print-errorlogs
 
-verify m=mode filter="": (build m)
+# Whole harness suite, or the checks whose names contain any given fragment.
+# The build is silent unless it fails: the run's own report is the output.
+[no-exit-message]
+verify m=mode *filters: (_ensure-configured m)
     #!/usr/bin/env bash
     set -euo pipefail
-    meson compile -C build-{{m}} harness-clients
-    bash tests/harness/verify.sh ./build-{{m}}/umbriel "{{filter}}"
+    if ! build_log=$(meson compile -C build-{{m}} umbriel harness-clients 2>&1); then
+        printf '%s\n' "$build_log" >&2
+        exit 1
+    fi
+    bash tests/harness/verify.sh ./build-{{m}}/umbriel {{filters}}
+
+# One check (or a few) on the default build, without naming the mode:
+# `just check 118`, `just check 118 120`, `just check 118 -v` for full output.
+[no-exit-message]
+check +filters: (verify mode filters)
+
+# Names of every harness check. Boots nothing.
+checks:
+    @bash tests/harness/verify.sh ./build-{{mode}}/umbriel --list
 
 format:
     find src tests \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 clang-format -i

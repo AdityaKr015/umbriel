@@ -1051,7 +1051,7 @@ namespace umbriel {
             .real("blur_ignore_alpha", 0.0, 1.0, rule.blurIgnoreAlpha);
         if (const toml::node* vrrNode = keys.take("vrr")) {
           if (const auto value = readVrrMode(*vrrNode)) {
-            rule.vrr = *value;
+            rule.vrr = value;
           } else {
             warnAt(vrrNode->source(), "ignoring window_rule.vrr (expected disabled|always|fullscreen)");
           }

@@ -40,6 +40,8 @@ namespace {
     bool mapped = false;
     bool closed = false;
     bool keyboardFocused = false;
+    bool requestMaximized = false;
+    bool maximizeRequested = false;
   };
 
   void keyboardKeymap(void*, wl_keyboard*, uint32_t, int32_t fd, uint32_t) { close(fd); }
@@ -133,6 +135,11 @@ namespace {
     wl_surface_attach(state.surface, state.buffer.resource, 0, 0);
     wl_surface_damage_buffer(state.surface, 0, 0, state.width, state.height);
     wl_surface_commit(state.surface);
+    if (state.requestMaximized && !state.maximizeRequested) {
+      xdg_toplevel_set_maximized(state.toplevel);
+      wl_surface_commit(state.surface);
+      state.maximizeRequested = true;
+    }
     std::println("mapped");
     std::fflush(stdout);
   }
@@ -141,7 +148,17 @@ namespace {
       .configure = xdgSurfaceConfigure,
   };
 
-  void toplevelConfigure(void*, xdg_toplevel*, int32_t, int32_t, wl_array*) {}
+  void toplevelConfigure(void*, xdg_toplevel*, int32_t, int32_t, wl_array* states) {
+    const auto* configured = static_cast<const uint32_t*>(states->data);
+    const size_t count = states->size / sizeof(uint32_t);
+    for (size_t index = 0; index < count; ++index) {
+      if (configured[index] == XDG_TOPLEVEL_STATE_MAXIMIZED) {
+        std::println("configured-maximized");
+        std::fflush(stdout);
+        break;
+      }
+    }
+  }
 
   void toplevelClose(void* data, xdg_toplevel*) {
     auto& state = *static_cast<State*>(data);
@@ -206,6 +223,7 @@ namespace {
 
 int main(int argc, char** argv) {
   State state;
+  state.requestMaximized = std::getenv("REQUEST_MAXIMIZED") != nullptr;
   if (argc > 2) {
     state.width = std::max(1, std::atoi(argv[2]));
   }

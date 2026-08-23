@@ -178,6 +178,10 @@ namespace umbriel {
   }
 
   View::~View() {
+    if (m_acceptClientMaximizeIdle != nullptr) {
+      wl_event_source_remove(m_acceptClientMaximizeIdle);
+      m_acceptClientMaximizeIdle = nullptr;
+    }
     m_server->unregisterAnimatable(this);
     setWorkspace(nullptr);
     if (m_map.link.next != nullptr) {
@@ -715,6 +719,12 @@ namespace umbriel {
   void View::onRequestMaximize(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_requestMaximize);
     self->handleRequestMaximize();
+  }
+
+  void View::onAcceptClientMaximizeRequests(void* data) {
+    auto* self = static_cast<View*>(data);
+    self->m_acceptClientMaximizeIdle = nullptr;
+    self->m_acceptClientMaximizeRequests = self->m_mapped;
   }
 
   void View::onRequestFullscreen(wl_listener* listener, void* /*data*/) {
@@ -1346,6 +1356,13 @@ namespace umbriel {
 
   void View::handleMap() {
     m_mapped = true;
+    m_acceptClientMaximizeRequests = false;
+    m_acceptClientMaximizeIdle =
+        wl_event_loop_add_idle(wl_display_get_event_loop(m_server->display()), onAcceptClientMaximizeRequests, this);
+    if (m_acceptClientMaximizeIdle == nullptr) {
+      kLog.error("failed to register opening maximize idle source");
+      m_acceptClientMaximizeRequests = true;
+    }
     m_server->scheduleIpcWindowsEvent();
     m_tiled = looksTiled(m_toplevel);
     const wlr_box& mapGeo = m_toplevel->base->geometry;
@@ -1412,10 +1429,11 @@ namespace umbriel {
       scheduleFrame();
     }
 
-    // Rules and restored client state both request ordinary maximization. Edge maximization is entered only through
-    // Umbriel's explicit action.
+    // Opening state is compositor-owned. Clients may restore a saved maximized
+    // flag during this transition; only an explicit window rule overrides the
+    // layout's initial size.
     const bool ruleMaximized = rule.defaultMaximize && *rule.defaultMaximize;
-    if (ruleMaximized || m_toplevel->requested.maximized) {
+    if (ruleMaximized) {
       setMaximized(true);
     }
 
@@ -1461,6 +1479,11 @@ namespace umbriel {
       wlr_scene_node_reparent(&m_sceneTree->node, m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
     }
     m_mapped = false;
+    m_acceptClientMaximizeRequests = false;
+    if (m_acceptClientMaximizeIdle != nullptr) {
+      wl_event_source_remove(m_acceptClientMaximizeIdle);
+      m_acceptClientMaximizeIdle = nullptr;
+    }
     m_server->updateIdleInhibit();
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {
       m_workspace->group()->output()->updateVrr();
@@ -1715,7 +1738,7 @@ namespace umbriel {
   }
 
   void View::handleRequestMaximize() {
-    if (!m_toplevel->base->initialized || !m_mapped) {
+    if (!m_toplevel->base->initialized || !m_mapped || !m_acceptClientMaximizeRequests) {
       return;
     }
     if (m_tiled && m_workspace != nullptr) {

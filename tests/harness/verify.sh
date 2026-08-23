@@ -87,6 +87,18 @@ if [[ ! -x $BINARY ]]; then
   exit 1
 fi
 BINARY=$(realpath "$BINARY")
+BINARY_DIR=$(dirname "$BINARY")
+
+# Checks use helper clients built alongside the selected compositor. Keeping
+# this resolution here makes every build mode consistent without each recipe
+# having to export a matching set of paths.
+export UMBRIEL_POINTER_CLIENT="$BINARY_DIR/pointer-client"
+export UMBRIEL_INPUT_METHOD_CLIENT="$BINARY_DIR/input-method-client"
+export UMBRIEL_DRAG_CLIENT="$BINARY_DIR/drag-client"
+export UMBRIEL_GLOBAL_CLIENT="$BINARY_DIR/global-client"
+export UMBRIEL_WORKSPACE_CLIENT="$BINARY_DIR/workspace-client"
+export UMBRIEL_UNMAP_CLIENT="$BINARY_DIR/unmap-client"
+export UMBRIEL_IDLE_INHIBIT_CLIENT="$BINARY_DIR/idle-inhibit-client"
 
 # sockaddr_un caps paths at 108 bytes and the compositor appends "/umbriel-wayland-0.sock" (23) to XDG_RUNTIME_DIR, so keep the root short. A long path makes
 # wl_display_add_socket fail and the boot abort.

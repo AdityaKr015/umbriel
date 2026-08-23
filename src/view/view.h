@@ -161,6 +161,7 @@ namespace umbriel {
     static void onRequestMove(wl_listener* listener, void* data);
     static void onRequestResize(wl_listener* listener, void* data);
     static void onRequestMaximize(wl_listener* listener, void* data);
+    static void onAcceptClientMaximizeRequests(void* data);
     static void onRequestFullscreen(wl_listener* listener, void* data);
     static void onSetTitle(wl_listener* listener, void* data);
     static void onSetAppId(wl_listener* listener, void* data);
@@ -299,6 +300,10 @@ namespace umbriel {
     wlr_ext_image_capture_source_v1* m_captureSource = nullptr;
     Workspace* m_workspace = nullptr;
     bool m_mapped = false;
+    // Saved client state commonly requests maximization while the surface is
+    // opening. Layout policy owns that transition; later requests are valid.
+    bool m_acceptClientMaximizeRequests = false;
+    wl_event_source* m_acceptClientMaximizeIdle = nullptr;
     bool m_xwayland = false;
     // False until the first setPosition/animateTo places the node; the initial
     // placement snaps (avoids animating from the default (0,0) world origin).

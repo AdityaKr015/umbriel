@@ -165,7 +165,7 @@ namespace umbriel {
 
     const auto& appearance = config().appearance;
     const int total = appearance.totalBorderWidth();
-    const bool decorated = total > 0 && !view->toplevel()->current.fullscreen;
+    const bool decorated = total > 0 && !view->toplevel()->current.fullscreen && !view->maximizedToEdges();
     // Scale the radius and each thickness once, then derive the rings from those scaled values. Rounding the outer
     // radius on its own drifts from the ring's own thickness at fractional zoom, so the curve stops matching the
     // stroke.

@@ -270,6 +270,7 @@ namespace umbriel {
     }
     if (m_layerSurface->initial_commit) {
       if (Output* out = output()) {
+        out->arrangeLayers();
         out->markDirty(Dirty::LayerArrange);
       }
       return;

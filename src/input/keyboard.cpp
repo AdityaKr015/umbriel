@@ -34,10 +34,14 @@ namespace umbriel {
     wl_signal_add(&device->events.destroy, &m_destroy);
 
     // A virtual keyboard is announced before its client necessarily provides a
-    // keymap. Do not replace the seat's usable physical keyboard with that
-    // incomplete device. Its first modifiers or key event selects it below.
-    if (!m_virtual) {
-      wlr_seat_set_keyboard(m_server->seat()->wlr(), m_keyboard);
+    // keymap. Do not replace a usable keyboard already on the seat with that
+    // incomplete device; its first modifiers or key event selects it below. An
+    // empty seat still has to take it: keyboard focus enter and the
+    // input-method grab keymap both read the seat's current keyboard, so a
+    // session whose only keyboards are virtual would never focus or type.
+    wlr_seat* seat = m_server->seat()->wlr();
+    if (!m_virtual || wlr_seat_get_keyboard(seat) == nullptr) {
+      wlr_seat_set_keyboard(seat, m_keyboard);
     }
   }
   void Keyboard::applyConfig() {

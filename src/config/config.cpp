@@ -58,6 +58,17 @@ namespace umbriel {
       return std::nullopt;
     }
 
+    std::optional<HdrMode> readHdrMode(const toml::node& node) {
+      const auto value = node.value<std::string>();
+      if (value == "off") {
+        return HdrMode::Off;
+      }
+      if (value == "on") {
+        return HdrMode::On;
+      }
+      return std::nullopt;
+    }
+
     void emitDiag(ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
       ConfigDiagnostic diag;
       diag.severity = severity;
@@ -875,6 +886,17 @@ namespace umbriel {
             warnAt(vrrNode->source(), "ignoring output.{}.vrr (expected disabled|always|fullscreen)", name);
           }
         }
+
+        if (const toml::node* hdrNode = keys.take("hdr")) {
+          if (const auto value = readHdrMode(*hdrNode)) {
+            rule.hdr = *value;
+          } else {
+            warnAt(hdrNode->source(), "ignoring output.{}.hdr (expected off|on)", name);
+          }
+        }
+        double sdrWhite = rule.sdrWhite;
+        keys.real("sdr_white", 80.0, 1000.0, sdrWhite);
+        rule.sdrWhite = static_cast<float>(sdrWhite);
 
         if (const toml::node* transformNode = keys.take("transform")) {
           const auto value = transformNode->value<std::string>();

@@ -282,6 +282,18 @@ UMBRIEL_TEST(outputStateAndWorkspaceInventoryAreIndependent) {
   CHECK(vrrEffects.outputState);
   CHECK(!vrrEffects.workspaceInventory);
 
+  Config hdrChanged = before;
+  hdrChanged.outputs[0].hdr = umbriel::HdrMode::On;
+  const ConfigEffects hdrEffects = ConfigEffects::between(before, hdrChanged);
+  CHECK(hdrEffects.outputState);
+  CHECK(!hdrEffects.workspaceInventory);
+
+  Config sdrWhiteChanged = before;
+  sdrWhiteChanged.outputs[0].sdrWhite = 300.0F;
+  const ConfigEffects sdrWhiteEffects = ConfigEffects::between(before, sdrWhiteChanged);
+  CHECK(sdrWhiteEffects.outputState);
+  CHECK(!sdrWhiteEffects.workspaceInventory);
+
   Config inventoryChanged = before;
   inventoryChanged.outputs[0].workspaces = std::vector<std::string>{"1", "dev"};
   const ConfigEffects inventoryEffects = ConfigEffects::between(before, inventoryChanged);

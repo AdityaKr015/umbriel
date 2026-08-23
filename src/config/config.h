@@ -94,6 +94,19 @@ namespace umbriel {
     Always,
     Fullscreen,
   };
+  enum class HdrMode {
+    Off,
+    On,
+  };
+  [[nodiscard]] constexpr std::string_view hdrModeName(HdrMode mode) {
+    switch (mode) {
+    case HdrMode::Off:
+      return "off";
+    case HdrMode::On:
+      return "on";
+    }
+    return "off";
+  }
   [[nodiscard]] constexpr bool vrrEnabled(VrrMode mode, bool fullscreen) {
     return mode == VrrMode::Always || (mode == VrrMode::Fullscreen && fullscreen);
   }
@@ -112,6 +125,8 @@ namespace umbriel {
     std::optional<double> scale;
     std::optional<int> transform;
     VrrMode vrr = VrrMode::Disabled;
+    HdrMode hdr = HdrMode::Off;
+    float sdrWhite = 203.0F;
     // Explicit workspace inventory. Omitted means dynamic workspaces.
     std::optional<std::vector<std::string>> workspaces;
     bool operator==(const OutputRule&) const = default;

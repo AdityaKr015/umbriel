@@ -10,6 +10,7 @@
 
 using umbriel::ConfigDiagnostic;
 using umbriel::ConfigStore;
+using umbriel::HdrMode;
 using umbriel::LayoutMode;
 using umbriel::ModifierKey;
 using umbriel::VrrMode;
@@ -304,6 +305,29 @@ UMBRIEL_TEST(outputVrrPolicyLoadsAndDefaultsDisabled) {
   file.write("[output.DP-1]\n");
   CHECK(store.reload().success);
   CHECK(store.config().outputs[0].vrr == VrrMode::Disabled);
+}
+
+UMBRIEL_TEST(outputHdrPolicyAndSdrWhiteLoad) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[output.DP-1]\nhdr = \"on\"\nsdr_white = 300\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK(store.config().outputs[0].hdr == HdrMode::On);
+  CHECK_EQ(store.config().outputs[0].sdrWhite, 300.0F);
+
+  file.write("[output.DP-1]\nhdr = \"off\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].hdr == HdrMode::Off);
+  CHECK_EQ(store.config().outputs[0].sdrWhite, 203.0F);
+
+  file.write("[output.DP-1]\nhdr = \"auto\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].hdr == HdrMode::Off);
+  CHECK_EQ(store.config().outputs[0].sdrWhite, 203.0F);
+  CHECK(containsDiagnostic(store, "ignoring output.DP-1.hdr"));
 }
 
 UMBRIEL_TEST(windowVrrPolicyLoadsAndRejectsInvalidValues) {

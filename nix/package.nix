@@ -24,11 +24,18 @@
   nlohmann_json,
   xwayland-satellite,
   makeBinaryWrapper,
-  scenefx,
 }:
 let
   inherit (builtins) baseNameOf head match readFile;
-  source = ../.;
+  source =
+    lib.throwIf (!builtins.pathExists (../. + "/subprojects/scenefx/meson.build")) ''
+      umbriel: subprojects/scenefx is missing.
+
+      This flake needs a Git submodule, which the `github:` fetcher cannot
+      fetch because it downloads a tarball. Use the Git fetcher instead:
+
+        inputs.umbriel.url = "git+https://github.com/noctalia-dev/umbriel";
+    '' ../.;
   version = head (match ".*\n  version: '([0-9][^']+)'.*" (readFile ../meson.build));
 in
 stdenv.mkDerivation {
@@ -36,12 +43,6 @@ stdenv.mkDerivation {
   inherit version;
 
   src = source;
-
-  preConfigure = ''
-    mkdir -p subprojects
-    rm -rf subprojects/scenefx
-    cp -r ${scenefx} subprojects/scenefx
-  '';
 
   nativeBuildInputs = [
     makeBinaryWrapper

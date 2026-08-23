@@ -196,7 +196,7 @@ Declarative configuration uses Nix attrsets serialized to TOML with `pkgs.format
 
 ```nix
 # flake input
-umbriel.url = "path:/path/to/umbriel"; # or github:noctalia-dev/umbriel
+umbriel.url = "git+https://github.com/noctalia-dev/umbriel";
 
 # NixOS
 imports = [ inputs.umbriel.nixosModules.default ];

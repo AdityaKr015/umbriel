@@ -94,7 +94,11 @@ else
     error('SceneFX submodule is missing, run git submodule update --init')
   endif
   scenefx_header_source = fs.read(scenefx_header)
-  if not scenefx_header_source.contains('wlr_scene_blur_set_ignore_alpha') or not scenefx_header_source.contains('wlr_scene_tree_set_clip') or not scenefx_header_source.contains('wlr_scene_output_set_sdr_white_level')
+  if (
+    not scenefx_header_source.contains('wlr_scene_blur_set_ignore_alpha')
+    or not scenefx_header_source.contains('wlr_scene_tree_set_clip')
+    or not scenefx_header_source.contains('wlr_scene_output_set_sdr_white_level')
+  )
     error('SceneFX submodule must provide Umbriel patched APIs')
   endif
   scenefx_proj = subproject(

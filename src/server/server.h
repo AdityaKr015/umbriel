@@ -21,6 +21,7 @@ struct wlr_allocator;
 struct wlr_backend;
 struct wlr_box;
 struct wlr_compositor;
+struct wlr_color_manager_v1;
 struct wlr_ext_foreign_toplevel_handle_v1;
 struct wlr_ext_foreign_toplevel_list_v1;
 struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1;
@@ -121,6 +122,7 @@ namespace umbriel {
     [[nodiscard]] wlr_renderer* renderer() const { return m_renderer; }
     [[nodiscard]] wlr_allocator* allocator() const { return m_allocator; }
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
+    [[nodiscard]] wlr_color_manager_v1* colorManager() const { return m_colorManager; }
     [[nodiscard]] wlr_scene_tree* xdgTree() const { return m_xdgTree; }
     [[nodiscard]] wlr_scene_tree* scratchpadTree() const { return m_scratchpadTree; }
     [[nodiscard]] wlr_scene_tree* scratchpadShadowTree() const { return m_scratchpadShadowTree; }
@@ -405,6 +407,7 @@ namespace umbriel {
     wlr_compositor* m_compositor = nullptr;
     wlr_output_layout* m_outputLayout = nullptr;
     wlr_scene* m_scene = nullptr;
+    wlr_color_manager_v1* m_colorManager = nullptr;
     wlr_scene_output_layout* m_sceneLayout = nullptr;
     wlr_xdg_shell* m_xdgShell = nullptr;
     wlr_xdg_decoration_manager_v1* m_xdgDecorationManager = nullptr;

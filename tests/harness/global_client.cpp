@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <cstring>
 #include <print>
 #include <string_view>
@@ -7,12 +8,14 @@ namespace {
   struct State {
     std::string_view wanted;
     bool found = false;
+    uint32_t version = 0;
   };
 
-  void handleGlobal(void* data, wl_registry*, uint32_t, const char* interface, uint32_t) {
+  void handleGlobal(void* data, wl_registry*, uint32_t, const char* interface, uint32_t version) {
     auto* state = static_cast<State*>(data);
     if (state->wanted == interface) {
       state->found = true;
+      state->version = version;
     }
   }
 
@@ -25,8 +28,14 @@ namespace {
 } // namespace
 
 int main(int argc, char** argv) {
-  if (argc != 3 || (std::strcmp(argv[2], "present") != 0 && std::strcmp(argv[2], "absent") != 0)) {
-    std::println(stderr, "usage: global-client INTERFACE present|absent");
+  if ((argc != 3 && argc != 4) || (std::strcmp(argv[2], "present") != 0 && std::strcmp(argv[2], "absent") != 0)) {
+    std::println(stderr, "usage: global-client INTERFACE present|absent [VERSION]");
+    return 2;
+  }
+  char* versionEnd = nullptr;
+  const unsigned long expectedVersion = argc == 4 ? std::strtoul(argv[3], &versionEnd, 10) : 0;
+  if (argc == 4 && (*argv[3] == '\0' || *versionEnd != '\0' || expectedVersion > UINT32_MAX)) {
+    std::println(stderr, "global-client: invalid version {}", argv[3]);
     return 2;
   }
 
@@ -54,6 +63,10 @@ int main(int argc, char** argv) {
         stderr, "global-client: {} was {}, expected {}", state.wanted, state.found ? "present" : "absent",
         expected ? "present" : "absent"
     );
+    return 1;
+  }
+  if (state.found && argc == 4 && state.version != expectedVersion) {
+    std::println(stderr, "global-client: {} version was {}, expected {}", state.wanted, state.version, expectedVersion);
     return 1;
   }
   return 0;

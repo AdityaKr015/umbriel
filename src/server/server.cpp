@@ -159,6 +159,43 @@ namespace umbriel {
     if (linuxDmabuf != nullptr) {
       wlr_scene_set_linux_dmabuf_v1(m_scene, linuxDmabuf);
     }
+    if (m_renderer->features.input_color_transform) {
+      size_t transferFunctionsLen = 0;
+      wp_color_manager_v1_transfer_function* transferFunctions =
+          wlr_color_manager_v1_transfer_function_list_from_renderer(m_renderer, &transferFunctionsLen);
+      size_t primariesLen = 0;
+      wp_color_manager_v1_primaries* primaries =
+          wlr_color_manager_v1_primaries_list_from_renderer(m_renderer, &primariesLen);
+      constexpr wp_color_manager_v1_render_intent renderIntents[] = {
+          WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL,
+      };
+      const wlr_color_manager_v1_options options = {
+          .features =
+              {
+                  .icc_v2_v4 = false,
+                  .parametric = true,
+                  .set_primaries = false,
+                  .set_tf_power = false,
+                  .set_luminances = false,
+                  .set_mastering_display_primaries = true,
+                  .extended_target_volume = false,
+                  .windows_scrgb = false,
+              },
+          .render_intents = renderIntents,
+          .render_intents_len = std::size(renderIntents),
+          .transfer_functions = transferFunctions,
+          .transfer_functions_len = transferFunctionsLen,
+          .primaries = primaries,
+          .primaries_len = primariesLen,
+      };
+      m_colorManager = wlr_color_manager_v1_create(m_display, 2, &options);
+      std::free(transferFunctions);
+      std::free(primaries);
+      if (m_colorManager == nullptr) {
+        throw std::runtime_error("failed to create color-management manager");
+      }
+      wlr_scene_set_color_manager_v1(m_scene, m_colorManager);
+    }
     const Config::Appearance::Blur& blur = config().appearance.blur;
     wlr_scene_set_blur_data(
         m_scene, blur.passes, blur.radius, static_cast<float>(blur.noise), static_cast<float>(blur.brightness),

@@ -2,13 +2,17 @@
 
 #include "config/config.h"
 #include "layer/layer_surface.h"
+#include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
 
+#include <cctype>
+#include <drm_fourcc.h>
 #include <nlohmann/json.hpp>
 #include <print>
+#include <string>
 
 namespace umbriel {
 
@@ -50,6 +54,200 @@ namespace umbriel {
         bool mapped = entry.value("mapped", false);
         std::println(
             "{}\t{}\t{}\t{}", layer, ns.empty() ? "-" : ns, output.empty() ? "-" : output, mapped ? "yes" : "no"
+        );
+      }
+    }
+
+    std::string fourccName(uint32_t format) {
+      if (format == DRM_FORMAT_INVALID) {
+        return "invalid";
+      }
+      std::string name(4, '?');
+      for (size_t i = 0; i < name.size(); ++i) {
+        const auto value = static_cast<unsigned char>((format >> (i * 8)) & 0xFFU);
+        name[i] = std::isprint(value) != 0 ? static_cast<char>(value) : '?';
+      }
+      return name;
+    }
+
+    const char* transferFunctionName(wlr_color_transfer_function value) {
+      switch (value) {
+      case WLR_COLOR_TRANSFER_FUNCTION_SRGB:
+        return "sRGB";
+      case WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ:
+        return "PQ";
+      case WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR:
+        return "extended linear";
+      case WLR_COLOR_TRANSFER_FUNCTION_GAMMA22:
+        return "gamma 2.2";
+      case WLR_COLOR_TRANSFER_FUNCTION_BT1886:
+        return "BT.1886";
+      }
+      return "unknown";
+    }
+
+    const char* primariesName(wlr_color_named_primaries value) {
+      switch (value) {
+      case WLR_COLOR_NAMED_PRIMARIES_SRGB:
+        return "sRGB";
+      case WLR_COLOR_NAMED_PRIMARIES_BT2020:
+        return "BT.2020";
+      }
+      return "unknown";
+    }
+
+    const char* protocolTransferFunctionName(uint32_t value) {
+      switch (value) {
+      case 0:
+        return "none";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_BT1886:
+        return "BT.1886";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22:
+        return "gamma 2.2";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA28:
+        return "gamma 2.8";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST240:
+        return "ST 240";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_LINEAR:
+        return "extended linear";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_LOG_100:
+        return "log 100";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_LOG_316:
+        return "log 316";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_XVYCC:
+        return "xvYCC";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB:
+        return "sRGB";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_SRGB:
+        return "extended sRGB";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ:
+        return "PQ";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST428:
+        return "ST 428";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_HLG:
+        return "HLG";
+      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_COMPOUND_POWER_2_4:
+        return "compound power 2.4";
+      default:
+        return "unknown";
+      }
+    }
+
+    const char* protocolPrimariesName(uint32_t value) {
+      switch (value) {
+      case 0:
+        return "none";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_SRGB:
+        return "sRGB";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_PAL_M:
+        return "PAL-M";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_PAL:
+        return "PAL";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_NTSC:
+        return "NTSC";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_GENERIC_FILM:
+        return "generic film";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_BT2020:
+        return "BT.2020";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_CIE1931_XYZ:
+        return "CIE 1931 XYZ";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_DCI_P3:
+        return "DCI-P3";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_DISPLAY_P3:
+        return "Display P3";
+      case WP_COLOR_MANAGER_V1_PRIMARIES_ADOBE_RGB:
+        return "Adobe RGB";
+      default:
+        return "unknown";
+      }
+    }
+
+    nlohmann::json supportedTransferFunctions(uint32_t supported) {
+      nlohmann::json names = nlohmann::json::array();
+      constexpr wlr_color_transfer_function values[] = {
+          WLR_COLOR_TRANSFER_FUNCTION_SRGB,       WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
+          WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR, WLR_COLOR_TRANSFER_FUNCTION_GAMMA22,
+          WLR_COLOR_TRANSFER_FUNCTION_BT1886,
+      };
+      for (const auto value : values) {
+        if ((supported & value) != 0) {
+          names.push_back(transferFunctionName(value));
+        }
+      }
+      return names;
+    }
+
+    nlohmann::json supportedPrimaries(uint32_t supported) {
+      nlohmann::json names = nlohmann::json::array();
+      constexpr wlr_color_named_primaries values[] = {
+          WLR_COLOR_NAMED_PRIMARIES_SRGB,
+          WLR_COLOR_NAMED_PRIMARIES_BT2020,
+      };
+      for (const auto value : values) {
+        if ((supported & value) != 0) {
+          names.push_back(primariesName(value));
+        }
+      }
+      return names;
+    }
+
+    nlohmann::json xy(const wlr_color_cie1931_xy& value) { return {{"x", value.x}, {"y", value.y}}; }
+
+    std::string joinNames(const nlohmann::json& names) {
+      std::string joined;
+      for (const auto& name : names) {
+        if (!joined.empty()) {
+          joined += ", ";
+        }
+        joined += name.get<std::string>();
+      }
+      return joined.empty() ? "none" : joined;
+    }
+
+    void printColor(const nlohmann::json& ok) {
+      const auto& renderer = ok.at("renderer");
+      std::println(
+          "color manager: {}, renderer input transform: {}, output transform: {}, timeline: {}",
+          ok.value("color_manager", false) ? "yes" : "no",
+          renderer.value("input_color_transform", false) ? "yes" : "no",
+          renderer.value("output_color_transform", false) ? "yes" : "no",
+          renderer.value("timeline", false) ? "yes" : "no"
+      );
+      for (const auto& output : ok.at("outputs")) {
+        const std::string fallback = output.value("fallback_reason", "");
+        std::println(
+            "output {}: HDR requested {}, active {}, format {}, {}, {}, SDR white {} cd/m2", output.value("name", ""),
+            output.value("hdr_requested", false) ? "yes" : "no", output.value("hdr_active", false) ? "yes" : "no",
+            output.value("render_format", "invalid"), output.value("transfer_function", "none"),
+            output.value("primaries", "none"), output.value("sdr_white", 0.0)
+        );
+        if (!fallback.empty()) {
+          std::println("  fallback: {}", fallback);
+        }
+        std::println(
+            "  supported transfer functions: {}; primaries: {}", joinNames(output.at("supported_transfer_functions")),
+            joinNames(output.at("supported_primaries"))
+        );
+      }
+      for (const auto& surface : ok.at("surfaces")) {
+        std::println(
+            "surface {}: {} ({}) {}, {}", surface.value("id", ""), surface.value("title", ""),
+            surface.value("app_id", ""), surface.value("transfer_function", "none"), surface.value("primaries", "none")
+        );
+        if (surface.at("mastering_luminance").is_object()) {
+          const auto& luminance = surface.at("mastering_luminance");
+          std::println(
+              "  mastering luminance: {} to {} cd/m2; MaxCLL: {}; MaxFALL: {}", luminance.value("min", 0.0),
+              luminance.value("max", 0.0), surface.value("max_cll", 0), surface.value("max_fall", 0)
+          );
+        } else {
+          std::println(
+              "  mastering luminance: unset; MaxCLL: {}; MaxFALL: {}", surface.value("max_cll", 0),
+              surface.value("max_fall", 0)
+          );
+        }
+        std::println(
+            "  mastering display primaries: {}", surface.at("mastering_display_primaries").is_object() ? "set" : "unset"
         );
       }
     }
@@ -106,6 +304,77 @@ namespace umbriel {
     return nlohmann::json{{"ok", layers}};
   }
 
+  nlohmann::json IpcCommands::color(Server& server, std::string_view /*arg*/) {
+    nlohmann::json outputs = nlohmann::json::array();
+    for (const auto& output : server.outputs()) {
+      const wlr_output* wlrOutput = output->wlr();
+      const wlr_output_image_description* description = wlrOutput->image_description;
+      outputs.push_back({
+          {"name", wlrOutput->name},
+          {"hdr_requested", output->hdrRequested()},
+          {"hdr_active", output->hdrActive()},
+          {"fallback_reason", output->hdrFallbackReason()},
+          {"render_format", fourccName(wlrOutput->render_format)},
+          {"transfer_function", description != nullptr ? transferFunctionName(description->transfer_function) : "none"},
+          {"primaries", description != nullptr ? primariesName(description->primaries) : "none"},
+          {"sdr_white", output->configuredSdrWhite()},
+          {"supported_transfer_functions", supportedTransferFunctions(wlrOutput->supported_transfer_functions)},
+          {"supported_primaries", supportedPrimaries(wlrOutput->supported_primaries)},
+      });
+    }
+
+    nlohmann::json surfaces = nlohmann::json::array();
+    for (const auto& view : server.views()) {
+      if (!view->mapped()) {
+        continue;
+      }
+      wlr_surface* surface = view->toplevel()->base->surface;
+      const wlr_image_description_v1_data* description = wlr_surface_get_image_description_v1_data(surface);
+      nlohmann::json entry = {
+          {"id", view->extForeignIdentifier() != nullptr ? view->extForeignIdentifier() : ""},
+          {"app_id", view->toplevel()->app_id != nullptr ? view->toplevel()->app_id : ""},
+          {"title", view->toplevel()->title != nullptr ? view->toplevel()->title : ""},
+          {"transfer_function", protocolTransferFunctionName(description != nullptr ? description->tf_named : 0)},
+          {"primaries", protocolPrimariesName(description != nullptr ? description->primaries_named : 0)},
+          {"max_cll", description != nullptr ? description->max_cll : 0},
+          {"max_fall", description != nullptr ? description->max_fall : 0},
+      };
+      entry["mastering_display_primaries"] = nullptr;
+      entry["mastering_luminance"] = nullptr;
+      if (description != nullptr && description->has_mastering_display_primaries) {
+        const auto& primaries = description->mastering_display_primaries;
+        entry["mastering_display_primaries"] = {
+            {"red", xy(primaries.red)},
+            {"green", xy(primaries.green)},
+            {"blue", xy(primaries.blue)},
+            {"white", xy(primaries.white)},
+        };
+      }
+      if (description != nullptr && description->has_mastering_luminance) {
+        entry["mastering_luminance"] = {
+            {"min", description->mastering_luminance.min},
+            {"max", description->mastering_luminance.max},
+        };
+      }
+      surfaces.push_back(std::move(entry));
+    }
+
+    return nlohmann::json{
+        {"ok",
+         {
+             {"color_manager", server.colorManager() != nullptr},
+             {"renderer",
+              {
+                  {"input_color_transform", server.renderer()->features.input_color_transform},
+                  {"output_color_transform", server.renderer()->features.output_color_transform},
+                  {"timeline", server.renderer()->features.timeline},
+              }},
+             {"outputs", std::move(outputs)},
+             {"surfaces", std::move(surfaces)},
+         }},
+    };
+  }
+
   nlohmann::json IpcCommands::keyboardLayouts(Server& server, std::string_view /*arg*/) {
     const auto state = server.keyboardLayoutState();
     if (!state.has_value()) {
@@ -131,6 +400,7 @@ namespace umbriel {
       {"msg", "<action> [args...]", "send an action to the compositor", true, &IpcCommands::msg, nullptr},
       {"windows", "", "list windows (app id and title)", false, &IpcCommands::windows, &printWindows},
       {"layers", "", "list layer-shell surfaces", false, &IpcCommands::layers, &printLayers},
+      {"color", "", "show color-management state", false, &IpcCommands::color, &printColor},
       {"keyboard-layouts", "", "list keyboard layouts", false, &IpcCommands::keyboardLayouts, nullptr},
   };
 

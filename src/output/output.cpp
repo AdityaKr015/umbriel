@@ -69,7 +69,17 @@ namespace umbriel {
     return rule == nullptr || rule->enabled;
   }
 
+  bool Output::hdrRequested() const {
+    const OutputRule* rule = findRule(m_output->name);
+    return rule != nullptr && rule->hdr == HdrMode::On;
+  }
+
   bool Output::hdrActive() const { return m_output->image_description != nullptr; }
+
+  float Output::configuredSdrWhite() const {
+    const OutputRule* rule = findRule(m_output->name);
+    return rule != nullptr ? rule->sdrWhite : 203.0F;
+  }
 
   void Output::setHdrFallbackReason(std::string_view reason) {
     if (m_hdrFallbackReason == reason) {
@@ -85,8 +95,7 @@ namespace umbriel {
     if (m_sceneOutput == nullptr) {
       return;
     }
-    const OutputRule* rule = findRule(m_output->name);
-    const float sdrWhite = hdrActive() && rule != nullptr ? rule->sdrWhite : 0.0F;
+    const float sdrWhite = hdrActive() ? configuredSdrWhite() : 0.0F;
     wlr_scene_output_set_sdr_white_level(m_sceneOutput, sdrWhite);
   }
 
@@ -110,7 +119,7 @@ namespace umbriel {
     wlr_output_state_set_enabled(&state, enabled);
 
     const bool hdrWasActive = hdrActive();
-    const bool hdrRequested = rule != nullptr && rule->hdr == HdrMode::On;
+    const bool hdrRequested = this->hdrRequested();
     bool hdrAttempted = false;
 
     bool enableVrr = false;

@@ -11,6 +11,7 @@ namespace umbriel {
     static nlohmann::json keyboardLayouts(Server& server, std::string_view arg);
     static nlohmann::json windows(Server& server, std::string_view arg);
     static nlohmann::json layers(Server& server, std::string_view arg);
+    static nlohmann::json color(Server& server, std::string_view arg);
     static nlohmann::json msg(Server& server, std::string_view arg);
   };
 

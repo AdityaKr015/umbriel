@@ -64,8 +64,10 @@ namespace umbriel {
     [[nodiscard]] bool setPowered(bool powered);
     [[nodiscard]] bool dpmsOff() const { return m_dpmsOff; }
     [[nodiscard]] bool configuredEnabled() const;
+    [[nodiscard]] bool hdrRequested() const;
     [[nodiscard]] bool hdrActive() const;
     [[nodiscard]] const std::string& hdrFallbackReason() const { return m_hdrFallbackReason; }
+    [[nodiscard]] float configuredSdrWhite() const;
     void applyCursorConfig();
     // Re-evaluate fullscreen-controlled VRR after a view or workspace changes.
     void updateVrr();

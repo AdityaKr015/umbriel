@@ -29,7 +29,7 @@ workspaces = 5
 | `position` | `[x, y]` | (auto) | Layout coordinates. |
 | `scale` | float | (auto) | Output scale (0.25-4.0). |
 | `vrr` | string | `"disabled"` | Variable refresh rate policy: `"disabled"`, `"always"`, or `"fullscreen"`. |
-| `hdr` | string | `"off"` | HDR policy: `"off"`, `"on"`, or `"auto"`. |
+| `hdr` | string | `"off"` | HDR policy: `"off"`, `"on"`, `"auto"`, or `"fullscreen"`. |
 | `sdr_white` | float | `203` | SDR reference white in cd/m2 while the output is in HDR mode (80-1000). |
 | `workspaces` | int, string array, or `"dynamic"` | `"dynamic"` | Dynamic numbered workspaces, a static count from 1 to 64, or a static ordered list of 1 to 64 names. |
 | `transform` | string | `"normal"` | Output rotation/flip. |
@@ -74,6 +74,7 @@ HDR accepts these policies:
 | `"off"` | Keep the output in its normal SDR mode. This is the default. |
 | `"on"` | Keep the output in PQ and BT.2020 continuously. SDR surfaces are mapped to `sdr_white`. |
 | `"auto"` | Enable PQ and BT.2020 while a fullscreen surface declaring PQ and BT.2020, or a fullscreen Gamescope surface, is visible on the active workspace. |
+| `"fullscreen"` | Enable PQ and BT.2020 while any fullscreen surface is visible on the active workspace. |
 
 Automatic HDR tracks the fullscreen surface that triggered the transition.
 Other applications that adopt the HDR output color space after activation do
@@ -92,6 +93,20 @@ undetectable. Use Gamescope, a native Wayland HDR path, or `hdr = "on"` for
 those clients. Automatic activation also requires fullscreen content on the
 active workspace; windowed HDR content does not activate the output.
 
+The `"fullscreen"` policy activates HDR before a client supplies color
+metadata. This can break the discovery loop for native Wayland games that only
+offer HDR after seeing an HDR output. It also activates for fullscreen SDR
+applications, including browsers and video players. Untagged surfaces are
+still interpreted as SDR and mapped to `sdr_white`; this policy cannot recover
+missing HDR color information from a direct XWayland game. Use Gamescope when
+an XWayland game needs its Vulkan color space and HDR metadata forwarded.
+
+A focused window can override the output policy with the window-rule `hdr`
+setting. The same `"off"`, `"on"`, `"auto"`, and `"fullscreen"` values are
+accepted. The output policy applies again when focus moves to a window without
+an HDR override. This only controls output activation; it does not assign a
+color space to an untagged surface.
+
 ```toml
 [output.DP-1]
 hdr = "auto"
@@ -100,7 +115,7 @@ sdr_white = 203
 
 Switching between SDR and HDR changes the output format, color space, and HDR
 metadata. Many monitors briefly go black while their display link resynchronizes.
-This is expected for each automatic transition.
+This is expected for each automatic or fullscreen transition.
 
 ## Disabling an output
 

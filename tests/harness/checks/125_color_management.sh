@@ -4,10 +4,12 @@ set -euo pipefail
 
 readonly GLOBAL_CLIENT="${UMBRIEL_GLOBAL_CLIENT:-./build-debug/global-client}"
 readonly UNMAP_CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly POINTER_CLIENT="${UMBRIEL_POINTER_CLIENT:-./build-debug/pointer-client}"
 CLIENT_PID=
+INPUT_PID=
 
-if [[ ! -x $GLOBAL_CLIENT ]]; then
-  echo "global client not built at $GLOBAL_CLIENT"
+if [[ ! -x $GLOBAL_CLIENT || ! -x $POINTER_CLIENT ]]; then
+  echo "required harness clients are not built"
   exit 1
 fi
 
@@ -21,6 +23,9 @@ cp "$UMBRIEL_CONFIG" "$UMBRIEL_CONFIG.color-management-bak"
 cleanup() {
   if [[ -n $CLIENT_PID ]]; then
     kill -TERM "$CLIENT_PID" 2>/dev/null || true
+  fi
+  if [[ -n $INPUT_PID ]]; then
+    kill -TERM "$INPUT_PID" 2>/dev/null || true
   fi
   mv "$UMBRIEL_CONFIG.color-management-bak" "$UMBRIEL_CONFIG"
   "$UMBRIEL" msg config-reload > /dev/null 2>&1 || true
@@ -216,4 +221,204 @@ if ! grep -q '^unmapped$' "$CLIENT_LOG" \
   exit 1
 fi
 
-echo "HDR diagnostics and fullscreen automatic HDR ownership transitions, including Gamescope, verified"
+kill -TERM "$CLIENT_PID"
+wait "$CLIENT_PID" 2>/dev/null || true
+CLIENT_PID=
+
+cp "$UMBRIEL_CONFIG.color-management-bak" "$UMBRIEL_CONFIG"
+printf '\n[output.HEADLESS-1]\nhdr = "fullscreen"\n' >> "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+
+color=$("$UMBRIEL" color --json)
+if ! jq -e '
+  .outputs[0].hdr_mode == "fullscreen"
+  and .outputs[0].hdr_requested == false
+  and .outputs[0].hdr_active == false
+  and .outputs[0].fallback_reason == ""
+' <<< "$color" > /dev/null; then
+  echo "fullscreen HDR did not remain idle without fullscreen content: $color"
+  exit 1
+fi
+
+CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/fullscreen-hdr-client.log"
+env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+  XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
+  REQUEST_FULLSCREEN=1 \
+  "$UNMAP_CLIENT" fullscreen-hdr > "$CLIENT_LOG" 2>&1 &
+CLIENT_PID=$!
+for _ in $(seq 60); do
+  grep -q '^mapped$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+if ! grep -q '^mapped$' "$CLIENT_LOG"; then
+  echo "fullscreen HDR client never mapped: $(cat "$CLIENT_LOG")"
+  exit 1
+fi
+
+for _ in $(seq 40); do
+  color=$("$UMBRIEL" color --json)
+  jq -e '
+    .outputs[0].hdr_mode == "fullscreen"
+    and .outputs[0].hdr_requested == true
+    and .outputs[0].hdr_active == false
+    and .outputs[0].fallback_reason == "display does not advertise PQ"
+    and (.surfaces[] | select(.title == "fullscreen-hdr")
+      | .transfer_function == "none" and .primaries == "none")
+  ' <<< "$color" > /dev/null && break
+  sleep 0.1
+done
+if ! jq -e '
+  .outputs[0].hdr_requested == true
+  and .outputs[0].fallback_reason == "display does not advertise PQ"
+  and (.surfaces[] | select(.title == "fullscreen-hdr")
+    | .transfer_function == "none" and .primaries == "none")
+' <<< "$color" > /dev/null; then
+  echo "untagged fullscreen content did not request fullscreen HDR: $color"
+  exit 1
+fi
+
+fullscreen_hdr_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "fullscreen-hdr") | .id')
+"$UMBRIEL" msg "window-close:$fullscreen_hdr_id" > /dev/null
+for _ in $(seq 40); do
+  grep -q '^unmapped$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+color=$("$UMBRIEL" color --json)
+if ! grep -q '^unmapped$' "$CLIENT_LOG" \
+    || ! jq -e '
+      .outputs[0].hdr_mode == "fullscreen"
+      and .outputs[0].hdr_requested == false
+      and .outputs[0].hdr_active == false
+      and .outputs[0].fallback_reason == ""
+    ' <<< "$color" > /dev/null; then
+  echo "fullscreen HDR did not release after fullscreen content unmapped: $color"
+  exit 1
+fi
+
+kill -TERM "$CLIENT_PID"
+wait "$CLIENT_PID" 2>/dev/null || true
+CLIENT_PID=
+
+cp "$UMBRIEL_CONFIG.color-management-bak" "$UMBRIEL_CONFIG"
+printf '\n[output.HEADLESS-1]\nhdr = "off"\n\n[[window_rule]]\nmatch.app_id = "^hdr-rule-on$"\nhdr = "on"\n' \
+  >> "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+
+env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+  XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
+  "$POINTER_CLIENT" 1280 720 pause 30000 tap 30 > /dev/null 2>&1 &
+INPUT_PID=$!
+sleep 0.1
+
+CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/hdr-rule-on-client.log"
+env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+  XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
+  APP_ID=hdr-rule-on \
+  "$UNMAP_CLIENT" hdr-rule-on > "$CLIENT_LOG" 2>&1 &
+CLIENT_PID=$!
+for _ in $(seq 60); do
+  grep -q '^mapped$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+hdr_rule_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "hdr-rule-on") | .id')
+"$UMBRIEL" msg "window-focus:$hdr_rule_id" > /dev/null
+for _ in $(seq 40); do
+  color=$("$UMBRIEL" color --json)
+  jq -e '
+    .outputs[0].hdr_mode == "off"
+    and .outputs[0].hdr_requested == true
+    and .outputs[0].fallback_reason == "display does not advertise PQ"
+  ' <<< "$color" > /dev/null && break
+  sleep 0.1
+done
+if ! jq -e '
+  .outputs[0].hdr_mode == "off"
+  and .outputs[0].hdr_requested == true
+  and .outputs[0].fallback_reason == "display does not advertise PQ"
+' <<< "$color" > /dev/null; then
+  echo "focused window HDR rule did not override the disabled output policy: $color"
+  exit 1
+fi
+
+"$UMBRIEL" msg "window-close:$hdr_rule_id" > /dev/null
+for _ in $(seq 40); do
+  grep -q '^unmapped$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+for _ in $(seq 40); do
+  color=$("$UMBRIEL" color --json)
+  jq -e '
+    .outputs[0].hdr_requested == false
+    and .outputs[0].fallback_reason == ""
+  ' <<< "$color" > /dev/null && break
+  sleep 0.1
+done
+if ! jq -e '
+  .outputs[0].hdr_requested == false
+  and .outputs[0].fallback_reason == ""
+' <<< "$color" > /dev/null; then
+  echo "output HDR policy did not resume after the enabling window rule unmapped: $color"
+  exit 1
+fi
+
+kill -TERM "$CLIENT_PID"
+wait "$CLIENT_PID" 2>/dev/null || true
+CLIENT_PID=
+
+cp "$UMBRIEL_CONFIG.color-management-bak" "$UMBRIEL_CONFIG"
+printf '\n[output.HEADLESS-1]\nhdr = "on"\n\n[[window_rule]]\nmatch.app_id = "^hdr-rule-off$"\nhdr = "off"\n' \
+  >> "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+
+CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/hdr-rule-off-client.log"
+env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+  XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
+  APP_ID=hdr-rule-off \
+  "$UNMAP_CLIENT" hdr-rule-off > "$CLIENT_LOG" 2>&1 &
+CLIENT_PID=$!
+for _ in $(seq 60); do
+  grep -q '^mapped$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+hdr_rule_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "hdr-rule-off") | .id')
+"$UMBRIEL" msg "window-focus:$hdr_rule_id" > /dev/null
+for _ in $(seq 40); do
+  color=$("$UMBRIEL" color --json)
+  jq -e '
+    .outputs[0].hdr_mode == "on"
+    and .outputs[0].hdr_requested == false
+    and .outputs[0].fallback_reason == ""
+  ' <<< "$color" > /dev/null && break
+  sleep 0.1
+done
+if ! jq -e '
+  .outputs[0].hdr_mode == "on"
+  and .outputs[0].hdr_requested == false
+  and .outputs[0].fallback_reason == ""
+' <<< "$color" > /dev/null; then
+  echo "focused window HDR rule did not override the enabled output policy: $color"
+  exit 1
+fi
+
+"$UMBRIEL" msg "window-close:$hdr_rule_id" > /dev/null
+for _ in $(seq 40); do
+  grep -q '^unmapped$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+for _ in $(seq 40); do
+  color=$("$UMBRIEL" color --json)
+  jq -e '
+    .outputs[0].hdr_requested == true
+    and .outputs[0].fallback_reason == "display does not advertise PQ"
+  ' <<< "$color" > /dev/null && break
+  sleep 0.1
+done
+if ! jq -e '
+  .outputs[0].hdr_requested == true
+  and .outputs[0].fallback_reason == "display does not advertise PQ"
+' <<< "$color" > /dev/null; then
+  echo "enabled output HDR policy did not resume after the disabling window rule unmapped: $color"
+  exit 1
+fi
+
+echo "HDR diagnostics, automatic and fullscreen transitions, and focused window overrides verified"

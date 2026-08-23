@@ -25,9 +25,10 @@ namespace umbriel {
     }
   }
 
-  void Server::refreshVrr() {
+  void Server::refreshOutputPolicies() {
     for (const auto& output : m_outputs) {
       output->updateVrr();
+      output->updateHdr();
     }
   }
 

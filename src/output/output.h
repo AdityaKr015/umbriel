@@ -53,7 +53,7 @@ namespace umbriel {
     // True from the moment a view starts entering fullscreen until its client
     // has committed the exit. Consumers such as hot corners must not act over
     // fullscreen content during either transition.
-    [[nodiscard]] bool hasFullscreenView() const;
+    [[nodiscard]] bool hasFullscreenView(const View* ignored = nullptr) const;
 
     void arrangeLayers();
     // Record that something on this output became stale; flushed at the top of the next frame. Schedules that frame, so
@@ -131,8 +131,9 @@ namespace umbriel {
     bool m_animationRenderLocked = false;
     bool m_dpmsOff = false;
     bool m_hdrGammaWarningLogged = false;
+    bool m_fullscreenHdrRequested = false;
+    bool m_lastHdrRequested = false;
     View* m_autoHdrOwner = nullptr;
-    HdrMode m_appliedHdrMode;
     std::string m_hdrFallbackReason;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;

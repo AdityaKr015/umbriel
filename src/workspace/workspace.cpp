@@ -119,6 +119,7 @@ namespace umbriel {
     if (active) {
       markArrange(false);
       m_group->output()->updateVrr();
+      m_group->output()->updateHdr();
     }
   }
 

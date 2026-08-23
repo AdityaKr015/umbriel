@@ -2320,7 +2320,7 @@ namespace umbriel {
       m_workspace->syncViewPresentation(this);
     }
     if (m_mapped) {
-      m_server->refreshVrr();
+      m_server->refreshOutputPolicies();
     }
   }
 

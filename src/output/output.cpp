@@ -31,8 +31,7 @@ namespace umbriel {
     }
   } // namespace
 
-  Output::Output(Server& server, wlr_output* output)
-      : m_server(&server), m_output(output), m_appliedHdrMode(HdrMode::Off) {
+  Output::Output(Server& server, wlr_output* output) : m_server(&server), m_output(output) {
     m_output->data = this;
     wlr_output_init_render(m_output, m_server->allocator(), m_server->renderer());
 
@@ -76,8 +75,16 @@ namespace umbriel {
   }
 
   bool Output::hdrRequested() const {
+    if (wlr_surface* surface = m_server->seat()->wlr()->keyboard_state.focused_surface) {
+      if (View* view = View::fromSurface(surface); view != nullptr && view->mapped() && view->currentOutput() == this) {
+        if (const std::optional<HdrMode> mode = view->resolvedRules().hdr) {
+          const bool fullscreen = view->layoutFullscreen() || view->toplevel()->current.fullscreen;
+          return hdrEnabled(*mode, fullscreen, autoHdrEligible(view));
+        }
+      }
+    }
     const HdrMode mode = hdrMode();
-    return mode == HdrMode::On || (mode == HdrMode::Auto && m_autoHdrOwner != nullptr);
+    return hdrEnabled(mode, m_fullscreenHdrRequested, m_autoHdrOwner != nullptr);
   }
 
   bool Output::hdrActive() const { return m_output->image_description != nullptr; }
@@ -126,6 +133,7 @@ namespace umbriel {
 
     const bool hdrWasActive = hdrActive();
     const bool hdrRequested = this->hdrRequested();
+    m_lastHdrRequested = hdrRequested;
     bool hdrAttempted = false;
 
     bool enableVrr = false;
@@ -231,7 +239,6 @@ namespace umbriel {
       kLog.error("output '{}': failed to commit configured state", m_output->name);
       return false;
     }
-    m_appliedHdrMode = hdrMode();
     const bool hdrIsActive = hdrActive();
     if (hdrIsActive) {
       setHdrFallbackReason({});
@@ -276,10 +283,12 @@ namespace umbriel {
     return effectiveVrrEnabled(outputMode, fullscreen, focusedMode, focusedFullscreen);
   }
 
-  bool Output::hasFullscreenView() const {
+  bool Output::hasFullscreenView(const View* ignored) const {
     const Workspace* workspace = m_workspaceGroup != nullptr ? m_workspaceGroup->active() : nullptr;
-    return workspace != nullptr && std::ranges::any_of(workspace->allViews(), [](const View* view) {
-             return view->mapped() && (view->layoutFullscreen() || view->toplevel()->current.fullscreen);
+    return workspace != nullptr && std::ranges::any_of(workspace->allViews(), [ignored](const View* view) {
+             return view != ignored
+                 && view->mapped()
+                 && (view->layoutFullscreen() || view->toplevel()->current.fullscreen);
            });
   }
 
@@ -309,37 +318,36 @@ namespace umbriel {
   }
 
   void Output::updateHdr() {
-    if (hdrMode() != HdrMode::Auto) {
+    const HdrMode mode = hdrMode();
+    if (mode == HdrMode::Fullscreen) {
       m_autoHdrOwner = nullptr;
-      return;
-    }
-
-    if (m_autoHdrOwner != nullptr && autoHdrEligible(m_autoHdrOwner)) {
-      return;
-    }
-
-    if (m_autoHdrOwner != nullptr || hdrActive()) {
+      m_fullscreenHdrRequested = hasFullscreenView();
+    } else if (mode == HdrMode::Auto) {
+      m_fullscreenHdrRequested = false;
+      if (!autoHdrEligible(m_autoHdrOwner)) {
+        m_autoHdrOwner = findAutoHdrCandidate();
+      }
+    } else {
+      m_fullscreenHdrRequested = false;
       m_autoHdrOwner = nullptr;
-      if (applyConfiguredState()) {
-        m_server->updateOutputManagerConfig();
-      }
-      return;
     }
 
-    if (View* candidate = findAutoHdrCandidate()) {
-      m_autoHdrOwner = candidate;
-      if (applyConfiguredState()) {
-        m_server->updateOutputManagerConfig();
-      }
+    if (hdrRequested() == m_lastHdrRequested) {
+      return;
+    }
+    if (applyConfiguredState()) {
+      m_server->updateOutputManagerConfig();
     }
   }
 
   void Output::forgetHdrView(const View* view) {
-    if (m_autoHdrOwner != view) {
-      return;
+    if (hdrMode() == HdrMode::Fullscreen && !hasFullscreenView(view)) {
+      m_fullscreenHdrRequested = false;
     }
-    m_autoHdrOwner = nullptr;
-    if (hdrMode() == HdrMode::Auto && applyConfiguredState()) {
+    if (m_autoHdrOwner == view) {
+      m_autoHdrOwner = nullptr;
+    }
+    if (hdrRequested() != m_lastHdrRequested && applyConfiguredState()) {
       m_server->updateOutputManagerConfig();
     }
   }
@@ -378,10 +386,17 @@ namespace umbriel {
 
   void Output::applyOutputState() {
     const HdrMode nextHdrMode = hdrMode();
-    if (nextHdrMode != HdrMode::Auto || m_appliedHdrMode == HdrMode::On) {
+    if (nextHdrMode == HdrMode::Auto) {
+      m_fullscreenHdrRequested = false;
+      if (!autoHdrEligible(m_autoHdrOwner)) {
+        m_autoHdrOwner = findAutoHdrCandidate();
+      }
+    } else if (nextHdrMode == HdrMode::Fullscreen) {
       m_autoHdrOwner = nullptr;
-    } else if (!autoHdrEligible(m_autoHdrOwner)) {
-      m_autoHdrOwner = findAutoHdrCandidate();
+      m_fullscreenHdrRequested = hasFullscreenView();
+    } else {
+      m_autoHdrOwner = nullptr;
+      m_fullscreenHdrRequested = false;
     }
     if (!applyConfiguredState()) {
       return;

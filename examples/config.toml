@@ -124,7 +124,7 @@ center_underfull_strip = true  # center the strip whenever it is narrower than t
 # position = [0, 0]
 # scale = 1.25
 # vrr = "fullscreen"            # "disabled" (default), "always", or "fullscreen"
-# hdr = "auto"                  # "off" (default), "on", or fullscreen PQ content and Gamescope with "auto"
+# hdr = "auto"                  # "off", "on", metadata-aware "auto", or any fullscreen surface with "fullscreen"
 # sdr_white = 203                # SDR reference white in cd/m2 while HDR is active
 # enabled = true                # false powers the monitor off and removes it from the desktop
 # Dynamic workspaces are the default; use a count or name list for static workspaces.
@@ -228,6 +228,7 @@ follows_mouse = false
 # default_focused = false
 # focus_on_activate = true
 # vrr = "always"                # override the output VRR policy while focused
+# hdr = "fullscreen"            # override the output HDR policy while focused
 
 # [[window_rule]]
 # match.title = "^notificationtoasts_.+_desktop"

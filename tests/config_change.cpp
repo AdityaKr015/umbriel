@@ -322,6 +322,15 @@ UMBRIEL_TEST(vrrPolicyTracksFullscreenOnlyWhenRequested) {
   CHECK(umbriel::vrrEnabled(umbriel::VrrMode::Fullscreen, true));
 }
 
+UMBRIEL_TEST(hdrPolicyTracksEligibilityForEachMode) {
+  CHECK(!umbriel::hdrEnabled(umbriel::HdrMode::Off, false, false));
+  CHECK(umbriel::hdrEnabled(umbriel::HdrMode::On, false, false));
+  CHECK(!umbriel::hdrEnabled(umbriel::HdrMode::Auto, true, false));
+  CHECK(umbriel::hdrEnabled(umbriel::HdrMode::Auto, true, true));
+  CHECK(!umbriel::hdrEnabled(umbriel::HdrMode::Fullscreen, false, false));
+  CHECK(umbriel::hdrEnabled(umbriel::HdrMode::Fullscreen, true, false));
+}
+
 UMBRIEL_TEST(blurRulesAndInputReachOnlyTheirConsumers) {
   const Config before;
 

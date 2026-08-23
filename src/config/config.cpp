@@ -69,6 +69,9 @@ namespace umbriel {
       if (value == "auto") {
         return HdrMode::Auto;
       }
+      if (value == "fullscreen") {
+        return HdrMode::Fullscreen;
+      }
       return std::nullopt;
     }
 
@@ -894,7 +897,7 @@ namespace umbriel {
           if (const auto value = readHdrMode(*hdrNode)) {
             rule.hdr = *value;
           } else {
-            warnAt(hdrNode->source(), "ignoring output.{}.hdr (expected off|on|auto)", name);
+            warnAt(hdrNode->source(), "ignoring output.{}.hdr (expected off|on|auto|fullscreen)", name);
           }
         }
         double sdrWhite = rule.sdrWhite;
@@ -1080,6 +1083,13 @@ namespace umbriel {
             rule.vrr = value;
           } else {
             warnAt(vrrNode->source(), "ignoring window_rule.vrr (expected disabled|always|fullscreen)");
+          }
+        }
+        if (const toml::node* hdrNode = keys.take("hdr")) {
+          if (const auto value = readHdrMode(*hdrNode)) {
+            rule.hdr = value;
+          } else {
+            warnAt(hdrNode->source(), "ignoring window_rule.hdr (expected off|on|auto|fullscreen)");
           }
         }
         if (const toml::node* n = keys.take("default_output")) {

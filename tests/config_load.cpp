@@ -328,13 +328,18 @@ UMBRIEL_TEST(outputHdrPolicyAndSdrWhiteLoad) {
   CHECK(store.config().outputs[0].hdr == HdrMode::Auto);
   CHECK_EQ(store.config().outputs[0].sdrWhite, 203.0F);
 
+  file.write("[output.DP-1]\nhdr = \"fullscreen\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].hdr == HdrMode::Fullscreen);
+  CHECK_EQ(store.config().outputs[0].sdrWhite, 203.0F);
+
   file.write("[output.DP-1]\nhdr = \"sometimes\"\n");
   CHECK(store.reload().success);
   CHECK(store.config().outputs[0].hdr == HdrMode::Off);
   CHECK(containsDiagnostic(store, "ignoring output.DP-1.hdr"));
 }
 
-UMBRIEL_TEST(windowVrrPolicyLoadsAndRejectsInvalidValues) {
+UMBRIEL_TEST(windowOutputPoliciesLoadAndRejectInvalidValues) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
@@ -349,6 +354,17 @@ UMBRIEL_TEST(windowVrrPolicyLoadsAndRejectsInvalidValues) {
   CHECK_EQ(store.config().windowRules.size(), size_t{1});
   CHECK(!store.config().windowRules[0].vrr);
   CHECK(containsDiagnostic(store, "ignoring window_rule.vrr"));
+
+  file.write("[[window_rule]]\nmatch.app_id = \"^game$\"\nhdr = \"fullscreen\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().windowRules.size(), size_t{1});
+  CHECK(store.config().windowRules[0].hdr == HdrMode::Fullscreen);
+
+  file.write("[[window_rule]]\nhdr = \"sometimes\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().windowRules.size(), size_t{1});
+  CHECK(!store.config().windowRules[0].hdr);
+  CHECK(containsDiagnostic(store, "ignoring window_rule.hdr"));
 }
 
 UMBRIEL_TEST(outputEnabledFlagParsesAndDefaultsTrue) {

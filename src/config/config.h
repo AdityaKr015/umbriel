@@ -98,6 +98,7 @@ namespace umbriel {
     Off,
     On,
     Auto,
+    Fullscreen,
   };
   [[nodiscard]] constexpr std::string_view hdrModeName(HdrMode mode) {
     switch (mode) {
@@ -107,11 +108,18 @@ namespace umbriel {
       return "on";
     case HdrMode::Auto:
       return "auto";
+    case HdrMode::Fullscreen:
+      return "fullscreen";
     }
     return "off";
   }
   [[nodiscard]] constexpr bool vrrEnabled(VrrMode mode, bool fullscreen) {
     return mode == VrrMode::Always || (mode == VrrMode::Fullscreen && fullscreen);
+  }
+  [[nodiscard]] constexpr bool hdrEnabled(HdrMode mode, bool fullscreen, bool autoEligible) {
+    return mode == HdrMode::On
+        || (mode == HdrMode::Auto && autoEligible)
+        || (mode == HdrMode::Fullscreen && fullscreen);
   }
   [[nodiscard]] constexpr bool effectiveVrrEnabled(
       VrrMode outputMode, bool outputFullscreen, std::optional<VrrMode> windowMode, bool windowFullscreen
@@ -172,6 +180,7 @@ namespace umbriel {
     std::optional<bool> defaultPinned;
     std::optional<bool> focusOnActivate;
     std::optional<VrrMode> vrr;
+    std::optional<HdrMode> hdr;
     std::optional<double> opacity; // 0.0-1.0
     std::optional<bool> blur;
     std::optional<bool> blurPopups;
@@ -196,6 +205,7 @@ namespace umbriel {
           && defaultPinned == other.defaultPinned
           && focusOnActivate == other.focusOnActivate
           && vrr == other.vrr
+          && hdr == other.hdr
           && opacity == other.opacity
           && blur == other.blur
           && blurPopups == other.blurPopups
@@ -218,6 +228,7 @@ namespace umbriel {
     std::optional<bool> defaultPinned;
     std::optional<bool> focusOnActivate;
     std::optional<VrrMode> vrr;
+    std::optional<HdrMode> hdr;
     std::optional<double> opacity;
     std::optional<bool> blur;
     std::optional<bool> blurPopups;

@@ -139,6 +139,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   app.defaultPinned = true;
   app.focusOnActivate = false;
   app.vrr = VrrMode::Disabled;
+  app.hdr = umbriel::HdrMode::Off;
   app.defaultPosition = umbriel::WindowPosition{
       .x = 12,
       .y = 24,
@@ -152,6 +153,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   title.opacity = 0.8;
   title.focusOnActivate = true;
   title.vrr = VrrMode::Always;
+  title.hdr = umbriel::HdrMode::On;
   title.defaultPinned = false;
   config.windowRules.push_back(std::move(title));
 
@@ -172,10 +174,12 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK(resolved.defaultPinned && !*resolved.defaultPinned);
   CHECK(resolved.focusOnActivate && *resolved.focusOnActivate);
   CHECK(resolved.vrr == VrrMode::Always);
+  CHECK(resolved.hdr == umbriel::HdrMode::On);
 
   const auto appOnly = umbriel::resolveWindowRules(config, "foot", "editor", false);
   CHECK(appOnly.defaultPinned && *appOnly.defaultPinned);
   CHECK(appOnly.vrr == VrrMode::Disabled);
+  CHECK(appOnly.hdr == umbriel::HdrMode::Off);
 
   const auto focused = umbriel::resolveWindowRules(config, "foot", "project shell", true);
   CHECK(focused.opacity && *focused.opacity == 0.8);

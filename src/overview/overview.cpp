@@ -518,6 +518,10 @@ namespace umbriel {
       wlr_scene_buffer_set_transform(copy, source->transform);
       wlr_scene_buffer_set_corner_radii(copy, source->corners);
       wlr_scene_buffer_set_opacity(copy, source->opacity);
+      wlr_scene_buffer_set_transfer_function(copy, source->transfer_function);
+      wlr_scene_buffer_set_primaries(copy, source->primaries);
+      wlr_scene_buffer_set_color_encoding(copy, source->color_encoding);
+      wlr_scene_buffer_set_color_range(copy, source->color_range);
       wlr_scene_buffer_set_filter_mode(copy, WLR_SCALE_FILTER_BILINEAR);
       ++buffersCopied;
     }

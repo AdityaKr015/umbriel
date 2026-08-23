@@ -971,6 +971,9 @@ namespace umbriel {
     std::swap(m_workspaces[index], m_workspaces[static_cast<size_t>(target)]);
     if (m_dynamic) {
       refreshDynamicWorkspaceMetadata();
+      if (m_workspaces.back()->hasViews()) {
+        appendDynamicWorkspace();
+      }
     } else {
       for (const size_t slot : {index, static_cast<size_t>(target)}) {
         Workspace* moved = m_workspaces[slot].get();

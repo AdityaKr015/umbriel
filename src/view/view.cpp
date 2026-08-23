@@ -1784,7 +1784,7 @@ namespace umbriel {
       if (maximized) {
         m_workspace->ensureFocusedVisible();
       }
-      m_workspace->markArrange(false);
+      m_workspace->markArrange(true);
     }
     updateForeignState();
   }

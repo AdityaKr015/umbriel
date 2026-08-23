@@ -1356,7 +1356,7 @@ namespace umbriel {
 
   void View::handleMap() {
     m_mapped = true;
-    m_acceptClientMaximizeRequests = false;
+    m_acceptClientMaximizeRequests = config().general.honorRestoredMaximize;
     m_acceptClientMaximizeIdle =
         wl_event_loop_add_idle(wl_display_get_event_loop(m_server->display()), onAcceptClientMaximizeRequests, this);
     if (m_acceptClientMaximizeIdle == nullptr) {
@@ -1433,7 +1433,8 @@ namespace umbriel {
     // flag during this transition; only an explicit window rule overrides the
     // layout's initial size.
     const bool ruleMaximized = rule.defaultMaximize && *rule.defaultMaximize;
-    if (ruleMaximized) {
+    const bool restoredMaximized = config().general.honorRestoredMaximize && m_toplevel->requested.maximized;
+    if (ruleMaximized || restoredMaximized) {
       setMaximized(true);
     }
 

@@ -462,6 +462,20 @@ default_position = { x = 0, y = 0 }
   CHECK(store.config().windowRules[1].defaultPosition->anchor == umbriel::WindowPositionAnchor::Center);
 }
 
+UMBRIEL_TEST(restoredMaximizePolicyLoadsAndDefaultsOff) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[general]\nhonor_restored_maximize = true\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().general.honorRestoredMaximize);
+
+  file.write("[general]\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().general.honorRestoredMaximize);
+}
+
 UMBRIEL_TEST(deviceInputOverridesLoadAndMatchExactNames) {
   const TempConfig file;
   file.write(R"(

@@ -569,6 +569,7 @@ namespace umbriel {
         s.boolean("xwayland", loaded.general.xwayland)
             .boolean("show_cheatsheet", loaded.general.showCheatsheet)
             .boolean("focus_on_activate", loaded.general.focusOnActivate)
+            .boolean("honor_restored_maximize", loaded.general.honorRestoredMaximize)
             .strings("autostart", loaded.general.autostart);
       });
     }

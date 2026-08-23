@@ -340,6 +340,8 @@ namespace umbriel {
       bool showCheatsheet = true;
       // Honor activation requests by focusing and revealing the target window.
       bool focusOnActivate = false;
+      // Honor maximized state restored by a client while its window opens.
+      bool honorRestoredMaximize = false;
       bool operator==(const General&) const = default;
     } general;
 

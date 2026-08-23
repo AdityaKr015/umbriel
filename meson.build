@@ -172,6 +172,19 @@ color_management_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+color_management_server_h = custom_target(
+  'color-management-v1-server-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/color-management/color-management-v1.xml',
+  output: 'color-management-v1-server-protocol.h',
+  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+color_management_server_c = custom_target(
+  'color-management-v1-server-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/color-management/color-management-v1.xml',
+  output: 'color-management-v1-server-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 idle_inhibit_client_h = custom_target(
   'idle-inhibit-unstable-v1-client-protocol.h',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/idle-inhibit/idle-inhibit-unstable-v1.xml',
@@ -306,6 +319,7 @@ core_sources = files(
   'src/config/config_merge.cpp',
   'src/config/config_watcher.cpp',
   'src/layout/drop_target.cpp',
+  'src/server/wine_color_manager.cpp',
   'src/server/server.cpp',
   'src/server/server_events.cpp',
   'src/server/server_keybinds.cpp',
@@ -364,7 +378,13 @@ umbriel_core_deps = [
 
 umbriel_core = static_library(
   'umbriel-core',
-  core_sources + [layer_shell_protocol_h, output_mgmt_client_h, output_mgmt_client_c],
+  core_sources + [
+    layer_shell_protocol_h,
+    output_mgmt_client_h,
+    output_mgmt_client_c,
+    color_management_server_h,
+    color_management_server_c,
+  ],
   include_directories: include_directories('src'),
   link_with: umbriel_pure,
   dependencies: umbriel_core_deps,

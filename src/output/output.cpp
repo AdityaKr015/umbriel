@@ -6,6 +6,7 @@
 #include "layer/layer_surface.h"
 #include "scene/node.h"
 #include "server/server.h"
+#include "server/wine_color_manager.h"
 #include "view/view.h"
 #include "wlr.h"
 #include "workspace/workspace.h"
@@ -264,6 +265,7 @@ namespace umbriel {
     } else {
       kLog.info("output '{}': powered off", m_output->name);
     }
+    m_server->updateColorPreferences();
     return true;
   }
 
@@ -300,12 +302,8 @@ namespace umbriel {
         || (!view->layoutFullscreen() && !view->toplevel()->current.fullscreen)) {
       return false;
     }
-    const char* appId = view->toplevel()->app_id;
-    if (appId != nullptr && std::string_view(appId) == "gamescope") {
-      return true;
-    }
     const wlr_image_description_v1_data* description =
-        wlr_surface_get_image_description_v1_data(view->toplevel()->base->surface);
+        m_server->surfaceImageDescription(view->toplevel()->base->surface);
     return description != nullptr
         && description->tf_named == WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ
         && description->primaries_named == WP_COLOR_MANAGER_V1_PRIMARIES_BT2020;
@@ -332,12 +330,10 @@ namespace umbriel {
       m_autoHdrOwner = nullptr;
     }
 
-    if (hdrRequested() == m_lastHdrRequested) {
-      return;
-    }
-    if (applyConfiguredState()) {
+    if (hdrRequested() != m_lastHdrRequested && applyConfiguredState()) {
       m_server->updateOutputManagerConfig();
     }
+    m_server->updateColorPreferences();
   }
 
   void Output::forgetHdrView(const View* view) {
@@ -350,6 +346,7 @@ namespace umbriel {
     if (hdrRequested() != m_lastHdrRequested && applyConfiguredState()) {
       m_server->updateOutputManagerConfig();
     }
+    m_server->updateColorPreferences();
   }
 
   void Output::updateVrr() {
@@ -741,6 +738,14 @@ namespace umbriel {
     if (animationsActive != m_animationRenderLocked) {
       wlr_output_lock_attach_render(m_output, animationsActive);
       m_animationRenderLocked = animationsActive;
+    }
+
+    // wlroots only knows about descriptions owned by its color manager and resets
+    // compatibility-managed Wine buffers to SDR on every surface commit. Restore
+    // their descriptions at the render boundary so no frame can observe that
+    // transient default state.
+    if (WineColorManager* colorManager = m_server->wineColorManager()) {
+      colorManager->applySurfaceDescriptions();
     }
 
     if (m_output->width <= 0 || m_output->height <= 0) {

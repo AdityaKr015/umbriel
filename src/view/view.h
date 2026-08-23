@@ -28,6 +28,7 @@ struct wlr_xdg_toplevel;
 namespace umbriel {
 
   class Server;
+  class WineColorManager;
   class Workspace;
   struct ResolvedWindowRule;
 
@@ -146,6 +147,7 @@ namespace umbriel {
 
   private:
     friend class Cursor;
+    friend class WineColorManager;
     friend class Output;
     friend class Server;
     friend class Popup;

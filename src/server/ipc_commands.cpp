@@ -331,7 +331,7 @@ namespace umbriel {
         continue;
       }
       wlr_surface* surface = view->toplevel()->base->surface;
-      const wlr_image_description_v1_data* description = wlr_surface_get_image_description_v1_data(surface);
+      const wlr_image_description_v1_data* description = server.surfaceImageDescription(surface);
       nlohmann::json entry = {
           {"id", view->extForeignIdentifier() != nullptr ? view->extForeignIdentifier() : ""},
           {"app_id", view->toplevel()->app_id != nullptr ? view->toplevel()->app_id : ""},

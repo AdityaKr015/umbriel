@@ -49,8 +49,36 @@ namespace {
     bool requestFullscreen = false;
     bool fullscreenRequested = false;
     bool requestHdr = false;
+    bool requestWindowsScrgb = false;
+    bool hasExtendedTargetVolume = false;
+    bool hasWindowsScrgb = false;
+    bool colorManagerDone = false;
     bool imageDescriptionReady = false;
     bool imageDescriptionFailed = false;
+  };
+
+  void colorManagerSupportedIntent(void*, wp_color_manager_v1*, uint32_t) {}
+
+  void colorManagerSupportedFeature(void* data, wp_color_manager_v1*, uint32_t feature) {
+    auto& state = *static_cast<State*>(data);
+    if (feature == WP_COLOR_MANAGER_V1_FEATURE_EXTENDED_TARGET_VOLUME) {
+      state.hasExtendedTargetVolume = true;
+    } else if (feature == WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_SCRGB) {
+      state.hasWindowsScrgb = true;
+    }
+  }
+
+  void colorManagerSupportedTransferFunction(void*, wp_color_manager_v1*, uint32_t) {}
+  void colorManagerSupportedPrimaries(void*, wp_color_manager_v1*, uint32_t) {}
+
+  void colorManagerDone(void* data, wp_color_manager_v1*) { static_cast<State*>(data)->colorManagerDone = true; }
+
+  constexpr wp_color_manager_v1_listener kColorManagerListener = {
+      .supported_intent = colorManagerSupportedIntent,
+      .supported_feature = colorManagerSupportedFeature,
+      .supported_tf_named = colorManagerSupportedTransferFunction,
+      .supported_primaries_named = colorManagerSupportedPrimaries,
+      .done = colorManagerDone,
   };
 
   void imageDescriptionFailed(void* data, wp_image_description_v1*, uint32_t, const char* message) {
@@ -238,6 +266,7 @@ namespace {
       state.colorManager = static_cast<wp_color_manager_v1*>(
           wl_registry_bind(registry, name, &wp_color_manager_v1_interface, std::min(version, 2U))
       );
+      wp_color_manager_v1_add_listener(state.colorManager, &kColorManagerListener, &state);
     }
   }
 
@@ -264,6 +293,7 @@ int main(int argc, char** argv) {
   state.requestMaximized = std::getenv("REQUEST_MAXIMIZED") != nullptr;
   state.requestFullscreen = std::getenv("REQUEST_FULLSCREEN") != nullptr;
   state.requestHdr = std::getenv("COLOR_HDR") != nullptr;
+  state.requestWindowsScrgb = std::getenv("COLOR_WINDOWS_SCRGB") != nullptr;
   if (argc > 2) {
     state.width = std::max(1, std::atoi(argv[2]));
   }
@@ -293,16 +323,26 @@ int main(int argc, char** argv) {
   }
 
   state.surface = wl_compositor_create_surface(state.compositor);
-  if (state.requestHdr) {
+  if (state.requestHdr || state.requestWindowsScrgb) {
     if (state.colorManager == nullptr) {
       std::println(stderr, "unmap-client: compositor is missing wp_color_manager_v1");
       return EXIT_FAILURE;
     }
+    if (state.requestWindowsScrgb
+        && (!state.colorManagerDone || !state.hasExtendedTargetVolume || !state.hasWindowsScrgb)) {
+      std::println(stderr, "unmap-client: compositor is missing Wine scRGB color-management features");
+      return EXIT_FAILURE;
+    }
     state.colorSurface = wp_color_manager_v1_get_surface(state.colorManager, state.surface);
-    wp_image_description_creator_params_v1* params = wp_color_manager_v1_create_parametric_creator(state.colorManager);
-    wp_image_description_creator_params_v1_set_tf_named(params, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ);
-    wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020);
-    state.imageDescription = wp_image_description_creator_params_v1_create(params);
+    if (state.requestWindowsScrgb) {
+      state.imageDescription = wp_color_manager_v1_create_windows_scrgb(state.colorManager);
+    } else {
+      wp_image_description_creator_params_v1* params =
+          wp_color_manager_v1_create_parametric_creator(state.colorManager);
+      wp_image_description_creator_params_v1_set_tf_named(params, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ);
+      wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020);
+      state.imageDescription = wp_image_description_creator_params_v1_create(params);
+    }
     wp_image_description_v1_add_listener(state.imageDescription, &kImageDescriptionListener, &state);
     while (!state.imageDescriptionReady && !state.imageDescriptionFailed && wl_display_roundtrip(state.display) >= 0) {
     }

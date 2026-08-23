@@ -92,6 +92,56 @@ kill -TERM "$CLIENT_PID"
 wait "$CLIENT_PID" 2>/dev/null || true
 CLIENT_PID=
 
+CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/wine-scrgb-client.log"
+env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+  XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
+  COLOR_WINDOWS_SCRGB=1 APP_ID=wine-scrgb \
+  bash -c 'exec -a wine "$@"' _ \
+  "$UNMAP_CLIENT" wine-scrgb > "$CLIENT_LOG" 2>&1 &
+CLIENT_PID=$!
+for _ in $(seq 60); do
+  grep -q '^mapped$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+if ! grep -q '^mapped$' "$CLIENT_LOG"; then
+  echo "Wine scRGB client never mapped: $(cat "$CLIENT_LOG")"
+  exit 1
+fi
+
+for _ in $(seq 40); do
+  color=$("$UMBRIEL" color --json)
+  jq -e '
+    .outputs[0].hdr_mode == "on"
+    and .outputs[0].hdr_requested == true
+    and (.surfaces[] | select(.title == "wine-scrgb")
+      | .app_id == "wine-scrgb" and .transfer_function == "extended linear" and .primaries == "sRGB")
+  ' <<< "$color" > /dev/null && break
+  sleep 0.1
+done
+if ! jq -e '
+  .outputs[0].hdr_requested == true
+  and (.surfaces[] | select(.title == "wine-scrgb")
+    | .app_id == "wine-scrgb" and .transfer_function == "extended linear" and .primaries == "sRGB")
+' <<< "$color" > /dev/null; then
+  echo "Wine scRGB metadata did not reach surface diagnostics: $color"
+  exit 1
+fi
+
+wine_scrgb_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "wine-scrgb") | .id')
+"$UMBRIEL" msg "window-close:$wine_scrgb_id" > /dev/null
+for _ in $(seq 40); do
+  grep -q '^unmapped$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+if ! grep -q '^unmapped$' "$CLIENT_LOG"; then
+  echo "Wine scRGB client did not unmap"
+  exit 1
+fi
+
+kill -TERM "$CLIENT_PID"
+wait "$CLIENT_PID" 2>/dev/null || true
+CLIENT_PID=
+
 cp "$UMBRIEL_CONFIG.color-management-bak" "$UMBRIEL_CONFIG"
 printf '\n[output.HEADLESS-1]\nhdr = "auto"\n' >> "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
@@ -159,65 +209,6 @@ if ! grep -q '^unmapped$' "$CLIENT_LOG" \
       and .outputs[0].fallback_reason == ""
     ' <<< "$color" > /dev/null; then
   echo "automatic HDR did not release after its owner unmapped: $color"
-  exit 1
-fi
-
-kill -TERM "$CLIENT_PID"
-wait "$CLIENT_PID" 2>/dev/null || true
-CLIENT_PID=
-
-CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/auto-hdr-gamescope-client.log"
-env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
-  XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
-  REQUEST_FULLSCREEN=1 APP_ID=gamescope \
-  "$UNMAP_CLIENT" auto-hdr-gamescope > "$CLIENT_LOG" 2>&1 &
-CLIENT_PID=$!
-for _ in $(seq 60); do
-  grep -q '^mapped$' "$CLIENT_LOG" && break
-  sleep 0.1
-done
-if ! grep -q '^mapped$' "$CLIENT_LOG"; then
-  echo "automatic HDR Gamescope client never mapped: $(cat "$CLIENT_LOG")"
-  exit 1
-fi
-
-for _ in $(seq 40); do
-  color=$("$UMBRIEL" color --json)
-  jq -e '
-    .outputs[0].hdr_mode == "auto"
-    and .outputs[0].hdr_requested == true
-    and .outputs[0].hdr_active == false
-    and .outputs[0].fallback_reason == "display does not advertise PQ"
-    and (.surfaces[] | select(.title == "auto-hdr-gamescope")
-      | .app_id == "gamescope" and .transfer_function == "none" and .primaries == "none")
-  ' <<< "$color" > /dev/null && break
-  sleep 0.1
-done
-if ! jq -e '
-  .outputs[0].hdr_requested == true
-  and .outputs[0].fallback_reason == "display does not advertise PQ"
-  and (.surfaces[] | select(.title == "auto-hdr-gamescope")
-    | .app_id == "gamescope" and .transfer_function == "none" and .primaries == "none")
-' <<< "$color" > /dev/null; then
-  echo "fullscreen Gamescope did not request automatic HDR without surface metadata: $color"
-  exit 1
-fi
-
-gamescope_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "auto-hdr-gamescope") | .id')
-"$UMBRIEL" msg "window-close:$gamescope_id" > /dev/null
-for _ in $(seq 40); do
-  grep -q '^unmapped$' "$CLIENT_LOG" && break
-  sleep 0.1
-done
-color=$("$UMBRIEL" color --json)
-if ! grep -q '^unmapped$' "$CLIENT_LOG" \
-    || ! jq -e '
-      .outputs[0].hdr_mode == "auto"
-      and .outputs[0].hdr_requested == false
-      and .outputs[0].hdr_active == false
-      and .outputs[0].fallback_reason == ""
-    ' <<< "$color" > /dev/null; then
-  echo "automatic HDR did not release after Gamescope unmapped: $color"
   exit 1
 fi
 
@@ -421,4 +412,4 @@ if ! jq -e '
   exit 1
 fi
 
-echo "HDR diagnostics, automatic and fullscreen transitions, and focused window overrides verified"
+echo "HDR diagnostics, Wine scRGB, automatic and fullscreen transitions, and focused window overrides verified"

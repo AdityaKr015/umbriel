@@ -73,7 +73,7 @@ HDR accepts these policies:
 |-------|----------|
 | `"off"` | Keep the output in its normal SDR mode. This is the default. |
 | `"on"` | Keep the output in PQ and BT.2020 continuously. SDR surfaces are mapped to `sdr_white`. |
-| `"auto"` | Enable PQ and BT.2020 while a fullscreen surface declaring PQ and BT.2020, or a fullscreen Gamescope surface, is visible on the active workspace. |
+| `"auto"` | Enable PQ and BT.2020 while a fullscreen surface declaring PQ and BT.2020 is visible on the active workspace. |
 | `"fullscreen"` | Enable PQ and BT.2020 while any fullscreen surface is visible on the active workspace. |
 
 Automatic HDR tracks the fullscreen surface that triggered the transition.
@@ -82,24 +82,18 @@ not keep HDR enabled. Leaving fullscreen, changing workspace, moving the
 surface to another output, unmapping it, or closing it returns the output to
 SDR.
 
-Gamescope is recognized by the exact `gamescope` application ID. A fullscreen
-Gamescope surface activates HDR before it supplies color metadata, allowing a
-nested Gamescope session started with HDR enabled to discover the HDR output.
-This also means that fullscreen Gamescope activates the output for SDR games.
-
 Automatic HDR cannot infer a color space from pixel values. Direct XWayland
 games and other clients that do not attach color-management metadata remain
-undetectable. Use Gamescope, a native Wayland HDR path, or `hdr = "on"` for
-those clients. Automatic activation also requires fullscreen content on the
-active workspace; windowed HDR content does not activate the output.
+undetectable. Use a native Wayland HDR path or `hdr = "on"` for those clients.
+Automatic activation also requires fullscreen content on the active workspace;
+windowed HDR content does not activate the output.
 
 The `"fullscreen"` policy activates HDR before a client supplies color
 metadata. This can break the discovery loop for native Wayland games that only
 offer HDR after seeing an HDR output. It also activates for fullscreen SDR
 applications, including browsers and video players. Untagged surfaces are
 still interpreted as SDR and mapped to `sdr_white`; this policy cannot recover
-missing HDR color information from a direct XWayland game. Use Gamescope when
-an XWayland game needs its Vulkan color space and HDR metadata forwarded.
+missing HDR color information from a direct XWayland game.
 
 A focused window can override the output policy with the window-rule `hdr`
 setting. The same `"off"`, `"on"`, `"auto"`, and `"fullscreen"` values are

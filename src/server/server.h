@@ -22,6 +22,7 @@ struct wlr_backend;
 struct wlr_box;
 struct wlr_compositor;
 struct wlr_color_manager_v1;
+struct wlr_image_description_v1_data;
 struct wlr_ext_foreign_toplevel_handle_v1;
 struct wlr_ext_foreign_toplevel_list_v1;
 struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1;
@@ -85,6 +86,7 @@ namespace umbriel {
   class ConfigWatcher;
   class InputMethodRelay;
   class Gestures;
+  class WineColorManager;
   class HintRect;
   class Keyboard;
   class LayerSurface;
@@ -123,6 +125,9 @@ namespace umbriel {
     [[nodiscard]] wlr_allocator* allocator() const { return m_allocator; }
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
     [[nodiscard]] wlr_color_manager_v1* colorManager() const { return m_colorManager; }
+    [[nodiscard]] WineColorManager* wineColorManager() const { return m_wineColorManager.get(); }
+    [[nodiscard]] const wlr_image_description_v1_data* surfaceImageDescription(wlr_surface* surface) const;
+    void updateColorPreferences();
     [[nodiscard]] wlr_scene_tree* xdgTree() const { return m_xdgTree; }
     [[nodiscard]] wlr_scene_tree* scratchpadTree() const { return m_scratchpadTree; }
     [[nodiscard]] wlr_scene_tree* scratchpadShadowTree() const { return m_scratchpadShadowTree; }
@@ -408,6 +413,7 @@ namespace umbriel {
     wlr_output_layout* m_outputLayout = nullptr;
     wlr_scene* m_scene = nullptr;
     wlr_color_manager_v1* m_colorManager = nullptr;
+    std::unique_ptr<WineColorManager> m_wineColorManager;
     wlr_scene_output_layout* m_sceneLayout = nullptr;
     wlr_xdg_shell* m_xdgShell = nullptr;
     wlr_xdg_decoration_manager_v1* m_xdgDecorationManager = nullptr;

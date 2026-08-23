@@ -21,6 +21,7 @@
 #include "scene/hint_rect.h"
 #include "scene/quit_confirm.h"
 #include "server/ipc.h"
+#include "server/wine_color_manager.h"
 #include "view/view.h"
 #include "wlr.h"
 #include "workspace/scratchpad.h"
@@ -44,10 +45,18 @@ namespace umbriel {
     constexpr Logger kLog("server");
     constexpr size_t kWaylandClientBufferSize = 1024 * 1024;
 
-    bool filterGlobal(const wl_client*, const wl_global* global, void*) {
+    bool filterGlobal(const wl_client* client, const wl_global* global, void* data) {
+      auto* server = static_cast<Server*>(data);
       const wl_interface* interface = wl_global_get_interface(global);
       if (interface != nullptr && std::string_view(interface->name) == "zwp_primary_selection_device_manager_v1") {
         return config().input.middleClickPaste;
+      }
+      if (interface != nullptr && std::string_view(interface->name) == "wp_color_manager_v1") {
+        const bool wine = WineColorManager::clientNeedsCompatibility(client);
+        if (server->wineColorManager() != nullptr && global == server->wineColorManager()->global()) {
+          return wine;
+        }
+        return !wine;
       }
       return true;
     }
@@ -147,7 +156,7 @@ namespace umbriel {
     if (wlr_primary_selection_v1_device_manager_create(m_display) == nullptr) {
       throw std::runtime_error("failed to create primary-selection manager");
     }
-    wl_display_set_global_filter(m_display, filterGlobal, nullptr);
+    wl_display_set_global_filter(m_display, filterGlobal, this);
     wlr_viewporter_create(m_display);
     wlr_fractional_scale_manager_v1_create(m_display, 1);
     wlr_presentation_create(m_display, m_backend, 2);
@@ -195,6 +204,10 @@ namespace umbriel {
         throw std::runtime_error("failed to create color-management manager");
       }
       wlr_scene_set_color_manager_v1(m_scene, m_colorManager);
+      m_wineColorManager = std::make_unique<WineColorManager>(*this);
+      if (!m_wineColorManager->valid()) {
+        throw std::runtime_error("failed to create Wine color-management manager");
+      }
     }
     const Config::Appearance::Blur& blur = config().appearance.blur;
     wlr_scene_set_blur_data(
@@ -388,6 +401,7 @@ namespace umbriel {
       }
     }
     wl_display_destroy_clients(m_display);
+    m_wineColorManager.reset();
     // Chrome components destroy scene nodes in their destructors, so they must go before the scene tree does; otherwise
     // the destructor body frees the nodes and the member destructors touch already-freed memory.
     m_quitConfirm.reset();
@@ -398,6 +412,24 @@ namespace umbriel {
     wlr_renderer_destroy(m_renderer);
     wlr_backend_destroy(m_backend);
     wl_display_destroy(m_display);
+  }
+
+  const wlr_image_description_v1_data* Server::surfaceImageDescription(wlr_surface* surface) const {
+    if (const wlr_image_description_v1_data* description = wlr_surface_get_image_description_v1_data(surface)) {
+      return description;
+    }
+    if (m_wineColorManager != nullptr) {
+      if (const wlr_image_description_v1_data* description = m_wineColorManager->surfaceDescription(surface)) {
+        return description;
+      }
+    }
+    return nullptr;
+  }
+
+  void Server::updateColorPreferences() {
+    if (m_wineColorManager != nullptr) {
+      m_wineColorManager->updatePreferredDescriptions();
+    }
   }
 
   bool Server::start(const char* startupCmd) {

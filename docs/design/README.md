@@ -12,6 +12,7 @@ boundaries, or regression-sensitive behavior.
 - [Workspace lifecycle](workspace-lifecycle.md)
 - [Overview rendering](overview-rendering.md)
 - [Xwayland input stability](xwayland-input-stability.md)
+- [Client buffer constraints](client-buffer-constraints.md)
 
 ## Pointer drag completion
 

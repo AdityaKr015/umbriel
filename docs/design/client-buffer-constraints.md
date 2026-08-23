@@ -1,0 +1,33 @@
+# Client buffer constraints
+
+Clients size and format their own `wl_shm` buffers from what the compositor
+tells them. Getting either wrong is a protocol error, so the client dies.
+
+## Initial layer-surface configure
+
+`LayerSurface::handleCommit` arranges the output synchronously on
+`initial_commit`. A client that requests 0x0 learns its size from that first
+configure; deferring it to the next frame lets the client allocate first and get
+`Invalid size (0)`.
+
+The `Dirty::LayerArrange` flag recorded alongside is the retry:
+`Output::arrangeLayers` returns early while the output has no effective
+resolution.
+
+## Capture readback format
+
+`fx_texture_preferred_read_format` in the SceneFX fork never reports packed
+24-bit. It is the only shm format the capture protocols offer clients, and the
+NVIDIA blob reports `GL_RGB` / `GL_UNSIGNED_BYTE` for opaque targets, which maps
+to `DRM_FORMAT_BGR888`. Clients assume a 4-byte pixel, derive `width * 4`, and
+wlroots rejects it because a stride must divide by the pixel size. GLES2 always
+allows `GL_RGBA` / `GL_UNSIGNED_BYTE` readback, so the clamp to 32-bit costs
+nothing at 8bpc.
+
+Do not fix this by dropping `DRM_FORMAT_BGR888` from the fork's pixel format
+table: the table also drives `wl_shm` advertisement and texture upload, and it
+is identical to wlroots' gles2 table.
+
+To reproduce without NVIDIA, hardcode `gl_format = GL_RGB`,
+`gl_type = GL_UNSIGNED_BYTE`, `alpha_size = 0` after the `glGetIntegerv` calls
+and capture with `grim`.

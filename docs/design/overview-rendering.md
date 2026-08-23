@@ -27,6 +27,12 @@ filmstrip scrolling, card dragging, and drop hints. Layout movement, resize,
 and fade transitions continue to advance in `View`, so the overview and the
 normal workspace cannot settle through different paths.
 
+Selecting a card focuses it before the closing zoom starts. The overview still
+withholds keyboard input until teardown, while a scrolling layout can begin
+revealing the selected column on the same frame and animation timeline as the
+zoom. The close therefore lands directly on the selected column instead of
+starting a second movement afterwards.
+
 Unmap is the one transition that cannot remain live because the client buffer
 may disappear immediately. Before removing an unmapped card, the overview
 freezes its already-scaled buffers and borders into a scene snapshot. That tree
@@ -84,6 +90,8 @@ The relevant checks are:
 - [`tests/harness/checks/114_overview_close_fade.sh`](../../tests/harness/checks/114_overview_close_fade.sh)
   for a card remaining visible after unmap and disappearing when the shared
   close snapshot settles.
+- [`tests/harness/checks/124_overview_focus_motion.sh`](../../tests/harness/checks/124_overview_focus_motion.sh)
+  for selected-column focus and reveal beginning during the closing zoom.
 - [`tests/harness/two-output-containment.sh`](../../tests/harness/two-output-containment.sh)
   for cards staying off a neighbouring output, overview included.
 - [`tests/presented_crop.cpp`](../../tests/presented_crop.cpp) for the

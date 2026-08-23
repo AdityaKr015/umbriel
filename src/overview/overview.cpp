@@ -780,6 +780,12 @@ namespace umbriel {
       // No slide: the real trees are hidden, the filmstrip is the transition.
       workspace->group()->activate(workspace, false);
     }
+    if (focus != nullptr && focus->mapped()) {
+      // Overview focus keeps keyboard input withheld, but it updates the workspace and starts any scrolling-column
+      // reveal. Begin it before the closing zoom so both animations receive their first tick together. finishAnimation
+      // repeats the focus after teardown to deliver keyboard focus once the real trees own input again.
+      m_server->focusView(focus, FocusReason::PointerPress);
+    }
     beginClose(focus);
   }
 

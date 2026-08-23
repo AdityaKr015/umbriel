@@ -1753,6 +1753,9 @@ namespace umbriel {
   }
 
   void View::setMaximizedToEdges(bool maximized) {
+    if (!maximized) {
+      m_restoreMaximizedToEdges = false;
+    }
     if (!m_toplevel->base->initialized || maximized == m_maximizedToEdges) {
       return;
     }
@@ -2084,6 +2087,7 @@ namespace umbriel {
     );
     if (fullscreen && m_maximizedToEdges) {
       setMaximizedToEdges(false);
+      m_restoreMaximizedToEdges = true;
     }
     if (fullscreen && !m_tiled && !m_toplevel->current.fullscreen) {
       const wlr_box& geometry = m_toplevel->base->geometry;
@@ -2179,6 +2183,10 @@ namespace umbriel {
     } else {
       m_pendingUnfullscreenSize = false;
       m_unfullscreenGraceStartMsec = 0;
+    }
+    if (!fullscreen && m_restoreMaximizedToEdges) {
+      m_restoreMaximizedToEdges = false;
+      setMaximizedToEdges(true);
     }
     updateForeignState();
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {

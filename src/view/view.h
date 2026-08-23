@@ -310,6 +310,7 @@ namespace umbriel {
     bool m_positioned = false;
     bool m_tiled = false;
     bool m_maximizedToEdges = false;
+    bool m_restoreMaximizedToEdges = false;
     wlr_box m_fullscreenRestoreBox{};
     bool m_hasFullscreenRestoreBox = false;
     bool m_pinned = false;

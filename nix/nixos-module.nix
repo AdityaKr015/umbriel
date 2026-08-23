@@ -16,6 +16,14 @@ in
       default = null;
       description = "The umbriel package to install.";
     };
+
+    portalPackage = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = null;
+      description = ''
+        The xdg-desktop-portal-umbriel package to install.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable (
@@ -41,6 +49,14 @@ in
         # Required for greetd / noctalia-greeter to discover the session (Name=Umbriel).
         # Plain systemPackages .desktop files are not enough; NixOS aggregates via this.
         services.displayManager.sessionPackages = [ cfg.package ];
+      })
+
+      (lib.mkIf (cfg.portalPackage != null) {
+        xdg.portal = {
+          enable = lib.mkDefault true;
+          extraPortals = [ cfg.portalPackage ];
+          configPackages = [ cfg.portalPackage ];
+        };
       })
     ]
   );

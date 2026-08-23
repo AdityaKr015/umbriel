@@ -2,19 +2,12 @@
   description = "Umbriel, a Wayland compositor built on wlroots and SceneFX.";
 
   inputs = {
+    self.submodules = true;
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
-    scenefx = {
-      url = "git+https://github.com/noctalia-dev/scenefx?ref=umbriel";
-      flake = false;
-    };
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      scenefx,
-    }:
+    { self, nixpkgs, ... }:
     let
       inherit (nixpkgs.lib) genAttrs getExe;
 
@@ -35,13 +28,13 @@
     in
     {
       overlays.default = final: prev: {
-        umbriel = final.callPackage ./nix/package.nix { inherit scenefx; };
+        umbriel = final.callPackage ./nix/package.nix { };
       };
 
       packages = forEachSystem (
         { pkgs, ... }:
         {
-          default = pkgs.callPackage ./nix/package.nix { inherit scenefx; };
+          default = pkgs.callPackage ./nix/package.nix { };
         }
       );
 

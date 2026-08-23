@@ -15,25 +15,7 @@
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs",
-        "scenefx": "scenefx"
-      }
-    },
-    "scenefx": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1787367884,
-        "narHash": "sha256-CanY5gX81OUvTNpafLc9Bkdk26Xrlq99rkrQQd98EKM=",
-        "ref": "umbriel",
-        "rev": "a7ceecd5336edd3ac7245e65ab2ee1b12dfa97ca",
-        "revCount": 319,
-        "type": "git",
-        "url": "https://github.com/noctalia-dev/scenefx"
-      },
-      "original": {
-        "ref": "umbriel",
-        "type": "git",
-        "url": "https://github.com/noctalia-dev/scenefx"
+        "nixpkgs": "nixpkgs"
       }
     }
   },

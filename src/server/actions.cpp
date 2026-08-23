@@ -269,6 +269,37 @@ namespace umbriel {
       return true;
     }
 
+    template <bool Powered> bool actionDpms(Server& server, const Keybind& bind, std::string* error) {
+      const auto* arg = payloadIf<OutputArg>(bind);
+      const std::string requested = arg != nullptr ? arg->output : std::string{};
+      bool found = false;
+      bool changed = false;
+      for (const auto& output : server.outputs()) {
+        const char* name = output->wlr()->name;
+        if (!requested.empty() && (name == nullptr || requested != name)) {
+          continue;
+        }
+        found = true;
+        if (!output->configuredEnabled()) {
+          if (!requested.empty()) {
+            return reject(error, "output is disabled by config: " + requested);
+          }
+          continue;
+        }
+        if (!output->setPowered(Powered)) {
+          return reject(error, "failed to change output power: " + std::string(name != nullptr ? name : "unknown"));
+        }
+        changed = true;
+      }
+      if (!found) {
+        return reject(error, "unknown output: " + requested);
+      }
+      if (!changed) {
+        return reject(error, "no configured outputs");
+      }
+      return true;
+    }
+
     bool actionKeyboardLayoutNext(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       return server.cycleKeyboardLayout();
     }
@@ -894,6 +925,8 @@ namespace umbriel {
         &actionModifyWidth,
         &actionWindowCenter,
         &actionWorkspaceSetLayout,
+        &actionDpms<false>,
+        &actionDpms<true>,
     };
 
     consteval bool everyActionHasHandler() {

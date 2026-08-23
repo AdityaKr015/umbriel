@@ -405,6 +405,16 @@ UMBRIEL_TEST(parsesOptionalOutputActions) {
   CHECK(parseAction("window-restore-from-scratchpad:eDP-1", bind));
   CHECK_EQ(outputOf(bind), std::string{"eDP-1"});
   CHECK(parseAction("scratchpad-focus-next", bind));
+
+  CHECK(parseAction("dpms-off", bind));
+  CHECK(bind.action == KeybindAction::DpmsOff);
+  CHECK(outputOf(bind).empty());
+  CHECK(parseAction("dpms-off:DP-1", bind));
+  CHECK_EQ(outputOf(bind), std::string{"DP-1"});
+  CHECK(parseAction("dpms-on", bind));
+  CHECK(bind.action == KeybindAction::DpmsOn);
+  CHECK(parseAction("dpms-on:eDP-1", bind));
+  CHECK_EQ(outputOf(bind), std::string{"eDP-1"});
 }
 
 UMBRIEL_TEST(parsesWindowIdActions) {

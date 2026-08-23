@@ -86,6 +86,8 @@ namespace umbriel {
     WindowModifyWidth,
     WindowCenter,
     WorkspaceSetLayout,
+    DpmsOff,
+    DpmsOn,
     Count,
   };
 

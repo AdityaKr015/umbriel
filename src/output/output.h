@@ -57,6 +57,11 @@ namespace umbriel {
     void markDirty(Dirty what);
     void onGammaChanged(wlr_gamma_control_v1* control);
     void applyOutputState();
+    // DPMS power is independent of configured enablement. A powered-off output
+    // stays in the logical layout with its workspace and windows intact.
+    [[nodiscard]] bool setPowered(bool powered);
+    [[nodiscard]] bool dpmsOff() const { return m_dpmsOff; }
+    [[nodiscard]] bool configuredEnabled() const;
     void applyCursorConfig();
     // Re-evaluate fullscreen-controlled VRR after a view or workspace changes.
     void updateVrr();
@@ -82,9 +87,7 @@ namespace umbriel {
     void handleRequestState(void* data);
     void handleDestroy();
     void applyMode(int width, int height);
-    void applyConfiguredState();
-    // Whether the config wants this output on (absent rule = on).
-    [[nodiscard]] bool configuredEnabled() const;
+    [[nodiscard]] bool applyConfiguredState();
     [[nodiscard]] bool configuredVrrEnabled() const;
     wlr_output_layout_output* addToLayout();
     void arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive);
@@ -108,6 +111,7 @@ namespace umbriel {
     bool m_gammaDirty = false;
     bool m_softwareCursorLocked = false;
     bool m_animationRenderLocked = false;
+    bool m_dpmsOff = false;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;
 

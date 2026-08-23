@@ -852,7 +852,18 @@ namespace umbriel {
     wlr_idle_notifier_v1_set_inhibited(m_idleNotifier, inhibited);
   }
 
-  void Server::notifyIdleActivity() { wlr_idle_notifier_v1_notify_activity(m_idleNotifier, m_seat->wlr()); }
+  void Server::notifyIdleActivity() {
+    wakeDpmsOutputs();
+    wlr_idle_notifier_v1_notify_activity(m_idleNotifier, m_seat->wlr());
+  }
+
+  void Server::wakeDpmsOutputs() {
+    for (const auto& output : m_outputs) {
+      if (output->dpmsOff()) {
+        (void)output->setPowered(true);
+      }
+    }
+  }
 
   void Server::beginSessionLock(wlr_session_lock_v1* lock) {
     if (m_sessionLock != nullptr) {

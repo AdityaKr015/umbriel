@@ -322,6 +322,8 @@ namespace {
     case A::OverviewClose:
       return Group::Overview;
     case A::ConfigReload:
+    case A::DpmsOff:
+    case A::DpmsOn:
     case A::SessionQuit:
     case A::Submap:
     case A::CheatsheetToggle:

@@ -158,6 +158,8 @@ namespace umbriel {
         {"column-move-to-output-right", "", KeybindAction::ColumnMoveToOutputRight},
         {"column-move-to-output-up", "", KeybindAction::ColumnMoveToOutputUp},
         {"config-reload", "", KeybindAction::ConfigReload},
+        {"dpms-off", "[<output>]", KeybindAction::DpmsOff, ActionArgKind::OptionalOutput},
+        {"dpms-on", "[<output>]", KeybindAction::DpmsOn, ActionArgKind::OptionalOutput},
         {"keyboard-layout-next", "", KeybindAction::KeyboardLayoutNext},
         {"layout-scroll-left", "", KeybindAction::LayoutScrollLeft},
         {"layout-scroll-right", "", KeybindAction::LayoutScrollRight},

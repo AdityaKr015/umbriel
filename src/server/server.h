@@ -283,6 +283,8 @@ namespace umbriel {
     void updateLockBlank();
     void updateBackdrop();
     void notifyIdleActivity();
+    // Input activity wakes outputs powered down through the DPMS actions.
+    void wakeDpmsOutputs();
     void refocus(Output* preferred = nullptr) { m_focus.refocus(preferred); }
     void reconcileDynamicWorkspaces();
     void clearKeyboardFocus() { m_focus.clearKeyboardFocus(); }

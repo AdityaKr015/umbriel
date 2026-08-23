@@ -44,7 +44,7 @@ namespace umbriel {
     wl_signal_add(&m_output->events.destroy, &m_destroy);
 
     applyCursorConfig();
-    applyConfiguredState();
+    (void)applyConfiguredState();
     m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
     if (configuredEnabled()) {
       wlr_output_layout_output* layoutOutput = addToLayout();
@@ -67,9 +67,10 @@ namespace umbriel {
     return rule == nullptr || rule->enabled;
   }
 
-  void Output::applyConfiguredState() {
+  bool Output::applyConfiguredState() {
     const OutputRule* rule = findRule(m_output->name);
-    const bool enabled = configuredEnabled();
+    const bool configured = configuredEnabled();
+    const bool enabled = configured && !m_dpmsOff;
     wlr_output_state state{};
     wlr_output_state_init(&state);
     wlr_output_state_set_enabled(&state, enabled);
@@ -136,7 +137,7 @@ namespace umbriel {
     wlr_output_state_finish(&state);
     if (!committed) {
       kLog.error("output '{}': failed to commit configured state", m_output->name);
-      return;
+      return false;
     }
     m_server->updateIdleInhibit();
     if (enabled) {
@@ -144,9 +145,12 @@ namespace umbriel {
           "output '{}': applied mode={}x{}@{}mHz scale={} transform={}", m_output->name, m_output->width,
           m_output->height, m_output->refresh, m_output->scale, static_cast<int>(m_output->transform)
       );
-    } else {
+    } else if (!configured) {
       kLog.info("output '{}': disabled by config", m_output->name);
+    } else {
+      kLog.info("output '{}': powered off", m_output->name);
     }
+    return true;
   }
 
   bool Output::configuredVrrEnabled() const {
@@ -205,7 +209,9 @@ namespace umbriel {
   }
 
   void Output::applyOutputState() {
-    applyConfiguredState();
+    if (!applyConfiguredState()) {
+      return;
+    }
     if (configuredEnabled()) {
       wlr_output_layout_output* layoutOutput = addToLayout();
       // Re-bind the scene output after a disable removed it from the layout.
@@ -219,6 +225,34 @@ namespace umbriel {
       m_server->updateLockBlank();
     }
     wlr_output_schedule_frame(m_output);
+  }
+
+  bool Output::setPowered(bool powered) {
+    if (!configuredEnabled()) {
+      return false;
+    }
+    const bool dpmsOff = !powered;
+    if (m_dpmsOff == dpmsOff) {
+      return true;
+    }
+
+    const bool previous = m_dpmsOff;
+    m_dpmsOff = dpmsOff;
+    if (!applyConfiguredState()) {
+      m_dpmsOff = previous;
+      return false;
+    }
+
+    if (powered) {
+      m_gammaDirty = true;
+      markDirty(Dirty::LayerArrange | Dirty::Banner | Dirty::Backdrop);
+      if (m_server->sessionLocked()) {
+        m_server->updateLockBlank();
+      }
+      wlr_output_schedule_frame(m_output);
+    }
+    m_server->updateOutputManagerConfig();
+    return true;
   }
 
   void Output::applyCursorConfig() {

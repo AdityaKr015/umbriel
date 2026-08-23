@@ -251,9 +251,12 @@ namespace umbriel {
       m_server->scheduleIpcWindowsEvent();
       if (previousOutput != nullptr) {
         previousOutput->updateVrr();
+        previousOutput->updateHdr();
       }
       if (m_workspace != nullptr && m_workspace->group() != nullptr) {
-        m_workspace->group()->output()->updateVrr();
+        Output* output = m_workspace->group()->output();
+        output->updateVrr();
+        output->updateHdr();
       }
     }
   }
@@ -290,6 +293,9 @@ namespace umbriel {
       }
       setForeignActivated(false);
       setBorderFocused(false);
+    }
+    if (Output* output = currentOutput()) {
+      output->updateHdr();
     }
   }
 
@@ -1451,6 +1457,9 @@ namespace umbriel {
       overview->onViewMapped(this);
     }
     m_server->updateIdleInhibit();
+    if (Output* output = currentOutput()) {
+      output->updateHdr();
+    }
   }
 
   void View::handleUnmap() {
@@ -1491,7 +1500,9 @@ namespace umbriel {
     }
     m_server->updateIdleInhibit();
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {
-      m_workspace->group()->output()->updateVrr();
+      Output* output = m_workspace->group()->output();
+      output->updateVrr();
+      output->updateHdr();
     }
     m_server->scheduleIpcWindowsEvent();
     m_positioned = false;
@@ -1639,6 +1650,9 @@ namespace umbriel {
       m_effectiveOpacityCommitPending = true;
     }
     updateForeignState();
+    if (Output* output = currentOutput()) {
+      output->updateHdr();
+    }
   }
 
   void View::handleDestroy() {
@@ -2195,7 +2209,9 @@ namespace umbriel {
     }
     updateForeignState();
     if (m_workspace != nullptr && m_workspace->group() != nullptr) {
-      m_workspace->group()->output()->updateVrr();
+      Output* output = m_workspace->group()->output();
+      output->updateVrr();
+      output->updateHdr();
     }
   }
 

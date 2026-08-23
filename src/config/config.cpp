@@ -66,6 +66,9 @@ namespace umbriel {
       if (value == "on") {
         return HdrMode::On;
       }
+      if (value == "auto") {
+        return HdrMode::Auto;
+      }
       return std::nullopt;
     }
 
@@ -891,7 +894,7 @@ namespace umbriel {
           if (const auto value = readHdrMode(*hdrNode)) {
             rule.hdr = *value;
           } else {
-            warnAt(hdrNode->source(), "ignoring output.{}.hdr (expected off|on)", name);
+            warnAt(hdrNode->source(), "ignoring output.{}.hdr (expected off|on|auto)", name);
           }
         }
         double sdrWhite = rule.sdrWhite;

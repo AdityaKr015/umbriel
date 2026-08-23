@@ -216,7 +216,8 @@ namespace umbriel {
       for (const auto& output : ok.at("outputs")) {
         const std::string fallback = output.value("fallback_reason", "");
         std::println(
-            "output {}: HDR requested {}, active {}, format {}, {}, {}, SDR white {} cd/m2", output.value("name", ""),
+            "output {}: HDR mode {}, requested {}, active {}, format {}, {}, {}, SDR white {} cd/m2",
+            output.value("name", ""), output.value("hdr_mode", "off"),
             output.value("hdr_requested", false) ? "yes" : "no", output.value("hdr_active", false) ? "yes" : "no",
             output.value("render_format", "invalid"), output.value("transfer_function", "none"),
             output.value("primaries", "none"), output.value("sdr_white", 0.0)
@@ -311,6 +312,7 @@ namespace umbriel {
       const wlr_output_image_description* description = wlrOutput->image_description;
       outputs.push_back({
           {"name", wlrOutput->name},
+          {"hdr_mode", hdrModeName(output->hdrMode())},
           {"hdr_requested", output->hdrRequested()},
           {"hdr_active", output->hdrActive()},
           {"fallback_reason", output->hdrFallbackReason()},

@@ -325,8 +325,12 @@ UMBRIEL_TEST(outputHdrPolicyAndSdrWhiteLoad) {
 
   file.write("[output.DP-1]\nhdr = \"auto\"\n");
   CHECK(store.reload().success);
-  CHECK(store.config().outputs[0].hdr == HdrMode::Off);
+  CHECK(store.config().outputs[0].hdr == HdrMode::Auto);
   CHECK_EQ(store.config().outputs[0].sdrWhite, 203.0F);
+
+  file.write("[output.DP-1]\nhdr = \"sometimes\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].hdr == HdrMode::Off);
   CHECK(containsDiagnostic(store, "ignoring output.DP-1.hdr"));
 }
 

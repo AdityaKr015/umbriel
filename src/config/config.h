@@ -97,6 +97,7 @@ namespace umbriel {
   enum class HdrMode {
     Off,
     On,
+    Auto,
   };
   [[nodiscard]] constexpr std::string_view hdrModeName(HdrMode mode) {
     switch (mode) {
@@ -104,6 +105,8 @@ namespace umbriel {
       return "off";
     case HdrMode::On:
       return "on";
+    case HdrMode::Auto:
+      return "auto";
     }
     return "off";
   }

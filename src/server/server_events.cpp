@@ -1381,6 +1381,9 @@ namespace umbriel {
     if (view == nullptr) {
       return;
     }
+    for (const auto& output : m_outputs) {
+      output->forgetHdrView(view);
+    }
     const bool hadKeyboardFocus = m_seat->wlr()->keyboard_state.focused_surface == view->toplevel()->base->surface;
     bool restorePointerFocus = false;
     if (m_scratchpadManager != nullptr) {

@@ -5,6 +5,7 @@
 // request lands, then keeps the connection alive until the harness kills it. Usage: unmap-client [title [width
 // height]]. The optional dimensions let pointer checks expose a surface that fills its assigned tile.
 
+#include "color-management-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
 #include <algorithm>
@@ -34,6 +35,9 @@ namespace {
     xdg_toplevel* toplevel = nullptr;
     wl_seat* seat = nullptr;
     wl_keyboard* keyboard = nullptr;
+    wp_color_manager_v1* colorManager = nullptr;
+    wp_color_management_surface_v1* colorSurface = nullptr;
+    wp_image_description_v1* imageDescription = nullptr;
     Buffer buffer;
     int width = 64;
     int height = 64;
@@ -42,6 +46,30 @@ namespace {
     bool keyboardFocused = false;
     bool requestMaximized = false;
     bool maximizeRequested = false;
+    bool requestFullscreen = false;
+    bool requestHdr = false;
+    bool imageDescriptionReady = false;
+    bool imageDescriptionFailed = false;
+  };
+
+  void imageDescriptionFailed(void* data, wp_image_description_v1*, uint32_t, const char* message) {
+    auto& state = *static_cast<State*>(data);
+    state.imageDescriptionFailed = true;
+    std::println(stderr, "unmap-client: HDR image description failed: {}", message);
+  }
+
+  void imageDescriptionReady(void* data, wp_image_description_v1*, uint32_t) {
+    static_cast<State*>(data)->imageDescriptionReady = true;
+  }
+
+  void imageDescriptionReady2(void* data, wp_image_description_v1*, uint32_t, uint32_t) {
+    static_cast<State*>(data)->imageDescriptionReady = true;
+  }
+
+  constexpr wp_image_description_v1_listener kImageDescriptionListener = {
+      .failed = imageDescriptionFailed,
+      .ready = imageDescriptionReady,
+      .ready2 = imageDescriptionReady2,
   };
 
   void keyboardKeymap(void*, wl_keyboard*, uint32_t, int32_t fd, uint32_t) { close(fd); }
@@ -200,6 +228,10 @@ namespace {
     } else if (std::strcmp(interface, wl_seat_interface.name) == 0) {
       state.seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, std::min(version, 2U)));
       wl_seat_add_listener(state.seat, &kSeatListener, &state);
+    } else if (std::strcmp(interface, wp_color_manager_v1_interface.name) == 0) {
+      state.colorManager = static_cast<wp_color_manager_v1*>(
+          wl_registry_bind(registry, name, &wp_color_manager_v1_interface, std::min(version, 2U))
+      );
     }
   }
 
@@ -224,6 +256,8 @@ namespace {
 int main(int argc, char** argv) {
   State state;
   state.requestMaximized = std::getenv("REQUEST_MAXIMIZED") != nullptr;
+  state.requestFullscreen = std::getenv("REQUEST_FULLSCREEN") != nullptr;
+  state.requestHdr = std::getenv("COLOR_HDR") != nullptr;
   if (argc > 2) {
     state.width = std::max(1, std::atoi(argv[2]));
   }
@@ -253,11 +287,34 @@ int main(int argc, char** argv) {
   }
 
   state.surface = wl_compositor_create_surface(state.compositor);
+  if (state.requestHdr) {
+    if (state.colorManager == nullptr) {
+      std::println(stderr, "unmap-client: compositor is missing wp_color_manager_v1");
+      return EXIT_FAILURE;
+    }
+    state.colorSurface = wp_color_manager_v1_get_surface(state.colorManager, state.surface);
+    wp_image_description_creator_params_v1* params = wp_color_manager_v1_create_parametric_creator(state.colorManager);
+    wp_image_description_creator_params_v1_set_tf_named(params, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ);
+    wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020);
+    state.imageDescription = wp_image_description_creator_params_v1_create(params);
+    wp_image_description_v1_add_listener(state.imageDescription, &kImageDescriptionListener, &state);
+    while (!state.imageDescriptionReady && !state.imageDescriptionFailed && wl_display_roundtrip(state.display) >= 0) {
+    }
+    if (!state.imageDescriptionReady) {
+      return EXIT_FAILURE;
+    }
+    wp_color_management_surface_v1_set_image_description(
+        state.colorSurface, state.imageDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
+    );
+  }
   state.xdgSurface = xdg_wm_base_get_xdg_surface(state.wmBase, state.surface);
   xdg_surface_add_listener(state.xdgSurface, &kXdgSurfaceListener, &state);
   state.toplevel = xdg_surface_get_toplevel(state.xdgSurface);
   xdg_toplevel_add_listener(state.toplevel, &kToplevelListener, &state);
   xdg_toplevel_set_title(state.toplevel, argc > 1 ? argv[1] : "unmap-client");
+  if (state.requestFullscreen) {
+    xdg_toplevel_set_fullscreen(state.toplevel, nullptr);
+  }
   wl_surface_commit(state.surface);
 
   while (wl_display_dispatch(state.display) >= 0) {
@@ -271,6 +328,15 @@ int main(int argc, char** argv) {
   }
   if (state.surface != nullptr) {
     wl_surface_destroy(state.surface);
+  }
+  if (state.colorSurface != nullptr) {
+    wp_color_management_surface_v1_destroy(state.colorSurface);
+  }
+  if (state.imageDescription != nullptr) {
+    wp_image_description_v1_destroy(state.imageDescription);
+  }
+  if (state.colorManager != nullptr) {
+    wp_color_manager_v1_destroy(state.colorManager);
   }
   if (state.keyboard != nullptr) {
     wl_keyboard_destroy(state.keyboard);

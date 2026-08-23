@@ -31,7 +31,8 @@ namespace umbriel {
     }
   } // namespace
 
-  Output::Output(Server& server, wlr_output* output) : m_server(&server), m_output(output) {
+  Output::Output(Server& server, wlr_output* output)
+      : m_server(&server), m_output(output), m_appliedHdrMode(HdrMode::Off) {
     m_output->data = this;
     wlr_output_init_render(m_output, m_server->allocator(), m_server->renderer());
 
@@ -69,9 +70,14 @@ namespace umbriel {
     return rule == nullptr || rule->enabled;
   }
 
-  bool Output::hdrRequested() const {
+  HdrMode Output::hdrMode() const {
     const OutputRule* rule = findRule(m_output->name);
-    return rule != nullptr && rule->hdr == HdrMode::On;
+    return rule != nullptr ? rule->hdr : HdrMode::Off;
+  }
+
+  bool Output::hdrRequested() const {
+    const HdrMode mode = hdrMode();
+    return mode == HdrMode::On || (mode == HdrMode::Auto && m_autoHdrOwner != nullptr);
   }
 
   bool Output::hdrActive() const { return m_output->image_description != nullptr; }
@@ -225,6 +231,7 @@ namespace umbriel {
       kLog.error("output '{}': failed to commit configured state", m_output->name);
       return false;
     }
+    m_appliedHdrMode = hdrMode();
     const bool hdrIsActive = hdrActive();
     if (hdrIsActive) {
       setHdrFallbackReason({});
@@ -276,6 +283,63 @@ namespace umbriel {
            });
   }
 
+  bool Output::autoHdrEligible(const View* view) const {
+    if (view == nullptr
+        || !view->mapped()
+        || !view->onActiveWorkspace()
+        || view->currentOutput() != this
+        || (!view->layoutFullscreen() && !view->toplevel()->current.fullscreen)) {
+      return false;
+    }
+    const wlr_image_description_v1_data* description =
+        wlr_surface_get_image_description_v1_data(view->toplevel()->base->surface);
+    return description != nullptr
+        && description->tf_named == WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ
+        && description->primaries_named == WP_COLOR_MANAGER_V1_PRIMARIES_BT2020;
+  }
+
+  View* Output::findAutoHdrCandidate() const {
+    const auto candidate =
+        std::ranges::find_if(m_server->views(), [this](const auto& view) { return autoHdrEligible(view.get()); });
+    return candidate != m_server->views().end() ? candidate->get() : nullptr;
+  }
+
+  void Output::updateHdr() {
+    if (hdrMode() != HdrMode::Auto) {
+      m_autoHdrOwner = nullptr;
+      return;
+    }
+
+    if (m_autoHdrOwner != nullptr && autoHdrEligible(m_autoHdrOwner)) {
+      return;
+    }
+
+    if (m_autoHdrOwner != nullptr || hdrActive()) {
+      m_autoHdrOwner = nullptr;
+      if (applyConfiguredState()) {
+        m_server->updateOutputManagerConfig();
+      }
+      return;
+    }
+
+    if (View* candidate = findAutoHdrCandidate()) {
+      m_autoHdrOwner = candidate;
+      if (applyConfiguredState()) {
+        m_server->updateOutputManagerConfig();
+      }
+    }
+  }
+
+  void Output::forgetHdrView(const View* view) {
+    if (m_autoHdrOwner != view) {
+      return;
+    }
+    m_autoHdrOwner = nullptr;
+    if (hdrMode() == HdrMode::Auto && applyConfiguredState()) {
+      m_server->updateOutputManagerConfig();
+    }
+  }
+
   void Output::updateVrr() {
     // wlroots rejects adaptive-sync commits on disabled outputs; nothing to
     // update while the monitor is off.
@@ -309,6 +373,12 @@ namespace umbriel {
   }
 
   void Output::applyOutputState() {
+    const HdrMode nextHdrMode = hdrMode();
+    if (nextHdrMode != HdrMode::Auto || m_appliedHdrMode == HdrMode::On) {
+      m_autoHdrOwner = nullptr;
+    } else if (!autoHdrEligible(m_autoHdrOwner)) {
+      m_autoHdrOwner = findAutoHdrCandidate();
+    }
     if (!applyConfiguredState()) {
       return;
     }

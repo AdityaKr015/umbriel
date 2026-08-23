@@ -22,7 +22,9 @@ extern "C" {
 
 namespace umbriel {
 
+  enum class HdrMode;
   class Server;
+  class View;
   class WorkspaceGroup;
 
   class Output {
@@ -64,6 +66,7 @@ namespace umbriel {
     [[nodiscard]] bool setPowered(bool powered);
     [[nodiscard]] bool dpmsOff() const { return m_dpmsOff; }
     [[nodiscard]] bool configuredEnabled() const;
+    [[nodiscard]] HdrMode hdrMode() const;
     [[nodiscard]] bool hdrRequested() const;
     [[nodiscard]] bool hdrActive() const;
     [[nodiscard]] const std::string& hdrFallbackReason() const { return m_hdrFallbackReason; }
@@ -71,6 +74,10 @@ namespace umbriel {
     void applyCursorConfig();
     // Re-evaluate fullscreen-controlled VRR after a view or workspace changes.
     void updateVrr();
+    // Re-evaluate automatic HDR after surface color, fullscreen, visibility,
+    // or output membership changes.
+    void updateHdr();
+    void forgetHdrView(const View* view);
     void markBlurBackgroundDirty();
     void handleExternalConfigChange();
     // Tell one surface this output's scale (fractional + integer preferred buffer scale). Both wlroots calls dedup
@@ -94,6 +101,8 @@ namespace umbriel {
     void handleDestroy();
     void applyMode(int width, int height);
     [[nodiscard]] bool applyConfiguredState();
+    [[nodiscard]] bool autoHdrEligible(const View* view) const;
+    [[nodiscard]] View* findAutoHdrCandidate() const;
     [[nodiscard]] bool configuredVrrEnabled() const;
     void setHdrFallbackReason(std::string_view reason);
     void updateSceneSdrWhite();
@@ -122,6 +131,8 @@ namespace umbriel {
     bool m_animationRenderLocked = false;
     bool m_dpmsOff = false;
     bool m_hdrGammaWarningLogged = false;
+    View* m_autoHdrOwner = nullptr;
+    HdrMode m_appliedHdrMode;
     std::string m_hdrFallbackReason;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;

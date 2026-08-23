@@ -159,6 +159,19 @@ xdg_shell_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+color_management_client_h = custom_target(
+  'color-management-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/color-management/color-management-v1.xml',
+  output: 'color-management-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+color_management_client_c = custom_target(
+  'color-management-v1-client-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/color-management/color-management-v1.xml',
+  output: 'color-management-v1-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 idle_inhibit_client_h = custom_target(
   'idle-inhibit-unstable-v1-client-protocol.h',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/idle-inhibit/idle-inhibit-unstable-v1.xml',
@@ -449,7 +462,13 @@ workspace_client = executable(
 # it, so the compositor keeps the View registered but unmapped.
 unmap_client = executable(
   'unmap-client',
-  ['tests/harness/unmap_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
+  [
+    'tests/harness/unmap_client.cpp',
+    xdg_shell_client_h,
+    xdg_shell_client_c,
+    color_management_client_h,
+    color_management_client_c,
+  ],
   dependencies: [wayland_client_dep],
 )
 

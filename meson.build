@@ -493,6 +493,14 @@ unmap_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper that creates a grabbed XDG popup and reports its dismissal.
+popup_client = executable(
+  'popup-client',
+  ['tests/harness/clients/popup_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
+  dependencies: [wayland_client_dep],
+)
+
+
 # Harness helper whose whole content is drawn by a full-window desynchronized
 # wl_subsurface, the way Firefox presents its chrome and web content.
 subsurface_client = executable(
@@ -525,6 +533,7 @@ alias_target(
   global_client,
   workspace_client,
   unmap_client,
+  popup_client,
   subsurface_client,
   idle_inhibit_client,
 )

@@ -343,11 +343,28 @@ namespace umbriel {
     setBorderFocused(true);
     setForeignActivated(true);
 
-    if (!withKeyboard || seat->keyboard_state.focused_surface == surface) {
+    if (!withKeyboard) {
+      return;
+    }
+
+    // A popup can still own wlroots' keyboard grab when its dismissing click
+    // reaches another view. Let that click transfer the seat immediately
+    // instead of losing the enter to a popup that is about to disappear. A
+    // data-device drag is different: it deliberately owns the grab until the
+    // initiating button is released, and FocusManager replays the selected
+    // view when that happens.
+    bool endedGrab = false;
+    if (seat->drag == nullptr && wlr_seat_keyboard_has_grab(seat)) {
+      wlr_seat_keyboard_end_grab(seat);
+      endedGrab = true;
+    }
+    if (!endedGrab && seat->keyboard_state.focused_surface == surface) {
       return;
     }
     if (wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat)) {
       wlr_seat_keyboard_notify_enter(seat, surface, keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+    } else {
+      wlr_seat_keyboard_notify_enter(seat, surface, nullptr, 0, nullptr);
     }
   }
 

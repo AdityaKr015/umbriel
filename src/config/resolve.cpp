@@ -60,6 +60,9 @@ namespace umbriel {
       if (overrides.scrolling.centerUnderfullStrip) {
         resolved.scrolling.centerUnderfullStrip = *overrides.scrolling.centerUnderfullStrip;
       }
+      if (overrides.scrolling.direction) {
+        resolved.scrolling.direction = *overrides.scrolling.direction;
+      }
       if (overrides.widthPresets) {
         resolved.widthPresets = *overrides.widthPresets;
       }
@@ -217,6 +220,7 @@ namespace umbriel {
     resolved.widthPresets = config.layout.widthPresets;
     resolved.scrolling.defaultWidthFraction = config.layout.scrolling.defaultWidthFraction;
     resolved.scrolling.centerUnderfullStrip = config.layout.scrolling.centerUnderfullStrip;
+    resolved.scrolling.direction = config.layout.scrolling.direction;
     const int borderWidth = config.appearance.totalBorderWidth();
     resolved.totalGap = resolved.gap + 2 * borderWidth;
     resolved.edgePad = resolved.gap + borderWidth;

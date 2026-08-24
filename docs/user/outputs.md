@@ -285,6 +285,7 @@ and numbered positions as those workspaces are created or removed.
 | `layout.width_presets` | float array | Widths used by the width-cycle action in both layouts. |
 | `layout.scrolling.default_width_fraction` | float | Initial scrolling column width (0.1-1.0). |
 | `layout.scrolling.center_underfull_strip` | bool | Center the complete strip whenever it is narrower than the viewport. Disable to left-align underfull strips. |
+| `layout.scrolling.direction` | string | `"horizontal"` or `"vertical"` scroll axis. |
 
 ### Examples
 
@@ -300,6 +301,7 @@ layout.mode = "dwindle"
 output = "HDMI-A-1"
 name = "CHAT"
 layout.mode = "scrolling"
+layout.scrolling.direction = "vertical"
 
 [[workspace]]
 output = "HDMI-A-1"

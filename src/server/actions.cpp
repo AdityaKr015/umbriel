@@ -376,9 +376,8 @@ namespace umbriel {
         return;
       }
       const auto step = static_cast<double>(config().input.mouse.scrollWheelStep * multiplier);
-      const int viewportWidth =
-          std::max(1, workspace->group()->output()->usableArea().width - 2 * workspace->layoutConfig().edgePad);
-      const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportWidth));
+      const int viewportPrimary = workspace->scrollViewportExtent();
+      const auto maxScroll = static_cast<double>(scrolling->maxScroll(viewportPrimary));
       scrolling->setScroll(std::clamp(scrolling->scroll() + Sign * step, 0.0, maxScroll));
       workspace->markArrange();
     }
@@ -890,6 +889,8 @@ namespace umbriel {
         &actionWindowMoveToWorkspaceAdjacent<-1>,
         &actionConfigReload,
         &actionKeyboardLayoutNext,
+        &actionLayoutScroll<-1>,
+        &actionLayoutScroll<1>,
         &actionLayoutScroll<-1>,
         &actionLayoutScroll<1>,
         &actionOverviewToggle,

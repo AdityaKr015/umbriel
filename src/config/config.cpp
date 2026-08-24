@@ -174,6 +174,27 @@ namespace umbriel {
       return std::nullopt;
     }
 
+    std::optional<ScrollingDirection> readScrollingDirection(Section& section, std::string_view context) {
+      const toml::node* node = section.take("direction");
+      if (node == nullptr) {
+        return std::nullopt;
+      }
+      const auto* value = node->as_string();
+      if (value == nullptr) {
+        warnAt(node->source(), R"({}.direction must be a string ("horizontal" or "vertical"))", context);
+        return std::nullopt;
+      }
+      const std::string_view direction = value->get();
+      if (direction == "horizontal") {
+        return ScrollingDirection::Horizontal;
+      }
+      if (direction == "vertical") {
+        return ScrollingDirection::Vertical;
+      }
+      warnAt(node->source(), R"(unknown {}.direction "{}" (expected "horizontal" or "vertical"))", context, direction);
+      return std::nullopt;
+    }
+
     std::vector<std::string_view> splitWhitespace(std::string_view text) {
       std::vector<std::string_view> tokens;
       size_t offset = 0;
@@ -315,6 +336,9 @@ namespace umbriel {
               overrides.widthPresets = std::move(*presets);
             }
             s.sub("scrolling", [&](Section& sc) {
+              if (const auto direction = readScrollingDirection(sc, layoutContext + ".scrolling")) {
+                overrides.scrolling.direction = direction;
+              }
               sc.real("default_width_fraction", 0.1, 1.0, overrides.scrolling.defaultWidthFraction)
                   .boolean("center_underfull_strip", overrides.scrolling.centerUnderfullStrip);
             });
@@ -549,6 +573,9 @@ namespace umbriel {
           loaded.layout.widthPresets = std::move(*presets);
         }
         s.sub("scrolling", [&](Section& sc) {
+          if (const auto direction = readScrollingDirection(sc, "layout.scrolling")) {
+            loaded.layout.scrolling.direction = *direction;
+          }
           sc.real("default_width_fraction", 0.1, 1.0, loaded.layout.scrolling.defaultWidthFraction)
               .boolean("center_underfull_strip", loaded.layout.scrolling.centerUnderfullStrip);
         });

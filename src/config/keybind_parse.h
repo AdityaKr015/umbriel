@@ -53,6 +53,8 @@ namespace umbriel {
     KeyboardLayoutNext,
     LayoutScrollLeft,
     LayoutScrollRight,
+    LayoutScrollUp,
+    LayoutScrollDown,
     OverviewToggle,
     OverviewOpen,
     OverviewClose,

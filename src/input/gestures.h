@@ -56,7 +56,7 @@ namespace umbriel {
     // Scroll state (horizontal 3-finger).
     Workspace* m_scrollWorkspace = nullptr;
     double m_scrollStart = 0;
-    int m_viewportWidth = 0;
+    int m_viewportPrimary = 0;
 
     // Switch state (vertical 3-finger).
     WorkspaceGroup* m_switchGroup = nullptr;

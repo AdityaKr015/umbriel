@@ -39,29 +39,43 @@ namespace umbriel {
     wlr_box columnHintBox(
         const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, int gapIndex, double scroll
     ) {
+      const bool v = workspace.scrollingVertical();
       const int edgePad = workspace.layoutConfig().edgePad;
       const int gap = workspace.layoutConfig().totalGap;
-      const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
+      const int viewportPrimary = workspace.scrollViewportExtent();
       const int columnCount = static_cast<int>(workspace.layout().columns().size());
       const int clampedGap = std::clamp(gapIndex, 0, columnCount);
 
-      int hintX = 0;
+      int hintPrimary = 0;
       if (columnCount == 0) {
-        hintX = 0;
+        hintPrimary = 0;
       } else if (clampedGap <= 0) {
-        hintX = layout.columnX(0, viewportWidth) - gap - kColumnHintWidth;
+        hintPrimary = layout.columnX(0, viewportPrimary) - gap - kColumnHintWidth;
       } else if (clampedGap >= columnCount) {
-        hintX =
-            layout.columnX(columnCount - 1, viewportWidth) + layout.columnWidth(columnCount - 1, viewportWidth) + gap;
+        hintPrimary = layout.columnX(columnCount - 1, viewportPrimary)
+            + layout.columnWidth(columnCount - 1, viewportPrimary)
+            + gap;
       } else {
-        hintX = layout.columnX(clampedGap, viewportWidth) - gap / 2 - kColumnHintWidth / 2;
+        hintPrimary = layout.columnX(clampedGap, viewportPrimary) - gap / 2 - kColumnHintWidth / 2;
       }
 
+      const int primaryPosition =
+          (v ? usable.y : usable.x) + edgePad + hintPrimary - static_cast<int>(std::lround(scroll));
+      const int crossPosition = (v ? usable.x : usable.y) + edgePad;
+      const int crossExtent = std::max(1, (v ? usable.width : usable.height) - 2 * edgePad);
+      if (v) {
+        return {
+            .x = crossPosition,
+            .y = primaryPosition,
+            .width = crossExtent,
+            .height = kColumnHintWidth,
+        };
+      }
       return {
-          .x = usable.x + edgePad + hintX - static_cast<int>(std::lround(scroll)),
-          .y = usable.y + edgePad,
+          .x = primaryPosition,
+          .y = crossPosition,
           .width = kColumnHintWidth,
-          .height = std::max(1, usable.height - 2 * edgePad),
+          .height = crossExtent,
       };
     }
 
@@ -72,32 +86,48 @@ namespace umbriel {
       if (columnIndex < 0 || columnIndex >= static_cast<int>(workspace.layout().columns().size())) {
         return {};
       }
+      const bool v = workspace.scrollingVertical();
       const int edgePad = workspace.layoutConfig().edgePad;
-      const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
+      const int viewportPrimary = workspace.scrollViewportExtent();
       const Column& column = workspace.layout().columns()[static_cast<size_t>(columnIndex)];
       const int rowCount = static_cast<int>(column.views.size());
       const int row = std::clamp(rowIndex, 0, rowCount);
+      const int crossOrigin = v ? usable.x : usable.y;
+      const int crossExtent = v ? usable.width : usable.height;
 
-      int hintY = 0;
-      int hintHeight = 0;
+      int hintCross = 0;
+      int hintCrossExtent = 0;
       if (row == 0) {
-        hintY = usable.y + edgePad;
-        hintHeight = kRowHintEdgeHeight;
+        hintCross = crossOrigin + edgePad;
+        hintCrossExtent = kRowHintEdgeHeight;
       } else if (row >= rowCount) {
-        hintY = usable.y + usable.height - edgePad - kRowHintEdgeHeight;
-        hintHeight = kRowHintEdgeHeight;
+        hintCross = crossOrigin + crossExtent - edgePad - kRowHintEdgeHeight;
+        hintCrossExtent = kRowHintEdgeHeight;
       } else {
-        const int boundary = workspace.layout().targetBox(column.views[static_cast<size_t>(row)]).y
-            - workspace.layoutConfig().totalGap / 2;
-        hintY = boundary - kRowHintMidHeight / 2;
-        hintHeight = kRowHintMidHeight;
+        const wlr_box target = workspace.layout().targetBox(column.views[static_cast<size_t>(row)]);
+        const int boundary = (v ? target.x : target.y) - workspace.layoutConfig().totalGap / 2;
+        hintCross = boundary - kRowHintMidHeight / 2;
+        hintCrossExtent = kRowHintMidHeight;
       }
 
+      const int primaryPosition = (v ? usable.y : usable.x)
+          + edgePad
+          + layout.columnX(columnIndex, viewportPrimary)
+          - static_cast<int>(std::lround(scroll));
+      const int primaryExtent = layout.columnWidth(columnIndex, viewportPrimary);
+      if (v) {
+        return {
+            .x = hintCross,
+            .y = primaryPosition,
+            .width = hintCrossExtent,
+            .height = primaryExtent,
+        };
+      }
       return {
-          .x = usable.x + edgePad + layout.columnX(columnIndex, viewportWidth) - static_cast<int>(std::lround(scroll)),
-          .y = hintY,
-          .width = layout.columnWidth(columnIndex, viewportWidth),
-          .height = hintHeight,
+          .x = primaryPosition,
+          .y = hintCross,
+          .width = primaryExtent,
+          .height = hintCrossExtent,
       };
     }
 
@@ -162,49 +192,58 @@ namespace umbriel {
       }
       return result;
     }
-    bool atScrollingLeftEdge(const wlr_box& usable, double worldX) {
-      return worldX <= static_cast<double>(usable.x + kScrollingEdgeDropWidth);
+    bool atStripStartEdge(double primaryWorld, int primaryOrigin) {
+      return primaryWorld <= static_cast<double>(primaryOrigin + kScrollingEdgeDropWidth);
     }
 
-    bool atScrollingRightEdge(const wlr_box& usable, double worldX) {
-      return worldX >= static_cast<double>(usable.x + usable.width - kScrollingEdgeDropWidth);
+    bool atStripEndEdge(double primaryWorld, int primaryOrigin, int primaryExtent) {
+      return primaryWorld >= static_cast<double>(primaryOrigin + primaryExtent - kScrollingEdgeDropWidth);
     }
 
     ScrollingTarget computeScrollingTarget(
         const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, double scroll, double worldX,
         double worldY
     ) {
+      const bool v = workspace.scrollingVertical();
       const int edgePad = workspace.layoutConfig().edgePad;
       const int totalGap = workspace.layoutConfig().totalGap;
-      const int viewportWidth = std::max(1, usable.width - 2 * edgePad);
+      const int viewportPrimary = workspace.scrollViewportExtent();
       const int columnCount = static_cast<int>(layout.columns().size());
-      // The strip may extend far beyond the viewport, making either outer layout-space gap unreachable. Reserve the
-      // output's extreme edges as stable prepend and append targets regardless of the scroll offset.
-      if (columnCount > 0 && layout.maxScroll(viewportWidth) > 0) {
-        if (atScrollingLeftEdge(usable, worldX)) {
+      const double primaryWorld = v ? worldY : worldX;
+      const int primaryOrigin = v ? usable.y : usable.x;
+      const int primaryExtent = v ? usable.height : usable.width;
+      const double crossWorld = v ? worldX : worldY;
+      const int crossOrigin = v ? usable.x : usable.y;
+      const int crossExtent = v ? usable.width : usable.height;
+
+      // Reserve the viewport's extreme primary edges as stable prepend and
+      // append targets when the strip extends beyond the viewport.
+      if (columnCount > 0 && layout.maxScroll(viewportPrimary) > 0) {
+        if (atStripStartEdge(primaryWorld, primaryOrigin)) {
           return {.column = 0, .row = -1};
         }
-        if (atScrollingRightEdge(usable, worldX)) {
+        if (atStripEndEdge(primaryWorld, primaryOrigin, primaryExtent)) {
           return {.column = columnCount, .row = -1};
         }
       }
 
-      const double layoutX = worldX - usable.x - edgePad + scroll;
+      const double layoutPrimary = primaryWorld - primaryOrigin - edgePad + scroll;
 
       for (int columnIndex = 0; columnIndex < columnCount; ++columnIndex) {
-        const int columnX = layout.columnX(columnIndex, viewportWidth);
-        const int columnWidth = layout.columnWidth(columnIndex, viewportWidth);
-        if (layoutX < columnX + columnWidth * 0.2 || layoutX > columnX + columnWidth * 0.8) {
+        const int columnPrimary = layout.columnX(columnIndex, viewportPrimary);
+        const int columnExtent = layout.columnWidth(columnIndex, viewportPrimary);
+        if (layoutPrimary < columnPrimary + columnExtent * 0.2 || layoutPrimary > columnPrimary + columnExtent * 0.8) {
           continue;
         }
         const Column& column = layout.columns()[static_cast<size_t>(columnIndex)];
         int nearestRow = 0;
-        double rowDistance = std::abs(worldY - (usable.y + edgePad));
+        double rowDistance = std::abs(crossWorld - (crossOrigin + edgePad));
         for (int row = 1; row <= static_cast<int>(column.views.size()); ++row) {
-          const int boundary = row == static_cast<int>(column.views.size())
-              ? usable.y + usable.height - edgePad
-              : layout.targetBox(column.views[static_cast<size_t>(row)]).y - totalGap / 2;
-          const double distance = std::abs(worldY - boundary);
+          const wlr_box target =
+              row == static_cast<int>(column.views.size()) ? wlr_box{} : layout.targetBox(column.views[row]);
+          const int boundary = row == static_cast<int>(column.views.size()) ? crossOrigin + crossExtent - edgePad
+                                                                            : (v ? target.x : target.y) - totalGap / 2;
+          const double distance = std::abs(crossWorld - boundary);
           if (distance < rowDistance) {
             nearestRow = row;
             rowDistance = distance;
@@ -214,11 +253,11 @@ namespace umbriel {
       }
 
       int nearestGap = 0;
-      double nearestDistance = std::abs(layoutX);
+      double nearestDistance = std::abs(layoutPrimary);
       for (int gap = 1; gap <= columnCount; ++gap) {
-        const int boundary = gap == columnCount ? layout.columnX(gap, viewportWidth) - totalGap
-                                                : layout.columnX(gap, viewportWidth) - totalGap / 2;
-        const double distance = std::abs(layoutX - boundary);
+        const int boundary = gap == columnCount ? layout.columnX(gap, viewportPrimary) - totalGap
+                                                : layout.columnX(gap, viewportPrimary) - totalGap / 2;
+        const double distance = std::abs(layoutPrimary - boundary);
         if (distance < nearestDistance) {
           nearestGap = gap;
           nearestDistance = distance;
@@ -275,22 +314,46 @@ namespace umbriel {
       result.row = target.row;
       if (target.row >= 0) {
         result.hintBox = stackHintBox(workspace, layout, usable, target.column, target.row, scroll);
-      } else if (target.column == 0 && !layout.columns().empty() && atScrollingLeftEdge(usable, worldX)) {
-        result.hintBox = {
-            .x = usable.x,
-            .y = usable.y + workspace.layoutConfig().edgePad,
-            .width = kColumnHintWidth,
-            .height = std::max(1, usable.height - 2 * workspace.layoutConfig().edgePad),
-        };
-      } else if (target.column == static_cast<int>(layout.columns().size()) && atScrollingRightEdge(usable, worldX)) {
-        result.hintBox = {
-            .x = usable.x + usable.width - kColumnHintWidth,
-            .y = usable.y + workspace.layoutConfig().edgePad,
-            .width = kColumnHintWidth,
-            .height = std::max(1, usable.height - 2 * workspace.layoutConfig().edgePad),
-        };
       } else {
-        result.hintBox = columnHintBox(workspace, layout, usable, target.column, scroll);
+        const bool v = workspace.scrollingVertical();
+        const double primaryWorld = v ? worldY : worldX;
+        const int primaryOrigin = v ? usable.y : usable.x;
+        const int primaryExtent = v ? usable.height : usable.width;
+        const int edgePad = workspace.layoutConfig().edgePad;
+        if (target.column == 0 && !layout.columns().empty() && atStripStartEdge(primaryWorld, primaryOrigin)) {
+          result.hintBox = v
+              ? wlr_box{
+                    .x = usable.x + edgePad,
+                    .y = usable.y,
+                    .width = std::max(1, usable.width - 2 * edgePad),
+                    .height = kColumnHintWidth,
+                }
+              : wlr_box{
+                    .x = usable.x,
+                    .y = usable.y + edgePad,
+                    .width = kColumnHintWidth,
+                    .height = std::max(1, usable.height - 2 * edgePad),
+                };
+        } else if (
+            target.column == static_cast<int>(layout.columns().size())
+            && atStripEndEdge(primaryWorld, primaryOrigin, primaryExtent)
+        ) {
+          result.hintBox = v
+              ? wlr_box{
+                    .x = usable.x + edgePad,
+                    .y = usable.y + usable.height - kColumnHintWidth,
+                    .width = std::max(1, usable.width - 2 * edgePad),
+                    .height = kColumnHintWidth,
+                }
+              : wlr_box{
+                    .x = usable.x + usable.width - kColumnHintWidth,
+                    .y = usable.y + edgePad,
+                    .width = kColumnHintWidth,
+                    .height = std::max(1, usable.height - 2 * edgePad),
+                };
+        } else {
+          result.hintBox = columnHintBox(workspace, layout, usable, target.column, scroll);
+        }
       }
     } else {
       result.column = static_cast<int>(workspace.layout().columns().size());

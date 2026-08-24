@@ -14,6 +14,7 @@ using umbriel::Column;
 using umbriel::Layout;
 using umbriel::LayoutConstraints;
 using umbriel::ResolvedLayoutConfig;
+using umbriel::ScrollingDirection;
 using umbriel::ScrollingLayout;
 using umbriel::View;
 
@@ -36,7 +37,8 @@ namespace {
     return config;
   }
 
-  constexpr int kViewport = 1260; // 1280 output minus 2 * edgePad
+  constexpr int kViewport = 1260;        // 1280 output minus 2 * edgePad
+  constexpr int kVerticalViewport = 700; // 720 output minus 2 * edgePad
   constexpr wlr_box kUsable{0, 0, 1280, 720};
 
   // Fixture holding the config alive: Layout keeps a raw pointer to it.
@@ -44,7 +46,10 @@ namespace {
     ResolvedLayoutConfig config = defaultConfig();
     ScrollingLayout layout;
 
-    Fixture() { layout.setConfig(&config); }
+    explicit Fixture(ScrollingDirection direction = ScrollingDirection::Horizontal) {
+      config.scrolling.direction = direction;
+      layout.setConfig(&config);
+    }
 
     void addColumns(int count) {
       for (int i = 0; i < count; ++i) {
@@ -788,6 +793,140 @@ UMBRIEL_TEST(insertAtTopConsumesTheResizedGap) {
   CHECK_EQ(upper.y, kUsable.y + fixture.config.edgePad);
   CHECK_EQ(lowerAfter.y, upper.y + upper.height + fixture.config.totalGap);
   CHECK(std::fabs(fixture.layout.topGapWeight(0)) < 1e-9);
+}
+
+// vertical scrolling
+UMBRIEL_TEST(verticalArrangePlacesLanesTopToBottom) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.addColumns(2);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box first = fixture.layout.targetBox(stub(0));
+  const wlr_box second = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(first.x, 10);
+  CHECK_EQ(first.y, 10);
+  CHECK_EQ(first.width, 1260);
+  CHECK_EQ(first.height, 344);
+  CHECK_EQ(second.x, 10);
+  CHECK_EQ(second.y, 366);
+  CHECK_EQ(second.width, 1260);
+  CHECK_EQ(second.height, 344);
+}
+
+UMBRIEL_TEST(verticalArrangeStacksViewsSideBySideWithinALane) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.addColumns(2);
+  CHECK(fixture.layout.consumeLeft(stub(1)));
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box left = fixture.layout.targetBox(stub(0));
+  const wlr_box right = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(left.y, right.y);
+  CHECK_EQ(left.height, right.height);
+  CHECK_EQ(right.x, left.x + left.width + fixture.config.totalGap);
+  CHECK(std::abs(left.width - right.width) <= 1);
+  CHECK_EQ(left.height, 344);
+}
+
+UMBRIEL_TEST(verticalLaneExtentUsesTheGapAwareFormula) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.addColumns(1);
+  CHECK_EQ(fixture.layout.columnWidth(0, kVerticalViewport), 344);
+}
+
+UMBRIEL_TEST(verticalInitialSizeMatchesWhatArrangeWillAssign) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  const Layout::InitialSize initial = fixture.layout.initialSize(kUsable, std::nullopt);
+  CHECK_EQ(initial.width, 1260);
+  CHECK_EQ(initial.height, 344);
+
+  fixture.addColumns(1);
+  fixture.layout.arrange(kUsable);
+  const wlr_box arranged = fixture.layout.targetBox(stub(0));
+  CHECK_EQ(initial.width, arranged.width);
+  CHECK_EQ(initial.height, arranged.height);
+}
+
+UMBRIEL_TEST(clientMinHeightWidensAVerticalLane) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.addColumns(1);
+  const int unconstrained = fixture.layout.columnWidth(0, kVerticalViewport);
+  fixture.layout.setConstraints([](const View*) { return LayoutConstraints{.minHeight = 500}; });
+  CHECK(fixture.layout.columnWidth(0, kVerticalViewport) > unconstrained);
+  CHECK_EQ(fixture.layout.columnWidth(0, kVerticalViewport), 500);
+}
+
+UMBRIEL_TEST(clientMaxHeightNarrowsAVerticalLane) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.addColumns(1);
+  fixture.layout.setConstraints([](const View*) { return LayoutConstraints{.maxHeight = 300}; });
+  CHECK_EQ(fixture.layout.columnWidth(0, kVerticalViewport), 300);
+}
+
+UMBRIEL_TEST(clientMinWidthClampsWithinAVerticalLane) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.addColumns(2);
+  CHECK(fixture.layout.consumeLeft(stub(1)));
+  fixture.layout.setConstraints([](const View*) { return LayoutConstraints{.minWidth = 900}; });
+  fixture.layout.arrange(kUsable);
+  CHECK(fixture.layout.targetBox(stub(0)).width >= 900);
+  CHECK(fixture.layout.targetBox(stub(1)).width >= 900);
+}
+
+UMBRIEL_TEST(verticalArrangeShiftsLanesByTheScrollOffset) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.addColumns(3);
+  fixture.layout.arrange(kUsable);
+  const wlr_box unscrolled = fixture.layout.targetBox(stub(0));
+
+  fixture.layout.setScroll(100);
+  fixture.layout.arrange(kUsable);
+  const wlr_box scrolled = fixture.layout.targetBox(stub(0));
+  CHECK_EQ(scrolled.x, unscrolled.x);
+  CHECK_EQ(scrolled.y, unscrolled.y - 100);
+}
+
+UMBRIEL_TEST(verticalFirstLaneTopEdgeStaysFixedWithoutCentering) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.config.scrolling.centerUnderfullStrip = false;
+  fixture.addColumns(1);
+  const uint32_t edges = fixture.layout.sanitizeResizeEdges(stub(0), WLR_EDGE_TOP | WLR_EDGE_LEFT);
+  CHECK_EQ(edges & WLR_EDGE_TOP, uint32_t{0});
+  CHECK((edges & WLR_EDGE_LEFT) != 0);
+}
+
+UMBRIEL_TEST(verticalResizeBottomEdgeGrowsTheLaneWithDy) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.addColumns(1);
+  fixture.layout.arrange(kUsable);
+  const int before = fixture.layout.targetBox(stub(0)).height;
+
+  auto resize = fixture.layout.beginResize(stub(0), WLR_EDGE_BOTTOM, kUsable);
+  CHECK(resize != nullptr);
+  resize->applyDelta(0.0, 40.0, kUsable);
+  fixture.layout.arrange(kUsable);
+  CHECK(fixture.layout.targetBox(stub(0)).height > before);
+}
+
+UMBRIEL_TEST(directionFlipKeepsFractionsAndRearranges) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  const double firstFraction = fixture.layout.widthFraction(0);
+  const double secondFraction = fixture.layout.widthFraction(1);
+  fixture.layout.arrange(kUsable);
+  const wlr_box horizontal = fixture.layout.targetBox(stub(0));
+
+  fixture.config.scrolling.direction = ScrollingDirection::Vertical;
+  fixture.layout.setConfig(&fixture.config);
+  fixture.layout.arrange(kUsable);
+  const wlr_box vertical = fixture.layout.targetBox(stub(0));
+
+  CHECK(std::fabs(fixture.layout.widthFraction(0) - firstFraction) < 1e-9);
+  CHECK(std::fabs(fixture.layout.widthFraction(1) - secondFraction) < 1e-9);
+  CHECK_EQ(horizontal.width, 624);
+  CHECK_EQ(horizontal.height, 700);
+  CHECK_EQ(vertical.width, 1260);
+  CHECK_EQ(vertical.height, 344);
 }
 
 int main() { return RUN_TESTS(); }

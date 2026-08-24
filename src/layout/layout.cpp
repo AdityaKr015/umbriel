@@ -24,9 +24,9 @@ namespace umbriel {
     };
   }
 
-  int Layout::fractionalWidth(int viewportWidth, double fraction) const {
+  int Layout::fractionalWidth(int viewportPrimary, double fraction) const {
     const int gap = m_config != nullptr ? m_config->totalGap : 0;
-    return std::max(1, static_cast<int>(std::lround(fraction * (viewportWidth + gap) - gap)));
+    return std::max(1, static_cast<int>(std::lround(fraction * (viewportPrimary + gap) - gap)));
   }
 
   std::unique_ptr<Layout> createLayout(LayoutMode mode) {

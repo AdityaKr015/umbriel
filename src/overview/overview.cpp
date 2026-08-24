@@ -160,6 +160,20 @@ namespace umbriel {
       };
     }
     wlr_scene_node_set_position(&card.tree->node, card.box.x, card.box.y);
+    const bool clipToRow = view->workspace() != nullptr && view->workspace()->scrollingVertical();
+    if (&card == m_dragCard || !clipToRow) {
+      wlr_scene_tree_set_clip(card.tree, nullptr);
+    } else {
+      // A vertical strip can extend into the next workspace row. Keep the row
+      // as a live viewport while focus and scroll actions move cards through it.
+      const wlr_box rowClip{
+          .x = metrics.rowX - card.box.x,
+          .y = rowTop(metrics, rowScroll, card.row) - card.box.y,
+          .width = metrics.rowW,
+          .height = metrics.rowH,
+      };
+      wlr_scene_tree_set_clip(card.tree, &rowClip);
+    }
     const float cardOpacity = &card == m_dragCard ? View::kDragOpacity : 1.0F;
     const float presentedOpacity = view->presentedOpacity() * cardOpacity;
 
@@ -1130,19 +1144,38 @@ namespace umbriel {
   // -: hit testing
 
   Overview::Card* Overview::cardAt(double lx, double ly) {
-    // Topmost first: later outputs and later cards paint over earlier ones. The part of a card that the output clip
-    // scissors away is not on screen, so it must not be clickable either; the dragged card is unclipped and hits
-    // everywhere.
+    // Topmost first: later outputs and later cards paint over earlier ones.
+    // Hit testing uses the same output and workspace-row clips as rendering.
+    // The dragged card is reparented to the unclipped root and hits everywhere.
     for (const auto& state : std::views::reverse(m_outputs)) {
-      wlr_box outputBox{};
-      wlr_output_layout_get_box(m_server->outputLayout(), state->output->wlr(), &outputBox);
+      RowMetrics metrics{};
+      if (!rowMetrics(*state, *m_server, zoom(), metrics)) {
+        continue;
+      }
       for (const auto& card : std::views::reverse(state->cards)) {
         if (card->tree == nullptr || !card->tree->node.enabled) {
           continue;
         }
         wlr_box hit = card->box;
-        if (card.get() != m_dragCard && !wlr_box_intersection(&hit, &card->box, &outputBox)) {
-          continue;
+        if (card.get() != m_dragCard) {
+          const bool clipToRow = card->view != nullptr
+              && card->view->workspace() != nullptr
+              && card->view->workspace()->scrollingVertical();
+          if (clipToRow) {
+            const wlr_box rowBox{
+                .x = metrics.rowX,
+                .y = rowTop(metrics, state->rowScroll, card->row),
+                .width = metrics.rowW,
+                .height = metrics.rowH,
+            };
+            wlr_box rowHit{};
+            if (!wlr_box_intersection(&rowHit, &card->box, &rowBox)
+                || !wlr_box_intersection(&hit, &rowHit, &metrics.outputBox)) {
+              continue;
+            }
+          } else if (!wlr_box_intersection(&hit, &card->box, &metrics.outputBox)) {
+            continue;
+          }
         }
         if (boxContains(hit, lx, ly)) {
           return card.get();

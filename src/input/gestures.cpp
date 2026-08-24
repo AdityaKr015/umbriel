@@ -259,8 +259,12 @@ namespace umbriel {
           m_state = State::Idle;
           return;
         }
+        if (ws->scrollingVertical()) {
+          m_state = State::Idle;
+          return;
+        }
         m_scrollWorkspace = ws;
-        m_viewportWidth = std::max(1, out->usableArea().width - 2 * ws->layoutConfig().edgePad);
+        m_viewportPrimary = ws->scrollViewportExtent();
         m_scrollStart = scrolling->scroll();
         ws->markArrange(false);
         m_state = State::Scroll;
@@ -299,12 +303,12 @@ namespace umbriel {
         m_state = State::Idle;
         return;
       }
-      const auto maxScroll = static_cast<double>(scrolling->maxScroll(m_viewportWidth));
+      const auto maxScroll = static_cast<double>(scrolling->maxScroll(m_viewportPrimary));
       if (target < 0) {
-        target = std::max(target * kOverscrollCompress, -0.1 * m_viewportWidth);
+        target = std::max(target * kOverscrollCompress, -0.1 * m_viewportPrimary);
       }
       if (target > maxScroll) {
-        target = std::min(maxScroll + (target - maxScroll) * kOverscrollCompress, maxScroll + 0.1 * m_viewportWidth);
+        target = std::min(maxScroll + (target - maxScroll) * kOverscrollCompress, maxScroll + 0.1 * m_viewportPrimary);
       }
       scrolling->setScroll(target);
       m_scrollWorkspace->markArrange(false);
@@ -462,7 +466,7 @@ namespace umbriel {
     } else {
       // Snap to the column nearest the viewport center.
       const ScrollingLayout& layout = *scrolling;
-      const auto maxScroll = static_cast<double>(layout.maxScroll(m_viewportWidth));
+      const auto maxScroll = static_cast<double>(layout.maxScroll(m_viewportPrimary));
       const double rawScroll = layout.scroll();
       const double currentScroll = std::clamp(rawScroll, 0.0, maxScroll);
       int best = -1;
@@ -475,11 +479,11 @@ namespace umbriel {
       } else if (m_accumX < 0.0 && rawScroll >= maxScroll) {
         best = static_cast<int>(layout.columns().size()) - 1;
       } else {
-        const double center = currentScroll + m_viewportWidth / 2.0;
+        const double center = currentScroll + m_viewportPrimary / 2.0;
         double bestDist = 1e18;
         for (int i = 0; i < static_cast<int>(layout.columns().size()); ++i) {
-          const double colCenter =
-              static_cast<double>(layout.columnX(i, m_viewportWidth)) + layout.columnWidth(i, m_viewportWidth) / 2.0;
+          const double colCenter = static_cast<double>(layout.columnX(i, m_viewportPrimary))
+              + layout.columnWidth(i, m_viewportPrimary) / 2.0;
           const double dist = std::abs(colCenter - center);
           if (dist < bestDist) {
             bestDist = dist;

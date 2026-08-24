@@ -19,6 +19,11 @@ namespace umbriel {
     Dwindle,
   };
 
+  enum class ScrollingDirection {
+    Horizontal,
+    Vertical,
+  };
+
   // What a layout needs to know about a view in order to size it: the client's
   // size hints plus whether it is going fullscreen.
   struct LayoutConstraints {
@@ -51,6 +56,9 @@ namespace umbriel {
   // tests want.
   using LayoutConstraintsFn = LayoutConstraints (*)(const View*);
 
+  // Scrolling interprets widthFrac as the primary-axis extent fraction.
+  // heightWeights and edge gap weights divide the cross-axis extent.
+  // Dwindle continues to use the fields in its native horizontal/vertical sense.
   struct Column {
     std::vector<View*> views;
     std::vector<double> heightWeights;
@@ -153,7 +161,7 @@ namespace umbriel {
     [[nodiscard]] wlr_box contentArea(const wlr_box& usable) const;
     // Gap-aware width of a column occupying `fraction` of the viewport. Solving sum(w) + (N-1)g = V with w = p*(V+g) -
     // g makes N columns whose fractions sum to 1 tile the viewport exactly.
-    [[nodiscard]] int fractionalWidth(int viewportWidth, double fraction) const;
+    [[nodiscard]] int fractionalWidth(int viewportPrimary, double fraction) const;
 
     const ResolvedLayoutConfig* m_config = nullptr;
     LayoutConstraintsFn m_constraints = nullptr;

@@ -10,6 +10,11 @@ namespace umbriel {
 
   class View;
 
+  // Public width and X vocabulary names primary-axis quantities for compatibility:
+  // X is the primary scroll axis, width is its extent, and height is the cross
+  // axis extent. Horizontal layouts map primary/cross to X/Y. Vertical layouts
+  // map them to Y/X.
+
   class ScrollingLayout : public Layout {
   public:
     [[nodiscard]] LayoutMode mode() const override { return LayoutMode::Scrolling; }
@@ -18,11 +23,11 @@ namespace umbriel {
     [[nodiscard]] int columnOf(const View* view) const override;
     [[nodiscard]] int rowOf(const View* view) const override;
     [[nodiscard]] double scroll() const { return m_scroll; }
-    [[nodiscard]] int columnX(int columnIndex, int viewportWidth) const;
-    [[nodiscard]] int columnWidth(int columnIndex, int viewportWidth) const;
+    [[nodiscard]] int columnX(int columnIndex, int viewportPrimary) const;
+    [[nodiscard]] int columnWidth(int columnIndex, int viewportPrimary) const;
     [[nodiscard]] bool isFullWidth(int columnIndex) const override;
-    [[nodiscard]] int maxScroll(int viewportWidth) const {
-      return std::max(0, totalWidth(viewportWidth) - viewportWidth);
+    [[nodiscard]] int maxScroll(int viewportPrimary) const {
+      return std::max(0, totalWidth(viewportPrimary) - viewportPrimary);
     }
 
     void insertView(View* view, int columnIndex) override;
@@ -33,17 +38,14 @@ namespace umbriel {
     void removeView(View* view) override;
     void moveColumn(int from, int to) override;
     void setScroll(double scroll);
-    // How much to subtract from the scroll offset when `columnIndex` is about to lose its last view, so the columns
-    // still on screen do not slide. Removing a column closes the space it held, so everything to its right moves left
-    // by its width plus one gap. When that space sat off-screen to the left, the movement is not something the user
-    // asked to see. Closing a window three columns back should not shift the one being read, so removal re-anchors the
-    // remaining columns. Returns the part of that span that was hidden, so it goes to zero as the column comes into
-    // view rather than switching on at the edge: a column sitting exactly at the left edge of the viewport gets no
-    // compensation and the strip closes up in plain sight, which is what a visible column closing should look like.
-    // Call before removeView, while the column still exists.
-    [[nodiscard]] double scrollShiftForColumnRemoval(int columnIndex, int viewportWidth) const;
-    void ensureVisible(int columnIndex, int viewportWidth);
-    [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportWidth) const;
+    // How much to subtract from the scroll offset when `columnIndex` is about
+    // to lose its last view. Removing a lane closes the primary-axis space it
+    // held. Compensation re-anchors content when that space was hidden toward
+    // strip start, while a visible lane closes in place. Call before removeView,
+    // while the lane still exists.
+    [[nodiscard]] double scrollShiftForColumnRemoval(int columnIndex, int viewportPrimary) const;
+    void ensureVisible(int columnIndex, int viewportPrimary);
+    [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportPrimary) const;
     void arrange(const wlr_box& usable) override;
     [[nodiscard]] wlr_box targetBox(const View* view) const override;
     [[nodiscard]] InitialSize
@@ -76,18 +78,19 @@ namespace umbriel {
       int height = 0;
     };
 
-    [[nodiscard]] int totalWidth(int viewportWidth) const;
-    [[nodiscard]] int rawTotalWidth(int viewportWidth) const;
-    [[nodiscard]] int centeringOffset(int viewportWidth) const;
-    [[nodiscard]] double targetScrollForEnsureVisible(int columnIndex, int viewportWidth) const;
+    [[nodiscard]] int totalWidth(int viewportPrimary) const;
+    [[nodiscard]] int rawTotalWidth(int viewportPrimary) const;
+    [[nodiscard]] int centeringOffset(int viewportPrimary) const;
+    [[nodiscard]] double targetScrollForEnsureVisible(int columnIndex, int viewportPrimary) const;
+    [[nodiscard]] bool vertical() const;
     void syncHeightWeights(Column& column);
 
     std::vector<Column> m_columns;
     std::vector<Target> m_targets;
     double m_scroll = 0;
-    // Height available during the last arrange, used to preserve existing pixel
-    // heights when a drop converts an outer gap into another stacked window.
-    int m_lastAvailableHeight = 0;
+    // Cross extent available during the last arrange, used to preserve existing
+    // pixel sizes when a drop converts an outer gap into another stacked view.
+    int m_lastAvailableCross = 0;
   };
 
 } // namespace umbriel

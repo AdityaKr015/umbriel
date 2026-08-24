@@ -53,16 +53,35 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 | `just clean <mode>` | Remove a build directory |
 | `just rebuild <mode>` | Clean and rebuild a build directory |
 
-`verify.sh` boots one compositor with a single headless output and runs every script in `tests/harness/checks/`
-against it. Two rules follow:
+`verify.sh` runs every script in `tests/harness/checks/` against its own dedicated compositor: one contained headless
+instance is booted per check, the check runs in its own process group with `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`
+already pointing at that instance, and the harness kills the group and asserts the instance exited cleanly. Boot plus
+teardown costs about 80ms, so isolation is cheaper than the cleanup it replaces. Four rules follow:
 
 - A check must pass in a plain `just verify` run, with no environment overrides.
-- A check that needs more outputs, or its own compositor lifecycle, boots a private instance. See `025_session_quit`
-  and `116_output_disable`.
+- A check starts from a pristine instance (no windows, overview closed, workspace 1 focused, `$UMBRIEL_CONFIG` holding
+  the harness default) and owes nothing to whatever runs next. It appends the config it needs, spawns what it needs,
+  and asserts. It must not restore config, close the overview, return to workspace 1, or reap its clients at exit: the
+  harness owns all of that. A check that needs a different compositor lifecycle boots a private instance and tears it
+  down itself, as `030_session_quit` does.
+- Never re-apply `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, or `-u DBUS_SESSION_BUS_ADDRESS` per command. The harness
+  already put the body in that environment. This is containment, not convenience: only IPC subcommands honour
+  `UMBRIEL_SOCKET`, while `umbriel outputs` and every helper client are Wayland clients resolving `XDG_RUNTIME_DIR`
+  and `WAYLAND_DISPLAY`, so a missing prefix used to query the developer's live session instead of the instance.
+- Never retain `$!` from a backgrounded shell *function*. Bash forks a subshell, so the captured pid is the wrapper and
+  a signal to it leaves the client running. Background the client binary directly when a pid must be kept.
 
-Keep the shared instance at one output: `055_output_actions` asserts that directional output actions are rejected
-when there is nowhere to move. Two-output rendering has its own harness, run directly:
-`bash tests/harness/two-output-containment.sh ./build-debug/umbriel`.
+Check names group by topic, and the leading number is the group: `0xx` session, IPC, and config reload, `1xx` layout,
+`2xx` workspaces, `3xx` overview, `4xx` drag, `5xx` input and seat, `6xx` output and display, `7xx` rendering. Numbers
+step by ten inside a group so a new check lands next to its relatives.
+
+An instance has one output unless the check asks for more with a `# harness: outputs=N` directive in its header, which
+`620_output_disable`, `630_dpms`, and `650_two_output_containment` use. Output count is fixed when the compositor
+starts, so it cannot be a runtime config change. Single-output instances are what `610_output_actions` relies on to
+assert that directional output actions are rejected when there is nowhere to move.
+
+A check that stops making progress is killed after 120 seconds, so the suite reports instead of hanging. Set
+`VERIFY_TIMEOUT` to change the cap, and `VERIFY_VERBOSE=1` (or `-v`) to keep the full output of passing checks.
 
 ## Code Style
 

@@ -6,10 +6,10 @@ set -euo pipefail
 # on compositor state.
 skip_action() {
   case $1 in
-    session-quit) return 0 ;;  # opens the confirm dialog; a repeat call would kill the instance mid-run
+    session-quit) return 0 ;;  # opens the modal confirm dialog, and confirming it ends the instance mid-sweep; covered by 030_session_quit
     spawn)        return 0 ;;  # would start a process outside the container
     window-focus) return 0 ;;  # needs a live window id; the round trip is covered by 010_ipc
-    # These require a second output; single-output rejection paths are covered by 055.
+    # These require a second output; single-output rejection paths are covered by 610_output_actions.
     output-focus-*)             return 0 ;;
     window-move-to-output-*)    return 0 ;;
     column-move-to-output-*)    return 0 ;;
@@ -58,10 +58,6 @@ if [[ $count -eq 0 ]]; then
   echo "no actions were exercised"
   exit 1
 fi
-
-# A submap push leaves the compositor in that submap; pop it so later checks
-# see the default keybind set.
-"$UMBRIEL" msg submap:reset > /dev/null 2>&1 || true
 
 if [[ $failures -gt 0 ]]; then
   echo "$failures of $count actions failed"

@@ -5,12 +5,6 @@ set -euo pipefail
 MARKER="umbriel-harness-spawn-$$"
 CHILD=
 
-cleanup() {
-  [[ -n $CHILD ]] && kill -KILL "$CHILD" 2>/dev/null || true
-  pkill -f "$MARKER" 2>/dev/null || true
-}
-trap cleanup EXIT
-
 "$UMBRIEL" msg "spawn:python3 -c 'import time; time.sleep(120)' $MARKER" > /dev/null
 
 for _ in $(seq 40); do

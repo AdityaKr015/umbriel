@@ -81,11 +81,11 @@ Configuration resolution and change classification are covered by
 [`tests/config_resolve.cpp`](../../tests/config_resolve.cpp) and
 [`tests/config_change.cpp`](../../tests/config_change.cpp). Live workspace
 selection is exercised by
-[`tests/harness/checks/050_workspace.sh`](../../tests/harness/checks/050_workspace.sh).
+[`tests/harness/checks/210_workspace_selectors.sh`](../../tests/harness/checks/210_workspace_selectors.sh).
 Pointer isolation during a wheel-triggered workspace transition is covered by
-[`tests/harness/checks/113_workspace_transition_focus.sh`](../../tests/harness/checks/113_workspace_transition_focus.sh).
+[`tests/harness/checks/220_workspace_transition_focus.sh`](../../tests/harness/checks/220_workspace_transition_focus.sh).
 Modifier-wheel switching and the resulting keyboard-focus handoff through an
 input-method keyboard grab are covered by
-[`tests/harness/checks/118_input_method_wheel.sh`](../../tests/harness/checks/118_input_method_wheel.sh).
+[`tests/harness/checks/520_input_method_wheel.sh`](../../tests/harness/checks/520_input_method_wheel.sh).
 Keyboard-focus restoration after a data-device drag is covered by
-[`tests/harness/checks/119_data_drag_focus.sh`](../../tests/harness/checks/119_data_drag_focus.sh).
+[`tests/harness/checks/470_data_drag_focus.sh`](../../tests/harness/checks/470_data_drag_focus.sh).

@@ -65,7 +65,9 @@ test m=mode: (configure m)
     meson compile -C build-{{m}} unit-tests
     meson test -C build-{{m}} --print-errorlogs
 
-# Whole harness suite, or the checks whose names contain any given fragment.
+# Whole harness suite, or the checks whose names contain any given fragment. Each
+# check runs against its own headless compositor instance, so a fragment selects
+# a group as readily as a single check.
 # The build is silent unless it fails: the run's own report is the output.
 [no-exit-message]
 verify m=mode *filters: (_ensure-configured m)
@@ -77,8 +79,8 @@ verify m=mode *filters: (_ensure-configured m)
     fi
     bash tests/harness/verify.sh ./build-{{m}}/umbriel {{filters}}
 
-# One check (or a few) on the default build, without naming the mode:
-# `just check 118`, `just check 118 120`, `just check 118 -v` for full output.
+# One check, a group, or a few, on the default build, without naming the mode:
+# `just check 310`, `just check drag`, `just check 310 -v` for full output.
 [no-exit-message]
 check +filters: (verify mode filters)
 

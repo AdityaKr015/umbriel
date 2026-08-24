@@ -2,19 +2,8 @@
 # The IPC surface answers and returns well-formed JSON of the documented shape.
 set -euo pipefail
 
-CLIENT_PIDS=()
-cleanup() {
-  for pid in "${CLIENT_PIDS[@]:-}"; do
-    kill -TERM "$pid" 2>/dev/null || true
-  done
-}
-trap cleanup EXIT
-
 spawn_client() {
-  env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
-    XDG_RUNTIME_DIR="$UMBRIEL_RUNTIME_DIR" WAYLAND_DISPLAY=wayland-0 \
-    foot --title="ipc-client" sh -c 'sleep 120' > /dev/null 2>&1 &
-  CLIENT_PIDS+=($!)
+  foot --title="ipc-client" sh -c 'sleep 120' > /dev/null 2>&1 &
 }
 
 wait_for_windows() {
@@ -260,4 +249,6 @@ if "err" in closed or "ok" not in closed:
     raise SystemExit(f"window-close on the real window failed: {closed}")
 PY
 
+# An "ok" reply only says the request was accepted. The window must actually
+# leave the list, which is the close path itself, not tidying up after it.
 wait_for_windows 0

@@ -106,11 +106,10 @@ buffer straddling the shared edge, and assertions on the enter/leave stream,
 the primary output and hit testing as the clip is set, nested, and cleared.
 
 Compositor-level containment is covered by
-[`tests/harness/two-output-containment.sh`](../../tests/harness/two-output-containment.sh),
-which boots its own two-output headless instance (`verify.sh` boots one
-output) and compares real framebuffers while a strip overflows the shared
-edge. Run it as `bash tests/harness/two-output-containment.sh
-./build-debug/umbriel`.
+[`tests/harness/checks/650_two_output_containment.sh`](../../tests/harness/checks/650_two_output_containment.sh),
+which declares `# harness: outputs=2` so the harness boots it a two-output
+instance, and compares real framebuffers while a strip overflows the shared
+edge. Run it as `just check 650`.
 
 The rest cannot be automated here. The headless harness cannot exercise
 satellite or multi-output X coordinate spaces, so changes to these paths need

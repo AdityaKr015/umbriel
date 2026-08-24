@@ -113,15 +113,18 @@ While iterating, `just check` runs single harness checks by name fragment on the
 default build, and `just checks` lists the available names:
 
 ```sh
-just check 120            # one check
-just check 118 120        # several
-just check 120 -v         # keep the full output of passing checks
+just check 310            # one check
+just check 310 520        # several
+just check overview       # every check in a group
+just check 310 -v         # keep the full output of passing checks
 ```
 
-A run reports one line per check with its duration; passing checks are
-summarized to a single dimmed line while failing ones print their whole output.
-A failing run keeps its runtime directory (compositor log, per-client logs) and
-prints the path. `just verify <mode> [fragment ...]` selects another build.
+Each check gets its own contained headless compositor, so a failure stays local
+and checks run in any order. A run reports one line per check with its duration;
+passing checks are summarized to a single dimmed line while failing ones print
+their whole output. A failing check keeps its runtime directory (compositor log,
+config, per-client logs) and prints the path. `just verify <mode> [fragment ...]`
+selects another build.
 
 ## Running
 

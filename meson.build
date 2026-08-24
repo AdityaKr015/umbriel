@@ -434,7 +434,7 @@ unit_tests = [
 pointer_client = executable(
   'pointer-client',
   [
-    'tests/harness/pointer_client.cpp',
+    'tests/harness/clients/pointer_client.cpp',
     virtual_pointer_client_h,
     virtual_pointer_client_c,
     virtual_keyboard_client_h,
@@ -447,7 +447,7 @@ pointer_client = executable(
 input_method_client = executable(
   'input-method-client',
   [
-    'tests/harness/input_method_client.cpp',
+    'tests/harness/clients/input_method_client.cpp',
     input_method_client_h,
     input_method_client_c,
     virtual_keyboard_client_h,
@@ -459,7 +459,7 @@ input_method_client = executable(
 # Harness helper that owns a mapped surface and initiates a data-device drag.
 drag_client = executable(
   'drag-client',
-  ['tests/harness/drag_client.cpp', layer_shell_client_h, layer_shell_client_c, xdg_shell_client_c],
+  ['tests/harness/clients/drag_client.cpp', layer_shell_client_h, layer_shell_client_c, xdg_shell_client_c],
   dependencies: [wayland_client_dep],
 )
 
@@ -467,14 +467,14 @@ drag_client = executable(
 # connected client.
 global_client = executable(
   'global-client',
-  'tests/harness/global_client.cpp',
+  'tests/harness/clients/global_client.cpp',
   dependencies: [wayland_client_dep],
 )
 
 # Harness helper that reports the active workspace through ext-workspace-v1.
 workspace_client = executable(
   'workspace-client',
-  ['tests/harness/workspace_client.cpp', ext_workspace_client_h, ext_workspace_client_c],
+  ['tests/harness/clients/workspace_client.cpp', ext_workspace_client_h, ext_workspace_client_c],
   dependencies: [wayland_client_dep],
 )
 
@@ -483,7 +483,7 @@ workspace_client = executable(
 unmap_client = executable(
   'unmap-client',
   [
-    'tests/harness/unmap_client.cpp',
+    'tests/harness/clients/unmap_client.cpp',
     xdg_shell_client_h,
     xdg_shell_client_c,
     color_management_client_h,
@@ -496,7 +496,7 @@ unmap_client = executable(
 # wl_subsurface, the way Firefox presents its chrome and web content.
 subsurface_client = executable(
   'subsurface-client',
-  ['tests/harness/subsurface_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
+  ['tests/harness/clients/subsurface_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
   dependencies: [wayland_client_dep],
 )
 
@@ -505,7 +505,7 @@ subsurface_client = executable(
 idle_inhibit_client = executable(
   'idle-inhibit-client',
   [
-    'tests/harness/idle_inhibit_client.cpp',
+    'tests/harness/clients/idle_inhibit_client.cpp',
     xdg_shell_client_h,
     xdg_shell_client_c,
     idle_inhibit_client_h,

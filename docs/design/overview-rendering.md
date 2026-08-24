@@ -76,23 +76,28 @@ is dropped.
 
 The relevant checks are:
 
-- [`tests/harness/checks/100_overview.sh`](../../tests/harness/checks/100_overview.sh)
+- [`tests/harness/checks/310_overview_wheel.sh`](../../tests/harness/checks/310_overview_wheel.sh)
   for overview interaction and workspace navigation.
-- [`tests/harness/checks/101_external_drag.sh`](../../tests/harness/checks/101_external_drag.sh)
+- [`tests/harness/checks/460_external_drag.sh`](../../tests/harness/checks/460_external_drag.sh)
   for client drag ownership during overview activation.
-- [`tests/harness/checks/107_drag_opacity.sh`](../../tests/harness/checks/107_drag_opacity.sh)
+- [`tests/harness/checks/430_drag_opacity.sh`](../../tests/harness/checks/430_drag_opacity.sh)
   for composed drag opacity.
-- [`tests/harness/checks/111_drag_left_hint.sh`](../../tests/harness/checks/111_drag_left_hint.sh)
+- [`tests/harness/checks/450_drag_left_hint.sh`](../../tests/harness/checks/450_drag_left_hint.sh)
   for the visible prepend target on an overflowing scrolling strip.
-- [`tests/harness/checks/112_overview_refocus.sh`](../../tests/harness/checks/112_overview_refocus.sh)
+- [`tests/harness/checks/320_overview_refocus.sh`](../../tests/harness/checks/320_overview_refocus.sh)
   for adjacent focus reassignment when the focused window closes in the
   overview.
-- [`tests/harness/checks/114_overview_close_fade.sh`](../../tests/harness/checks/114_overview_close_fade.sh)
+- [`tests/harness/checks/330_overview_close_fade.sh`](../../tests/harness/checks/330_overview_close_fade.sh)
   for a card remaining visible after unmap and disappearing when the shared
   close snapshot settles.
-- [`tests/harness/checks/124_overview_focus_motion.sh`](../../tests/harness/checks/124_overview_focus_motion.sh)
+- [`tests/harness/checks/340_overview_focus_motion.sh`](../../tests/harness/checks/340_overview_focus_motion.sh)
   for selected-column focus and reveal beginning during the closing zoom.
-- [`tests/harness/two-output-containment.sh`](../../tests/harness/two-output-containment.sh)
+- [`tests/harness/checks/350_overview_horizontal_overflow.sh`](../../tests/harness/checks/350_overview_horizontal_overflow.sh)
+  for cards extending past the scaled workspace background while staying inside
+  the output.
+- [`tests/harness/checks/360_vertical_viewport_clips.sh`](../../tests/harness/checks/360_vertical_viewport_clips.sh)
+  for a vertical strip presented as one live viewport per overview row.
+- [`tests/harness/checks/650_two_output_containment.sh`](../../tests/harness/checks/650_two_output_containment.sh)
   for cards staying off a neighbouring output, overview included.
 - [`tests/presented_crop.cpp`](../../tests/presented_crop.cpp) for the
   presented-crop math shared with window presentation.

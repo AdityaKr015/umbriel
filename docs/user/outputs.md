@@ -111,6 +111,12 @@ Switching between SDR and HDR changes the output format, color space, and HDR
 metadata. Many monitors briefly go black while their display link resynchronizes.
 This is expected for each automatic or fullscreen transition.
 
+While an HDR output is active, screencopy clients such as `grim` and Noctalia
+receive an SDR Gamma 2.2 view instead of PQ-encoded output pixels. This keeps
+screenshots readable in ordinary SDR viewers. Values outside the SDR capture
+range are clipped rather than tone-mapped. Raw export-DMA-BUF capture remains
+in the output's native format.
+
 ## Disabling an output
 
 Set `enabled = false` on an output section to turn the monitor off. The

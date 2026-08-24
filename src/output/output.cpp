@@ -765,7 +765,18 @@ namespace umbriel {
       wlr_output_state_init(&state);
 
       bool commitOk = false;
-      if (wlr_scene_output_build_state(m_sceneOutput, &state, nullptr)) {
+      int captureLocks = m_output->attach_render_locks - (m_animationRenderLocked ? 1 : 0);
+      if (wlr_export_dmabuf_manager_v1* manager = m_server->exportDmabufManager()) {
+        wlr_export_dmabuf_frame_v1* frame;
+        wl_list_for_each(frame, &manager->frames, link) {
+          if (frame->output == m_output) {
+            --captureLocks;
+          }
+        }
+      }
+      wlr_scene_output_state_options sceneOptions{};
+      sceneOptions.capture_sdr = hdrActive() && captureLocks > 0;
+      if (wlr_scene_output_build_state(m_sceneOutput, &state, &sceneOptions)) {
         // Hardware gamma only (DRM). Nested Wayland has no gamma LUT; leave that alone.
         // Apply only when dirty: uploading the LUT every frame stalls the compositor.
         bool gammaPending = false;

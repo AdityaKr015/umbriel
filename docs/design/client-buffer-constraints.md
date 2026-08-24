@@ -31,3 +31,17 @@ is identical to wlroots' gles2 table.
 To reproduce without NVIDIA, hardcode `gl_format = GL_RGB`,
 `gl_type = GL_UNSIGNED_BYTE`, `alpha_size = 0` after the `glGetIntegerv` calls
 and capture with `grim`.
+
+## HDR capture view
+
+Capture protocols negotiate their buffer constraints before they lock the
+output for an attach-render frame. The SDR capture sidecar must therefore keep
+the output buffer's DRM format while storing Gamma 2.2 SDR values. For an XR30
+HDR output, replacing that sidecar with XR24 after negotiation makes the client
+request packed 10-bit readback from an 8-bit framebuffer.
+
+SceneFX creates the sidecar lazily from its pre-output-transform linear blend
+buffer. This can happen during texture import, outside the normal SceneFX
+render pass, so the SceneFX EGL context must be current while the framebuffer
+is allocated. Export-DMA-BUF frames bypass the SDR sidecar and retain the
+output's native representation.

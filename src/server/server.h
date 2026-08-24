@@ -287,6 +287,7 @@ namespace umbriel {
 
     void removeOutput(Output* output);
     void reassignOutputViews(Output* source, Output* destination);
+    void scheduleDisplacedViewRestore();
     void removeKeyboard(Keyboard* keyboard);
     void removeView(View* view);
     void removeLayerSurface(LayerSurface* layerSurface, wlr_output* output);
@@ -342,6 +343,7 @@ namespace umbriel {
     static int onBackgroundFrameTimer(void* data);
     static int onTerminateSignal(int signal, void* data);
     static void onIpcWindowsIdle(void* data);
+    static void onDisplacedRestoreIdle(void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -384,6 +386,7 @@ namespace umbriel {
     void handleWorkspaceCommit(void* data);
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     void applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly);
+    void restoreDisplacedViews();
     [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 
     struct IdleInhibitorWatch {
@@ -517,6 +520,7 @@ namespace umbriel {
     // Non-null while a windows-event idle callback is pending. The idle source
     // removes itself when it runs, so a non-null pointer means "already queued".
     wl_event_source* m_ipcWindowsIdle = nullptr;
+    wl_event_source* m_displacedRestoreIdle = nullptr;
     // SIGINT / SIGTERM, delivered on the event loop rather than in a signal
     // handler, so shutdown runs ordinary code instead of async-signal-safe code.
     wl_event_source* m_signalSources[2]{};

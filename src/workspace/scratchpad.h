@@ -28,6 +28,7 @@ namespace umbriel {
     void restorePresentation(View* view);
     void remove(View* view);
     void moveOutput(Output* from, Output* to);
+    void adoptOrphans(Output* output);
 
   private:
     struct Entry {

@@ -90,7 +90,7 @@ namespace umbriel {
         );
       }
     }
-    view->setWorkspace(nullptr);
+    view->moveToWorkspace(nullptr);
     wlr_scene_node_reparent(&view->sceneTree()->node, m_root);
     view->reparentShadow(m_shadowRoot);
     view->setScratchpadBorder(true);
@@ -261,7 +261,7 @@ namespace umbriel {
     }
     view->reparentShadow(nullptr);
     view->setScratchpadBorder(false);
-    view->setWorkspace(workspace, false);
+    view->moveToWorkspace(workspace, false);
     if (entry.returnTiled) {
       view->setFloating(false);
     } else {
@@ -313,6 +313,17 @@ namespace umbriel {
     }
     if (wasVisible && to != nullptr) {
       setVisible(to, true);
+    }
+  }
+
+  void ScratchpadManager::adoptOrphans(Output* output) {
+    if (output == nullptr) {
+      return;
+    }
+    for (Entry& entry : m_entries) {
+      if (entry.output == nullptr) {
+        entry.output = output;
+      }
     }
   }
 

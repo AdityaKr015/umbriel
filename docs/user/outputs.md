@@ -240,6 +240,10 @@ number beyond the current count, Umbriel uses the last workspace.
 Set `workspaces` to a number or an ordered list of names. Umbriel creates
 exactly those workspaces and keeps them when they are empty.
 
+Numeric workspace actions select positions on the focused output, so
+`workspace-switch:2` selects the second entry even when that workspace has a
+custom name.
+
 ```toml
 [output.DP-1]
 workspaces = 5

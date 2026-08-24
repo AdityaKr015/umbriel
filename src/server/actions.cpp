@@ -79,11 +79,12 @@ namespace umbriel {
       Output* preferred = server.outputFromWlr(server.preferredOutput());
       WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
 
-      // Dynamic numbered workspaces belong to their output. Resolve this first
-      // so an existing number elsewhere cannot steal a local request.
+      // Numeric selectors address positions on the focused output. Resolve
+      // them first so an existing numeric name elsewhere cannot steal a local
+      // request from a static group with custom workspace names.
       const bool numericSelector = !selector->name.empty()
           && std::ranges::all_of(selector->name, [](char value) { return value >= '0' && value <= '9'; });
-      if (preferredGroup != nullptr && preferredGroup->dynamic() && numericSelector) {
+      if (preferredGroup != nullptr && numericSelector) {
         if (Workspace* target = preferredGroup->workspaceForSelector(selector->name)) {
           return target;
         }

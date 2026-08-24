@@ -1180,15 +1180,16 @@ namespace umbriel {
     if (Workspace* workspace = workspaceNamed(name)) {
       return workspace;
     }
-    if (!m_dynamic || name.empty() || !std::ranges::all_of(name, [](char value) {
-          return value >= '0' && value <= '9';
-        })) {
+    if (name.empty() || !std::ranges::all_of(name, [](char value) { return value >= '0' && value <= '9'; })) {
       return nullptr;
     }
     size_t index = 0;
     const auto [end, error] = std::from_chars(name.data(), name.data() + name.size(), index);
     if (error != std::errc{} || end != name.data() + name.size() || index < 1 || m_workspaces.empty()) {
       return nullptr;
+    }
+    if (!m_dynamic) {
+      return index <= m_workspaces.size() ? m_workspaces[index - 1].get() : nullptr;
     }
     return m_workspaces.back().get();
   }

@@ -1,4 +1,0 @@
-[keybinds]
-"Mod+A" = { action = "window-close", repeat = false }
-"Mod+B" = { action = "window-close", repeat = 1, extra = true }
-"Mod+C" = { repeat = false }

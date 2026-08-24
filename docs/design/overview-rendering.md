@@ -99,5 +99,5 @@ The relevant checks are:
   for a vertical strip presented as one live viewport per overview row.
 - [`tests/harness/checks/650_two_output_containment.sh`](../../tests/harness/checks/650_two_output_containment.sh)
   for cards staying off a neighbouring output, overview included.
-- [`tests/presented_crop.cpp`](../../tests/presented_crop.cpp) for the
+- [`tests/unit/presented_crop.cpp`](../../tests/unit/presented_crop.cpp) for the
   presented-crop math shared with window presentation.

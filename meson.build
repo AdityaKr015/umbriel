@@ -409,24 +409,25 @@ umbriel = executable(
 # Unit tests. Each entry is [name, test sources, extra dependencies]. Every test gets umbriel_pure_dep; add umbriel_core_dep to the third field for a test that
 # needs compositor code. Either way a test never lists or recompiles a source.
 unit_tests = [
-  ['presented-crop', ['tests/presented_crop.cpp'], []],
-  ['scene-node', ['tests/scene_node.cpp'], []],
-  ['scene-clip', ['tests/scene_clip.cpp'], [wayland_server_dep]],
-  ['value-parse', ['tests/value_parse.cpp'], []],
-  ['keybind-parse', ['tests/keybind_parse.cpp'], []],
-  ['modifier-tap', ['tests/modifier_tap.cpp'], []],
-  ['output-direction', ['tests/output_direction.cpp'], []],
-  ['scrolling-layout', ['tests/scrolling_layout.cpp'], []],
-  ['dwindle-layout', ['tests/dwindle_layout.cpp'], []],
-  ['cheatsheet-rows', ['tests/cheatsheet_rows.cpp'], []],
-  ['border-ring', ['tests/border_ring.cpp'], []],
-  ['floating', ['tests/floating.cpp'], []],
-  ['maximize', ['tests/maximize.cpp'], []],
-  ['config-section', ['tests/config_section.cpp'], []],
-  ['config-change', ['tests/config_change.cpp'], []],
-  ['config-load', ['tests/config_load.cpp'], [umbriel_core_dep]],
-  ['action-registry', ['tests/action_registry.cpp'], [umbriel_core_dep]],
-  ['config-resolve', ['tests/config_resolve.cpp'], []],
+  ['presented-crop', ['tests/unit/presented_crop.cpp'], []],
+  ['scene-node', ['tests/unit/scene_node.cpp'], []],
+  ['scene-clip', ['tests/unit/scene_clip.cpp'], [wayland_server_dep]],
+  ['presentation', ['tests/unit/presentation.cpp'], [umbriel_core_dep]],
+  ['value-parse', ['tests/unit/value_parse.cpp'], []],
+  ['keybind-parse', ['tests/unit/keybind_parse.cpp'], []],
+  ['modifier-tap', ['tests/unit/modifier_tap.cpp'], []],
+  ['output-direction', ['tests/unit/output_direction.cpp'], []],
+  ['scrolling-layout', ['tests/unit/scrolling_layout.cpp'], []],
+  ['dwindle-layout', ['tests/unit/dwindle_layout.cpp'], []],
+  ['cheatsheet-rows', ['tests/unit/cheatsheet_rows.cpp'], []],
+  ['border-ring', ['tests/unit/border_ring.cpp'], []],
+  ['floating', ['tests/unit/floating.cpp'], []],
+  ['maximize', ['tests/unit/maximize.cpp'], []],
+  ['config-section', ['tests/unit/config_section.cpp'], []],
+  ['config-change', ['tests/unit/config_change.cpp'], []],
+  ['config-load', ['tests/unit/config_load.cpp'], [umbriel_core_dep]],
+  ['action-registry', ['tests/unit/action_registry.cpp'], [umbriel_core_dep]],
+  ['config-resolve', ['tests/unit/config_resolve.cpp'], []],
 ]
 
 # Harness helper, not a unit test: drives virtual pointer and modifier input against a running compositor. The headless backend has no input devices, so protocol
@@ -533,7 +534,7 @@ foreach unit_test : unit_tests
   test_exe = executable(
     unit_test[0] + '-test',
     unit_test[1],
-    include_directories: include_directories('tests'),
+    include_directories: include_directories('tests/unit'),
     dependencies: [umbriel_pure_dep] + unit_test[2],
   )
   unit_test_targets += test_exe

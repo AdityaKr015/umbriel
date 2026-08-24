@@ -78,8 +78,8 @@ inventory change.
 ## Verification
 
 Configuration resolution and change classification are covered by
-[`tests/config_resolve.cpp`](../../tests/config_resolve.cpp) and
-[`tests/config_change.cpp`](../../tests/config_change.cpp). Live workspace
+[`tests/unit/config_resolve.cpp`](../../tests/unit/config_resolve.cpp) and
+[`tests/unit/config_change.cpp`](../../tests/unit/config_change.cpp). Live workspace
 selection is exercised by
 [`tests/harness/checks/210_workspace_selectors.sh`](../../tests/harness/checks/210_workspace_selectors.sh).
 Pointer isolation during a wheel-triggered workspace transition is covered by

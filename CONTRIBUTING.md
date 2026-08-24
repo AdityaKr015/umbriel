@@ -53,6 +53,21 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 | `just clean <mode>` | Remove a build directory |
 | `just rebuild <mode>` | Clean and rebuild a build directory |
 
+Tests live in three places, and which one a change belongs in follows from what it can observe:
+
+```
+tests/unit/            C++ unit tests, one binary per test, run by `just test`
+tests/harness/verify.sh the headless compositor harness, run by `just verify`
+tests/harness/checks/   one script per behaviour it asserts
+tests/harness/clients/  Wayland helper clients the checks drive
+```
+
+A unit test covers math and pure decisions (layout geometry, config classification, keybind parsing) and never needs a
+compositor. A harness check covers anything that only exists in a running compositor: real clients, real framebuffers,
+seat grabs, live reloads. Every unit test gets `umbriel_pure_dep`, and one that needs compositor code adds
+`umbriel_core_dep` in the third field of the `unit_tests` table in `meson.build`. A test that is not in that table is
+not built and will rot unnoticed.
+
 `verify.sh` runs every script in `tests/harness/checks/` against its own dedicated compositor: one contained headless
 instance is booted per check, the check runs in its own process group with `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`
 already pointing at that instance, and the harness kills the group and asserts the instance exited cleanly. Boot plus

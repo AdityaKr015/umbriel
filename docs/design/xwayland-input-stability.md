@@ -101,7 +101,7 @@ behavior, not something the compositor can mask.
 ## Verifying changes here
 
 The clip primitive itself is covered by
-[`tests/scene_clip.cpp`](../../tests/scene_clip.cpp): two headless outputs, a
+[`tests/unit/scene_clip.cpp`](../../tests/unit/scene_clip.cpp): two headless outputs, a
 buffer straddling the shared edge, and assertions on the enter/leave stream,
 the primary output and hit testing as the clip is set, nested, and cleared.
 

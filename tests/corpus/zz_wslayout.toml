@@ -1,9 +1,0 @@
-[[workspace]]
-name = "code"
-[workspace.layout]
-mode = "spiral"
-gap = 9999
-gapp = 1
-[workspace.layout.scrolling]
-default_width_fraction = 9.0
-always_centre = true

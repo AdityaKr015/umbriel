@@ -1,2 +1,0 @@
-[input.focus]
-follows_mouse_max_scroll = 1e9     # nonsense; clamped and reported

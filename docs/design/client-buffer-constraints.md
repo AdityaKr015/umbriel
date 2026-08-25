@@ -45,3 +45,20 @@ buffer. This can happen during texture import, outside the normal SceneFX
 render pass, so the SceneFX EGL context must be current while the framebuffer
 is allocated. Export-DMA-BUF frames bypass the SDR sidecar and retain the
 output's native representation.
+
+## Windows-scRGB luminance
+
+Windows-scRGB and generic extended-linear content share the same transfer
+function, but not the same reference-white convention. Windows-scRGB defines a
+linear value of 1.0 as 80 cd/m2 and uses 2.5375, or 203 cd/m2, when compositor
+processing needs an assumed reference white. Treating every extended-linear
+buffer as Windows-scRGB would incorrectly dim parametric extended-linear
+content.
+
+Umbriel therefore marks only image descriptions created by
+`create_windows_scrgb` with a SceneFX luminance multiplier of `80 / 203`.
+SceneFX applies that multiplier while normalizing the buffer into its
+reference-white-relative blend space. The output transform subsequently maps
+the normalized reference white to the configured output `sdr_white` level.
+Buffers using this multiplier cannot use direct scanout because scanout would
+bypass the conversion.

@@ -82,6 +82,10 @@ if pkgconfig.found()
       'scenefx/types/wlr_scene.h',
       'wlr_scene_output_set_sdr_white_level',
       args: scenefx_cflags,
+    ) and cpp.has_header_symbol(
+      'scenefx/types/wlr_scene.h',
+      'wlr_scene_buffer_set_luminance_multiplier',
+      args: scenefx_cflags,
     ) and cpp.has_member(
       'struct wlr_scene_output_state_options',
       'capture_sdr',
@@ -103,6 +107,7 @@ else
     not scenefx_header_source.contains('wlr_scene_blur_set_ignore_alpha')
     or not scenefx_header_source.contains('wlr_scene_tree_set_clip')
     or not scenefx_header_source.contains('wlr_scene_output_set_sdr_white_level')
+    or not scenefx_header_source.contains('wlr_scene_buffer_set_luminance_multiplier')
     or not scenefx_header_source.contains('capture_sdr')
   )
     error('SceneFX submodule must provide Umbriel patched APIs')

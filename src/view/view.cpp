@@ -1168,6 +1168,7 @@ namespace umbriel {
           wlr_scene_buffer_set_opacity(copy, src->opacity);
           wlr_scene_buffer_set_transfer_function(copy, src->transfer_function);
           wlr_scene_buffer_set_primaries(copy, src->primaries);
+          wlr_scene_buffer_set_luminance_multiplier(copy, src->luminance_multiplier);
           wlr_scene_buffer_set_color_encoding(copy, src->color_encoding);
           wlr_scene_buffer_set_color_range(copy, src->color_range);
           ++c->buffersCopied;

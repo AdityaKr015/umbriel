@@ -1486,7 +1486,7 @@ namespace umbriel {
     // with the real title, even if the client mapped with a placeholder.
     m_initialRulesSettled = !anyWindowRuleHasTitlePattern(config());
 
-    showDecorations(!m_toplevel->current.fullscreen);
+    showDecorations(!m_toplevel->scheduled.fullscreen);
 
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this, rule.defaultWidth);

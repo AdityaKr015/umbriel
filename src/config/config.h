@@ -398,6 +398,7 @@ namespace umbriel {
         std::string options;
         int repeatRate = 25;
         int repeatDelay = 600;
+        bool numlockToggle = false;
         bool operator==(const Keyboard&) const = default;
       } keyboard;
 

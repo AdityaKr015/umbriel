@@ -1643,21 +1643,35 @@ namespace umbriel {
       const ResolvedWindowRule rule = resolvedRules();
       const bool wantTiled = rule.defaultFloating ? !*rule.defaultFloating : looksTiled(m_toplevel);
 
-      if (wantTiled) {
-        wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
+      // Resolve the workspace this view will attach to, so the output and layout that will actually arrange it are the
+      // ones that size the first configure.
+      Workspace* target = m_workspace;
+      Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
+      WorkspaceGroup* targetGroup = target != nullptr
+          ? target->group()
+          : windowRuleWorkspaceGroup(*m_server, rule, preferred != nullptr ? preferred->workspaceGroup() : nullptr);
+      if (target == nullptr) {
+        target = windowRuleWorkspace(targetGroup, rule);
+      }
+      Output* targetOutput = targetGroup != nullptr ? targetGroup->output() : preferred;
 
-        // Resolve the workspace this view will attach to, so the layout that
-        // will actually arrange it is the one that sizes the first configure.
-        Workspace* target = m_workspace;
-        Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
-        WorkspaceGroup* targetGroup = target != nullptr
-            ? target->group()
-            : windowRuleWorkspaceGroup(*m_server, rule, preferred != nullptr ? preferred->workspaceGroup() : nullptr);
-        if (target == nullptr) {
-          target = windowRuleWorkspace(targetGroup, rule);
+      wlr_xdg_toplevel_set_tiled(
+          m_toplevel, wantTiled ? WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT : 0
+      );
+
+      if (m_toplevel->requested.fullscreen) {
+        // xwayland-satellite can request fullscreen while creating the xdg role, before the initial surface commit.
+        // The request event is too early to configure, but wlroots preserves it in requested state for us to honor now.
+        wlr_xdg_toplevel_set_fullscreen(m_toplevel, true);
+        wlr_box fullArea{};
+        wlr_output* initialOutput = targetOutput != nullptr ? targetOutput->wlr() : m_server->preferredOutput();
+        if (initialOutput != nullptr) {
+          wlr_output_layout_get_box(m_server->outputLayout(), initialOutput, &fullArea);
         }
-
-        Output* targetOutput = targetGroup != nullptr ? targetGroup->output() : preferred;
+        if (fullArea.width > 0 && fullArea.height > 0) {
+          wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
+        }
+      } else if (wantTiled) {
         wlr_box usable = targetOutput != nullptr
             ? targetOutput->usableArea()
             : m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
@@ -1683,7 +1697,6 @@ namespace umbriel {
         const int width = rule.defaultSize ? (*rule.defaultSize)[0] : initial.width;
         wlr_xdg_toplevel_set_size(m_toplevel, width, initial.height);
       } else {
-        wlr_xdg_toplevel_set_tiled(m_toplevel, 0);
         const XdgSizeHints hints = xdgSizeHints(m_toplevel);
         if (rule.defaultSize) {
           requestFloatingSize(

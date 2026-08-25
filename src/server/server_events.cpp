@@ -1385,7 +1385,6 @@ namespace umbriel {
       output->forgetHdrView(view);
     }
     const bool hadKeyboardFocus = m_seat->wlr()->keyboard_state.focused_surface == view->toplevel()->base->surface;
-    bool restorePointerFocus = false;
     if (m_scratchpadManager != nullptr) {
       m_scratchpadManager->remove(view);
     }
@@ -1395,23 +1394,11 @@ namespace umbriel {
       if (workspace->group() != nullptr) {
         output = workspace->group()->output();
       }
-      std::optional<std::pair<double, double>> focusPoint;
-      if (workspace->focusedView() == view
-          && config().input.focus.followsMouse
-          && view->tiled()
-          && workspace->scrollingLayout() == nullptr
-          && workspace->active()
-          && m_cursor != nullptr
-          && output != nullptr
-          && wlr_output_layout_output_at(m_outputLayout, m_cursor->wlr()->x, m_cursor->wlr()->y) == output->wlr()) {
-        focusPoint = std::pair{m_cursor->wlr()->x, m_cursor->wlr()->y};
-        restorePointerFocus = true;
-      }
-      replacement = workspace->removeView(view, focusPoint);
+      replacement = workspace->removeView(view);
       view->detachWorkspace();
     }
     m_registry.remove(view);
-    if (hadKeyboardFocus || restorePointerFocus) {
+    if (hadKeyboardFocus) {
       wlr_seat_keyboard_notify_clear_focus(m_seat->wlr());
       if (replacement != nullptr) {
         focusView(replacement);

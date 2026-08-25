@@ -237,7 +237,7 @@ namespace umbriel {
       m_workspace = nullptr;
       // Keep an empty destination alive until this view has been attached.
       // addView() reconciles the group after the transfer is complete.
-      previous->removeView(this, std::nullopt, !sameGroup);
+      previous->removeView(this, !sameGroup);
     }
     m_workspace = workspace;
     if (m_workspace != nullptr) {
@@ -1567,6 +1567,20 @@ namespace umbriel {
     }
     if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
       overview->onViewUnmapped(this);
+    }
+    // Choose the layout neighbor while this view still belongs to the layout. Waiting for destroy loses that position,
+    // and focus-follows-mouse used to replace it with whichever survivor happened to sit under the stationary pointer.
+    if (m_workspace != nullptr && m_workspace->focusedView() == this) {
+      View* replacement = m_workspace->focusReplacementForRemoval(this);
+      if (replacement != nullptr) {
+        if (m_workspace->active() && !m_server->sessionLocked()) {
+          m_server->focusView(replacement, FocusReason::Directional);
+        } else {
+          m_workspace->setFocusedView(replacement);
+        }
+      } else {
+        m_workspace->setFocusedView(nullptr);
+      }
     }
     beginCloseAnimation();
     cancelFadeAnimation();

@@ -187,7 +187,7 @@ namespace umbriel {
     m_group->reconcileDynamic();
   }
 
-  View* Workspace::removeView(View* view, std::optional<std::pair<double, double>> focusPoint, bool reconcile) {
+  View* Workspace::removeView(View* view, bool reconcile) {
     if (view == nullptr) {
       return nullptr;
     }
@@ -198,41 +198,14 @@ namespace umbriel {
       );
       view->reparentShadow(nullptr);
     }
-    const int removedColumn = m_layout->columnOf(view);
-    View* adjacentReplacement = m_focusedView == view ? focusReplacementForRemoval(view) : nullptr;
+    View* replacement = m_focusedView == view ? focusReplacementForRemoval(view) : nullptr;
     detachFromLayout(view);
     std::erase(m_views, view);
     updateUrgent();
     std::erase(m_floatingStack, view);
     std::erase(m_switchViews, view);
 
-    View* replacement = nullptr;
     if (m_focusedView == view) {
-      m_focusedView = nullptr;
-      if (focusPoint && m_group != nullptr && m_group->output() != nullptr) {
-        wlr_box usable = m_group->output()->usableArea();
-        if (usable.width <= 0 || usable.height <= 0) {
-          wlr_output_layout_get_box(m_group->server()->outputLayout(), m_group->output()->wlr(), &usable);
-        }
-        if (usable.width > 0 && usable.height > 0) {
-          // Removal changes both column indices and the scrolling offset. Refresh layout targets before deciding which
-          // survivor now occupies a stationary pointer; the scene nodes catch up on the next frame.
-          m_layout->arrange(usable);
-          for (View* candidate : m_views) {
-            if (candidate == nullptr || !candidate->mapped() || !candidate->tiled()) {
-              continue;
-            }
-            const wlr_box box = m_layout->targetBox(candidate);
-            if (wlr_box_contains_point(&box, focusPoint->first, focusPoint->second)) {
-              replacement = candidate;
-              break;
-            }
-          }
-        }
-      }
-      if (replacement == nullptr && removedColumn >= 0) {
-        replacement = adjacentReplacement;
-      }
       m_focusedView = replacement;
     }
     // Re-anchor the strip on whatever is focused now, the way every other focus-moving operation does. Activating an

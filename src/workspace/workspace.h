@@ -182,6 +182,7 @@ namespace umbriel {
     // Insert an empty numbered workspace into a dynamic group and renumber the following workspaces. Static configured
     // groups cannot be extended this way and return null.
     Workspace* insertDynamicWorkspace(size_t index);
+    bool moveActiveWorkspace(int direction);
     void reconcileInventory();
     void refreshLayouts();
     void reconcileDynamic();

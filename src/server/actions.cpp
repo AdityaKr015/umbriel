@@ -628,6 +628,15 @@ namespace umbriel {
       return true;
     }
 
+    template <int Direction> bool actionWorkspaceMove(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      Workspace* workspace = activeWorkspace(server);
+      if (workspace == nullptr || workspace->group() == nullptr) {
+        return true;
+      }
+      workspace->group()->moveActiveWorkspace(Direction);
+      return true;
+    }
+
     template <int Sign> bool actionLayoutScroll(Server& server, const Keybind& bind, std::string* /*error*/) {
       const int multiplier = bind.wheel != WheelDirection::None && tiledDragActive(server) ? 2 : 1;
       scrollActiveLayout<Sign>(server, multiplier);
@@ -929,6 +938,8 @@ namespace umbriel {
         &actionWorkspaceSetLayout,
         &actionDpms<false>,
         &actionDpms<true>,
+        &actionWorkspaceMove<1>,
+        &actionWorkspaceMove<-1>,
     };
 
     consteval bool everyActionHasHandler() {

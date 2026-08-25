@@ -15,7 +15,9 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
+#include <utility>
 #include "wlr.h"
 // clang-format on
 
@@ -971,6 +973,41 @@ namespace umbriel {
       overview->onWorkspaceInventoryChanged(this);
     }
     return result;
+  }
+
+  bool WorkspaceGroup::moveActiveWorkspace(int direction) {
+    if (m_active == nullptr || m_workspaces.size() < 2 || direction == 0 || m_output == nullptr) {
+      return false;
+    }
+    const size_t index = m_active->index();
+    const auto target = static_cast<std::ptrdiff_t>(index) + direction;
+    if (target < 0 || target >= static_cast<std::ptrdiff_t>(m_workspaces.size())) {
+      return false;
+    }
+    if (m_dynamic && direction > 0) {
+      const bool targetIsTrailingEmpty = static_cast<size_t>(target) == m_workspaces.size() - 1
+          && !m_workspaces[static_cast<size_t>(target)]->hasViews();
+      if (targetIsTrailingEmpty) {
+        return false;
+      }
+    }
+    slideFinish();
+    std::swap(m_workspaces[index], m_workspaces[static_cast<size_t>(target)]);
+    if (m_dynamic) {
+      refreshDynamicWorkspaceMetadata();
+      if (m_workspaces.back()->hasViews()) {
+        appendDynamicWorkspace();
+      }
+    } else {
+      for (const size_t slot : {index, static_cast<size_t>(target)}) {
+        Workspace* moved = m_workspaces[slot].get();
+        moved->rename(moved->name(), slot);
+      }
+    }
+    if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+      overview->onWorkspaceInventoryChanged(this);
+    }
+    return true;
   }
 
   void WorkspaceGroup::reconcileInventory() {

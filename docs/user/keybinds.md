@@ -143,6 +143,9 @@ focused output, by index. They do not wrap around: `workspace-previous` on the
 first workspace is a silent no-op. On a dynamic output, `workspace-next` reaches
 the trailing empty workspace, which becomes active as usual.
 
+`workspace-move-down` and `workspace-move-up` move the focused workspace up or down
+on the focused output. They do not wrap around either.
+
 The matching window actions can be bound independently:
 
 ```toml

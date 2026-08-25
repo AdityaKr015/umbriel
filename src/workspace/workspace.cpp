@@ -625,8 +625,12 @@ namespace umbriel {
   }
 
   bool Workspace::moveLaneAlongStrip(int direction) {
+    View* destination = focusAlongStrip(direction);
+    if (destination == nullptr) {
+      return false;
+    }
     const int current = m_layout->columnOf(m_focusedView);
-    const int target = current + direction;
+    const int target = m_layout->columnOf(destination);
     if (current < 0 || target < 0 || target >= static_cast<int>(m_layout->columns().size())) {
       return false;
     }

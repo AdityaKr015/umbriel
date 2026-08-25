@@ -278,6 +278,28 @@ namespace umbriel {
     collectColumns(m_root.get());
   }
 
+  bool DwindleLayout::swapLeafViews(Node* first, Node* second) {
+    if (first == nullptr
+        || second == nullptr
+        || first == second
+        || first->type != Node::Leaf
+        || second->type != Node::Leaf) {
+      return false;
+    }
+    View* firstView = first->view;
+    View* secondView = second->view;
+    std::swap(first->view, second->view);
+    for (Target& target : m_targets) {
+      if (target.view == firstView) {
+        target.view = secondView;
+      } else if (target.view == secondView) {
+        target.view = firstView;
+      }
+    }
+    rebuildFlatColumns();
+    return true;
+  }
+
   // Public Layout interface
   int DwindleLayout::columnOf(const View* view) const {
     for (size_t i = 0; i < m_flatColumns.size(); ++i) {
@@ -335,9 +357,7 @@ namespace umbriel {
     if (b == nullptr || b->type != Node::Leaf) {
       return false;
     }
-    std::swap(a->view, b->view);
-    rebuildFlatColumns();
-    return true;
+    return swapLeafViews(a, b);
   }
 
   bool DwindleLayout::expelRight(View* view) {
@@ -350,31 +370,11 @@ namespace umbriel {
     if (b == nullptr || b->type != Node::Leaf) {
       return false;
     }
-    std::swap(a->view, b->view);
-    rebuildFlatColumns();
-    return true;
+    return swapLeafViews(a, b);
   }
 
   bool DwindleLayout::moveViewVertical(View* view, int direction) {
-    Node* a = findNode(view);
-    if (a == nullptr || a->parent == nullptr) {
-      return false;
-    }
-    if (a->parent->type != Node::VSplit) {
-      return false;
-    }
-    Node* sibling = nullptr;
-    if (direction < 0 && a->parent->right.get() == a) {
-      sibling = a->parent->left.get();
-    } else if (direction > 0 && a->parent->left.get() == a) {
-      sibling = a->parent->right.get();
-    }
-    if (sibling == nullptr || sibling->type != Node::Leaf) {
-      return false;
-    }
-    std::swap(a->view, sibling->view);
-    rebuildFlatColumns();
-    return true;
+    return swapLeafViews(findNode(view), findNode(directionalNeighbor(view, false, direction)));
   }
 
   void DwindleLayout::removeView(View* view) {
@@ -398,10 +398,7 @@ namespace umbriel {
     }
     Node* a = nodeAtFlatIndex(from);
     Node* b = nodeAtFlatIndex(destination);
-    if (a != nullptr && b != nullptr && a->type == Node::Leaf && b->type == Node::Leaf) {
-      std::swap(a->view, b->view);
-      rebuildFlatColumns();
-    }
+    swapLeafViews(a, b);
   }
 
   void DwindleLayout::arrange(const wlr_box& usable) {

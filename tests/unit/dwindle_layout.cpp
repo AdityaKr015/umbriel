@@ -255,6 +255,54 @@ UMBRIEL_TEST(directionalFocusFollowsScreenGeometry) {
   }
 }
 
+UMBRIEL_TEST(directionalMoveRefreshesScreenGeometryImmediately) {
+  Fixture fixture;
+  fixture.layout.insertView(stub(0), 0);
+  fixture.layout.arrange(kUsable);
+  fixture.layout.insertView(stub(1), 1);
+  fixture.layout.arrange(kUsable);
+  fixture.layout.insertView(stub(2), 2);
+  fixture.layout.arrange(kUsable);
+
+  const auto leftTarget = fixture.layout.focusHorizontalLeaf(stub(2), -1);
+  CHECK(leftTarget.has_value());
+  if (!leftTarget.has_value() || *leftTarget == nullptr) {
+    return;
+  }
+  fixture.layout.moveColumn(fixture.layout.columnOf(stub(2)), fixture.layout.columnOf(*leftTarget));
+
+  // A repeated key action can arrive before the deferred arrange. Directional
+  // lookup must already see the moved view in its new left-hand tile.
+  const auto rightTarget = fixture.layout.focusHorizontalLeaf(stub(2), 1);
+  CHECK(rightTarget.has_value());
+  if (rightTarget.has_value()) {
+    CHECK_EQ(*rightTarget, stub(1));
+  }
+}
+
+UMBRIEL_TEST(verticalMoveCrossesNestedBranches) {
+  Fixture fixture;
+  for (int i = 0; i < 5; ++i) {
+    fixture.layout.insertView(stub(i), i);
+    fixture.layout.arrange(kUsable);
+  }
+
+  const wlr_box upperRight = fixture.layout.targetBox(stub(1));
+  const wlr_box lowerLeft = fixture.layout.targetBox(stub(2));
+  CHECK_EQ(upperRight.x, lowerLeft.x);
+  CHECK(upperRight.y < lowerLeft.y);
+
+  CHECK(fixture.layout.moveViewVertical(stub(2), -1));
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.targetBox(stub(2)).y, upperRight.y);
+  CHECK_EQ(fixture.layout.targetBox(stub(1)).y, lowerLeft.y);
+
+  CHECK(fixture.layout.moveViewVertical(stub(2), 1));
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.targetBox(stub(2)).y, lowerLeft.y);
+  CHECK_EQ(fixture.layout.targetBox(stub(1)).y, upperRight.y);
+}
+
 UMBRIEL_TEST(splitsFollowTheLongerEdgeOnAPortraitArea) {
   Fixture fixture;
   fixture.addLeaves(3);

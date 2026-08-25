@@ -469,28 +469,61 @@ namespace umbriel {
     return {.x = t.x, .y = t.y, .width = t.width, .height = t.height};
   }
 
-  View* DwindleLayout::verticalSibling(const View* view, int direction) const {
-    Node* node = findNode(view);
-    if (node == nullptr || node->parent == nullptr) {
+  View* DwindleLayout::directionalNeighbor(const View* view, bool horizontal, int direction) const {
+    if (view == nullptr || direction == 0) {
       return nullptr;
     }
-    if (node->parent->type != Node::VSplit) {
+
+    const auto sourceIt = std::ranges::find_if(m_targets, [view](const Target& target) { return target.view == view; });
+    if (sourceIt == m_targets.end()) {
       return nullptr;
     }
-    Node* sibling = nullptr;
-    if (direction < 0 && node->parent->right.get() == node) {
-      sibling = node->parent->left.get();
-    } else if (direction > 0 && node->parent->left.get() == node) {
-      sibling = node->parent->right.get();
+
+    const Target& source = *sourceIt;
+    View* best = nullptr;
+    int bestGap = std::numeric_limits<int>::max();
+    int bestOverlap = -1;
+    int bestCenterDistance = std::numeric_limits<int>::max();
+
+    for (const Target& candidate : m_targets) {
+      if (candidate.view == nullptr || candidate.view == view) {
+        continue;
+      }
+
+      int gap = 0;
+      int overlap = 0;
+      int centerDistance = 0;
+      if (horizontal) {
+        gap = direction < 0 ? source.x - (candidate.x + candidate.width) : candidate.x - (source.x + source.width);
+        overlap = std::min(source.y + source.height, candidate.y + candidate.height) - std::max(source.y, candidate.y);
+        centerDistance = std::abs((2 * source.y + source.height) - (2 * candidate.y + candidate.height));
+      } else {
+        gap = direction < 0 ? source.y - (candidate.y + candidate.height) : candidate.y - (source.y + source.height);
+        overlap = std::min(source.x + source.width, candidate.x + candidate.width) - std::max(source.x, candidate.x);
+        centerDistance = std::abs((2 * source.x + source.width) - (2 * candidate.x + candidate.width));
+      }
+
+      if (gap < 0 || overlap <= 0) {
+        continue;
+      }
+      if (gap < bestGap
+          || (gap == bestGap && overlap > bestOverlap)
+          || (gap == bestGap && overlap == bestOverlap && centerDistance < bestCenterDistance)) {
+        best = candidate.view;
+        bestGap = gap;
+        bestOverlap = overlap;
+        bestCenterDistance = centerDistance;
+      }
     }
-    if (sibling == nullptr || sibling->type != Node::Leaf) {
-      return nullptr;
-    }
-    return sibling->view;
+    return best;
   }
 
-  View* DwindleLayout::focusVerticalLeaf(const View* view, int direction) const {
-    return verticalSibling(view, direction);
+  std::optional<View*> DwindleLayout::focusHorizontalLeaf(const View* view, int direction) const {
+    return directionalNeighbor(view, true, direction);
+  }
+
+  std::optional<View*> DwindleLayout::focusVerticalLeaf(const View* view, int direction) const {
+    return directionalNeighbor(view, false, direction);
   }
 
   bool DwindleLayout::cycleWidth(int columnIndex, int direction) {

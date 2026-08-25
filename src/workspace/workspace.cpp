@@ -526,6 +526,9 @@ namespace umbriel {
   }
 
   View* Workspace::focusAlongStrip(int direction) const {
+    if (const auto horizontal = m_layout->focusHorizontalLeaf(m_focusedView, direction)) {
+      return *horizontal;
+    }
     const int current = m_layout->columnOf(m_focusedView);
     const int target = current + direction;
     if (current < 0 || target < 0 || target >= static_cast<int>(m_layout->columns().size())) {
@@ -536,8 +539,8 @@ namespace umbriel {
   }
 
   View* Workspace::focusWithinLane(int direction) const {
-    if (View* vertical = m_layout->focusVerticalLeaf(m_focusedView, direction)) {
-      return vertical;
+    if (const auto vertical = m_layout->focusVerticalLeaf(m_focusedView, direction)) {
+      return *vertical;
     }
     const int column = m_layout->columnOf(m_focusedView);
     const int row = m_layout->rowOf(m_focusedView);

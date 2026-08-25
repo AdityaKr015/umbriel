@@ -53,8 +53,8 @@ namespace umbriel {
 
     [[nodiscard]] int leafIndexAt(double cx, double cy) const;
     [[nodiscard]] wlr_box targetBoxByIndex(int index) const;
-    [[nodiscard]] View* verticalSibling(const View* view, int direction) const;
-    [[nodiscard]] View* focusVerticalLeaf(const View* view, int direction) const override;
+    [[nodiscard]] std::optional<View*> focusHorizontalLeaf(const View* view, int direction) const override;
+    [[nodiscard]] std::optional<View*> focusVerticalLeaf(const View* view, int direction) const override;
 
     // Drag-and-drop: split the target leaf and place the new view on the given
     // WLR edge (0 = default/automatic orientation, new view last).
@@ -78,6 +78,8 @@ namespace umbriel {
     [[nodiscard]] double widthFraction(int columnIndex) const override;
 
   private:
+    [[nodiscard]] View* directionalNeighbor(const View* view, bool horizontal, int direction) const;
+
     struct Target {
       View* view = nullptr;
       int x = 0;

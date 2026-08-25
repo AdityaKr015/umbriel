@@ -226,6 +226,35 @@ UMBRIEL_TEST(splitsFollowTheLongerEdgeOnALandscapeArea) {
   CHECK(second.y != third.y);
 }
 
+UMBRIEL_TEST(directionalFocusFollowsScreenGeometry) {
+  Fixture fixture;
+  fixture.layout.insertView(stub(0), 0);
+  fixture.layout.arrange(kUsable);
+  fixture.layout.insertView(stub(1), 1);
+  fixture.layout.arrange(kUsable);
+  fixture.layout.insertView(stub(2), 2);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box left = fixture.layout.targetBox(stub(0));
+  const wlr_box upperRight = fixture.layout.targetBox(stub(1));
+  const wlr_box lowerRight = fixture.layout.targetBox(stub(2));
+  CHECK(left.x < lowerRight.x);
+  CHECK_EQ(upperRight.x, lowerRight.x);
+  CHECK(upperRight.y < lowerRight.y);
+
+  const auto leftTarget = fixture.layout.focusHorizontalLeaf(stub(2), -1);
+  const auto upTarget = fixture.layout.focusVerticalLeaf(stub(2), -1);
+  const auto rightBoundary = fixture.layout.focusHorizontalLeaf(stub(1), 1);
+  CHECK(leftTarget.has_value());
+  CHECK(upTarget.has_value());
+  CHECK(rightBoundary.has_value());
+  if (leftTarget.has_value() && upTarget.has_value() && rightBoundary.has_value()) {
+    CHECK_EQ(*leftTarget, stub(0));
+    CHECK_EQ(*upTarget, stub(1));
+    CHECK_EQ(*rightBoundary, nullptr);
+  }
+}
+
 UMBRIEL_TEST(splitsFollowTheLongerEdgeOnAPortraitArea) {
   Fixture fixture;
   fixture.addLeaves(3);

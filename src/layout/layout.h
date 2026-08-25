@@ -120,7 +120,12 @@ namespace umbriel {
     [[nodiscard]] virtual InitialSize
     initialSize(const wlr_box& usable, std::optional<double> ruleWidthFraction) const = 0;
 
-    [[nodiscard]] virtual View* focusVerticalLeaf(const View* /*view*/, int /*direction*/) const { return nullptr; }
+    [[nodiscard]] virtual std::optional<View*> focusHorizontalLeaf(const View* /*view*/, int /*direction*/) const {
+      return std::nullopt;
+    }
+    [[nodiscard]] virtual std::optional<View*> focusVerticalLeaf(const View* /*view*/, int /*direction*/) const {
+      return std::nullopt;
+    }
 
     virtual bool cycleWidth(int columnIndex, int direction) = 0;
     virtual bool toggleFullWidth(int columnIndex) = 0;

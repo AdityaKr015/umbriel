@@ -77,6 +77,12 @@ namespace umbriel {
       xkb_context_unref(context);
     }
     wlr_keyboard_set_repeat_info(m_keyboard, repeatRate, repeatDelay);
+    if (input.keyboard.numlockToggle) {
+      const xkb_mod_index_t numLock = xkb_keymap_mod_get_index(m_keyboard->keymap, XKB_MOD_NAME_NUM);
+      if (numLock != XKB_MOD_INVALID) {
+        xkb_state_update_mask(m_keyboard->xkb_state, 0, 0, 1U << numLock, 0, 0, 0);
+      }
+    }
     // The name list or keymap changed; resend the current state so consumers
     // observe the reload even when the effective group did not move.
     notifyLayoutIfChanged();

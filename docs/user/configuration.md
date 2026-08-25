@@ -411,7 +411,7 @@ variant = ""      # XKB variant
 options = ""      # XKB options, comma-separated
 repeat_rate = 25  # 0-1000 Hz, 0 disables
 repeat_delay = 600 # 0-10000 ms
-numlock_toggle = true # true enables NumLock when Umbriel starts; false leaves it off
+numlock_toggle = true # true enables NumLock when a keyboard connects; false leaves it off
 ```
 
 `layout` takes a comma-separated list to load several layouts at once

@@ -223,6 +223,21 @@ follows_mouse = false
 
 # Window and layer rules (see docs/user/rules.md) ---------------------------
 
+# Blur all windows
+[[window_rule]]
+blur = true
+blur_optimized = true
+
+[[window_rule]]
+match.app_id = "^dev.noctalia.Noctalia$"
+default_floating = true
+default_size = [1020, 900]
+
+[[window_rule]]
+match.app_id = "^dev.noctalia.UmbrielSharePicker$"
+default_floating = true
+default_size = [800, 600]
+
 # [[window_rule]]
 # match.app_id = "firefox"
 # match.title = "^Library$"
@@ -237,16 +252,6 @@ follows_mouse = false
 # default_position = { x = 0, y = 0, anchor = "bottom_right" }
 # default_focused = false
 # default_pinned = true
-
-[[window_rule]]
-match.app_id = "^dev.noctalia.Noctalia$"
-default_floating = true
-default_size = [1020, 900]
-
-[[window_rule]]
-match.app_id = "^dev.noctalia.UmbrielSharePicker$"
-default_floating = true
-default_size = [800, 600]
 
 # Layer rules (see docs/user/rules.md#layer-rules) ---------------------------
 

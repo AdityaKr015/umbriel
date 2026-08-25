@@ -63,13 +63,13 @@ namespace umbriel {
     bool operator==(const WorkspaceConfig&) const = default;
   };
 
-  // Fully resolved layout config: no optionals. Owned by each Workspace.
+  // Fully resolved layout config. Owned by each Workspace.
   struct ResolvedLayoutConfig {
     LayoutMode mode = LayoutMode::Scrolling;
     int gap = 8;
     std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
     struct Scrolling {
-      double defaultWidthFraction = 0.5;
+      std::optional<double> defaultWidthFraction;
       bool centerUnderfullStrip = true;
       // Axis-agnostic layout state is preserved when config reload changes direction.
       ScrollingDirection direction = ScrollingDirection::Horizontal;
@@ -343,7 +343,7 @@ namespace umbriel {
       int gap = 8;
       std::vector<double> widthPresets{1.0 / 3, 0.5, 2.0 / 3};
       struct Scrolling {
-        double defaultWidthFraction = 0.5;
+        std::optional<double> defaultWidthFraction;
         bool centerUnderfullStrip = true;
         ScrollingDirection direction = ScrollingDirection::Horizontal;
         bool operator==(const Scrolling&) const = default;

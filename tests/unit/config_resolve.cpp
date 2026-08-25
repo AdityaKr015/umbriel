@@ -67,16 +67,29 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   CHECK_EQ(onDpOne.gap, 20);
   CHECK_EQ(onDpOne.totalGap, 24);
   CHECK_EQ(onDpOne.edgePad, 22);
-  CHECK_EQ(onDpOne.scrolling.defaultWidthFraction, 0.6);
+  CHECK(onDpOne.scrolling.defaultWidthFraction.has_value());
+  CHECK_EQ(*onDpOne.scrolling.defaultWidthFraction, 0.6);
 
   const auto onDpTwo = umbriel::resolveWorkspaceLayout(config, "DP-2", "dev", 0);
   CHECK(onDpTwo.mode == LayoutMode::Scrolling);
   CHECK_EQ(onDpTwo.gap, 30);
-  CHECK_EQ(onDpTwo.scrolling.defaultWidthFraction, 0.6);
+  CHECK(onDpTwo.scrolling.defaultWidthFraction.has_value());
+  CHECK_EQ(*onDpTwo.scrolling.defaultWidthFraction, 0.6);
 
   const auto elsewhere = umbriel::resolveWorkspaceLayout(config, "HDMI-A-1", "dev", 0);
   CHECK_EQ(elsewhere.gap, 12);
-  CHECK_EQ(elsewhere.scrolling.defaultWidthFraction, 0.6);
+  CHECK(elsewhere.scrolling.defaultWidthFraction.has_value());
+  CHECK_EQ(*elsewhere.scrolling.defaultWidthFraction, 0.6);
+}
+
+UMBRIEL_TEST(omittedScrollingDefaultWidthRemainsUnset) {
+  Config config;
+
+  const auto global = umbriel::resolveGlobalLayout(config);
+  CHECK(!global.scrolling.defaultWidthFraction.has_value());
+
+  const auto workspace = umbriel::resolveWorkspaceLayout(config, "DP-1", "dev", 0);
+  CHECK(!workspace.scrolling.defaultWidthFraction.has_value());
 }
 
 UMBRIEL_TEST(workspaceInventoryResolvesStaticAndDynamicOutputs) {

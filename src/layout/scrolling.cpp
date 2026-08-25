@@ -123,6 +123,18 @@ namespace umbriel {
     return std::clamp(width, 1, std::max(1, viewportPrimary));
   }
 
+  bool ScrollingLayout::setWidthFromPixels(int columnIndex, int viewportPrimary, int width) {
+    if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {
+      return false;
+    }
+    const int gap = m_config->totalGap;
+    Column& column = m_columns[static_cast<size_t>(columnIndex)];
+    column.widthFrac =
+        static_cast<double>(std::max(1, width) + gap) / static_cast<double>(std::max(1, viewportPrimary) + gap);
+    column.savedWidthFrac = 0.0;
+    return true;
+  }
+
   int ScrollingLayout::centeringOffset(int viewportPrimary) const {
     if (!m_config->scrolling.centerUnderfullStrip) {
       return 0;
@@ -174,7 +186,7 @@ namespace umbriel {
     }
     const int index = std::clamp(columnIndex, 0, static_cast<int>(m_columns.size()));
     Column column;
-    column.widthFrac = m_config->scrolling.defaultWidthFraction;
+    column.widthFrac = m_config->scrolling.defaultWidthFraction.value_or(0.5);
     column.views.push_back(view);
     column.heightWeights.push_back(1.0);
     m_columns.insert(m_columns.begin() + index, std::move(column));
@@ -268,7 +280,7 @@ namespace umbriel {
       source.heightWeights.erase(source.heightWeights.begin() + row);
     }
     Column column;
-    column.widthFrac = m_config->scrolling.defaultWidthFraction;
+    column.widthFrac = m_config->scrolling.defaultWidthFraction.value_or(0.5);
     column.views.push_back(view);
     column.heightWeights.push_back(weight);
     m_columns.insert(m_columns.begin() + sourceColumn + 1, std::move(column));
@@ -440,11 +452,16 @@ namespace umbriel {
   Layout::InitialSize
   ScrollingLayout::initialSize(const wlr_box& usable, std::optional<double> ruleWidthFraction) const {
     const wlr_box content = contentArea(usable);
-    const double fraction = ruleWidthFraction.value_or(m_config->scrolling.defaultWidthFraction);
-    if (vertical()) {
-      return {.width = content.width, .height = fractionalWidth(content.height, fraction)};
+    const std::optional<double> fraction =
+        ruleWidthFraction ? ruleWidthFraction : m_config->scrolling.defaultWidthFraction;
+    if (!fraction) {
+      return vertical() ? InitialSize{.width = content.width, .height = 0}
+                        : InitialSize{.width = 0, .height = content.height};
     }
-    return {.width = fractionalWidth(content.width, fraction), .height = content.height};
+    if (vertical()) {
+      return {.width = content.width, .height = fractionalWidth(content.height, *fraction)};
+    }
+    return {.width = fractionalWidth(content.width, *fraction), .height = content.height};
   }
 
   wlr_box ScrollingLayout::targetBox(const View* view) const {
@@ -509,7 +526,7 @@ namespace umbriel {
 
   double ScrollingLayout::widthFraction(int columnIndex) const {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {
-      return m_config->scrolling.defaultWidthFraction;
+      return m_config->scrolling.defaultWidthFraction.value_or(0.5);
     }
     return m_columns[static_cast<size_t>(columnIndex)].widthFrac;
   }

@@ -228,9 +228,20 @@ namespace umbriel {
     const int focusedColumn = m_layout->columnOf(m_focusedView);
     const int index = focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout->columns().size());
     m_layout->insertView(view, index);
-    // default_width is a viewport fraction: scrolling only. Dwindle ignores it.
-    if (ScrollingLayout* scrolling = scrollingLayout(); initialWidth && scrolling != nullptr) {
-      scrolling->setWidthFraction(scrolling->columnOf(view), *initialWidth);
+    if (ScrollingLayout* scrolling = scrollingLayout(); scrolling != nullptr) {
+      const int column = scrolling->columnOf(view);
+      const std::optional<double> configuredWidth =
+          initialWidth ? initialWidth : m_layoutConfig.scrolling.defaultWidthFraction;
+      if (configuredWidth) {
+        // default_width is a viewport fraction: scrolling only. Dwindle ignores it.
+        scrolling->setWidthFraction(column, *configuredWidth);
+      } else {
+        const wlr_box& geometry = view->toplevel()->base->geometry;
+        const int primary = scrollingVertical() ? geometry.height : geometry.width;
+        if (primary > 0) {
+          scrolling->setWidthFromPixels(column, scrollViewportExtent(), primary);
+        }
+      }
     }
     markArrange(true);
   }

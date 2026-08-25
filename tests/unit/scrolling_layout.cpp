@@ -447,6 +447,28 @@ UMBRIEL_TEST(initialSizeUsesTheDefaultFractionWhenNoRuleApplies) {
   CHECK_EQ(fixture.layout.initialSize(kUsable, std::nullopt).height, 700);
 }
 
+UMBRIEL_TEST(initialSizeLeavesTheScrollAxisUnconstrainedWhenNoDefaultIsSet) {
+  Fixture horizontal;
+  horizontal.config.scrolling.defaultWidthFraction.reset();
+  const Layout::InitialSize horizontalSize = horizontal.layout.initialSize(kUsable, std::nullopt);
+  CHECK_EQ(horizontalSize.width, 0);
+  CHECK_EQ(horizontalSize.height, 700);
+
+  Fixture vertical(ScrollingDirection::Vertical);
+  vertical.config.scrolling.defaultWidthFraction.reset();
+  const Layout::InitialSize verticalSize = vertical.layout.initialSize(kUsable, std::nullopt);
+  CHECK_EQ(verticalSize.width, 1260);
+  CHECK_EQ(verticalSize.height, 0);
+}
+
+UMBRIEL_TEST(mappedClientWidthCanBecomeTheColumnWidth) {
+  Fixture fixture;
+  fixture.addColumns(1);
+  CHECK(fixture.layout.setWidthFromPixels(0, kViewport, 800));
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.targetBox(stub(0)).width, 800);
+}
+
 // scrolling
 UMBRIEL_TEST(maxScrollIsZeroWhileEverythingFits) {
   Fixture fixture;

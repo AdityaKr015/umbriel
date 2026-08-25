@@ -25,6 +25,7 @@ cat >> "$UMBRIEL_CONFIG" <<'EOF'
 
 [layout.scrolling]
 direction = "vertical"
+default_width_fraction = 0.5
 EOF
 "$UMBRIEL" msg config-reload > /dev/null
 

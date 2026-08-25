@@ -1643,23 +1643,27 @@ namespace umbriel {
 
       if (wantTiled) {
         wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
-        const wlr_box usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
 
         // Resolve the workspace this view will attach to, so the layout that
         // will actually arrange it is the one that sizes the first configure.
         Workspace* target = m_workspace;
+        Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
+        WorkspaceGroup* targetGroup = target != nullptr
+            ? target->group()
+            : windowRuleWorkspaceGroup(*m_server, rule, preferred != nullptr ? preferred->workspaceGroup() : nullptr);
         if (target == nullptr) {
-          if (Output* out = m_server->outputFromWlr(m_server->preferredOutput())) {
-            if (WorkspaceGroup* group = out->workspaceGroup()) {
-              target = group->active();
-              if (rule.defaultWorkspace) {
-                if (Workspace* ruleTarget =
-                        group->workspaceAtClamped(static_cast<size_t>(*rule.defaultWorkspace - 1))) {
-                  target = ruleTarget;
-                }
-              }
-            }
-          }
+          target = windowRuleWorkspace(targetGroup, rule);
+        }
+
+        Output* targetOutput = targetGroup != nullptr ? targetGroup->output() : preferred;
+        wlr_box usable = targetOutput != nullptr
+            ? targetOutput->usableArea()
+            : m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+        if (targetOutput != nullptr && (usable.width <= 0 || usable.height <= 0)) {
+          wlr_output_layout_get_box(m_server->outputLayout(), targetOutput->wlr(), &usable);
+        }
+        if (usable.width <= 0 || usable.height <= 0) {
+          usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
         }
 
         // No workspace yet (no output, or none active): fall back to a throwaway layout built from the global config,

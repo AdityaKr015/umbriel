@@ -191,6 +191,25 @@ center_underfull_strip = true
   CHECK(containsDiagnostic(store, "unknown key general.prefer_no_csd"));
 }
 
+UMBRIEL_TEST(scrollingDefaultWidthIsOptional) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[layout.scrolling]\ncenter_underfull_strip = false\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().layout.scrolling.defaultWidthFraction.has_value());
+
+  file.write("[layout.scrolling]\ndefault_width_fraction = 0.75\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().layout.scrolling.defaultWidthFraction.has_value());
+  CHECK_EQ(*store.config().layout.scrolling.defaultWidthFraction, 0.75);
+
+  file.write("[layout.scrolling]\ncenter_underfull_strip = true\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().layout.scrolling.defaultWidthFraction.has_value());
+}
+
 UMBRIEL_TEST(modKeyIsUserConfigurable) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

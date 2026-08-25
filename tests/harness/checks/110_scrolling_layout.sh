@@ -23,6 +23,9 @@ wait_for_windows() {
 readonly EXPECT_W=624
 readonly EXPECT_H=700
 
+printf '\n[layout.scrolling]\ndefault_width_fraction = 0.5\n' >> "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+
 spawn_client a
 wait_for_windows 1
 

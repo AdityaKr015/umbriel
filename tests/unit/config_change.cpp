@@ -115,7 +115,7 @@ UMBRIEL_TEST(nestedAppearanceChangesAreCaught) {
   CHECK(ConfigChange::between(before, shadowed).appearance);
 
   Config scrolled;
-  scrolled.layout.scrolling.defaultWidthFraction += 0.1;
+  scrolled.layout.scrolling.defaultWidthFraction = 0.6;
   CHECK(ConfigChange::between(before, scrolled).layout);
 
   Config focused;

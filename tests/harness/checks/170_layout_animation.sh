@@ -8,6 +8,9 @@ readonly TOTAL_GAP=12 # gap 8 + 2 * border 2
 
 CLIENT_PIDS=()
 
+printf '\n[layout.scrolling]\ndefault_width_fraction = 0.5\n' >> "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+
 spawn_client() {
   foot sh -c 'sleep 120' > /dev/null 2>&1 &
   CLIENT_PIDS+=($!)

@@ -7,6 +7,9 @@ readonly OUTPUT_W=1280
 readonly OUTPUT_H=720
 readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/pointer-client}"
 
+printf '\n[layout.scrolling]\ndefault_width_fraction = 0.5\n' >> "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+
 if [[ ! -x $POINTER ]]; then
   echo "pointer client not built at $POINTER"
   exit 1

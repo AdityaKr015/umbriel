@@ -80,7 +80,7 @@ namespace umbriel {
     if (input.keyboard.numlockToggle) {
       const xkb_mod_index_t numLock = xkb_keymap_mod_get_index(m_keyboard->keymap, XKB_MOD_NAME_NUM);
       if (numLock != XKB_MOD_INVALID) {
-        xkb_state_update_mask(m_keyboard->xkb_state, 0, 0, 1U << numLock, 0, 0, 0);
+        wlr_keyboard_notify_modifiers(m_keyboard, 0, 0, 1U << numLock, 0);
       }
     }
     // The name list or keymap changed; resend the current state so consumers

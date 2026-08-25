@@ -225,6 +225,7 @@ namespace umbriel {
     // commit or clip change) resets buffer opacity, so this must run afterward while opacity is below 1.
     [[nodiscard]] float effectiveOpacity() const { return m_fadeAlpha * m_ruleOpacity * m_dragOpacity; }
     void applyEffectiveOpacity();
+    void flushPendingEffectiveOpacity();
     void watchOpacitySurfaceTree(wlr_surface* root);
     void watchOpacitySurface(wlr_surface* surface);
     void clearOpacitySurfaceWatches();

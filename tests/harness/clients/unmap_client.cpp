@@ -57,6 +57,15 @@ namespace {
     bool imageDescriptionFailed = false;
   };
 
+  struct AuxiliaryToplevel {
+    State* state = nullptr;
+    wl_surface* surface = nullptr;
+    xdg_surface* xdgSurface = nullptr;
+    xdg_toplevel* toplevel = nullptr;
+    Buffer buffer;
+    bool mapped = false;
+  };
+
   void colorManagerSupportedIntent(void*, wp_color_manager_v1*, uint32_t) {}
 
   void colorManagerSupportedFeature(void* data, wp_color_manager_v1*, uint32_t feature) {
@@ -182,6 +191,62 @@ namespace {
     return buffer;
   }
 
+  void auxiliaryXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, uint32_t serial) {
+    auto& window = *static_cast<AuxiliaryToplevel*>(data);
+    xdg_surface_ack_configure(xdgSurface, serial);
+    if (window.mapped) {
+      return;
+    }
+    window.mapped = true;
+    wl_surface_attach(window.surface, window.buffer.resource, 0, 0);
+    wl_surface_damage_buffer(window.surface, 0, 0, window.state->width, window.state->height);
+    wl_surface_commit(window.surface);
+  }
+
+  constexpr xdg_surface_listener kAuxiliaryXdgSurfaceListener = {
+      .configure = auxiliaryXdgSurfaceConfigure,
+  };
+
+  void auxiliaryToplevelConfigure(void*, xdg_toplevel*, int32_t, int32_t, wl_array*) {}
+
+  void auxiliaryToplevelClose(void* data, xdg_toplevel*) {
+    auto& window = *static_cast<AuxiliaryToplevel*>(data);
+    if (!window.mapped) {
+      return;
+    }
+    window.mapped = false;
+    wl_surface_attach(window.surface, nullptr, 0, 0);
+    wl_surface_commit(window.surface);
+  }
+
+  constexpr xdg_toplevel_listener kAuxiliaryToplevelListener = {
+      .configure = auxiliaryToplevelConfigure,
+      .close = auxiliaryToplevelClose,
+      .configure_bounds = nullptr,
+      .wm_capabilities = nullptr,
+  };
+
+  bool mapAuxiliaryToplevel(State& state, AuxiliaryToplevel& window, const char* title) {
+    window.state = &state;
+    window.buffer = createBuffer(state);
+    if (window.buffer.resource == nullptr) {
+      return false;
+    }
+    window.surface = wl_compositor_create_surface(state.compositor);
+    window.xdgSurface = xdg_wm_base_get_xdg_surface(state.wmBase, window.surface);
+    xdg_surface_add_listener(window.xdgSurface, &kAuxiliaryXdgSurfaceListener, &window);
+    window.toplevel = xdg_surface_get_toplevel(window.xdgSurface);
+    xdg_toplevel_add_listener(window.toplevel, &kAuxiliaryToplevelListener, &window);
+    xdg_toplevel_set_title(window.toplevel, title);
+    wl_surface_commit(window.surface);
+    while (!window.mapped) {
+      if (wl_display_dispatch(state.display) < 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void xdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, uint32_t serial) {
     auto& state = *static_cast<State*>(data);
     xdg_surface_ack_configure(xdgSurface, serial);
@@ -286,6 +351,19 @@ namespace {
     }
   }
 
+  void destroyAuxiliaryToplevel(AuxiliaryToplevel& window) {
+    if (window.toplevel != nullptr) {
+      xdg_toplevel_destroy(window.toplevel);
+    }
+    if (window.xdgSurface != nullptr) {
+      xdg_surface_destroy(window.xdgSurface);
+    }
+    if (window.surface != nullptr) {
+      wl_surface_destroy(window.surface);
+    }
+    destroyBuffer(window.buffer);
+  }
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -319,6 +397,16 @@ int main(int argc, char** argv) {
   state.buffer = createBuffer(state);
   if (state.buffer.resource == nullptr) {
     std::println(stderr, "unmap-client: failed to allocate shared-memory buffer");
+    return EXIT_FAILURE;
+  }
+
+  const bool transientSuite = std::getenv("TRANSIENT_SUITE") != nullptr;
+  AuxiliaryToplevel transientParent;
+  AuxiliaryToplevel transientUnrelated;
+  if (transientSuite
+      && (!mapAuxiliaryToplevel(state, transientParent, "transient-parent")
+          || !mapAuxiliaryToplevel(state, transientUnrelated, "transient-unrelated"))) {
+    std::println(stderr, "unmap-client: failed to map transient-suite support windows");
     return EXIT_FAILURE;
   }
 
@@ -361,6 +449,9 @@ int main(int argc, char** argv) {
   if (const char* appId = std::getenv("APP_ID")) {
     xdg_toplevel_set_app_id(state.toplevel, appId);
   }
+  if (transientSuite) {
+    xdg_toplevel_set_parent(state.toplevel, transientParent.toplevel);
+  }
   wl_surface_commit(state.surface);
 
   while (wl_display_dispatch(state.display) >= 0) {
@@ -381,6 +472,8 @@ int main(int argc, char** argv) {
   if (state.surface != nullptr) {
     wl_surface_destroy(state.surface);
   }
+  destroyAuxiliaryToplevel(transientUnrelated);
+  destroyAuxiliaryToplevel(transientParent);
   if (state.colorManager != nullptr) {
     wp_color_manager_v1_destroy(state.colorManager);
   }

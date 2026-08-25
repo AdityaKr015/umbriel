@@ -572,6 +572,14 @@ namespace umbriel {
       return candidate != nullptr && candidate != view && candidate->mapped();
     };
 
+    const wlr_xdg_toplevel* toplevel = view->toplevel();
+    if (toplevel != nullptr && toplevel->parent != nullptr && toplevel->parent->base != nullptr) {
+      View* parent = View::fromSurface(toplevel->parent->base->surface);
+      if (mappedCandidate(parent) && parent->workspace() == this) {
+        return parent;
+      }
+    }
+
     if (columnIndex >= 0 && columnIndex < static_cast<int>(columns.size())) {
       const auto& column = columns[static_cast<size_t>(columnIndex)].views;
       for (int row = rowIndex - 1; row >= 0; --row) {

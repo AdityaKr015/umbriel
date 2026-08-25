@@ -415,6 +415,14 @@ namespace umbriel {
     );
   }
 
+  void View::flushPendingEffectiveOpacity() {
+    if (!m_effectiveOpacityCommitPending) {
+      return;
+    }
+    applyEffectiveOpacity();
+    m_effectiveOpacityCommitPending = false;
+  }
+
   void View::watchOpacitySurfaceTree(wlr_surface* root) {
     if (root == nullptr) {
       return;
@@ -733,12 +741,6 @@ namespace umbriel {
       } else {
         active = true;
       }
-    }
-    // The scene helper may process a surface commit after View::handleCommit.
-    // Reapply on the ensuing frame, after every commit listener has run.
-    if (m_effectiveOpacityCommitPending) {
-      applyEffectiveOpacity();
-      m_effectiveOpacityCommitPending = false;
     }
     return active;
   }

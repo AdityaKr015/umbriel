@@ -776,6 +776,10 @@ namespace umbriel {
     const uint64_t nowMsec = static_cast<uint64_t>(now.tv_sec) * 1000 + static_cast<uint64_t>(now.tv_nsec) / 1'000'000;
     m_server->tickAnimations(nowMsec);
 
+    // Surface commits reset scene-buffer opacity to the protocol alpha. Repair
+    // pending rule opacity after every commit listener and before composition.
+    m_server->flushPendingViewOpacities();
+
     // A direct-scanned fullscreen client may stop submitting as soon as it loses focus. On VRR outputs that can leave
     // the first workspace-switch frame waiting on the old client, so the compositor never gets a vblank to advance the
     // slide. Keep animated outputs on the render path until their final composed frame has settled.

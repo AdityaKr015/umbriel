@@ -160,6 +160,7 @@ namespace umbriel {
     // Central animation tick: advances every registered owner once per msec and
     // reports whether anything is still animating.
     bool tickAnimations(uint64_t nowMsec);
+    void flushPendingViewOpacities();
     [[nodiscard]] bool animationsActive() const;
     [[nodiscard]] bool animationsActiveFor(const Output* output) const;
     // Owners register themselves for the frame tick. The registry is kept in phase order, so the three traversals above

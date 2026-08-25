@@ -395,7 +395,7 @@ namespace umbriel {
         &effective
     );
     setBorderFocused(m_borderFocusedState);
-    m_decoration.setAlpha(effective);
+    m_decoration.setAlpha(effective, m_fadeAlpha);
   }
 
   void View::applyEffectiveOpacity() {
@@ -1064,7 +1064,7 @@ namespace umbriel {
     const wlr_box nodeBox{0, 0, contentWidth, contentHeight};
     m_decoration.updateBlur(
         m_sceneTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry, surfaceRadius(), nullptr,
-        effectiveOpacity()
+        effectiveOpacity(), m_fadeAlpha
     );
   }
 

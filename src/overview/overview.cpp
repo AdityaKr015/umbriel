@@ -256,8 +256,11 @@ namespace umbriel {
       wlr_scene_buffer_set_dest_size(entry->buffer, contentW, contentH);
       wlr_scene_buffer_set_corner_radii(entry->buffer, corner_radii_all(radius));
       const wlr_box blurBox{0, 0, contentW, contentH};
-      card.blur.setAlpha(entry->buffer->opacity);
-      card.blur.update(card.tree, surface, blurBox, geometry, radius, nullptr, view->blurOptions(), entry->buffer);
+      card.blur.setAlpha(1.0F);
+      card.blur.update(
+          card.tree, surface, blurBox, geometry, radius, nullptr, view->blurOptions(), entry->buffer->opacity,
+          entry->buffer
+      );
       blurUpdated = true;
     }
     if (!blurUpdated) {

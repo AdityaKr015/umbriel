@@ -43,6 +43,12 @@ wait_for_focus() {
 
 cat >> "$UMBRIEL_CONFIG" <<'EOF'
 
+[layout]
+mode = "dwindle"
+
+[appearance]
+animation_ms = 1
+
 [input.focus]
 follows_mouse = true
 EOF
@@ -55,19 +61,26 @@ wait_for_count 2
 spawn_client "dwindle-close-focused" "$UMBRIEL_RUNTIME_DIR/focused-window.log"
 wait_for_count 3
 
+# Let the one-millisecond opening animation settle before using target positions for hit-testing.
+sleep 0.1
 windows=$("$UMBRIEL" windows --json)
 pointer_id=$(jq -r '.[] | select(.title == "dwindle-close-pointer") | .id' <<< "$windows")
 predecessor_id=$(jq -r '.[] | select(.title == "dwindle-close-predecessor") | .id' <<< "$windows")
 focused_id=$(jq -r '.[] | select(.title == "dwindle-close-focused") | .id' <<< "$windows")
-pointer_x=$(jq -r '.[] | select(.title == "dwindle-close-pointer") | (.x + .w / 2 | round)' <<< "$windows")
-pointer_y=$(jq -r '.[] | select(.title == "dwindle-close-pointer") | (.y + .h / 2 | round)' <<< "$windows")
+# Reported width and height are the client's committed geometry, which may exceed its presented Dwindle tile. A small
+# offset from the tile origin is safely inside this first leaf.
+pointer_x=$(jq -r '.[] | select(.title == "dwindle-close-pointer") | .x + 50' <<< "$windows")
+pointer_y=$(jq -r '.[] | select(.title == "dwindle-close-pointer") | .y + 50' <<< "$windows")
+focused_x=$(jq -r '.[] | select(.title == "dwindle-close-focused") | .x + 50' <<< "$windows")
+focused_y=$(jq -r '.[] | select(.title == "dwindle-close-focused") | .y + 50' <<< "$windows")
 if [[ -z $pointer_id || -z $predecessor_id || -z $focused_id ]]; then
   echo "could not resolve Dwindle window ids: $windows"
   exit 1
 fi
 
-# Establish the conflicting candidates: the pointer rests over the first window, while the newest window owns focus.
-pointer move "$pointer_x" "$pointer_y"
+# Establish the conflicting candidates: cross from the focused tile into the first tile so follows-mouse observes a
+# pointer-enter transition, then restore keyboard focus to the newest window while leaving the pointer stationary.
+pointer move "$focused_x" "$focused_y" move "$pointer_x" "$pointer_y"
 wait_for_focus "$pointer_id"
 "$UMBRIEL" msg "window-focus:$focused_id" > /dev/null
 wait_for_focus "$focused_id"

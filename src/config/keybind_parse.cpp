@@ -181,6 +181,7 @@ namespace umbriel {
         {"window-close", "[<window-id>]", KeybindAction::WindowClose, ActionArgKind::OptionalWindowId},
         {"window-consume-left", "", KeybindAction::WindowConsumeLeft},
         {"window-cycle-width", "", KeybindAction::WindowCycleWidth},
+        {"window-cycle-width-back", "", KeybindAction::WindowCycleWidthBack},
         {"window-expel-right", "", KeybindAction::WindowExpelRight},
         {"window-focus", "<window-id>", KeybindAction::WindowFocusId, ActionArgKind::WindowId},
         {"window-focus-down", "", KeybindAction::WindowFocusDown},
@@ -465,6 +466,7 @@ namespace umbriel {
     add(KeybindAction::WindowConsumeLeft, XKB_KEY_comma);
     add(KeybindAction::WindowExpelRight, XKB_KEY_period);
     add(KeybindAction::WindowCycleWidth, XKB_KEY_r);
+    add(KeybindAction::WindowCycleWidthBack, XKB_KEY_r, WLR_MODIFIER_SHIFT);
     add(KeybindAction::ToggleFullscreen, XKB_KEY_f);
     add(KeybindAction::ToggleMaximize, XKB_KEY_f, WLR_MODIFIER_CTRL);
     add(KeybindAction::ToggleMaximizeToEdges, XKB_KEY_m);

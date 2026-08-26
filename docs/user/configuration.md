@@ -159,6 +159,7 @@ outer_border_color = "#1A1A1FFF"
 insert_hint_color = "#7FC8FF80"
 backdrop_color = "#000000FF"
 animation_ms = 200             # 1-10000
+drag_opacity = 0.75
 ```
 
 | Key                           | Type  | Default     | Description                                                                                                                                       |
@@ -175,6 +176,7 @@ animation_ms = 200             # 1-10000
 | `insert_hint_color`           | color | `#7FC8FF80` | Drop-target preview during drag.                                                                                                                  |
 | `backdrop_color`              | color | `#000000FF` | Background for fullscreen gaps and lock screen.                                                                                                   |
 | `animation_ms`                | int   | `200`       | Animation duration in milliseconds (1-10000).                                                                                                     |
+| `drag_opacity`                | float | `0.75`      | Opacity of the window while dragging.                                                                                                             |
 
 Colors are `#RRGGBB` or `#RRGGBBAA`.
 

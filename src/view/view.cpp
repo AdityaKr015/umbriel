@@ -563,7 +563,7 @@ namespace umbriel {
 
   void View::enterDragPresentation() {
     cancelPositionAnimation();
-    m_dragOpacity = kDragOpacity;
+    m_dragOpacity = config().appearance.dragOpacity;
     setFadeAlpha(m_fadeAlpha);
     m_effectiveOpacityCommitPending = false;
     if (m_pinned) {

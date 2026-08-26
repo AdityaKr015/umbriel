@@ -504,6 +504,7 @@ namespace umbriel {
             .color("insert_hint_color", a.insertHintColor)
             .color("backdrop_color", a.backdropColor)
             .integer("animation_ms", 1, 10000, a.animationMs)
+            .real("drag_opacity", 0.0, 1.0, a.dragOpacity)
             .boolean("prefer_no_csd", a.preferNoCsd);
         s.sub("blur", [&](Section& blur) {
           blur.boolean("enabled", a.blur.enabled)

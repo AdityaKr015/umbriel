@@ -174,7 +174,7 @@ namespace umbriel {
       };
       wlr_scene_tree_set_clip(card.tree, &rowClip);
     }
-    const float cardOpacity = &card == m_dragCard ? View::kDragOpacity : 1.0F;
+    const float cardOpacity = &card == m_dragCard ? config().appearance.dragOpacity : 1.0F;
     const float presentedOpacity = view->presentedOpacity() * cardOpacity;
 
     const auto& appearance = config().appearance;

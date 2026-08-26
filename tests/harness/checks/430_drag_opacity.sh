@@ -36,8 +36,8 @@ measure_drag_green() {
 
   local green
   # Read the pixel as encoded, deliberately without -colorspace RGB. The thresholds below are the composite this check
-  # reasons about, and that arithmetic lives in the same encoding grim wrote: an opaque card at kDragOpacity 0.75 over
-  # pure green leaves 255 * 0.25 = 64. Linearizing reads that very pixel as 13 and fails the check on correct output.
+  # reasons about, and that arithmetic lives in the same encoding grim wrote: an opaque card at the configured 0.5
+  # drag opacity over pure green leaves 255 * 0.5 = 128. Linearizing reads that pixel as 55 and fails a correct check.
   # The sibling checks linearize harmlessly: they sample saturated colors, where both encodings agree, or compare two
   # crops against each other, where any monotone transform cancels.
   green=$(magick "$screenshot" -crop 40x40+680+430 -format '%[fx:round(255*mean.g)]' info:)
@@ -58,6 +58,7 @@ cat >> "$UMBRIEL_CONFIG" <<'EOF'
 
 [appearance]
 insert_hint_color = "#FF0000FF"
+drag_opacity = 0.5
 
 [overview]
 background_tint = "#000000FF"
@@ -66,14 +67,14 @@ EOF
 "$UMBRIEL" msg config-reload > /dev/null
 
 opaque_green=$(measure_drag_green 1 drag-opaque)
-if (( opaque_green < 40 || opaque_green > 210 )); then
-  echo "opaque dragged card did not become semi-transparent: mean green=$opaque_green"
+if (( opaque_green < 110 || opaque_green > 145 )); then
+  echo "opaque dragged card did not use configured opacity: mean green=$opaque_green"
   exit 1
 fi
 
 transparent_green=$(measure_drag_green 0.5 drag-transparent)
-if (( transparent_green <= opaque_green + 25 || transparent_green > 220 )); then
-  echo "client alpha did not compose with drag opacity: opaque=$opaque_green transparent=$transparent_green"
+if (( transparent_green < 170 || transparent_green > 210 )); then
+  echo "client alpha did not compose with configured drag opacity: opaque=$opaque_green transparent=$transparent_green"
   exit 1
 fi
 

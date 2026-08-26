@@ -290,6 +290,7 @@ namespace umbriel {
       std::array<float, 4> insertHintColor{0.50F, 0.78F, 1.0F, 0.50F};
       std::array<float, 4> backdropColor{0.0F, 0.0F, 0.0F, 1.0F};
       int animationMs = 200;
+      double dragOpacity = 0.75;
       struct Blur {
         bool enabled = true;
         bool optimized = true;

@@ -45,6 +45,7 @@ border_width = 2               # 0-100
 outer_border_width = 0         # 0-100
 corner_radius = 10             # 0-100
 animation_ms = 250             # 1-10000
+drag_opacity = 0.75
 # border_focused = "#7AA3FFFF"
 # border_unfocused = "#292933FF"
 # scratchpad_border_focused = "#E5C07BFF"

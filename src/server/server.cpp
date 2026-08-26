@@ -414,6 +414,7 @@ namespace umbriel {
     m_quitConfirm.reset();
     m_cheatsheet.reset();
     m_configBanner.reset();
+    m_scratchpadManager.reset();
     wlr_scene_node_destroy(&m_scene->tree.node);
     wlr_allocator_destroy(m_allocator);
     wlr_renderer_destroy(m_renderer);
@@ -697,10 +698,15 @@ namespace umbriel {
   }
 
   Server::CloseSnapshot::CloseSnapshot(
-      Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects,
-      int durationMs
+      Server& server, Output* output, wlr_scene_tree* tree,
+      std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects, int durationMs, const AnimationCurve& curve,
+      std::string_view style
   )
-      : m_tree(tree), m_output(output), m_rects(std::move(rects)) {
+      : m_server(&server), m_tree(tree), m_output(output), m_rects(std::move(rects)) {
+    if (m_tree != nullptr) {
+      m_origX = m_tree->node.x;
+      m_origY = m_tree->node.y;
+    }
     wlr_scene_node_for_each_buffer(
         &m_tree->node,
         [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
@@ -710,29 +716,45 @@ namespace umbriel {
         &m_buffers
     );
     m_alpha.snap(1.0);
-    m_alpha.retarget(0.0, durationMs, Easing::EaseOutCubic);
+    m_alpha.retarget(0.0, durationMs, curve);
+
+    if (style == "slide") {
+      m_posY.snap(m_origY);
+      m_posY.retarget(m_origY + 80, durationMs, curve);
+    }
   }
 
   Server::CloseSnapshot::~CloseSnapshot() {
+    if (m_server != nullptr) {
+      m_server->unregisterAnimatable(this);
+    }
     if (m_tree != nullptr) {
       wlr_scene_node_destroy(&m_tree->node);
     }
   }
 
   bool Server::CloseSnapshot::tickAnimations(uint64_t nowMsec) {
-    if (!m_alpha.tick(nowMsec)) {
+    const bool movedAlpha = m_alpha.tick(nowMsec);
+    const bool movedY = m_posY.tick(nowMsec);
+
+    if (!movedAlpha && !movedY) {
       return false;
     }
-    const auto alpha = static_cast<float>(m_alpha.current());
+    // Overshooting curves can push this out of range; wlr_scene_buffer_set_opacity asserts opacity is in [0, 1].
+    const auto alpha = std::clamp(static_cast<float>(m_alpha.current()), 0.0F, 1.0F);
     for (auto& [buffer, baseOpacity] : m_buffers) {
-      wlr_scene_buffer_set_opacity(buffer, baseOpacity * alpha);
+      wlr_scene_buffer_set_opacity(buffer, std::clamp(baseOpacity * alpha, 0.0F, 1.0F));
     }
     for (auto& [rect, base] : m_rects) {
       float color[4];
       premultiplied(color, base, alpha);
       wlr_scene_rect_set_color(rect, color);
     }
-    return m_alpha.animating();
+
+    if (m_tree != nullptr && movedY) {
+      wlr_scene_node_set_position(&m_tree->node, m_origX, static_cast<int>(std::lround(m_posY.current())));
+    }
+    return m_alpha.animating() || m_posY.animating();
   }
 
   void Server::registerAnimatable(Animatable* animatable) {
@@ -761,8 +783,8 @@ namespace umbriel {
     // snapshots are reaped below rather than from their own tick, and no owner destroys another. The phase order is
     // what makes that hold, since finishing the overview calls focusView, which reorders the view registry after every
     // view has already ticked.
-    const std::vector<Animatable*> owners = m_animatables;
-    for (Animatable* owner : owners) {
+    m_animatablesScratch.assign(m_animatables.begin(), m_animatables.end());
+    for (Animatable* owner : m_animatablesScratch) {
       active = owner->tickAnimations(nowMsec) || active;
     }
 
@@ -798,11 +820,33 @@ namespace umbriel {
   }
 
   void Server::animateCloseSnapshot(
-      Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
+      Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects,
+      std::optional<CloseSnapshotOverrides> overrides
   ) {
-    auto snapshot = std::make_unique<CloseSnapshot>(
-        output, tree, std::move(rects), std::max(1, config().appearance.animationMs / 2)
-    );
+    int durationMs = 0;
+    AnimationCurve curve{.easing = Easing::Snappy};
+    std::string style = "fade";
+    if (overrides) {
+      durationMs = overrides->durationMs;
+      curve = overrides->curve;
+      style = overrides->style;
+    } else {
+      const auto& animation = config().animation;
+      const auto& close = animation.windowsOut;
+      if (!animation.enabled || !close.enabled) {
+        wlr_scene_node_destroy(&tree->node);
+        return;
+      }
+      durationMs = close.durationMs;
+      curve = close.curve;
+      style = close.style;
+    }
+    if (durationMs <= 0) {
+      wlr_scene_node_destroy(&tree->node);
+      return;
+    }
+
+    auto snapshot = std::make_unique<CloseSnapshot>(*this, output, tree, std::move(rects), durationMs, curve, style);
     registerAnimatable(snapshot.get());
     m_closeSnapshots.push_back(std::move(snapshot));
   }

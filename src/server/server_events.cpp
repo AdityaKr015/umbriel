@@ -407,6 +407,9 @@ namespace umbriel {
         updateLockBlank();
       }
     }
+    if (effects.animation && m_scratchpadManager != nullptr) {
+      m_scratchpadManager->applyConfig();
+    }
     if (effects.layerEffects) {
       for (const auto& layer : m_layerSurfaces) {
         if (layer->mapped()) {
@@ -1344,6 +1347,9 @@ namespace umbriel {
   }
 
   void Server::removeOutput(Output* output) {
+    if (m_scratchpadManager != nullptr) {
+      m_scratchpadManager->releaseOutput(output);
+    }
     m_overview->onOutputRemoved(output);
     m_gestures->cancelForOutput(output);
     if (!m_cursor->isPassthrough()) {

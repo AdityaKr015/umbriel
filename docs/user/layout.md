@@ -90,4 +90,3 @@ picks that direction explicitly instead.
 
 Layout fields can be overridden per-workspace; see
 [Workspace Rules](workspaces.md#workspace-rules).
-

@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <initializer_list>
 #include <iterator>
 #include <string_view>
 #include <utility>
@@ -490,38 +491,263 @@ namespace umbriel {
       });
     }
 
+    std::optional<BezierCurve> parseBezier(const toml::node& node) {
+      const auto* values = node.as_array();
+      if (values == nullptr || values->size() != 4) {
+        return std::nullopt;
+      }
+      const auto x1 = (*values)[0].value<double>();
+      const auto y1 = (*values)[1].value<double>();
+      const auto x2 = (*values)[2].value<double>();
+      const auto y2 = (*values)[3].value<double>();
+      if (!x1
+          || !y1
+          || !x2
+          || !y2
+          || !std::isfinite(*x1)
+          || !std::isfinite(*y1)
+          || !std::isfinite(*x2)
+          || !std::isfinite(*y2)
+          || *x1 < 0.0
+          || *x1 > 1.0
+          || *x2 < 0.0
+          || *x2 > 1.0) {
+        return std::nullopt;
+      }
+      return BezierCurve{.x1 = *x1, .y1 = *y1, .x2 = *x2, .y2 = *y2};
+    }
+
+    std::optional<SpringConfig> parseSpring(const toml::node& node) {
+      const auto* table = node.as_table();
+      if (table == nullptr || table->size() != 2) {
+        return std::nullopt;
+      }
+      const toml::node* dampingNode = table->get("damping");
+      const toml::node* stiffnessNode = table->get("stiffness");
+      if (dampingNode == nullptr || stiffnessNode == nullptr) {
+        return std::nullopt;
+      }
+      const auto damping = dampingNode->value<double>();
+      const auto stiffness = stiffnessNode->value<double>();
+      if (!damping
+          || !stiffness
+          || !std::isfinite(*damping)
+          || !std::isfinite(*stiffness)
+          || *damping < 0.01
+          || *damping > 5.0
+          || *stiffness < 1.0
+          || *stiffness > 1000.0) {
+        return std::nullopt;
+      }
+      return SpringConfig{.damping = *damping, .stiffness = *stiffness};
+    }
+
+    std::optional<AnimationCurve> parseAnimationCurve(
+        std::string_view str, const std::map<std::string, BezierCurve>& beziers = {},
+        const std::map<std::string, SpringConfig>& springs = {}
+    ) {
+      std::string s = lowercase(str);
+
+      for (const auto& [name, curve] : beziers) {
+        if (lowercase(name) == s) {
+          return AnimationCurve{.easing = Easing::CustomBezier, .bezier = curve};
+        }
+      }
+      for (const auto& [name, spring] : springs) {
+        if (lowercase(name) == s) {
+          return AnimationCurve{.easing = Easing::Spring, .spring = spring};
+        }
+      }
+
+      return CurveRegistry::parse(str);
+    }
+
+    std::optional<AnimationCurve> readCurveNode(
+        const toml::node* node, std::string_view context, const std::map<std::string, BezierCurve>& beziers = {},
+        const std::map<std::string, SpringConfig>& springs = {}
+    ) {
+      if (node == nullptr) {
+        return std::nullopt;
+      }
+      const auto* value = node->as_string();
+      if (value == nullptr) {
+        warnAt(node->source(), "{}.curve must be a string", context);
+        return std::nullopt;
+      }
+      if (auto curve = parseAnimationCurve(value->get(), beziers, springs)) {
+        return curve;
+      }
+      warnAt(node->source(), R"(invalid curve "{}" in {})", value->get(), context);
+      return std::nullopt;
+    }
+
+    void parseAnimationSection(Section& s, Config::Animation& animation) {
+      s.boolean("enabled", animation.enabled);
+
+      if (const toml::node* node = s.take("beziers")) {
+        if (const auto* table = node->as_table()) {
+          for (const auto& [name, value] : *table) {
+            if (auto bezier = parseBezier(value)) {
+              animation.beziers[std::string(name.str())] = *bezier;
+            } else {
+              warnAt(value.source(), "invalid bezier curve '{}'", name.str());
+            }
+          }
+        } else {
+          warnAt(node->source(), "animation.beziers must be a table");
+        }
+      }
+
+      if (const toml::node* node = s.take("springs")) {
+        if (const auto* table = node->as_table()) {
+          for (const auto& [name, value] : *table) {
+            if (auto spring = parseSpring(value)) {
+              animation.springs[std::string(name.str())] = *spring;
+            } else {
+              warnAt(value.source(), "invalid spring config '{}'", name.str());
+            }
+          }
+        } else {
+          warnAt(node->source(), "animation.springs must be a table");
+        }
+      }
+
+      std::optional<int> defaultDuration;
+      s.integer("duration_ms", 1, 10000, defaultDuration);
+      if (defaultDuration) {
+        animation.durationMs = *defaultDuration;
+        animation.windowsIn.durationMs = *defaultDuration;
+        animation.windowsOut.durationMs = *defaultDuration;
+        animation.windowsMove.durationMs = *defaultDuration;
+        animation.workspaces.durationMs = *defaultDuration;
+        animation.scratchpad.durationMs = *defaultDuration;
+        animation.border.durationMs = *defaultDuration;
+        animation.dimUnfocused.durationMs = *defaultDuration;
+        animation.fade.durationMs = *defaultDuration;
+      }
+
+      if (const toml::node* node = s.take("curve")) {
+        if (auto curve = readCurveNode(node, "animation", animation.beziers, animation.springs)) {
+          animation.curve = *curve;
+          animation.windowsIn.curve = *curve;
+          animation.windowsOut.curve = *curve;
+          animation.windowsMove.curve = *curve;
+          animation.workspaces.curve = *curve;
+          animation.scratchpad.curve = *curve;
+          animation.border.curve = *curve;
+          animation.dimUnfocused.curve = *curve;
+          animation.fade.curve = *curve;
+        }
+      }
+
+      const auto readCurve = [&](Section& section, std::string_view context, AnimationCurve& target) {
+        if (const toml::node* node = section.take("curve")) {
+          if (auto curve = readCurveNode(node, context, animation.beziers, animation.springs)) {
+            target = *curve;
+          }
+        }
+      };
+      const auto readStyle = [](Section& section, std::string& target,
+                                std::initializer_list<std::string_view> allowed) {
+        std::string parsed = target;
+        section.text("style", parsed);
+        const toml::node* node = section.node("style");
+        if (node == nullptr || !node->is_string()) {
+          return;
+        }
+        if (std::ranges::find(allowed, std::string_view(parsed)) != allowed.end()) {
+          target = std::move(parsed);
+          return;
+        }
+        warnAt(node->source(), R"(invalid animation style "{}")", parsed);
+      };
+
+      s.sub("windows_in", [&](Section& section) {
+        section.boolean("enabled", animation.windowsIn.enabled)
+            .integer("duration_ms", 1, 10000, animation.windowsIn.durationMs)
+            .real("scale", 0.1, 1.0, animation.windowsIn.scale);
+        readStyle(section, animation.windowsIn.style, {"popin", "zoom", "slide", "fade", "none"});
+        readCurve(section, "animation.windows_in", animation.windowsIn.curve);
+      });
+      s.sub("windows_out", [&](Section& section) {
+        section.boolean("enabled", animation.windowsOut.enabled)
+            .integer("duration_ms", 1, 10000, animation.windowsOut.durationMs);
+        readStyle(section, animation.windowsOut.style, {"fade", "slide"});
+        readCurve(section, "animation.windows_out", animation.windowsOut.curve);
+      });
+      s.sub("windows_move", [&](Section& section) {
+        section.boolean("enabled", animation.windowsMove.enabled)
+            .integer("duration_ms", 1, 10000, animation.windowsMove.durationMs);
+        readCurve(section, "animation.windows_move", animation.windowsMove.curve);
+      });
+      s.sub("workspaces", [&](Section& section) {
+        section.boolean("enabled", animation.workspaces.enabled)
+            .integer("duration_ms", 1, 10000, animation.workspaces.durationMs);
+        readCurve(section, "animation.workspaces", animation.workspaces.curve);
+      });
+      s.sub("scratchpad", [&](Section& section) {
+        section.boolean("enabled", animation.scratchpad.enabled)
+            .integer("duration_ms", 1, 10000, animation.scratchpad.durationMs)
+            .real("dim", 0.0, 1.0, animation.scratchpad.dim)
+            .boolean("blur", animation.scratchpad.blur)
+            .real("scale", 0.0, 1.0, animation.scratchpad.scale)
+            .boolean("maximize", animation.scratchpad.maximize)
+            .boolean("fullscreen", animation.scratchpad.fullscreen);
+        readCurve(section, "animation.scratchpad", animation.scratchpad.curve);
+      });
+      s.sub("border", [&](Section& section) {
+        section.boolean("enabled", animation.border.enabled)
+            .integer("duration_ms", 1, 10000, animation.border.durationMs);
+        readCurve(section, "animation.border", animation.border.curve);
+      });
+      s.sub("dim_unfocused", [&](Section& section) {
+        section.boolean("enabled", animation.dimUnfocused.enabled)
+            .integer("duration_ms", 1, 10000, animation.dimUnfocused.durationMs)
+            .real("dim", 0.0, 1.0, animation.dimUnfocused.dim);
+        readCurve(section, "animation.dim_unfocused", animation.dimUnfocused.curve);
+      });
+      s.sub("fade", [&](Section& section) {
+        section.boolean("enabled", animation.fade.enabled).integer("duration_ms", 1, 10000, animation.fade.durationMs);
+        readCurve(section, "animation.fade", animation.fade.curve);
+      });
+    }
+
+    void readAnimation(Section& root, Config& loaded) {
+      root.sub("animation", [&](Section& section) { parseAnimationSection(section, loaded.animation); });
+    }
+
     void readAppearance(Section& root, Config& loaded) {
-      auto& a = loaded.appearance;
+      auto& appearance = loaded.appearance;
       root.sub("appearance", [&](Section& s) {
-        s.integer("border_width", 0, 100, a.borderWidth)
-            .integer("outer_border_width", 0, 100, a.outerBorderWidth)
-            .integer("corner_radius", 0, 100, a.cornerRadius)
-            .color("border_focused", a.borderFocused)
-            .color("border_unfocused", a.borderUnfocused)
-            .color("scratchpad_border_focused", a.scratchpadBorderFocused)
-            .color("scratchpad_border_unfocused", a.scratchpadBorderUnfocused)
-            .color("outer_border_color", a.outerBorderColor)
-            .color("insert_hint_color", a.insertHintColor)
-            .color("backdrop_color", a.backdropColor)
-            .integer("animation_ms", 1, 10000, a.animationMs)
-            .real("drag_opacity", 0.0, 1.0, a.dragOpacity)
-            .boolean("prefer_no_csd", a.preferNoCsd);
+        s.integer("border_width", 0, 100, appearance.borderWidth)
+            .integer("outer_border_width", 0, 100, appearance.outerBorderWidth)
+            .integer("corner_radius", 0, 100, appearance.cornerRadius)
+            .color("border_focused", appearance.borderFocused)
+            .color("border_unfocused", appearance.borderUnfocused)
+            .color("scratchpad_border_focused", appearance.scratchpadBorderFocused)
+            .color("scratchpad_border_unfocused", appearance.scratchpadBorderUnfocused)
+            .color("outer_border_color", appearance.outerBorderColor)
+            .color("insert_hint_color", appearance.insertHintColor)
+            .color("backdrop_color", appearance.backdropColor)
+            .real("drag_opacity", 0.0, 1.0, appearance.dragOpacity)
+            .boolean("prefer_no_csd", appearance.preferNoCsd);
+
         s.sub("blur", [&](Section& blur) {
-          blur.boolean("enabled", a.blur.enabled)
-              .boolean("optimized", a.blur.optimized)
-              .integer("passes", 0, 8, a.blur.passes)
-              .integer("radius", 0, 100, a.blur.radius)
-              .real("noise", 0.0, 1.0, a.blur.noise)
-              .real("brightness", 0.0, 2.0, a.blur.brightness)
-              .real("contrast", 0.0, 2.0, a.blur.contrast)
-              .real("saturation", 0.0, 2.0, a.blur.saturation);
+          blur.boolean("enabled", appearance.blur.enabled)
+              .boolean("optimized", appearance.blur.optimized)
+              .integer("passes", 0, 8, appearance.blur.passes)
+              .integer("radius", 0, 100, appearance.blur.radius)
+              .real("noise", 0.0, 1.0, appearance.blur.noise)
+              .real("brightness", 0.0, 2.0, appearance.blur.brightness)
+              .real("contrast", 0.0, 2.0, appearance.blur.contrast)
+              .real("saturation", 0.0, 2.0, appearance.blur.saturation);
         });
         s.sub("shadow", [&](Section& shadow) {
-          shadow.boolean("enabled", a.shadow.enabled)
-              .integer("softness", 0, 200, a.shadow.softness)
-              .integer("offset_x", -200, 200, a.shadow.offsetX)
-              .integer("offset_y", -200, 200, a.shadow.offsetY)
-              .color("color", a.shadow.color);
+          shadow.boolean("enabled", appearance.shadow.enabled)
+              .integer("softness", 0, 200, appearance.shadow.softness)
+              .integer("offset_x", -200, 200, appearance.shadow.offsetX)
+              .integer("offset_y", -200, 200, appearance.shadow.offsetY)
+              .color("color", appearance.shadow.color);
         });
       });
     }
@@ -1318,6 +1544,7 @@ namespace umbriel {
         {
           Section root(result.merged, "", store.mutableDiagnostics());
           readColors(root, loaded);
+          readAnimation(root, loaded);
           readAppearance(root, loaded);
           readOverview(root, loaded);
           readHotCorners(root, loaded);

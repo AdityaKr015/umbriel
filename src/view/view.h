@@ -7,6 +7,7 @@
 #include "view/floating.h"
 #include "view/presentation.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <memory>
@@ -144,6 +145,9 @@ namespace umbriel {
     void setFadeAlpha(float alpha);
     void cancelFadeAnimation();
     void cancelPositionAnimation();
+    void snapPosition(int x, int y);
+    void animateFadeTo(float toAlpha, int durationMs, const AnimationCurve& curve);
+    [[nodiscard]] const ViewPresentation& presentation() const { return m_presentation; }
     // Size/position to the full output and drop tile clips (exclusive zones do not apply).
     void applyFullscreenLayout(bool animate = false);
     // Compositor-driven fullscreen toggle (keybind); client requests use handleRequestFullscreen.
@@ -240,7 +244,12 @@ namespace umbriel {
     void trackPresentedSize(int width, int height);
     // Re-apply the effective fade, rule, and drag opacity to surface buffers. wlroots scene surface reconfigure (on
     // commit or clip change) resets buffer opacity, so this must run afterward while opacity is below 1.
-    [[nodiscard]] float effectiveOpacity() const { return m_fadeAlpha * m_ruleOpacity * m_dragOpacity; }
+    [[nodiscard]] float effectiveOpacity() const {
+      // Overshooting curves can push this past [0, 1]; wlr_scene_buffer_set_opacity asserts.
+      return std::clamp(
+          m_fadeAlpha * m_ruleOpacity * m_dragOpacity * static_cast<float>(m_focusDim.current()), 0.0F, 1.0F
+      );
+    }
     void applyEffectiveOpacity();
     void flushPendingEffectiveOpacity();
     void watchOpacitySurfaceTree(wlr_surface* root);
@@ -374,8 +383,11 @@ namespace umbriel {
     AnimatedValue m_posX;
     AnimatedValue m_posY;
     AnimatedValue m_fade;
+    AnimatedColor m_borderColorAnim;
+    AnimatedValue m_focusDim{1.0};
     float m_fadeAlpha = 1.0F;
     bool m_borderFocusedState = false;
+    bool m_focusDimInitialized = false;
     // Window rules: unsettled means title was empty at map, so a later
     // handleSetTitle re-applies all rule effects one more time.
     bool m_initialRulesSettled = false;

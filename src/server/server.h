@@ -313,8 +313,15 @@ namespace umbriel {
     void clearKeyboardFocus() { m_focus.clearKeyboardFocus(); }
     void deactivateViews(View* except = nullptr) { m_focus.deactivateViews(except); }
     [[nodiscard]] LayerSurface* exclusiveKeyboardLayer() const { return m_focus.exclusiveKeyboardLayer(); }
+    // Lets a caller other than View's own close animation drive the snapshot with its own duration/curve/style.
+    struct CloseSnapshotOverrides {
+      int durationMs = 0;
+      AnimationCurve curve{.easing = Easing::EaseOutCubic};
+      std::string style = "fade";
+    };
     void animateCloseSnapshot(
-        Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects
+        Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects,
+        std::optional<CloseSnapshotOverrides> overrides = std::nullopt
     );
 
   private:
@@ -482,20 +489,25 @@ namespace umbriel {
     class CloseSnapshot : public Animatable {
     public:
       CloseSnapshot(
-          Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects,
-          int durationMs
+          Server& server, Output* output, wlr_scene_tree* tree,
+          std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects, int durationMs,
+          const AnimationCurve& curve, std::string_view style
       );
       ~CloseSnapshot() override;
 
       [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Overlays; }
       bool tickAnimations(uint64_t nowMsec) override;
-      [[nodiscard]] bool hasActiveAnimations() const override { return m_alpha.animating(); }
+      [[nodiscard]] bool hasActiveAnimations() const override { return m_alpha.animating() || m_posY.animating(); }
       [[nodiscard]] bool animatesOn(const Output* output) const override { return m_output == output; }
 
     private:
+      Server* m_server = nullptr;
       wlr_scene_tree* m_tree = nullptr;
       Output* m_output = nullptr;
       AnimatedValue m_alpha;
+      AnimatedValue m_posY;
+      int m_origX = 0;
+      int m_origY = 0;
       std::vector<std::pair<wlr_scene_buffer*, float>> m_buffers;
       std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> m_rects;
     };
@@ -503,6 +515,7 @@ namespace umbriel {
     // values would move them out from under it on reallocation.
     std::vector<std::unique_ptr<CloseSnapshot>> m_closeSnapshots;
     std::vector<Animatable*> m_animatables;
+    std::vector<Animatable*> m_animatablesScratch;
 
     std::unique_ptr<Seat> m_seat;
     std::unique_ptr<InputMethodRelay> m_inputMethodRelay;

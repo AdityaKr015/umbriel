@@ -407,7 +407,8 @@ namespace umbriel {
   }
 
   void View::setFadeAlpha(float alpha) {
-    m_fadeAlpha = alpha;
+    // Overshooting curves can push this out of range; wlr_scene_buffer_set_opacity asserts opacity is in [0, 1].
+    m_fadeAlpha = std::clamp(alpha, 0.0F, 1.0F);
     float effective = effectiveOpacity();
     wlr_scene_node_for_each_buffer(
         &m_sceneTree->node,
@@ -653,7 +654,15 @@ namespace umbriel {
     if (m_presentation.targeting(width, height)) {
       return;
     }
-    m_presentation.animateTo(width, height, config().appearance.animationMs);
+    const auto& animation = config().animation;
+    const auto& move = animation.windowsMove;
+    if (!animation.enabled || !move.enabled) {
+      m_presentation.setSize(width, height);
+      m_presentation.snapTo(width, height);
+      applyPresentedSize();
+      return;
+    }
+    m_presentation.animateTo(width, height, move.durationMs, move.curve);
     scheduleFrame();
   }
 
@@ -663,6 +672,14 @@ namespace umbriel {
     m_positioned = true;
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
     m_decoration.setShadowPosition(x, y);
+  }
+
+  void View::snapPosition(int x, int y) { setPosition(x, y); }
+
+  void View::animateFadeTo(float toAlpha, int durationMs, const AnimationCurve& curve) {
+    m_fade.snap(m_fadeAlpha);
+    m_fade.retarget(toAlpha, durationMs, curve);
+    scheduleFrame();
   }
 
   void View::setDragPosition(int x, int y) {
@@ -686,11 +703,17 @@ namespace umbriel {
       m_posY.snap(y);
       return;
     }
+    const auto& animation = config().animation;
+    const auto& move = animation.windowsMove;
+    if (!animation.enabled || !move.enabled) {
+      setPosition(x, y);
+      return;
+    }
     // Animate from wherever the node visually is, not from the last target.
     m_posX.snap(fromX);
-    m_posX.retarget(x, config().appearance.animationMs);
+    m_posX.retarget(x, move.durationMs, move.curve);
     m_posY.snap(fromY);
-    m_posY.retarget(y, config().appearance.animationMs);
+    m_posY.retarget(y, move.durationMs, move.curve);
     scheduleFrame();
   }
 
@@ -741,6 +764,15 @@ namespace umbriel {
       }
       active = active || m_fade.animating();
     }
+    if (m_focusDim.tick(nowMsec)) {
+      setFadeAlpha(m_fadeAlpha);
+      active = active || m_focusDim.animating();
+    }
+
+    if (m_borderColorAnim.tick(nowMsec)) {
+      m_decoration.setBorderRawColor(m_borderColorAnim.current(), effectiveOpacity());
+      active = active || m_borderColorAnim.animating();
+    }
     // Unfullscreen grace: the compositor asked the client to leave fullscreen with a size-0x0 configure. A compliant
     // client commits its own windowed geometry (handleCommit ends the grace and tiles it); a client that re-requests
     // fullscreen cancels it in setFullscreen. Expiry means the client ignored the state change entirely: some game
@@ -769,7 +801,11 @@ namespace umbriel {
 
   bool View::animatesOn(const Output* output) const {
     const Workspace* workspace = m_workspace;
-    return workspace != nullptr && workspace->group() != nullptr && workspace->group()->output() == output;
+    if (workspace != nullptr && workspace->group() != nullptr) {
+      return workspace->group()->output() == output;
+    }
+    // Scratchpad views have no workspace; fall back to the output we are physically on.
+    return currentOutput() == output;
   }
 
   bool View::hasActiveAnimations() const {
@@ -777,6 +813,8 @@ namespace umbriel {
         || m_posY.animating()
         || sizeAnimating()
         || m_fade.animating()
+        || m_borderColorAnim.animating()
+        || m_focusDim.animating()
         || m_pendingUnfullscreenSize;
   }
 
@@ -1000,7 +1038,34 @@ namespace umbriel {
   void View::setBorderFocused(bool focused) {
     const bool focusChanged = m_borderFocusedState != focused;
     m_borderFocusedState = focused;
-    m_decoration.setBorderColor(focused, m_scratchpadBorder, effectiveOpacity());
+
+    const auto& animation = config().animation;
+    const auto& dim = animation.dimUnfocused;
+    if (focusChanged || !m_focusDimInitialized) {
+      m_focusDimInitialized = true;
+      const double target = focused || !m_mapped || !animation.enabled || !dim.enabled ? 1.0 : 1.0 - dim.dim;
+      if (m_mapped && focusChanged && animation.enabled && dim.enabled) {
+        m_focusDim.retarget(target, dim.durationMs, dim.curve);
+        scheduleFrame();
+      } else {
+        m_focusDim.snap(target);
+      }
+      setFadeAlpha(m_fadeAlpha);
+    }
+
+    const auto& targetBase = m_scratchpadBorder
+        ? (focused ? config().appearance.scratchpadBorderFocused : config().appearance.scratchpadBorderUnfocused)
+        : (focused ? config().appearance.borderFocused : config().appearance.borderUnfocused);
+
+    const auto& border = animation.border;
+    if (m_mapped && focusChanged && animation.enabled && border.enabled) {
+      m_borderColorAnim.retarget(targetBase, border.durationMs, border.curve);
+      scheduleFrame();
+    } else {
+      m_borderColorAnim.snap(targetBase);
+      m_decoration.setBorderColor(focused, m_scratchpadBorder, effectiveOpacity());
+    }
+
     if (focusChanged && m_mapped) {
       applyDynamicRules();
     }
@@ -1133,6 +1198,7 @@ namespace umbriel {
   }
 
   void View::refreshConfigChrome() {
+    m_focusDimInitialized = false;
     setBorderFocused(false);
     updateBorderGeometry();
     applyCornerRadius();
@@ -1142,15 +1208,18 @@ namespace umbriel {
   }
 
   void View::beginCloseAnimation() {
+    const auto& animation = config().animation;
     if (!m_mapped
         || !m_onActiveWorkspace
+        || !animation.enabled
+        || !animation.windowsOut.enabled
         || m_server->sessionLocked()
         || (m_server->overview() != nullptr && m_server->overview()->active())) {
       return;
     }
 
     Output* output =
-        m_workspace != nullptr && m_workspace->group() != nullptr ? m_workspace->group()->output() : nullptr;
+        m_workspace != nullptr && m_workspace->group() != nullptr ? m_workspace->group()->output() : currentOutput();
     if (output == nullptr) {
       return;
     }
@@ -1235,6 +1304,16 @@ namespace umbriel {
   Output* View::currentOutput() const {
     if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
       return m_workspace->group()->output();
+    }
+    // Scratchpad / floating views with no workspace: find the output containing the view's scene coordinates.
+    if (m_sceneTree != nullptr && m_server != nullptr && m_server->outputLayout() != nullptr) {
+      wlr_output* wlrOut = wlr_output_layout_output_at(
+          m_server->outputLayout(), m_sceneTree->node.x + (m_toplevel ? m_toplevel->current.width / 2 : 0),
+          m_sceneTree->node.y + (m_toplevel ? m_toplevel->current.height / 2 : 0)
+      );
+      if (wlrOut != nullptr) {
+        return m_server->outputFromWlr(wlrOut);
+      }
     }
     return m_server->outputFromWlr(m_server->preferredOutput());
   }
@@ -1553,10 +1632,47 @@ namespace umbriel {
       m_server->focusView(this);
     }
     if (m_onActiveWorkspace) {
-      setFadeAlpha(0.0F);
-      m_fade.snap(0.0);
-      m_fade.retarget(1.0, std::max(1, config().appearance.animationMs / 2));
-      scheduleFrame();
+      const auto& animation = config().animation;
+      const auto& open = animation.windowsIn;
+      if (!animation.enabled || !open.enabled || open.style == "none") {
+        setFadeAlpha(1.0F);
+        m_fade.snap(1.0);
+      } else {
+        setFadeAlpha(0.0F);
+        m_fade.snap(0.0);
+        m_fade.retarget(1.0, open.durationMs, open.curve);
+
+        if (open.style == "popin" || open.style == "zoom") {
+          const int targetW = m_presentation.width();
+          const int targetH = m_presentation.height();
+          if (targetW > 0 && targetH > 0) {
+            const double scale = open.style == "zoom" ? 0.5 : open.scale;
+            const int startW = std::max(1, static_cast<int>(targetW * scale));
+            const int startH = std::max(1, static_cast<int>(targetH * scale));
+            const int targetX = m_sceneTree->node.x;
+            const int targetY = m_sceneTree->node.y;
+            const int startX = targetX + (targetW - startW) / 2;
+            const int startY = targetY + (targetH - startH) / 2;
+
+            m_presentation.setSize(startW, startH);
+            m_presentation.animateTo(targetW, targetH, open.durationMs, open.curve);
+            wlr_scene_node_set_position(&m_sceneTree->node, startX, startY);
+            m_posX.snap(startX);
+            m_posY.snap(startY);
+            m_posX.retarget(targetX, open.durationMs, open.curve);
+            m_posY.retarget(targetY, open.durationMs, open.curve);
+          }
+        } else if (open.style == "slide") {
+          const int targetX = m_sceneTree->node.x;
+          const int targetY = m_sceneTree->node.y;
+          const int startY = targetY + 60;
+          wlr_scene_node_set_position(&m_sceneTree->node, targetX, startY);
+          m_posX.snap(targetX);
+          m_posY.snap(startY);
+          m_posY.retarget(targetY, open.durationMs, open.curve);
+        }
+        scheduleFrame();
+      }
     }
 
     // Opening state is compositor-owned. Clients may restore a saved maximized

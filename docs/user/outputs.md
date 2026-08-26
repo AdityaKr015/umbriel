@@ -267,4 +267,3 @@ files = [
   "machines/monolith.toml",   # output config for this machine
 ]
 ```
-

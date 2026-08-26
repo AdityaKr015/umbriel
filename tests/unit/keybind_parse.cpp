@@ -346,6 +346,15 @@ UMBRIEL_TEST(parsesArgumentFreeNewActions) {
 
   CHECK(parseAction("window-toggle-maximize-to-edges", bind));
   CHECK(bind.action == KeybindAction::ToggleMaximizeToEdges);
+  CHECK(parseAction("column-focus-first", bind));
+  CHECK(bind.action == KeybindAction::ColumnFocusFirst);
+  CHECK(parseAction("column-focus-last", bind));
+  CHECK(bind.action == KeybindAction::ColumnFocusLast);
+
+  CHECK(parseAction("column-move-to-first", bind));
+  CHECK(bind.action == KeybindAction::ColumnMoveToFirst);
+  CHECK(parseAction("column-move-to-last", bind));
+  CHECK(bind.action == KeybindAction::ColumnMoveToLast);
 
   // Argument-free actions reject arguments.
   CHECK(!parseAction("workspace-next:1", bind));

@@ -222,6 +222,10 @@ follows_mouse = false
 # "Mod+Shift+K" = "keyboard-layout-next"
 
 # Output, workspace, and window movement actions.
+# "Mod+Home" = "column-focus-first"
+# "Mod+End" = "column-focus-last"
+# "Mod+Shift+Home" = "column-move-to-first"
+# "Mod+Shift+End" = "column-move-to-last"
 # "Mod+Comma" = "workspace-previous"
 # "Mod+Period" = "workspace-next"
 # "Mod+Shift+Comma" = "window-move-to-workspace-previous"

@@ -561,6 +561,24 @@ namespace umbriel {
     return scrollingVertical() ? focusAlongStrip(direction) : focusWithinLane(direction);
   }
 
+  View* Workspace::focusFirstColumn() const {
+    const auto& columns = m_layout->columns();
+    if (columns.empty()) {
+      return nullptr;
+    }
+    const Column& firstColumn = columns.front();
+    return firstColumn.views.empty() ? nullptr : firstColumn.views.front();
+  }
+
+  View* Workspace::focusLastColumn() const {
+    const auto& columns = m_layout->columns();
+    if (columns.empty()) {
+      return nullptr;
+    }
+    const Column& lastColumn = columns.back();
+    return lastColumn.views.empty() ? nullptr : lastColumn.views.front();
+  }
+
   View* Workspace::focusReplacementForRemoval(const View* view) const {
     if (view == nullptr) {
       return nullptr;
@@ -682,6 +700,35 @@ namespace umbriel {
 
   bool Workspace::moveFocusedVertical(int direction) {
     return scrollingVertical() ? moveLaneAlongStrip(direction) : moveWithinLane(direction);
+  }
+
+  bool Workspace::moveFocusedColumnFirst() {
+    if (m_focusedView == nullptr) {
+      return false;
+    }
+    const int current = m_layout->columnOf(m_focusedView);
+    if (current <= 0) {
+      return false;
+    }
+    m_layout->moveColumn(current, 0);
+    ensureFocusedVisible();
+    markArrange();
+    return true;
+  }
+
+  bool Workspace::moveFocusedColumnLast() {
+    if (m_focusedView == nullptr) {
+      return false;
+    }
+    const int current = m_layout->columnOf(m_focusedView);
+    const int last = static_cast<int>(m_layout->columns().size()) - 1;
+    if (current < 0 || current >= last) {
+      return false;
+    }
+    m_layout->moveColumn(current, last);
+    ensureFocusedVisible();
+    markArrange();
+    return true;
   }
 
   bool Workspace::cycleFocusedWidth(int direction) {

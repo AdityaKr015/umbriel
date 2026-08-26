@@ -109,6 +109,10 @@ namespace umbriel {
     WorkspaceMoveDown,
     WorkspaceMoveUp,
     ColumnCenter,
+    ColumnFocusFirst,
+    ColumnFocusLast,
+    ColumnMoveToFirst,
+    ColumnMoveToLast,
     Count,
   };
 

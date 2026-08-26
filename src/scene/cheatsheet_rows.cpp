@@ -270,6 +270,8 @@ namespace {
     case A::WindowFocusRight:
     case A::WindowFocusOrOutputLeft:
     case A::WindowFocusOrOutputRight:
+    case A::ColumnFocusFirst:
+    case A::ColumnFocusLast:
     case A::WindowFocusUp:
     case A::WindowFocusDown:
     case A::WindowFocusOrWorkspaceUp:
@@ -285,6 +287,8 @@ namespace {
     case A::ColumnMoveRight:
     case A::WindowMoveOrOutputLeft:
     case A::WindowMoveOrOutputRight:
+    case A::ColumnMoveToFirst:
+    case A::ColumnMoveToLast:
     case A::ColumnCenter:
     case A::WindowMoveUp:
     case A::WindowMoveDown:

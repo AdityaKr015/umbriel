@@ -524,6 +524,38 @@ namespace umbriel {
       return true;
     }
 
+    bool actionFocusFirstColumn(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        if (View* target = workspace->focusFirstColumn()) {
+          server.focusView(target, FocusReason::Directional);
+        }
+      }
+      return true;
+    }
+
+    bool actionFocusLastColumn(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        if (View* target = workspace->focusLastColumn()) {
+          server.focusView(target, FocusReason::Directional);
+        }
+      }
+      return true;
+    }
+
+    bool actionMoveColumnFirst(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        workspace->moveFocusedColumnFirst();
+      }
+      return true;
+    }
+
+    bool actionMoveColumnLast(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        workspace->moveFocusedColumnLast();
+      }
+      return true;
+    }
+
     template <int Direction, wlr_direction WlrDir>
     bool actionMoveHorizontalOrOutput(Server& server, const Keybind& bind, std::string* error) {
       if (Workspace* workspace = activeWorkspace(server)) {
@@ -1171,6 +1203,10 @@ namespace umbriel {
         &actionWorkspaceMove<1>,
         &actionWorkspaceMove<-1>,
         &actionColumnCenter,
+        &actionFocusFirstColumn,
+        &actionFocusLastColumn,
+        &actionMoveColumnFirst,
+        &actionMoveColumnLast,
     };
 
     consteval bool everyActionHasHandler() {

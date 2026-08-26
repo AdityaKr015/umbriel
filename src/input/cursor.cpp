@@ -233,7 +233,11 @@ namespace umbriel {
   }
 
   void Cursor::hideCursor() {
-    if (m_cursorHidden) {
+    // Detaching the cursor surface in the middle of an implicit pointer grab
+    // disrupts simultaneous mouse and keyboard input in games and other
+    // interactive clients. The release restarts the inactivity timer, and a
+    // later keypress can hide the cursor normally.
+    if (m_cursorHidden || m_server->seat()->wlr()->pointer_state.button_count != 0) {
       return;
     }
     m_cursorHidden = true;

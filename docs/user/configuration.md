@@ -590,8 +590,10 @@ Set `hardware_cursor = false` to composite the cursor in the output render pass.
 This can work around cursor flicker or disappearance caused by hardware cursor
 planes. Cursor settings apply on config reload. Output scale changes also reload
 the cursor image at the matching scale without requiring a restart.
-Set `hide_when_typing = true` to hide the cursor immediately after a
-non-modifier key press. Modifier-only presses leave it visible.
+Set `hide_when_typing = true` to hide the cursor after a non-modifier key
+press. Modifier-only presses leave it visible. Typing while a pointer button is
+held also leaves it visible so active clicks, drags, and game actions are not
+interrupted.
 Set `hide_timeout_ms` to a value from `1` to `3600000` to hide the cursor after
 that many milliseconds without pointer activity. Motion, clicks, scrolling,
 and tablet input reveal the cursor and restart the timeout. The two hiding

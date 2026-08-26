@@ -410,9 +410,13 @@ namespace umbriel {
     return workspace != nullptr && grab != nullptr && grab->workspace == workspace;
   }
 
-  void Cursor::beginMove(View* view) {
+  void Cursor::beginMove(View* view, uint32_t button) {
     if (view == nullptr) {
       return;
+    }
+    if (button == 0) {
+      const wlr_seat_pointer_state& pointer = m_server->seat()->wlr()->pointer_state;
+      button = pointer.button_count > 0 ? pointer.grab_button : 0;
     }
     if (!isPassthrough()) {
       resetMode();
@@ -429,6 +433,7 @@ namespace umbriel {
     const double offsetY = m_cursor->y - view->sceneTree()->node.y;
     if (!tiled) {
       m_grab = FloatingMoveGrab{.view = view, .offsetX = offsetX, .offsetY = offsetY};
+      m_moveButton = button;
       view->enterDragPresentation();
       updateInteractiveCursor(view);
       return;
@@ -455,6 +460,7 @@ namespace umbriel {
         .column = std::max(0, grab.sourceColumn),
     };
     m_grab = grab;
+    m_moveButton = button;
     updateInteractiveCursor(view);
   }
 
@@ -562,6 +568,7 @@ namespace umbriel {
       view->finishFloatingResize();
     }
     m_grab = PassthroughGrab{};
+    m_moveButton = 0;
     if (restoreDragPresentation && view != nullptr) {
       view->restoreHomePresentation();
     }
@@ -728,6 +735,14 @@ namespace umbriel {
       return;
     }
 
+    // An interactive move ends only when its initiating button is released.
+    if (m_moveButton != 0 && button != m_moveButton) {
+      if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+        m_swallowedButtons.push_back(button);
+      }
+      return;
+    }
+
     // Overview owns the pointer while it is up: cards are its own hit-test surface and the desktop underneath is inert.
     // Top/overlay layer surfaces (panels) stay fully interactive.
     if (Overview* overview = m_server->overview();
@@ -829,7 +844,7 @@ namespace umbriel {
     const bool modHeld = (m_server->keyboardModifiers() & m_server->modKey()) != 0;
     if (button == BTN_LEFT && modHeld && view != nullptr) {
       m_server->focusView(view, FocusReason::Grab);
-      beginMove(view);
+      beginMove(view, button);
       return;
     }
     if (button == BTN_RIGHT && modHeld && view != nullptr) {

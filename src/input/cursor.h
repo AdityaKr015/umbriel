@@ -108,7 +108,7 @@ namespace umbriel {
     void applyConfig();
     void setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY);
     void setXcursor(const char* name);
-    void beginMove(View* view);
+    void beginMove(View* view, uint32_t button = 0);
     void beginResize(View* view, uint32_t edges);
     void resetMode();
     // Warp the cursor to a layout position and run the motion pipeline (pointer focus, xcursor, pointer-output
@@ -207,10 +207,13 @@ namespace umbriel {
     wlr_pointer_constraint_v1* m_activeConstraint = nullptr;
 
     GrabState m_grab;
+    // Physical button that owns the current interactive move.
+    uint32_t m_moveButton = 0;
     // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
     wlr_output* m_pointerOutput = nullptr;
     double m_wheelAccum[2]{};
-    // Presses consumed by config mouse binds; their release is swallowed too.
+    // Presses consumed by config binds or ignored during an interactive move;
+    // their release is swallowed too, even if the grab ended first.
     std::vector<uint32_t> m_swallowedButtons;
     std::vector<std::unique_ptr<TabletToolState>> m_tools;
     bool m_compositorOwnsCursor = false;

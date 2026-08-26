@@ -258,8 +258,15 @@ namespace umbriel {
       setOnActiveWorkspace(true);
     }
     notifyOutputScale();
-    if (m_mapped && m_onActiveWorkspace) {
-      enterForeignOutput();
+    if (m_mapped) {
+      if (m_workspace != nullptr && m_onActiveWorkspace) {
+        enterForeignOutput();
+      } else if (m_workspace == nullptr) {
+        // An unassigned view has no output to advertise. In particular, the preferred output may be the one currently
+        // being destroyed, and foreign-toplevel output membership installs a bind listener that must be gone before
+        // wlr_output_finish completes.
+        leaveForeignOutput();
+      }
     }
     if (m_mapped) {
       m_server->scheduleIpcWindowsEvent();

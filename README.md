@@ -186,11 +186,17 @@ Umbriel first checks `$XDG_CONFIG_HOME/umbriel/config.toml`, then `$XDG_CONFIG_D
 See [`examples/config.toml`](examples/config.toml) for the packaged starting configuration and
 [`docs/user/`](docs/user/) for the full reference:
 
-- [Configuration](docs/user/configuration.md): general, appearance, layout, input
-- [Keybinds](docs/user/keybinds.md): chords, submaps, Noctalia integration
+- [Configuration](docs/user/configuration.md): loading, includes, and global settings
+- [Appearance](docs/user/appearance.md): colors, borders, blur, and shadows
+- [Workspace Overview](docs/user/workspace-overview.md): workspace overview and hot corners
+- [Layout](docs/user/layout.md): scrolling and dwindle layout behavior
+- [Input](docs/user/input.md): keyboard, pointer, tablet, cursor, and focus settings
+- [Keybinds](docs/user/keybinds.md): binding syntax, submaps, and binding behavior
+- [Actions](docs/user/actions.md): the complete keybind action reference
 - [Scratchpads](docs/user/scratchpad.md): setup, workflow, and multi-output behavior
-- [Window and Layer Rules](docs/user/rules.md): matching, effects, blur
-- [Outputs](docs/user/outputs.md): monitors, workspaces, workspace layout overrides
+- [Window and Layer Rules](docs/user/rules.md): matching, effects, and blur
+- [Outputs](docs/user/outputs.md): monitor configuration and output movement
+- [Workspaces](docs/user/workspaces.md): workspace models and workspace rules
 - [Maintainer design notes](docs/design/README.md): reloads, workspaces, and overview rendering
 
 ### Nix (home-manager / NixOS)

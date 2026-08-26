@@ -905,16 +905,17 @@ namespace umbriel {
     m_floating.rememberPositionFraction({m_sceneTree->node.x, m_sceneTree->node.y}, floatingUsableArea());
   }
 
-  void View::restoreFloatingPosition() {
+  void View::restoreFloatingPosition(bool rememberRestored) {
     if (m_tiled) {
       return;
     }
     const wlr_box usable = floatingUsableArea();
     if (const std::optional<FloatingPoint> origin = m_floating.restoredOrigin(usable)) {
       animateTo(origin->x, origin->y);
-      // Re-anchor on the new usable area so a second cross-output move lands
-      // proportionally again instead of reusing a stale fraction.
-      m_floating.rememberPositionFraction(*origin, usable);
+      if (rememberRestored) {
+        // Re-anchor on the new usable area so a second deliberate cross-output move lands proportionally again.
+        m_floating.rememberPositionFraction(*origin, usable);
+      }
       return;
     }
     clampFloatingPosition();

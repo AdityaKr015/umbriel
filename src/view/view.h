@@ -121,8 +121,9 @@ namespace umbriel {
     // Record the floating position as a fraction of the current usable area,
     // so a cross-output move can land the window proportionally. No-op when tiled.
     void rememberFloatingPosition();
-    // Re-anchor into the (new) workspace output's usable area. No-op when tiled.
-    void restoreFloatingPosition();
+    // Re-anchor into the (new) workspace output's usable area. Temporary fallback placement can preserve the saved
+    // fraction so a displaced view still remembers its real home geometry. No-op when tiled.
+    void restoreFloatingPosition(bool rememberRestored = true);
     // Center the floating window on its output's usable area. False when not floating.
     bool centerFloating();
     // Animate the presented size toward a layout-assigned size. Called by Workspace::arrange when it configures the

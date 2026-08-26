@@ -1411,18 +1411,22 @@ namespace umbriel {
           continue;
         }
         if (!view->displacedHome() && sourceName != nullptr) {
+          if (view->floating()) {
+            // Capture this before moving any view. A later output loss may encounter the same displaced view on a
+            // temporary fallback, but its home geometry must remain the one recorded here.
+            view->rememberFloatingPosition();
+          }
           view->markDisplaced({.outputName = sourceName, .workspaceName = workspace->name()});
         }
         leaving.push_back(view.get());
       }
       for (View* view : leaving) {
         const bool floating = view->floating();
-        if (floating) {
-          view->rememberFloatingPosition();
-        }
         view->setWorkspace(targetWorkspace);
         if (floating && targetWorkspace != nullptr) {
-          view->restoreFloatingPosition();
+          // This output is only a refuge while the recorded home is absent. Present the saved geometry here without
+          // replacing it, since another output can disappear before this animation finishes during VT deactivation.
+          view->restoreFloatingPosition(false);
         }
       }
     }
@@ -1505,7 +1509,7 @@ namespace umbriel {
       const bool floating = view->floating();
       view->setWorkspace(workspace);
       if (floating) {
-        view->restoreFloatingPosition();
+        view->restoreFloatingPosition(atHome);
       }
       ++restored;
     }

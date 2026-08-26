@@ -221,6 +221,8 @@ namespace umbriel {
     m_backdrop = wlr_scene_rect_create(&m_scene->tree, 0, 0, config().appearance.backdropColor.data());
     wlr_scene_rect_set_corner_radius(m_backdrop, 0);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&m_scene->tree);
+    m_overviewBlurTree = wlr_scene_tree_create(&m_scene->tree);
+    wlr_scene_node_set_enabled(&m_overviewBlurTree->node, false);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&m_scene->tree);
     m_xdgTree = wlr_scene_tree_create(&m_scene->tree);
     m_scratchpadTree = wlr_scene_tree_create(&m_scene->tree);

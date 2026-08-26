@@ -134,6 +134,9 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* scratchpadTree() const { return m_scratchpadTree; }
     [[nodiscard]] wlr_scene_tree* scratchpadShadowTree() const { return m_scratchpadShadowTree; }
     [[nodiscard]] ScratchpadManager* scratchpadManager() const { return m_scratchpadManager.get(); }
+    // Between layer-shell background and bottom: overview wallpaper blur renders
+    // before bottom-layer widgets so they remain sharp.
+    [[nodiscard]] wlr_scene_tree* overviewBlurTree() const { return m_overviewBlurTree; }
     // Between windows and the drag/insert-hint tree: overview cards render here
     // while the real window trees are disabled.
     [[nodiscard]] wlr_scene_tree* overviewTree() const { return m_overviewTree; }
@@ -444,6 +447,7 @@ namespace umbriel {
     wlr_scene_tree* m_scratchpadTree = nullptr;
     wlr_scene_tree* m_scratchpadShadowTree = nullptr;
     wlr_scene_tree* m_scratchpadContentTree = nullptr;
+    wlr_scene_tree* m_overviewBlurTree = nullptr;
     wlr_scene_tree* m_overviewTree = nullptr;
     wlr_scene_tree* m_dragShadowTree = nullptr;
     wlr_scene_tree* m_dragTree = nullptr;

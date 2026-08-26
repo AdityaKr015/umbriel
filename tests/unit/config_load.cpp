@@ -264,6 +264,16 @@ UMBRIEL_TEST(hotCornersLoadActionsAndValidate) {
   CHECK(containsDiagnostic(store, "hot_corners.top_right.delay_ms = -1"));
 }
 
+UMBRIEL_TEST(overviewBackgroundBlurLoads) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[overview]\nbackground_blur = false\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().overview.backgroundBlur);
+}
+
 UMBRIEL_TEST(cornerRadiusClampsToItsRange) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

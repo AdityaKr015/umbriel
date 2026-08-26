@@ -275,9 +275,24 @@ namespace umbriel {
     }
 
     // Rows overhang the output by design (adjacent workspaces peek in). One clip on this output's overview tree
-    // contains every card, ring, background and blur below it, so nothing here needs to trim its own geometry. The
-    // dragged card is reparented out to the unclipped overview root, which is what lets it span outputs.
+    // contains every card, ring, and workspace background, so none needs to trim its own geometry. The dragged card
+    // is reparented out to the unclipped overview root, which is what lets it span outputs.
     wlr_scene_tree_set_clip(state.tree, &metrics.outputBox);
+    if (state.backgroundBlur != nullptr) {
+      wlr_scene_blur* blur = state.backgroundBlur;
+      wlr_scene_node_set_enabled(&blur->node, m_progress > 0.001);
+      wlr_scene_node_set_position(&blur->node, metrics.outputBox.x, metrics.outputBox.y);
+      if (blur->width != metrics.outputBox.width || blur->height != metrics.outputBox.height) {
+        wlr_scene_blur_set_size(blur, metrics.outputBox.width, metrics.outputBox.height);
+      }
+      const auto level = static_cast<float>(m_progress);
+      if (blur->alpha != level) {
+        wlr_scene_blur_set_alpha(blur, level);
+      }
+      if (blur->strength != level) {
+        wlr_scene_blur_set_strength(blur, level);
+      }
+    }
 
     wlr_scene_node_set_position(&state.backgroundTint->node, metrics.outputBox.x, metrics.outputBox.y);
     wlr_scene_rect_set_size(state.backgroundTint, metrics.outputBox.width, metrics.outputBox.height);
@@ -683,6 +698,12 @@ namespace umbriel {
       if (state->tree == nullptr) {
         continue;
       }
+      if (config().overview.backgroundBlur && config().appearance.blur.enabled) {
+        state->backgroundBlur = wlr_scene_blur_create(m_server->overviewBlurTree(), 1, 1);
+        if (state->backgroundBlur != nullptr) {
+          wlr_scene_blur_set_should_only_blur_bottom_layer(state->backgroundBlur, config().appearance.blur.optimized);
+        }
+      }
       const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, 0.0);
       state->backgroundTint = wlr_scene_rect_create(state->tree, 1, 1, backgroundTint.data());
       wlr_scene_rect_set_corner_radius(state->backgroundTint, 0);
@@ -763,6 +784,7 @@ namespace umbriel {
     m_server->cursor()->clearConstraint();
 
     applyProgress();
+    wlr_scene_node_set_enabled(&m_server->overviewBlurTree()->node, true);
     for (const auto& state : m_outputs) {
       state->output->markBlurBackgroundDirty();
     }
@@ -914,6 +936,10 @@ namespace umbriel {
         destroyCard(card.get());
       }
       state->cards.clear();
+      if (state->backgroundBlur != nullptr) {
+        wlr_scene_node_destroy(&state->backgroundBlur->node);
+        state->backgroundBlur = nullptr;
+      }
       if (state->tree != nullptr) {
         wlr_scene_node_destroy(&state->tree->node);
         state->tree = nullptr;
@@ -922,6 +948,7 @@ namespace umbriel {
       wlr_output_schedule_frame(state->output->wlr());
     }
     m_outputs.clear();
+    wlr_scene_node_set_enabled(&m_server->overviewBlurTree()->node, false);
 
     if (m_tree != nullptr) {
       wlr_scene_node_set_enabled(&m_tree->node, false);

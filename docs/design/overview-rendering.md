@@ -47,14 +47,21 @@ windows. These values scale with the card.
 
 Each output's overview tree carries a `wlr_scene_tree_set_clip` of that
 output's logical bounds, the same primitive windows use. A workspace row that
-pushes a card past an output edge is scissored there: cards, border rings,
-workspace backgrounds and blur are all contained by that one clip, and none of
-them trims its own geometry. The dragged card is reparented out to the
+pushes a card past an output edge is scissored there: cards, border rings, and
+workspace backgrounds are all contained by that one clip, and none of them
+trims its own geometry. The dragged card is reparented out to the
 unclipped overview root so it can span outputs, exactly as a dragged window
 does.
 
 Each workspace has a rounded background behind its cards. The configured alpha
 controls whether this is a light tint, a translucent panel, or an opaque fill.
+
+A dedicated scene root between the layer-shell background and bottom layers
+carries each output's wallpaper blur node. This placement blurs the background
+layer while bottom-layer widgets render afterward and remain sharp. The node's
+alpha and strength fade with zoom progress. When `[appearance.blur] optimized`
+is enabled, it samples the optimized background buffer. The node is absent when
+appearance blur or `overview.background_blur` is disabled.
 
 The focused border tracks the workspace's focused view, so each row shows where
 it will land when zoomed into. Closing the focused window reassigns focus to its

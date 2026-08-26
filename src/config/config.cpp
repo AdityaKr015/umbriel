@@ -528,6 +528,7 @@ namespace umbriel {
     void readOverview(Section& root, Config& loaded) {
       root.sub("overview", [&](Section& s) {
         s.real("zoom", 0.1, 0.75, loaded.overview.zoom)
+            .boolean("background_blur", loaded.overview.backgroundBlur)
             .color("background_tint", loaded.overview.backgroundTint)
             .color("workspace_background", loaded.overview.workspaceBackground);
       });

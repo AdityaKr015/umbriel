@@ -318,6 +318,9 @@ namespace umbriel {
     struct Overview {
       // Workspace scale when fully zoomed out.
       double zoom = 0.5;
+      // Blur the wallpaper behind the filmstrip while the overview is visible. Uses [appearance.blur] parameters;
+      // inert when appearance blur is disabled.
+      bool backgroundBlur = true;
       // Tint composited over the desktop background while overview is visible.
       std::array<float, 4> backgroundTint{0.0627451F, 0.0627451F, 0.0784314F, 0.1882353F};
       // Rounded background behind each workspace; alpha controls opacity.

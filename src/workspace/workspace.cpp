@@ -9,6 +9,7 @@
 #include "output/output.h"
 #include "overview/overview.h"
 #include "server/server.h"
+#include "view/registry.h"
 #include "view/view.h"
 #include "view/xdg_size.h"
 // clang-format off
@@ -580,30 +581,39 @@ namespace umbriel {
       }
     }
 
-    if (columnIndex >= 0 && columnIndex < static_cast<int>(columns.size())) {
-      const auto& column = columns[static_cast<size_t>(columnIndex)].views;
-      for (int row = rowIndex - 1; row >= 0; --row) {
-        if (View* candidate = column[static_cast<size_t>(row)]; mappedCandidate(candidate)) {
+    // Floating views have no layout successor: hand focus back to the most recently focused mapped view on this
+    // workspace, since nothing else refocuses until a destroy-time fallback that unmap-only clients never reach.
+    if (columnIndex < 0 || columnIndex >= static_cast<int>(columns.size())) {
+      for (const auto& entry : m_group->server()->registry().all()) {
+        if (entry.get() != view && entry->mapped() && entry->workspace() == this) {
+          return entry.get();
+        }
+      }
+      return nullptr;
+    }
+
+    const auto& column = columns[static_cast<size_t>(columnIndex)].views;
+    for (int row = rowIndex - 1; row >= 0; --row) {
+      if (View* candidate = column[static_cast<size_t>(row)]; mappedCandidate(candidate)) {
+        return candidate;
+      }
+    }
+    for (int row = rowIndex + 1; row < static_cast<int>(column.size()); ++row) {
+      if (View* candidate = column[static_cast<size_t>(row)]; mappedCandidate(candidate)) {
+        return candidate;
+      }
+    }
+    for (int targetColumn = columnIndex - 1; targetColumn >= 0; --targetColumn) {
+      for (View* candidate : columns[static_cast<size_t>(targetColumn)].views) {
+        if (mappedCandidate(candidate)) {
           return candidate;
         }
       }
-      for (int row = rowIndex + 1; row < static_cast<int>(column.size()); ++row) {
-        if (View* candidate = column[static_cast<size_t>(row)]; mappedCandidate(candidate)) {
+    }
+    for (int targetColumn = columnIndex + 1; targetColumn < static_cast<int>(columns.size()); ++targetColumn) {
+      for (View* candidate : columns[static_cast<size_t>(targetColumn)].views) {
+        if (mappedCandidate(candidate)) {
           return candidate;
-        }
-      }
-      for (int targetColumn = columnIndex - 1; targetColumn >= 0; --targetColumn) {
-        for (View* candidate : columns[static_cast<size_t>(targetColumn)].views) {
-          if (mappedCandidate(candidate)) {
-            return candidate;
-          }
-        }
-      }
-      for (int targetColumn = columnIndex + 1; targetColumn < static_cast<int>(columns.size()); ++targetColumn) {
-        for (View* candidate : columns[static_cast<size_t>(targetColumn)].views) {
-          if (mappedCandidate(candidate)) {
-            return candidate;
-          }
         }
       }
     }

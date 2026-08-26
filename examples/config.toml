@@ -241,6 +241,8 @@ follows_mouse = false
 # "XF86AudioPlay"       = "spawn:playerctl play-pause"
 # "XF86AudioNext"       = "spawn:playerctl next"
 # "XF86AudioPrev"       = "spawn:playerctl prev"
+# Controls intended to remain usable while the session is locked use the table form.
+# "XF86MonBrightnessDown" = { action = "spawn:noctalia msg brightness-down 10", allow_when_locked = true }
 
 # Window and layer rules (see docs/user/rules.md) ---------------------------
 

@@ -11,10 +11,12 @@ skip_action() {
     window-focus) return 0 ;;  # needs a live window id; the round trip is covered by 010_ipc
     # These require a second output; single-output rejection paths are covered by 610_output_actions.
     output-focus-*)             return 0 ;;
+    window-focus-or-output-*)   return 0 ;;
+    window-move-or-output-*)    return 0 ;;
     window-move-to-output-*)    return 0 ;;
     column-move-to-output-*)    return 0 ;;
     workspace-move-to-output-*) return 0 ;;
-    *)            return 1 ;;
+    *) return 1 ;;
   esac
 }
 

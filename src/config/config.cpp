@@ -987,12 +987,14 @@ namespace umbriel {
         const std::string chord(key.str());
         std::string actionStr;
         bool repeatBind = true;
+        bool allowWhenLocked = false;
 
         if (const auto* tbl = entry.as_table()) {
           Section bind(*tbl, "keybinds." + chord, configStore().mutableDiagnostics());
           // Read `repeat` before validating the action: an entry rejected for a
           // bad action must not also be told its `repeat` key is unknown.
           bind.boolean("repeat", repeatBind);
+          bind.boolean("allow_when_locked", allowWhenLocked);
           const toml::node* actionNode = bind.take("action");
           if (actionNode == nullptr) {
             warnAt(entry.source(), "ignoring keybind '{}' (table needs an 'action' string)", chord);
@@ -1023,6 +1025,7 @@ namespace umbriel {
           continue;
         }
         binding.repeat = binding.modifierOnly ? false : repeatBind;
+        binding.allowWhenLocked = allowWhenLocked;
         if (!parseAction(actionStr, binding)) {
           warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, actionStr);
           continue;

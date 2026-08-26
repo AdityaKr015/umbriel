@@ -693,7 +693,7 @@ namespace umbriel {
 
     // Config mouse binds win over the overview and the built-in Mod+drag / Mod+resize grabs. Presses consumed here
     // swallow their paired release so clients never see an unmatched release.
-    if (state == WL_POINTER_BUTTON_STATE_PRESSED && !m_server->sessionLocked() && isPassthrough()) {
+    if (state == WL_POINTER_BUTTON_STATE_PRESSED && isPassthrough()) {
       const uint32_t modifiers = m_server->keyboardModifiers();
       const Keybind* bound = m_server->handleMouseBind(button, modifiers);
       // Any press dismisses the cheatsheet, as any key press does, except one that just ran a cheatsheet action. Unlike

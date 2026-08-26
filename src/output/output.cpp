@@ -565,7 +565,7 @@ namespace umbriel {
       if (surface == nullptr || !surface->initialized) {
         continue;
       }
-      // Match sway: only exclusive_zone > 0 participates in the exclusive pass.
+      // Only exclusive_zone > 0 participates in the exclusive pass.
       if ((surface->current.exclusive_zone > 0) != exclusive) {
         continue;
       }

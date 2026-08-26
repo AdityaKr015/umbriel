@@ -4,6 +4,7 @@
 #include "core/log.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
+#include "output/frame_schedule.h"
 #include "output/hdr_format.h"
 #include "scene/node.h"
 #include "server/server.h"
@@ -22,6 +23,7 @@ namespace umbriel {
 
   namespace {
     constexpr Logger kLog("output");
+    constexpr int kFrameRetryDelayMs = 16;
 
     const OutputRule* findRule(const char* name) {
       for (const OutputRule& rule : config().outputs) {
@@ -45,6 +47,9 @@ namespace umbriel {
 
     m_destroy.notify = onDestroy;
     wl_signal_add(&m_output->events.destroy, &m_destroy);
+
+    m_frameRetryTimer =
+        wl_event_loop_add_timer(wl_display_get_event_loop(m_server->display()), onFrameRetryTimer, this);
 
     applyCursorConfig();
     (void)applyConfiguredState();
@@ -513,6 +518,10 @@ namespace umbriel {
   }
 
   Output::~Output() {
+    if (m_frameRetryTimer != nullptr) {
+      wl_event_source_remove(m_frameRetryTimer);
+      m_frameRetryTimer = nullptr;
+    }
     if (m_animationRenderLocked) {
       wlr_output_lock_attach_render(m_output, false);
       m_animationRenderLocked = false;
@@ -700,6 +709,20 @@ namespace umbriel {
     self->handleDestroy();
   }
 
+  int Output::onFrameRetryTimer(void* data) {
+    auto* self = static_cast<Output*>(data);
+    if (outputFrameAllowed(self->m_server->stopping(), self->m_server->session())) {
+      wlr_output_schedule_frame(self->m_output);
+    }
+    return 0;
+  }
+
+  void Output::armFrameRetry() {
+    if (m_frameRetryTimer != nullptr && outputFrameAllowed(m_server->stopping(), m_server->session())) {
+      wl_event_source_timer_update(m_frameRetryTimer, kFrameRetryDelayMs);
+    }
+  }
+
   void Output::applyMode(int width, int height) {
     if (width <= 0 || height <= 0) {
       return;
@@ -760,10 +783,14 @@ namespace umbriel {
   }
 
   void Output::handleFrame() {
-    // A failed DRM commit can immediately queue another frame after logind revokes device access.
-    // Stop before that retry loop can keep the final event-loop dispatch alive.
-    if (m_server->stopping()) {
+    // A failed DRM commit can immediately queue another frame after logind revokes device access. Stop before that
+    // retry loop can keep the final event-loop dispatch alive. A null session belongs to a nested or headless backend
+    // and remains renderable.
+    if (!outputFrameAllowed(m_server->stopping(), m_server->session())) {
       return;
+    }
+    if (m_frameRetryTimer != nullptr) {
+      wl_event_source_timer_update(m_frameRetryTimer, 0);
     }
 
     flushDirty();
@@ -807,6 +834,7 @@ namespace umbriel {
     // video players) block on wl_surface.frame before submitting their next buffer. If we skip frame_done on the
     // "nothing to render" path, they never commit again -> damage stays clean -> wlr_scene_output_needs_frame returns
     // false forever -> compositor parks in epoll_wait. (Reproducible with any mailbox/FIFO Vulkan game.)
+    bool commitFailed = false;
     if (wlr_scene_output_needs_frame(m_sceneOutput) || m_gammaDirty) {
       m_inFrame = true;
 
@@ -856,11 +884,7 @@ namespace umbriel {
 
       wlr_output_state_finish(&state);
       m_inFrame = false;
-
-      if (!commitOk) {
-        // Retry on next vblank; scene may have changed or backend may have recovered.
-        wlr_output_schedule_frame(m_output);
-      }
+      commitFailed = !commitOk;
     }
 
     // A request_state that arrived mid-commit is applied now that we're out of it.
@@ -869,9 +893,26 @@ namespace umbriel {
       applyMode(m_deferredWidth, m_deferredHeight);
     }
 
-    // Keep this output ticking on the next vblank while it owns an animation.
-    if (animationsActive) {
+    if (commitFailed && m_output->idle_frame != nullptr) {
+      // Damage, animation, or deferred output work can schedule another idle frame while this frame callback is still
+      // running. Remove it before arming the timer, otherwise the idle dispatcher can still recurse without returning
+      // to signals.
+      wl_event_source_remove(m_output->idle_frame);
+      m_output->idle_frame = nullptr;
+    }
+
+    // A failed commit has no vblank to pace an immediate retry. Defer it so event-loop signal and session sources get
+    // dispatched first. This also replaces animation scheduling for the failed frame, otherwise the animation path
+    // would recreate the same immediate retry loop.
+    switch (outputFrameFollowup(m_server->stopping(), m_server->session(), commitFailed, animationsActive)) {
+    case OutputFrameFollowup::Schedule:
       wlr_output_schedule_frame(m_output);
+      break;
+    case OutputFrameFollowup::RetryDelayed:
+      armFrameRetry();
+      break;
+    case OutputFrameFollowup::None:
+      break;
     }
 
     // Unconditional: see comment above. Never gate this on commit success.

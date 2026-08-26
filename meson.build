@@ -429,6 +429,7 @@ unit_tests = [
   ['keybind-parse', ['tests/unit/keybind_parse.cpp'], []],
   ['modifier-tap', ['tests/unit/modifier_tap.cpp'], []],
   ['output-direction', ['tests/unit/output_direction.cpp'], []],
+  ['output-frame-schedule', ['tests/unit/output_frame_schedule.cpp'], []],
   ['hdr-format', ['tests/unit/hdr_format.cpp'], []],
   ['scrolling-layout', ['tests/unit/scrolling_layout.cpp'], []],
   ['dwindle-layout', ['tests/unit/dwindle_layout.cpp'], []],

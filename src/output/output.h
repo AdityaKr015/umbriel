@@ -95,6 +95,7 @@ namespace umbriel {
     static void onFrame(wl_listener* listener, void* data);
     static void onRequestState(wl_listener* listener, void* data);
     static void onDestroy(wl_listener* listener, void* data);
+    static int onFrameRetryTimer(void* data);
 
     void handleFrame();
     void handleRequestState(void* data);
@@ -107,6 +108,7 @@ namespace umbriel {
     void setHdrFallbackReason(std::string_view reason);
     void updateSceneSdrWhite();
     void rejectGammaControl(wlr_gamma_control_v1* control);
+    void armFrameRetry();
     wlr_output_layout_output* addToLayout();
     void arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive);
     void updateOptimizedBlur(const wlr_box& fullArea);
@@ -133,6 +135,7 @@ namespace umbriel {
     bool m_hdrGammaWarningLogged = false;
     bool m_fullscreenHdrRequested = false;
     bool m_lastHdrRequested = false;
+    wl_event_source* m_frameRetryTimer = nullptr;
     View* m_autoHdrOwner = nullptr;
     std::string m_hdrFallbackReason;
     int m_deferredWidth = 0;

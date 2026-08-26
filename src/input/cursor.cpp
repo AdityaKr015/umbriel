@@ -22,6 +22,7 @@
 #include <linux/input-event-codes.h>
 #include "wlr.h"
 // clang-format on
+#include "wlr/util/edges.h"
 #include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
@@ -466,10 +467,6 @@ namespace umbriel {
       tiled = false;
     }
 
-    setActiveConstraint(nullptr);
-    if (view->maximizedToEdges()) {
-      view->setMaximizedToEdges(false);
-    }
     if (tiled) {
       Workspace* workspace = view->workspace();
       if (workspace == nullptr || workspace->group() == nullptr || workspace->group()->output() == nullptr) {
@@ -485,6 +482,10 @@ namespace umbriel {
         }
         refreshInteractiveCursor();
         return;
+      }
+      setActiveConstraint(nullptr);
+      if (view->maximizedToEdges()) {
+        view->setMaximizedToEdges(false);
       }
       const wlr_box usable = workspace->group()->output()->usableArea();
       std::unique_ptr<ResizeGrab> session = layout.beginResize(view, resolvedEdges, usable);
@@ -505,6 +506,14 @@ namespace umbriel {
       };
       updateInteractiveCursor(view);
       return;
+    }
+    if (edges == 0) {
+      refreshInteractiveCursor();
+      return;
+    }
+    setActiveConstraint(nullptr);
+    if (view->maximizedToEdges()) {
+      view->setMaximizedToEdges(false);
     }
 
     const wlr_box& geometry = view->toplevel()->base->geometry;
@@ -1689,24 +1698,19 @@ namespace umbriel {
     const int y = view->sceneTree()->node.y + geo.y;
     const double cx = m_cursor->x;
     const double cy = m_cursor->y;
-    const double distLeft = std::abs(cx - x);
-    const double distRight = std::abs(cx - (x + geo.width));
-    const double distTop = std::abs(cy - y);
-    const double distBottom = std::abs(cy - (y + geo.height));
-    const double nearestH = std::min(distLeft, distRight);
-    const double nearestV = std::min(distTop, distBottom);
+    const double px = cx - x;
+    const double py = cy - y;
 
     uint32_t edges = 0;
-    if (nearestH <= nearestV) {
-      edges |= distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
-    } else {
-      edges |= distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+    if (px < geo.width / 3.0) {
+      edges |= WLR_EDGE_LEFT;
+    } else if (px > 2.0 * geo.width / 3.0) {
+      edges |= WLR_EDGE_RIGHT;
     }
-    // Prefer a corner when the cursor is near both axes.
-    constexpr double kCornerSlop = 32.0;
-    if (nearestH < kCornerSlop && nearestV < kCornerSlop) {
-      edges = (distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT)
-          | (distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM);
+    if (py < geo.height / 3.0) {
+      edges |= WLR_EDGE_TOP;
+    } else if (py > 2.0 * geo.height / 3.0) {
+      edges |= WLR_EDGE_BOTTOM;
     }
     return edges;
   }

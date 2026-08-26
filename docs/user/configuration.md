@@ -363,11 +363,12 @@ The three-finger vertical swipe continues to switch workspaces. The
 three-finger horizontal strip gesture is inert on vertical workspaces, so use
 keyboard or wheel bindings to scroll the strip.
 
-In the scrolling layout, Mod+Right-drag selects horizontal and vertical resize
-edges from the outer thirds of a window. Dragging from a corner region resizes
-both axes. Mod+Right-click in the center region starts no resize and instead
-scrolls the focused window into view. When a tiled resize ends, the focused
-scrolling column animates back into view.
+Mod+Right-drag selects horizontal and vertical resize edges from the outer
+thirds of both tiled and floating windows. Dragging from a corner region resizes
+both axes. Mod+Right-click in the center region starts no resize and preserves
+the window's maximize state. For tiled windows, a center click also scrolls the
+focused window into view. When a tiled resize ends, the focused scrolling column
+animates back into view.
 
 When focus moves to a partially or fully hidden column, Umbriel scrolls by the
 shortest distance needed to reveal it completely. A column entering from the

@@ -128,7 +128,7 @@ center_underfull_strip = true  # center the strip whenever it is narrower than t
 # position = [0, 0]
 # scale = 1.25
 # vrr = "fullscreen"            # "disabled" (default), "always", or "fullscreen"
-# hdr = "auto"                  # "off", "on", metadata-aware "auto", or any fullscreen surface with "fullscreen"
+# hdr = "auto"                  # "off", "on", metadata-driven "auto", or any-app "fullscreen"
 # sdr_white = 203                # SDR reference white in cd/m2 while HDR is active
 # enabled = true                # false powers the monitor off and removes it from the desktop
 # Dynamic workspaces are the default; use a count or name list for static workspaces.

@@ -43,6 +43,7 @@ namespace umbriel {
       wlr_image_description_v1_data data{};
       Luminances luminances;
       float luminanceMultiplier = 1.0F;
+      bool requiresHdrOutput = false;
     };
 
     std::string readProcessFile(pid_t pid, std::string_view name, bool binary = false) {
@@ -113,7 +114,8 @@ namespace umbriel {
           && left.luminances.min == right.luminances.min
           && left.luminances.max == right.luminances.max
           && left.luminances.reference == right.luminances.reference
-          && left.luminanceMultiplier == right.luminanceMultiplier;
+          && left.luminanceMultiplier == right.luminanceMultiplier
+          && left.requiresHdrOutput == right.requiresHdrOutput;
     }
 
     bool primariesSet(const wlr_color_primaries& primaries) {
@@ -154,6 +156,8 @@ namespace umbriel {
       bool currentSet = false;
       bool wlrDestroying = false;
       wl_listener commit{};
+      wl_listener map{};
+      wl_listener unmap{};
       wl_listener destroy{};
     };
 
@@ -357,6 +361,7 @@ namespace umbriel {
       const auto* event = static_cast<wlr_output_event_commit*>(data);
       if ((event->state->committed & WLR_OUTPUT_STATE_IMAGE_DESCRIPTION) != 0) {
         wp_color_management_output_v1_send_image_description_changed(output->resource);
+        wlr_output_schedule_done(output->output);
       }
     }
 
@@ -410,6 +415,10 @@ namespace umbriel {
       );
       managed->commit.notify = handleSurfaceCommit;
       wl_signal_add(&surface->events.commit, &managed->commit);
+      managed->map.notify = handleSurfaceMap;
+      wl_signal_add(&surface->events.map, &managed->map);
+      managed->unmap.notify = handleSurfaceUnmap;
+      wl_signal_add(&surface->events.unmap, &managed->unmap);
       managed->destroy.notify = handleWlrSurfaceDestroy;
       wl_signal_add(&surface->events.destroy, &managed->destroy);
       manager->surfaces.emplace(surface, managed);
@@ -459,8 +468,23 @@ namespace umbriel {
 
     static void handleSurfaceCommit(wl_listener* listener, void*) {
       Surface* surface = wl_container_of(listener, surface, commit);
+      const bool changed = surface->currentSet != surface->pendingSet
+          || (surface->pendingSet && !descriptionsEqual(surface->currentDescription, surface->pendingDescription));
       surface->currentDescription = surface->pendingDescription;
       surface->currentSet = surface->pendingSet;
+      if (changed) {
+        surface->manager->refreshSurfaceHdr(surface->surface);
+      }
+    }
+
+    static void handleSurfaceMap(wl_listener* listener, void*) {
+      Surface* surface = wl_container_of(listener, surface, map);
+      surface->manager->refreshSurfaceHdr(surface->surface);
+    }
+
+    static void handleSurfaceUnmap(wl_listener* listener, void*) {
+      Surface* surface = wl_container_of(listener, surface, unmap);
+      surface->manager->refreshSurfaceHdr(surface->surface);
     }
 
     static void handleWlrSurfaceDestroy(wl_listener* listener, void*) {
@@ -475,11 +499,14 @@ namespace umbriel {
         return;
       }
       wl_list_remove(&surface->commit.link);
+      wl_list_remove(&surface->map.link);
+      wl_list_remove(&surface->unmap.link);
       wl_list_remove(&surface->destroy.link);
       surface->manager->surfaces.erase(surface->surface);
       if (!surface->wlrDestroying) {
         surface->manager->applySurfaceColor(surface->surface, nullptr);
       }
+      surface->manager->refreshSurfaceHdr(surface->surface);
       delete surface;
     }
 
@@ -706,6 +733,7 @@ namespace umbriel {
       description.data.primaries_named = WP_COLOR_MANAGER_V1_PRIMARIES_SRGB;
       description.luminances = {.min = 0.0F, .max = 10000.0F, .reference = 203.0F};
       description.luminanceMultiplier = 80.0F / 203.0F;
+      description.requiresHdrOutput = true;
       manager->createReadyImageDescription(managerResource, id, description, false);
     }
 
@@ -716,6 +744,7 @@ namespace umbriel {
       description.data.tf_named = WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ;
       description.data.primaries_named = WP_COLOR_MANAGER_V1_PRIMARIES_BT2020;
       description.luminances = defaultLuminances(description.data.tf_named);
+      description.requiresHdrOutput = true;
       manager->createReadyImageDescription(managerResource, id, description, false);
     }
 #endif
@@ -925,6 +954,19 @@ namespace umbriel {
       }
     }
 
+    void refreshSurfaceHdr(wlr_surface* surface) {
+      if (server.stopping() || surface == nullptr) {
+        return;
+      }
+      View* view = View::fromSurface(wlr_surface_get_root_surface(surface));
+      if (view == nullptr || !view->mapped()) {
+        return;
+      }
+      if (Output* output = view->currentOutput()) {
+        output->updateHdr();
+      }
+    }
+
     void applySurfaceColor(wlr_surface* surface, const Description* description) {
       struct ApplyContext {
         wlr_surface* surface;
@@ -1023,6 +1065,13 @@ namespace umbriel {
     const auto found = m_impl->surfaces.find(surface);
     return found != m_impl->surfaces.end() && found->second->currentSet ? &found->second->currentDescription.data
                                                                         : nullptr;
+  }
+
+  bool WineColorManager::surfaceRequiresHdrOutput(wlr_surface* surface) const {
+    const auto found = m_impl->surfaces.find(surface);
+    return found != m_impl->surfaces.end()
+        && found->second->currentSet
+        && found->second->currentDescription.requiresHdrOutput;
   }
 
   void WineColorManager::applySurfaceDescriptions() { m_impl->applySurfaceDescriptions(); }

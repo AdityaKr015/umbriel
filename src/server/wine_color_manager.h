@@ -22,6 +22,7 @@ namespace umbriel {
     [[nodiscard]] bool valid() const;
     [[nodiscard]] wl_global* global() const;
     [[nodiscard]] const wlr_image_description_v1_data* surfaceDescription(wlr_surface* surface) const;
+    [[nodiscard]] bool surfaceRequiresHdrOutput(wlr_surface* surface) const;
     void applySurfaceDescriptions();
     void updatePreferredDescriptions();
 

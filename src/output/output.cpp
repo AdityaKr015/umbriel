@@ -352,11 +352,7 @@ namespace umbriel {
         || (!view->layoutFullscreen() && !view->toplevel()->current.fullscreen)) {
       return false;
     }
-    const wlr_image_description_v1_data* description =
-        m_server->surfaceImageDescription(view->toplevel()->base->surface);
-    return description != nullptr
-        && description->tf_named == WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ
-        && description->primaries_named == WP_COLOR_MANAGER_V1_PRIMARIES_BT2020;
+    return m_server->surfaceTreeHdrDescription(view->toplevel()->base->surface) != nullptr;
   }
 
   View* Output::findAutoHdrCandidate() const {

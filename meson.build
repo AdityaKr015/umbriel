@@ -437,6 +437,7 @@ unit_tests = [
   ['border-ring', ['tests/unit/border_ring.cpp'], []],
   ['floating', ['tests/unit/floating.cpp'], []],
   ['maximize', ['tests/unit/maximize.cpp'], []],
+  ['deferred-unfullscreen', ['tests/unit/deferred_unfullscreen.cpp'], []],
   ['config-section', ['tests/unit/config_section.cpp'], []],
   ['config-change', ['tests/unit/config_change.cpp'], []],
   ['config-load', ['tests/unit/config_load.cpp'], [umbriel_core_dep]],

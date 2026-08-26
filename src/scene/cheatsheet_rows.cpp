@@ -268,21 +268,29 @@ namespace {
       return Group::Apps;
     case A::WindowFocusLeft:
     case A::WindowFocusRight:
+    case A::WindowFocusOrOutputLeft:
+    case A::WindowFocusOrOutputRight:
     case A::WindowFocusUp:
     case A::WindowFocusDown:
     case A::WindowFocusOrWorkspaceUp:
     case A::WindowFocusOrWorkspaceDown:
+    case A::WindowFocusOrOutputUp:
+    case A::WindowFocusOrOutputDown:
     case A::WindowFocusNext:
     case A::WindowFocusId:
     case A::WindowFocusSwitchFloating:
       return Group::Focus;
     case A::ColumnMoveLeft:
     case A::ColumnMoveRight:
+    case A::WindowMoveOrOutputLeft:
+    case A::WindowMoveOrOutputRight:
     case A::ColumnCenter:
     case A::WindowMoveUp:
     case A::WindowMoveDown:
     case A::WindowMoveOrWorkspaceUp:
     case A::WindowMoveOrWorkspaceDown:
+    case A::WindowMoveOrOutputUp:
+    case A::WindowMoveOrOutputDown:
     case A::WindowConsumeLeft:
     case A::WindowExpelRight:
     case A::WindowCycleWidth:

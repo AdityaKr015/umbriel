@@ -114,6 +114,8 @@ namespace umbriel {
     // Warp the cursor to a layout position and run the motion pipeline (pointer focus, xcursor, pointer-output
     // tracking, idle). Output actions use it so focus follows the cursor onto the target monitor.
     void warpTo(double lx, double ly);
+    // Run the same motion pipeline without letting pointer crossing replace an explicit keyboard-focus choice.
+    void warpToPreservingFocus(double lx, double ly);
     // A layout-mode reload can replace the layout that owns a tiled resize.
     void cancelStaleTiledResize();
     void handleNewConstraint(wlr_pointer_constraint_v1* constraint);
@@ -162,9 +164,10 @@ namespace umbriel {
     void handleTabletToolTip(void* data);
     void handleTabletToolButton(void* data);
 
-    void processMotion(uint32_t timeMsec, double oldX, double oldY);
+    void warpTo(double lx, double ly, bool allowFocusChange);
+    void processMotion(uint32_t timeMsec, double oldX, double oldY, bool allowFocusChange = true);
     void processButton(uint32_t timeMsec, uint32_t button, wl_pointer_button_state state);
-    void updatePointerOutput();
+    void updatePointerOutput(bool allowFocusChange = true);
     View* hoverFocus(
         View* view, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer, double oldX, double oldY
     );

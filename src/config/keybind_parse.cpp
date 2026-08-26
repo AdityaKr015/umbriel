@@ -197,6 +197,7 @@ namespace umbriel {
         {"window-focus-right", "", KeybindAction::WindowFocusRight},
         {"window-focus-switch-floating", "", KeybindAction::WindowFocusSwitchFloating},
         {"window-focus-up", "", KeybindAction::WindowFocusUp},
+        {"window-focus-warp", "<window-id>", KeybindAction::WindowFocusWarpId, ActionArgKind::WindowId},
         {"window-modify-width", "<delta>", KeybindAction::WindowModifyWidth, ActionArgKind::WidthDelta},
         {"window-move-down", "", KeybindAction::WindowMoveDown},
         {"window-move-or-output-down", "", KeybindAction::WindowMoveOrOutputDown},

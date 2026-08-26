@@ -358,6 +358,41 @@ namespace umbriel {
       return nullptr;
     }
 
+    wlr_box windowWarpBox(Server& server, View& view) {
+      Output* output = view.currentOutput();
+      if (output == nullptr) {
+        return {};
+      }
+
+      wlr_box outputBox{};
+      wlr_output_layout_get_box(server.outputLayout(), output->wlr(), &outputBox);
+      if (outputBox.width <= 0 || outputBox.height <= 0) {
+        return {};
+      }
+
+      wlr_box target = view.presentedBox();
+      Workspace* workspace = view.workspace();
+      if (view.layoutFullscreen()) {
+        target = outputBox;
+      } else if (view.maximizedToEdges()) {
+        target = output->usableArea();
+      } else if (view.tiled() && workspace != nullptr) {
+        // focusView updated the scrolling offset and marked the layout stale. Flush it before reading the final logical
+        // target, while leaving its visual transition animated.
+        workspace->flushArrange();
+        target = workspace->layout().targetBox(&view);
+      } else {
+        target.x = view.layoutTargetX();
+        target.y = view.layoutTargetY();
+      }
+
+      if (target.width <= 0 || target.height <= 0) {
+        target = outputBox;
+      }
+      wlr_box visible{};
+      return wlr_box_intersection(&visible, &target, &outputBox) ? visible : outputBox;
+    }
+
     bool actionWindowClose(Server& server, const Keybind& bind, std::string* error) {
       if (const auto* arg = payloadIf<WindowIdArg>(bind); arg != nullptr && !arg->id.empty()) {
         View* view = viewByForeignIdentifier(server, arg->id);
@@ -648,11 +683,11 @@ namespace umbriel {
       return true;
     }
 
-    bool actionWindowFocusId(Server& server, const Keybind& bind, std::string* error) {
+    template <bool Warp> bool actionWindowFocusId(Server& server, const Keybind& bind, std::string* error) {
       const auto* arg = payloadIf<WindowIdArg>(bind);
       if (arg == nullptr || arg->id.empty()) {
         if (error != nullptr) {
-          *error = "window-focus requires a window id";
+          *error = Warp ? "window-focus-warp requires a window id" : "window-focus requires a window id";
         }
         return false;
       }
@@ -664,6 +699,12 @@ namespace umbriel {
         return false;
       }
       server.focusView(view, FocusReason::ForeignActivation);
+      if constexpr (Warp) {
+        const wlr_box target = windowWarpBox(server, *view);
+        if (target.width > 0 && target.height > 0) {
+          server.cursor()->warpToPreservingFocus(target.x + target.width / 2.0, target.y + target.height / 2.0);
+        }
+      }
       return true;
     }
 
@@ -1102,7 +1143,8 @@ namespace umbriel {
         &actionToggleScratchpad,
         &actionScratchpadFocusNext,
         &actionSubmap,
-        &actionWindowFocusId,
+        &actionWindowFocusId<false>,
+        &actionWindowFocusId<true>,
         &actionWorkspaceAdjacent<1>,
         &actionWorkspaceAdjacent<-1>,
         &actionOutputFocus<WLR_DIRECTION_LEFT>,

@@ -433,6 +433,9 @@ UMBRIEL_TEST(parsesWindowIdActions) {
   CHECK(parseAction("window-focus:abc123", bind));
   CHECK(bind.action == KeybindAction::WindowFocusId);
   CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{"abc123"});
+  CHECK(parseAction("window-focus-warp:abc123", bind));
+  CHECK(bind.action == KeybindAction::WindowFocusWarpId);
+  CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{"abc123"});
 }
 
 UMBRIEL_TEST(payloadAlternativeMatchesTheDeclaredArgKind) {

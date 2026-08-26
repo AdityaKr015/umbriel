@@ -199,6 +199,8 @@ follows_mouse = false
 # Keybinds (see docs/user/keybinds.md) --------------------------------------
 
 [keybinds]
+# Runtime switchers can use `window-focus-warp:<id>` to move both focus and the
+# cursor. Window ids come from `umbriel windows`, so they are not static binds.
 "Mod+Return" = "spawn:kitty"
 "Mod+T" = "window-toggle-floating"
 "Mod+Shift+T" = "window-focus-switch-floating"

@@ -546,7 +546,11 @@ namespace umbriel {
     updateInteractiveCursor(view);
   }
 
-  void Cursor::warpTo(double lx, double ly) {
+  void Cursor::warpTo(double lx, double ly) { warpTo(lx, ly, true); }
+
+  void Cursor::warpToPreservingFocus(double lx, double ly) { warpTo(lx, ly, false); }
+
+  void Cursor::warpTo(double lx, double ly, bool allowFocusChange) {
     noteActivity();
     const double oldX = m_cursor->x;
     const double oldY = m_cursor->y;
@@ -556,7 +560,7 @@ namespace umbriel {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     const uint32_t timeMsec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
     m_server->notifyIdleActivity();
-    processMotion(timeMsec, oldX, oldY);
+    processMotion(timeMsec, oldX, oldY, allowFocusChange);
   }
 
   void Cursor::resetMode() {
@@ -1100,7 +1104,7 @@ namespace umbriel {
 
   void Cursor::handleTouchFrame() { wlr_seat_touch_notify_frame(m_server->seat()->wlr()); }
 
-  void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY) {
+  void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY, bool allowFocusChange) {
     updateHotCorner();
     // Overview owns motion: cards follow a drag, panels keep passthrough, and
     // the inert desktop underneath never receives enter/motion or hover focus.
@@ -1191,7 +1195,7 @@ namespace umbriel {
       updateConstraintForSurface(seat->pointer_state.focused_surface);
       return;
     }
-    updatePointerOutput();
+    updatePointerOutput(allowFocusChange);
 
     double sx = 0;
     double sy = 0;
@@ -1199,7 +1203,11 @@ namespace umbriel {
     LayerSurface* layer = nullptr;
     View* view = m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
 
-    if (config().input.focus.followsMouse && layer == nullptr && view != nullptr && view->mapped()) {
+    if (allowFocusChange
+        && config().input.focus.followsMouse
+        && layer == nullptr
+        && view != nullptr
+        && view->mapped()) {
       view = hoverFocus(view, &surface, &sx, &sy, &layer, oldX, oldY);
     }
 
@@ -1224,13 +1232,14 @@ namespace umbriel {
     updateInteractiveCursor(view);
   }
 
-  void Cursor::updatePointerOutput() {
+  void Cursor::updatePointerOutput(bool allowFocusChange) {
     // Crossing outputs updates keyboard / foreign-toplevel focus so clients that follow the
     // focused screen match preferredOutput() / workspace-switch behavior.
     wlr_output* pointerOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
     if (pointerOutput != m_pointerOutput) {
       m_pointerOutput = pointerOutput;
-      if (config().input.focus.followsMouse
+      if (allowFocusChange
+          && config().input.focus.followsMouse
           && !m_server->sessionLocked()
           && m_server->exclusiveKeyboardLayer() == nullptr) {
         m_server->refocus(m_server->outputFromWlr(pointerOutput));

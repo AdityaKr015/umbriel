@@ -82,6 +82,7 @@ namespace umbriel {
     ScratchpadFocusNext,
     Submap,
     WindowFocusId,
+    WindowFocusWarpId,
     WorkspaceNext,
     WorkspacePrevious,
     OutputFocusLeft,

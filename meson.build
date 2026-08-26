@@ -342,6 +342,7 @@ core_sources = files(
   'src/input/text_input.cpp',
   'src/input/cursor.cpp',
   'src/input/gestures.cpp',
+  'src/input/swipe_tracker.cpp',
   'src/input/cursor_constraint.cpp',
   'src/view/view.cpp',
   'src/view/decoration.cpp',

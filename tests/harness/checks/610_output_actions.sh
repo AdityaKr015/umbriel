@@ -42,6 +42,8 @@ wait_for_windows() {
 # also proves parse + dispatch reach the handler.
 for action in \
   output-focus-left output-focus-right output-focus-up output-focus-down \
+  window-focus-or-output-left window-focus-or-output-right window-focus-or-output-up window-focus-or-output-down \
+  window-move-or-output-left window-move-or-output-right window-move-or-output-up window-move-or-output-down \
   window-move-to-output-left window-move-to-output-right window-move-to-output-up window-move-to-output-down \
   column-move-to-output-left column-move-to-output-right column-move-to-output-up column-move-to-output-down \
   workspace-move-to-output-left workspace-move-to-output-right workspace-move-to-output-up workspace-move-to-output-down; do

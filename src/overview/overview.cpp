@@ -11,6 +11,7 @@
 #include "scene/color.h"
 #include "scene/hint_rect.h"
 #include "server/server.h"
+#include "server/wine_color_manager.h"
 #include "view/view.h"
 // clang-format off
 #include <algorithm>
@@ -372,6 +373,13 @@ namespace umbriel {
       wlr_scene_buffer_set_luminance_multiplier(entry.buffer, source->luminance_multiplier);
       wlr_scene_buffer_set_color_encoding(entry.buffer, source->color_encoding);
       wlr_scene_buffer_set_color_range(entry.buffer, source->color_range);
+    }
+    // wlroots restores scene surfaces to its protocol-owned color state on
+    // every commit. Wine compatibility metadata is repaired at the render
+    // boundary, after this passive mirror has copied the transient state, so
+    // apply the authoritative committed description directly to the mirror.
+    if (WineColorManager* colorManager = entry.card->overview->m_server->wineColorManager()) {
+      colorManager->applySurfaceDescriptionToBuffer(surface, entry.buffer);
     }
   }
 

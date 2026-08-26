@@ -54,6 +54,7 @@ namespace {
     bool mapped = false;
     bool closed = false;
     bool redrawOnClose = false;
+    bool redrawOnceOnClose = false;
     bool keyboardFocused = false;
     bool requestMaximized = false;
     bool maximizeRequested = false;
@@ -317,6 +318,9 @@ namespace {
     if (state.redrawOnClose) {
       wl_surface_damage_buffer(state.surface, 0, 0, state.width, state.height);
       wl_surface_commit(state.surface);
+      if (state.redrawOnceOnClose) {
+        state.redrawOnClose = false;
+      }
       std::println("redrawn");
       std::fflush(stdout);
       return;
@@ -434,7 +438,10 @@ int main(int argc, char** argv) {
   }
 
   State state;
-  state.redrawOnClose = std::getenv("REDRAW_ON_CLOSE") != nullptr;
+  if (const char* redraw = std::getenv("REDRAW_ON_CLOSE")) {
+    state.redrawOnClose = true;
+    state.redrawOnceOnClose = std::string_view(redraw) == "once";
+  }
   state.requestMaximized = std::getenv("REQUEST_MAXIMIZED") != nullptr;
   state.requestFullscreen = std::getenv("REQUEST_FULLSCREEN") != nullptr;
   state.requestHdr = std::getenv("COLOR_HDR") != nullptr;

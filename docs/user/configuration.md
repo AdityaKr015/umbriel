@@ -274,8 +274,10 @@ before you drop the window.
 ### Appearance
 
 Overview cards use the same borders, corner radius, transparency, and blur as
-their windows. `workspace_background` adds a rounded background behind each
-workspace. Its alpha can produce anything from a light tint to an opaque fill.
+their windows. They also retain each surface's color description, so HDR and
+extended-linear content keeps the same appearance while the overview is open.
+`workspace_background` adds a rounded background behind each workspace. Its
+alpha can produce anything from a light tint to an opaque fill.
 
 | Key                    | Type  | Default     | Description                                                                                    |
 | ---------------------- | ----- | ----------- | ---------------------------------------------------------------------------------------------- |

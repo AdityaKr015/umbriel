@@ -89,7 +89,7 @@ wait "$CLIENT_PID" 2>/dev/null || true
 CLIENT_PID=
 
 CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/wine-scrgb-client.log"
-env COLOR_WINDOWS_SCRGB=1 APP_ID=wine-scrgb \
+env COLOR_WINDOWS_SCRGB=1 REDRAW_ON_CLOSE=once APP_ID=wine-scrgb \
   bash -c 'exec -a wine "$@"' _ \
   "$UNMAP_CLIENT" wine-scrgb > "$CLIENT_LOG" 2>&1 &
 CLIENT_PID=$!
@@ -120,6 +120,53 @@ if ! jq -e '
   echo "Wine scRGB metadata did not reach surface diagnostics: $color"
   exit 1
 fi
+
+# The overview mirrors client buffers into raw scene buffers. Their color must match the normal scene surface even
+# after Wine's compatibility metadata is repaired at the render boundary.
+normal_shot="$UMBRIEL_RUNTIME_DIR/wine-scrgb-normal.png"
+overview_shot="$UMBRIEL_RUNTIME_DIR/wine-scrgb-overview.png"
+window_json=$("$UMBRIEL" windows --json | jq '.[] | select(.title == "wine-scrgb")')
+window_x=$(jq -r '.x' <<< "$window_json")
+window_y=$(jq -r '.y' <<< "$window_json")
+window_w=$(jq -r '.w' <<< "$window_json")
+window_h=$(jq -r '.h' <<< "$window_json")
+normal_x=$((window_x + window_w / 2))
+normal_y=$((window_y + window_h / 2))
+overview_x=$((320 + normal_x / 2))
+overview_y=$((180 + normal_y / 2))
+
+sample_rgb() {
+  magick "$1" -alpha off -crop "20x20+$(($2 - 10))+$(($3 - 10))" +repage -colorspace RGB \
+    -format '%[fx:round(255*mean.r)] %[fx:round(255*mean.g)] %[fx:round(255*mean.b)]\n' info:
+}
+
+grim "$normal_shot"
+"$UMBRIEL" msg overview-open > /dev/null
+sleep 0.4
+wine_scrgb_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "wine-scrgb") | .id')
+"$UMBRIEL" msg "window-close:$wine_scrgb_id" > /dev/null
+for _ in $(seq 40); do
+  grep -q '^redrawn$' "$CLIENT_LOG" && break
+  sleep 0.1
+done
+if ! grep -q '^redrawn$' "$CLIENT_LOG"; then
+  echo "Wine scRGB client did not redraw inside overview: $(cat "$CLIENT_LOG")"
+  exit 1
+fi
+grim "$overview_shot"
+read -r normal_r normal_g normal_b < <(sample_rgb "$normal_shot" "$normal_x" "$normal_y")
+read -r overview_r overview_g overview_b < <(sample_rgb "$overview_shot" "$overview_x" "$overview_y")
+for channel in r g b; do
+  normal_var="normal_$channel"
+  overview_var="overview_$channel"
+  difference=$(( ${!normal_var} - ${!overview_var} ))
+  (( difference < 0 )) && difference=$((-difference))
+  if (( difference > 3 )); then
+    echo "Wine scRGB overview color changed: normal=$normal_r,$normal_g,$normal_b overview=$overview_r,$overview_g,$overview_b"
+    exit 1
+  fi
+done
+"$UMBRIEL" msg overview-close > /dev/null
 
 wine_scrgb_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "wine-scrgb") | .id')
 "$UMBRIEL" msg "window-close:$wine_scrgb_id" > /dev/null

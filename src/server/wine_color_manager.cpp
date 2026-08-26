@@ -1045,6 +1045,29 @@ namespace umbriel {
       );
     }
 
+    void applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const {
+      if (surface == nullptr || buffer == nullptr) {
+        return;
+      }
+      const auto found = surfaces.find(surface);
+      if (found == surfaces.end() || !found->second->currentSet) {
+        return;
+      }
+      const Description& currentDescription = found->second->currentDescription;
+      const wlr_image_description_v1_data& description = currentDescription.data;
+      wlr_scene_buffer_set_transfer_function(
+          buffer,
+          wlr_color_manager_v1_transfer_function_to_wlr(
+              static_cast<wp_color_manager_v1_transfer_function>(description.tf_named)
+          )
+      );
+      wlr_scene_buffer_set_primaries(
+          buffer,
+          wlr_color_manager_v1_primaries_to_wlr(static_cast<wp_color_manager_v1_primaries>(description.primaries_named))
+      );
+      wlr_scene_buffer_set_luminance_multiplier(buffer, currentDescription.luminanceMultiplier);
+    }
+
     Server& server;
     wl_global* global = nullptr;
     uint64_t lastIdentity = 0;
@@ -1072,6 +1095,10 @@ namespace umbriel {
     return found != m_impl->surfaces.end()
         && found->second->currentSet
         && found->second->currentDescription.requiresHdrOutput;
+  }
+
+  void WineColorManager::applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const {
+    m_impl->applySurfaceDescriptionToBuffer(surface, buffer);
   }
 
   void WineColorManager::applySurfaceDescriptions() { m_impl->applySurfaceDescriptions(); }

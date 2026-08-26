@@ -165,7 +165,8 @@ namespace umbriel {
 
     void applyMouseAcceleration(
         libinput_device* libinputDevice, const wlr_input_device* device,
-        const std::optional<AccelProfile>& configuredProfile, double sensitivity
+        const std::optional<AccelProfile>& configuredProfile, const std::optional<double>& configuredSensitivity,
+        std::string_view accelSetting, std::string_view sensitivitySetting
     ) {
       if (libinput_device_config_accel_is_available(libinputDevice) == 0) {
         return;
@@ -212,19 +213,25 @@ namespace umbriel {
               : pointsStatus;
           libinput_config_accel_destroy(acceleration);
           if (applyStatus != LIBINPUT_CONFIG_STATUS_SUCCESS) {
-            kLog.warn("input: failed to apply input.mouse.accel_profile to '{}'", deviceName(device));
+            kLog.warn("input: failed to apply {} to '{}'", accelSetting, deviceName(device));
           }
           return;
         }
 
         if (libinput_device_config_accel_set_profile(libinputDevice, profile) != LIBINPUT_CONFIG_STATUS_SUCCESS) {
-          kLog.warn("input: failed to apply input.mouse.accel_profile to '{}'", deviceName(device));
+          kLog.warn("input: failed to apply {} to '{}'", accelSetting, deviceName(device));
           return;
         }
       }
 
+      const double sensitivity =
+          configuredSensitivity.value_or(libinput_device_config_accel_get_default_speed(libinputDevice));
       if (libinput_device_config_accel_set_speed(libinputDevice, sensitivity) != LIBINPUT_CONFIG_STATUS_SUCCESS) {
-        kLog.warn("input: failed to apply input.mouse.sensitivity to '{}'", deviceName(device));
+        if (configuredSensitivity) {
+          kLog.warn("input: failed to apply {} to '{}'", sensitivitySetting, deviceName(device));
+        } else {
+          kLog.warn("input: failed to restore the default acceleration speed for '{}'", deviceName(device));
+        }
       }
     }
 
@@ -252,28 +259,35 @@ namespace umbriel {
               override != nullptr && override->tap ? "input.device.tap" : "input.touchpad.tap", deviceName(device)
           );
         }
-
-        const std::optional<bool>& naturalScroll =
-            override != nullptr && override->naturalScroll ? override->naturalScroll : input.touchpad.naturalScroll;
-        applyNaturalScroll(
-            libinputDevice, device, naturalScroll,
-            override != nullptr && override->naturalScroll ? "input.device.natural_scroll"
-                                                           : "input.touchpad.natural_scroll"
-        );
-        return;
       }
 
-      const std::optional<bool>& naturalScroll =
-          override != nullptr && override->naturalScroll ? override->naturalScroll : input.mouse.naturalScroll;
+      const std::optional<bool>& naturalScroll = override != nullptr && override->naturalScroll
+          ? override->naturalScroll
+          : isTouchpad ? input.touchpad.naturalScroll
+                       : input.mouse.naturalScroll;
       applyNaturalScroll(
           libinputDevice, device, naturalScroll,
-          override != nullptr && override->naturalScroll ? "input.device.natural_scroll" : "input.mouse.natural_scroll"
+          override != nullptr && override->naturalScroll ? "input.device.natural_scroll"
+              : isTouchpad                               ? "input.touchpad.natural_scroll"
+                                                         : "input.mouse.natural_scroll"
       );
-      const std::optional<AccelProfile>& accelProfile =
-          override != nullptr && override->accelProfile ? override->accelProfile : input.mouse.accelProfile;
-      const double sensitivity =
-          override != nullptr && override->sensitivity ? *override->sensitivity : input.mouse.sensitivity;
-      applyMouseAcceleration(libinputDevice, device, accelProfile, sensitivity);
+
+      const std::optional<AccelProfile> accelProfile = override != nullptr && override->accelProfile
+          ? override->accelProfile
+          : isTouchpad ? input.touchpad.accelProfile
+                       : std::optional{input.mouse.accelProfile};
+      const std::optional<double> sensitivity = override != nullptr && override->sensitivity ? override->sensitivity
+          : isTouchpad ? input.touchpad.sensitivity
+                       : std::optional{input.mouse.sensitivity};
+      applyMouseAcceleration(
+          libinputDevice, device, accelProfile, sensitivity,
+          override != nullptr && override->accelProfile ? "input.device.accel_profile"
+              : isTouchpad                              ? "input.touchpad.accel_profile"
+                                                        : "input.mouse.accel_profile",
+          override != nullptr && override->sensitivity ? "input.device.sensitivity"
+              : isTouchpad                             ? "input.touchpad.sensitivity"
+                                                       : "input.mouse.sensitivity"
+      );
     }
   } // namespace
   void Server::applyConfig(const ConfigEffects& effects) {

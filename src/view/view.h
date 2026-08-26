@@ -50,6 +50,11 @@ namespace umbriel {
     [[nodiscard]] bool mapped() const { return m_mapped; }
     [[nodiscard]] bool xwayland() const { return m_xwayland; }
     [[nodiscard]] Workspace* workspace() const { return m_workspace; }
+    // The output currently presenting this view. Unassigned views follow the
+    // preferred output until they are attached to a workspace.
+    [[nodiscard]] Output* currentOutput() const;
+    // Effective optional window-rule override used by tearing diagnostics.
+    [[nodiscard]] std::optional<bool> tearingRuleOverride();
     [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
@@ -274,9 +279,6 @@ namespace umbriel {
     // Apply subsurface clip to the toplevel surface only, not xdg popup children.
     void setSurfaceTreeClip(const wlr_box* clip);
     void unconstrainPopup(wlr_xdg_popup* popup);
-    // The output this view is presented on: its workspace group's output, or
-    // the server's preferred output while unassigned (scratchpad, pre-map).
-    [[nodiscard]] Output* currentOutput() const;
     // Push the current output's scale to every surface of this toplevel (fractional-scale + preferred buffer scale,
     // popups included). Clients like xwayland-satellite size and map pointer coordinates by this, so it must follow the
     // view across outputs and track scale changes.

@@ -6,6 +6,7 @@
 // height]]. The optional dimensions let pointer checks expose a surface that fills its assigned tile.
 
 #include "color-management-v1-client-protocol.h"
+#include "tearing-control-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
 #include <algorithm>
@@ -45,6 +46,8 @@ namespace {
     wp_color_manager_v1* colorManager = nullptr;
     wp_color_management_surface_v1* colorSurface = nullptr;
     wp_image_description_v1* imageDescription = nullptr;
+    wp_tearing_control_manager_v1* tearingManager = nullptr;
+    wp_tearing_control_v1* tearingControl = nullptr;
     Buffer buffer;
     wl_surface* colorChildSurface = nullptr;
     wl_subsurface* colorChildSubsurface = nullptr;
@@ -74,6 +77,7 @@ namespace {
     bool colorManagerDone = false;
     bool imageDescriptionReady = false;
     bool imageDescriptionFailed = false;
+    int tearingHint = -1;
   };
 
   struct AuxiliaryToplevel {
@@ -273,7 +277,13 @@ namespace {
   void xdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, uint32_t serial) {
     auto& state = *static_cast<State*>(data);
     xdg_surface_ack_configure(xdgSurface, serial);
-    if (state.mapped || state.closed) {
+    if (state.mapped) {
+      // Apply later toplevel state transitions, such as leaving fullscreen. Acknowledging the configure without a
+      // surface commit leaves the requested state pending forever.
+      wl_surface_commit(state.surface);
+      return;
+    }
+    if (state.closed) {
       return;
     }
     state.mapped = true;
@@ -397,6 +407,10 @@ namespace {
           wl_registry_bind(registry, name, &wp_color_manager_v1_interface, std::min(version, kColorManagerVersion))
       );
       wp_color_manager_v1_add_listener(state.colorManager, &kColorManagerListener, &state);
+    } else if (std::strcmp(interface, wp_tearing_control_manager_v1_interface.name) == 0) {
+      state.tearingManager = static_cast<wp_tearing_control_manager_v1*>(
+          wl_registry_bind(registry, name, &wp_tearing_control_manager_v1_interface, std::min(version, 1U))
+      );
     }
   }
 
@@ -449,6 +463,16 @@ int main(int argc, char** argv) {
   state.requestWindowsBt2100 = std::getenv("COLOR_WINDOWS_BT2100") != nullptr;
   state.colorOnSubsurface = std::getenv("COLOR_ON_SUBSURFACE") != nullptr;
   state.colorChildLifecycle = std::getenv("COLOR_CHILD_LIFECYCLE") != nullptr;
+  if (const char* hint = std::getenv("TEARING_HINT")) {
+    if (std::strcmp(hint, "async") == 0) {
+      state.tearingHint = WP_TEARING_CONTROL_V1_PRESENTATION_HINT_ASYNC;
+    } else if (std::strcmp(hint, "vsync") == 0) {
+      state.tearingHint = WP_TEARING_CONTROL_V1_PRESENTATION_HINT_VSYNC;
+    } else {
+      std::println(stderr, "unmap-client: TEARING_HINT must be async or vsync");
+      return EXIT_FAILURE;
+    }
+  }
   if (argc > 2) {
     state.width = std::max(1, std::atoi(argv[2]));
   }
@@ -488,6 +512,14 @@ int main(int argc, char** argv) {
   }
 
   state.surface = wl_compositor_create_surface(state.compositor);
+  if (state.tearingHint >= 0) {
+    if (state.tearingManager == nullptr) {
+      std::println(stderr, "unmap-client: compositor is missing wp_tearing_control_manager_v1");
+      return EXIT_FAILURE;
+    }
+    state.tearingControl = wp_tearing_control_manager_v1_get_tearing_control(state.tearingManager, state.surface);
+    wp_tearing_control_v1_set_presentation_hint(state.tearingControl, static_cast<uint32_t>(state.tearingHint));
+  }
   wl_surface* colorTargetSurface = state.surface;
   if (state.colorOnSubsurface) {
     if (state.subcompositor == nullptr) {
@@ -579,6 +611,9 @@ int main(int argc, char** argv) {
   if (state.xdgSurface != nullptr) {
     xdg_surface_destroy(state.xdgSurface);
   }
+  if (state.tearingControl != nullptr) {
+    wp_tearing_control_v1_destroy(state.tearingControl);
+  }
   if (state.colorSurface != nullptr) {
     wp_color_management_surface_v1_destroy(state.colorSurface);
   }
@@ -598,6 +633,9 @@ int main(int argc, char** argv) {
   destroyAuxiliaryToplevel(transientParent);
   if (state.colorManager != nullptr) {
     wp_color_manager_v1_destroy(state.colorManager);
+  }
+  if (state.tearingManager != nullptr) {
+    wp_tearing_control_manager_v1_destroy(state.tearingManager);
   }
   if (state.keyboard != nullptr) {
     wl_keyboard_destroy(state.keyboard);

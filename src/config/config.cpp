@@ -830,7 +830,7 @@ namespace umbriel {
         }
         OutputRule rule;
         rule.name = name;
-        keys.boolean("enabled", rule.enabled);
+        keys.boolean("enabled", rule.enabled).boolean("tearing", rule.allowTearing);
         if (const toml::node* workspacesNode = keys.take("workspaces")) {
           if (const auto count = workspacesNode->value<std::int64_t>()) {
             if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {
@@ -1107,6 +1107,7 @@ namespace umbriel {
             .boolean("default_focused", rule.defaultFocused)
             .boolean("default_pinned", rule.defaultPinned)
             .boolean("focus_on_activate", rule.focusOnActivate)
+            .boolean("tearing", rule.allowTearing)
             .boolean("blur", rule.blur)
             .boolean("blur_popups", rule.blurPopups)
             .boolean("blur_optimized", rule.blurOptimized)

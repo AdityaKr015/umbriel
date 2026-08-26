@@ -128,6 +128,7 @@ center_underfull_strip = true  # center the strip whenever it is narrower than t
 # position = [0, 0]
 # scale = 1.25
 # vrr = "fullscreen"            # "disabled" (default), "always", or "fullscreen"
+# tearing = true                 # allow eligible fullscreen clients to request tearing
 # hdr = "auto"                  # "off", "on", metadata-driven "auto", or any-app "fullscreen"
 # sdr_white = 203                # SDR reference white in cd/m2 while HDR is active
 # enabled = true                # false powers the monitor off and removes it from the desktop
@@ -270,6 +271,7 @@ default_size = [800, 600]
 # default_focused = false
 # focus_on_activate = true
 # vrr = "always"                # override the output VRR policy while focused
+# tearing = true                 # force a tearing request; false vetoes the client hint
 # hdr = "fullscreen"            # override the output HDR policy while focused
 
 # [[window_rule]]

@@ -160,6 +160,10 @@ namespace umbriel {
     wlr_viewporter_create(m_display);
     wlr_fractional_scale_manager_v1_create(m_display, 1);
     wlr_presentation_create(m_display, m_backend, 2);
+    m_tearingControlManager = wlr_tearing_control_manager_v1_create(m_display, 1);
+    if (m_tearingControlManager == nullptr) {
+      throw std::runtime_error("failed to create tearing-control manager");
+    }
     wlr_ext_data_control_manager_v1_create(m_display, 1);
 
     m_outputLayout = wlr_output_layout_create(m_display);

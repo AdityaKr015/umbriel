@@ -27,4 +27,28 @@ namespace umbriel {
     return animationsActive ? OutputFrameFollowup::Schedule : OutputFrameFollowup::None;
   }
 
+  // An asynchronous page flip can pass the backend test and still fail at commit time. The generic frame retry must
+  // submit one fresh regular state before another asynchronous attempt, otherwise a backend rejection can become a
+  // self-sustaining retry loop.
+  class TearingCommitRecovery {
+  public:
+    [[nodiscard]] bool requestTearing(bool eligible) const { return eligible && !m_regularCommitPending; }
+    [[nodiscard]] bool regularCommitPending() const { return m_regularCommitPending; }
+
+    void recordCommit(bool requestedTearing, bool succeeded) {
+      if (requestedTearing && !succeeded) {
+        m_regularCommitPending = true;
+      } else if (!requestedTearing && succeeded) {
+        m_regularCommitPending = false;
+      }
+    }
+
+    void forceRegularCommit() { m_regularCommitPending = true; }
+
+    void reset() { m_regularCommitPending = false; }
+
+  private:
+    bool m_regularCommitPending = false;
+  };
+
 } // namespace umbriel

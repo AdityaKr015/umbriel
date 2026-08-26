@@ -52,6 +52,7 @@ struct wlr_tablet_manager_v2;
 struct wlr_tablet_pad;
 struct wlr_tablet_v2_tablet;
 struct wlr_tablet_v2_tablet_pad;
+struct wlr_tearing_control_manager_v1;
 struct wlr_xdg_activation_v1;
 struct wlr_xdg_activation_token_v1;
 struct wlr_xdg_decoration_manager_v1;
@@ -127,6 +128,7 @@ namespace umbriel {
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
     [[nodiscard]] wlr_color_manager_v1* colorManager() const { return m_colorManager; }
     [[nodiscard]] wlr_export_dmabuf_manager_v1* exportDmabufManager() const { return m_exportDmabufManager; }
+    [[nodiscard]] wlr_tearing_control_manager_v1* tearingControlManager() const { return m_tearingControlManager; }
     [[nodiscard]] WineColorManager* wineColorManager() const { return m_wineColorManager.get(); }
     [[nodiscard]] const wlr_image_description_v1_data* surfaceImageDescription(wlr_surface* surface) const;
     [[nodiscard]] const wlr_image_description_v1_data* surfaceTreeHdrDescription(wlr_surface* surface) const;
@@ -142,6 +144,7 @@ namespace umbriel {
     // while the real window trees are disabled.
     [[nodiscard]] wlr_scene_tree* overviewTree() const { return m_overviewTree; }
     [[nodiscard]] Overview* overview() const { return m_overview.get(); }
+    [[nodiscard]] ConfigBanner* configBanner() const { return m_configBanner.get(); }
     [[nodiscard]] Cheatsheet* cheatsheet() const { return m_cheatsheet.get(); }
     [[nodiscard]] QuitConfirm* quitConfirm() const { return m_quitConfirm.get(); }
     [[nodiscard]] wlr_scene_tree* dragShadowTree() const { return m_dragShadowTree; }
@@ -438,6 +441,7 @@ namespace umbriel {
     wlr_ext_foreign_toplevel_list_v1* m_extForeignToplevelList = nullptr;
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1* m_toplevelCaptureSourceManager = nullptr;
     wlr_export_dmabuf_manager_v1* m_exportDmabufManager = nullptr;
+    wlr_tearing_control_manager_v1* m_tearingControlManager = nullptr;
     wlr_ext_workspace_manager_v1* m_workspaceManager = nullptr;
     wlr_session_lock_manager_v1* m_sessionLockManager = nullptr;
     wlr_pointer_constraints_v1* m_pointerConstraints = nullptr;

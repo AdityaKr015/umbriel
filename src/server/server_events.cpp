@@ -365,6 +365,11 @@ namespace umbriel {
       // like xwayland-satellite keep mapping input with the stale scale.
       refreshSurfaceScales();
     }
+    if (effects.tearingPolicy) {
+      for (const auto& output : m_outputs) {
+        output->resetTearingState();
+      }
+    }
     if (effects.workspaceInventory) {
       for (const auto& output : m_outputs) {
         if (WorkspaceGroup* group = output->workspaceGroup()) {

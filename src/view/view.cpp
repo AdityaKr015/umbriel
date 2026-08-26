@@ -1239,6 +1239,8 @@ namespace umbriel {
     return m_server->outputFromWlr(m_server->preferredOutput());
   }
 
+  std::optional<bool> View::tearingRuleOverride() { return resolvedRules().allowTearing; }
+
   void View::notifyOutputScale() {
     Output* output = currentOutput();
     if (output == nullptr || m_toplevel == nullptr || m_toplevel->base == nullptr) {

@@ -472,6 +472,7 @@ namespace umbriel {
           if (const ScrollingLayout* scrolling = scrollingLayout()) {
             const int position = (scrollingVertical() ? outputBox.y : outputBox.x)
                 + scrolling->columnX(col, viewportPrimary)
+                + m_layoutConfig.edgePad
                 - static_cast<int>(std::lround(scrolling->scroll()));
             if (scrollingVertical()) {
               target.y = position;
@@ -510,12 +511,19 @@ namespace umbriel {
       return target;
     }
     if (scrollingLayout() != nullptr) {
-      if (scrollingVertical()) {
-        target.y -= m_layoutConfig.edgePad;
+      const bool vertical = scrollingVertical();
+      const int usablePrimary = vertical ? usable.height : usable.width;
+      const int layoutPrimary = vertical ? target.height : target.width;
+      if (vertical) {
         target.x = usable.x;
+        if (layoutPrimary < usablePrimary) {
+          target.y -= m_layoutConfig.edgePad;
+        }
       } else {
-        target.x -= m_layoutConfig.edgePad;
         target.y = usable.y;
+        if (layoutPrimary < usablePrimary) {
+          target.x -= m_layoutConfig.edgePad;
+        }
       }
     } else {
       target.x = usable.x;
@@ -827,6 +835,14 @@ namespace umbriel {
       return;
     }
     scrolling->ensureVisible(scrolling->columnOf(m_focusedView), scrollViewportExtent());
+  }
+
+  void Workspace::snapVisible(const View* view) {
+    ScrollingLayout* scrolling = scrollingLayout();
+    if (scrolling == nullptr || m_group == nullptr || m_group->output() == nullptr) {
+      return;
+    }
+    scrolling->snapVisible(scrolling->columnOf(view), scrollViewportExtent());
   }
 
   double Workspace::scrollFractionToReveal(const View* view) const {

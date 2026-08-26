@@ -49,6 +49,7 @@ namespace umbriel {
     // while the lane still exists.
     [[nodiscard]] double scrollShiftForColumnRemoval(int columnIndex, int viewportPrimary) const;
     void ensureVisible(int columnIndex, int viewportPrimary);
+    void snapVisible(int columnIndex, int viewportPrimary);
     [[nodiscard]] double scrollAmountToEnsureVisible(int columnIndex, int viewportPrimary) const;
     void arrange(const wlr_box& usable) override;
     [[nodiscard]] wlr_box targetBox(const View* view) const override;
@@ -85,7 +86,7 @@ namespace umbriel {
     [[nodiscard]] int totalWidth(int viewportPrimary) const;
     [[nodiscard]] int rawTotalWidth(int viewportPrimary) const;
     [[nodiscard]] int centeringOffset(int viewportPrimary) const;
-    [[nodiscard]] double targetScrollForEnsureVisible(int columnIndex, int viewportPrimary) const;
+    [[nodiscard]] double targetScrollForEnsureVisible(int columnIndex, int viewportPrimary, bool force = false) const;
     [[nodiscard]] bool vertical() const;
     void syncHeightWeights(Column& column);
 

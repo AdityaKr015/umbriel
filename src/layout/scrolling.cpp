@@ -109,7 +109,8 @@ namespace umbriel {
     const Column& column = m_columns[static_cast<size_t>(columnIndex)];
     // Fullscreen lanes fill the entire viewport, bypassing widthFrac and size-hint clamps.
     if (columnFillsViewport(column, *this)) {
-      return std::max(1, viewportPrimary);
+      const int edgePad = m_config->edgePad;
+      return std::max(1, viewportPrimary + 2 * edgePad);
     }
     // Gap-aware: reserve one inter-lane gap per lane so fractions summing to 1
     // tile exactly across the viewport primary extent.
@@ -350,13 +351,21 @@ namespace umbriel {
     return true;
   }
 
-  double ScrollingLayout::targetScrollForEnsureVisible(int columnIndex, int viewportPrimary) const {
+  double ScrollingLayout::targetScrollForEnsureVisible(int columnIndex, int viewportPrimary, bool force) const {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size()) || viewportPrimary <= 0) {
       return m_scroll;
     }
     const int x = columnX(columnIndex, viewportPrimary);
     const int width = columnWidth(columnIndex, viewportPrimary);
     const double max = static_cast<double>(std::max(0, totalWidth(viewportPrimary) - viewportPrimary));
+
+    if (width >= viewportPrimary) {
+      const double cover = static_cast<double>(x) + static_cast<double>(width - viewportPrimary) / 2.0;
+      return std::clamp(cover, 0.0, max);
+    }
+    if (force) {
+      return std::clamp(static_cast<double>(x), 0.0, max);
+    }
     // Already fully on screen: never move the strip, including one parked past an edge on purpose (column-center
     // overshoots the range so edge columns can sit in the middle). A touchpad swipe that left the strip outside its
     // range springs back where the gesture ends, in Gestures::finishScroll.
@@ -395,9 +404,14 @@ namespace umbriel {
   }
 
   void ScrollingLayout::ensureVisible(int columnIndex, int viewportPrimary) {
-    const double target = targetScrollForEnsureVisible(columnIndex, viewportPrimary);
+    const double target = targetScrollForEnsureVisible(columnIndex, viewportPrimary, false);
     m_centeredRest = m_centeredRest && target == m_scroll;
     m_scroll = target;
+  }
+
+  void ScrollingLayout::snapVisible(int columnIndex, int viewportPrimary) {
+    m_centeredRest = false;
+    m_scroll = targetScrollForEnsureVisible(columnIndex, viewportPrimary, true);
   }
 
   void ScrollingLayout::arrange(const wlr_box& usable) {

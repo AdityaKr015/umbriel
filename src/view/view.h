@@ -3,6 +3,7 @@
 #include "core/animation.h"
 #include "scene/node.h"
 #include "view/decoration.h"
+#include "view/deferred_unfullscreen.h"
 #include "view/floating.h"
 #include "view/presentation.h"
 
@@ -141,6 +142,7 @@ namespace umbriel {
     void applyFullscreenLayout(bool animate = false);
     // Compositor-driven fullscreen toggle (keybind); client requests use handleRequestFullscreen.
     void toggleFullscreen();
+    void applyDeferredUnfullscreen();
     void setMaximizedToEdges(bool maximized);
     void toggleMaximizedToEdges();
     // Detach from the scrolling layout (float) or re-insert as a tiled column.
@@ -356,6 +358,9 @@ namespace umbriel {
     // 0 until the first frame tick after arming; the grace deadline counts
     // from there so a stalled frame clock cannot expire it instantly.
     uint64_t m_unfullscreenGraceStartMsec = 0;
+    // Inactive client unfullscreen requests wait briefly for xdg or foreign activation. Any later client request or
+    // compositor-driven fullscreen change clears the parked request.
+    DeferredUnfullscreen m_deferredUnfullscreen;
     // Geometry at unfullscreen time; a commit with a different geometry means
     // the client accepted windowed mode and the grace can end early.
     wlr_box m_unfullscreenGeometry{};

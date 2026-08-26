@@ -1955,20 +1955,23 @@ namespace umbriel {
     );
 
     const bool requested = m_toplevel->requested.fullscreen;
+    const FullscreenRequestDisposition disposition = m_deferredUnfullscreen.observeClientRequest(
+        requested, m_toplevel->scheduled.activated, m_toplevel->scheduled.fullscreen
+    );
 
-    // Redundant request (wine spams set_fullscreen while already fullscreen): ack with a configure, but skip the
-    // reparent/scroll-snap/arrange churn that a full setFullscreen() would run: that churn is visible flicker.
-    if (requested == m_toplevel->scheduled.fullscreen) {
+    if (disposition == FullscreenRequestDisposition::Acknowledge) {
+      // Wine spams set_fullscreen while already fullscreen. Acknowledge without the visible reparent, scroll snap, and
+      // arrange churn that a full setFullscreen() would run. Observing this newer request also clears any parked
+      // unfullscreen, so activation cannot apply stale client intent.
       wlr_xdg_surface_schedule_configure(m_toplevel->base);
       return;
     }
 
-    // Wine unfullscreens games when they lose focus (minimize-on-focus-loss). Honoring that rips the game out of the
-    // fullscreen strip the moment the user scrolls away. Deny unfullscreen from deactivated windows; the scheduled
-    // configure re-asserts the fullscreen state (spec-compliant).
-    if (!requested && !m_toplevel->scheduled.activated) {
+    if (disposition == FullscreenRequestDisposition::Park) {
+      // Wine games commonly unfullscreen when they lose focus. Park that request briefly instead of ripping the game
+      // out of the fullscreen strip; xdg or foreign activation consumes it, while expiry preserves fullscreen.
       kLog.debug(
-          "request_fullscreen denied for deactivated '{}'", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?"
+          "request_fullscreen parked for deactivated '{}'", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?"
       );
       wlr_xdg_surface_schedule_configure(m_toplevel->base);
       return;
@@ -1992,6 +1995,19 @@ namespace umbriel {
       return;
     }
     setFullscreen(!m_toplevel->scheduled.fullscreen);
+  }
+
+  void View::applyDeferredUnfullscreen() {
+    if (!m_deferredUnfullscreen.takeOnActivation() || !m_toplevel->base->initialized) {
+      return;
+    }
+    if (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen) {
+      kLog.debug(
+          "deferred unfullscreen applied on activation for '{}'",
+          m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?"
+      );
+      setFullscreen(false);
+    }
   }
 
   void View::toggleFloating() { setFloating(m_tiled); }
@@ -2235,6 +2251,7 @@ namespace umbriel {
   }
 
   void View::setFullscreen(bool fullscreen) {
+    m_deferredUnfullscreen.clear();
     kLog.debug(
         "set_fullscreen '{}' [{}] -> {} (tiled={}, ws_active={})",
         m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?", static_cast<const void*>(this), fullscreen, m_tiled,

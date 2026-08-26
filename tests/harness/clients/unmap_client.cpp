@@ -19,6 +19,12 @@
 
 namespace {
 
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
+  constexpr uint32_t kColorManagerVersion = WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION;
+#else
+  constexpr uint32_t kColorManagerVersion = 2;
+#endif
+
   struct Buffer {
     wl_buffer* resource = nullptr;
     void* pixels = MAP_FAILED;
@@ -50,8 +56,12 @@ namespace {
     bool fullscreenRequested = false;
     bool requestHdr = false;
     bool requestWindowsScrgb = false;
+    bool requestWindowsBt2100 = false;
     bool hasExtendedTargetVolume = false;
     bool hasWindowsScrgb = false;
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
+    bool hasWindowsBt2100 = false;
+#endif
     bool colorManagerDone = false;
     bool imageDescriptionReady = false;
     bool imageDescriptionFailed = false;
@@ -74,6 +84,10 @@ namespace {
       state.hasExtendedTargetVolume = true;
     } else if (feature == WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_SCRGB) {
       state.hasWindowsScrgb = true;
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
+    } else if (feature == WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_BT2100) {
+      state.hasWindowsBt2100 = true;
+#endif
     }
   }
 
@@ -329,7 +343,7 @@ namespace {
       wl_seat_add_listener(state.seat, &kSeatListener, &state);
     } else if (std::strcmp(interface, wp_color_manager_v1_interface.name) == 0) {
       state.colorManager = static_cast<wp_color_manager_v1*>(
-          wl_registry_bind(registry, name, &wp_color_manager_v1_interface, std::min(version, 2U))
+          wl_registry_bind(registry, name, &wp_color_manager_v1_interface, std::min(version, kColorManagerVersion))
       );
       wp_color_manager_v1_add_listener(state.colorManager, &kColorManagerListener, &state);
     }
@@ -367,11 +381,17 @@ namespace {
 } // namespace
 
 int main(int argc, char** argv) {
+  if (argc == 2 && std::strcmp(argv[1], "--color-manager-version") == 0) {
+    std::println("{}", kColorManagerVersion);
+    return EXIT_SUCCESS;
+  }
+
   State state;
   state.requestMaximized = std::getenv("REQUEST_MAXIMIZED") != nullptr;
   state.requestFullscreen = std::getenv("REQUEST_FULLSCREEN") != nullptr;
   state.requestHdr = std::getenv("COLOR_HDR") != nullptr;
   state.requestWindowsScrgb = std::getenv("COLOR_WINDOWS_SCRGB") != nullptr;
+  state.requestWindowsBt2100 = std::getenv("COLOR_WINDOWS_BT2100") != nullptr;
   if (argc > 2) {
     state.width = std::max(1, std::atoi(argv[2]));
   }
@@ -411,7 +431,7 @@ int main(int argc, char** argv) {
   }
 
   state.surface = wl_compositor_create_surface(state.compositor);
-  if (state.requestHdr || state.requestWindowsScrgb) {
+  if (state.requestHdr || state.requestWindowsScrgb || state.requestWindowsBt2100) {
     if (state.colorManager == nullptr) {
       std::println(stderr, "unmap-client: compositor is missing wp_color_manager_v1");
       return EXIT_FAILURE;
@@ -421,9 +441,24 @@ int main(int argc, char** argv) {
       std::println(stderr, "unmap-client: compositor is missing Wine scRGB color-management features");
       return EXIT_FAILURE;
     }
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
+    if (state.requestWindowsBt2100 && (!state.colorManagerDone || !state.hasWindowsBt2100)) {
+      std::println(stderr, "unmap-client: compositor is missing Windows BT.2100 color-management support");
+      return EXIT_FAILURE;
+    }
+#else
+    if (state.requestWindowsBt2100) {
+      std::println(stderr, "unmap-client: Windows BT.2100 requires wayland-protocols 1.49");
+      return EXIT_FAILURE;
+    }
+#endif
     state.colorSurface = wp_color_manager_v1_get_surface(state.colorManager, state.surface);
     if (state.requestWindowsScrgb) {
       state.imageDescription = wp_color_manager_v1_create_windows_scrgb(state.colorManager);
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
+    } else if (state.requestWindowsBt2100) {
+      state.imageDescription = wp_color_manager_v1_create_windows_bt2100(state.colorManager);
+#endif
     } else {
       wp_image_description_creator_params_v1* params =
           wp_color_manager_v1_create_parametric_creator(state.colorManager);

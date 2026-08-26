@@ -26,7 +26,11 @@ namespace umbriel {
 
   namespace {
 
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
+    constexpr uint32_t kProtocolVersion = WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION;
+#else
     constexpr uint32_t kProtocolVersion = 2;
+#endif
     constexpr uint32_t kDefaultSdrWhite = 203;
 
     struct Luminances {
@@ -217,10 +221,8 @@ namespace umbriel {
           .create_parametric_creator = handleCreateParametricCreator,
           .create_windows_scrgb = handleCreateWindowsScrgb,
           .get_image_description = handleGetReferencedImageDescription,
-      // create_windows_bt2100 (protocol v3) is deliberately unimplemented: v3 is never
-      // advertised, so the member is only initialized when the header declares it.
 #ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
-          .create_windows_bt2100 = nullptr,
+          .create_windows_bt2100 = handleCreateWindowsBt2100,
 #endif
       };
       return implementation;
@@ -292,6 +294,11 @@ namespace umbriel {
       wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_SET_MASTERING_DISPLAY_PRIMARIES);
       wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_EXTENDED_TARGET_VOLUME);
       wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_SCRGB);
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
+      if (wl_resource_get_version(resource) >= WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION) {
+        wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_BT2100);
+      }
+#endif
       wp_color_manager_v1_send_supported_intent(resource, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL);
       for (const wp_color_manager_v1_transfer_function transferFunction : manager->transferFunctions) {
         if (wp_color_manager_v1_transfer_function_is_valid(transferFunction, wl_resource_get_version(resource))) {
@@ -701,6 +708,17 @@ namespace umbriel {
       description.luminanceMultiplier = 80.0F / 203.0F;
       manager->createReadyImageDescription(managerResource, id, description, false);
     }
+
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
+    static void handleCreateWindowsBt2100(wl_client*, wl_resource* managerResource, uint32_t id) {
+      auto* manager = static_cast<Impl*>(wl_resource_get_user_data(managerResource));
+      Description description;
+      description.data.tf_named = WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ;
+      description.data.primaries_named = WP_COLOR_MANAGER_V1_PRIMARIES_BT2020;
+      description.luminances = defaultLuminances(description.data.tf_named);
+      manager->createReadyImageDescription(managerResource, id, description, false);
+    }
+#endif
 
     static void handleGetReferencedImageDescription(wl_client*, wl_resource* resource, uint32_t, wl_resource*) {
       wl_resource_post_error(

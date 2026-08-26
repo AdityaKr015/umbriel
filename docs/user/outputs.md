@@ -89,6 +89,12 @@ undetectable. Use a native Wayland HDR path or `hdr = "on"` for those clients.
 Automatic activation also requires fullscreen content on the active workspace;
 windowed HDR content does not activate the output.
 
+When built with wayland-protocols 1.49 or newer, Umbriel exposes the predefined
+Windows BT.2100 description to native Wayland Wine clients. Wine may still
+choose Windows scRGB for an HDR game. That is a valid HDR presentation path,
+but it does not satisfy the explicit PQ and BT.2020 requirement of `"auto"`.
+Use `"fullscreen"` or `"on"` when a game selects Windows scRGB.
+
 The `"fullscreen"` policy activates HDR before a client supplies color
 metadata. This can break the discovery loop for native Wayland games that only
 offer HDR after seeing an HDR output. It also activates for fullscreen SDR

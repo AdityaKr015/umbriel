@@ -406,6 +406,24 @@ UMBRIEL_TEST(maximizedToEdgesColumnFillsTheViewportIgnoringFractions) {
   CHECK(!fixture.layout.isFullWidth(1));
 }
 
+UMBRIEL_TEST(preservedFullWidthSurvivesEdgeMaximizeToggle) {
+  Fixture fixture;
+  fixture.addColumns(1);
+  CHECK(fixture.layout.setWidthFraction(0, 0.5));
+  CHECK(fixture.layout.toggleFullWidth(0));
+
+  fixture.layout.setConstraints([](const View* view) {
+    return LayoutConstraints{.maximizedToEdges = view == stub(0)};
+  });
+  CHECK_EQ(fixture.layout.columnWidth(0, kViewport), kViewport);
+
+  fixture.layout.setConstraints([](const View*) { return LayoutConstraints{}; });
+  CHECK(fixture.layout.isFullWidth(0));
+  CHECK_EQ(fixture.layout.columnWidth(0, kViewport), kViewport);
+  CHECK(!fixture.layout.toggleFullWidth(0));
+  CHECK(std::fabs(fixture.layout.widthFraction(0) - 0.5) < 1e-6);
+}
+
 UMBRIEL_TEST(unsetConstraintsMeanUnconstrained) {
   Fixture fixture;
   fixture.addColumns(1);

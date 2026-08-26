@@ -1935,16 +1935,15 @@ namespace umbriel {
       m_unfullscreenGraceStartMsec = 0;
     }
     cancelSizeAnimation();
-    if (m_tiled && m_workspace != nullptr && maximized) {
-      const int column = m_workspace->layout().columnOf(this);
-      if (column >= 0 && m_workspace->layout().isFullWidth(column)) {
-        m_workspace->layout().clearFullWidthState(column);
-      }
-    }
 
     m_maximizedToEdges = maximized;
+    bool columnFullWidth = false;
+    if (!maximized && m_tiled && m_workspace != nullptr && !m_toplevel->scheduled.fullscreen) {
+      const int column = m_workspace->layout().columnOf(this);
+      columnFullWidth = column >= 0 && m_workspace->layout().isFullWidth(column);
+    }
     if (m_tiled) {
-      wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+      wlr_xdg_toplevel_set_maximized(m_toplevel, maximized || columnFullWidth);
     } else {
       setMaximized(maximized);
     }
@@ -2288,15 +2287,6 @@ namespace umbriel {
     // float path re-sets the flag right after its own setFullscreen(false).
     if (!fullscreen) {
       m_refullscreenOnTile = false;
-    }
-    // Leaving column maximize when entering real fullscreen avoids a stale
-    // widthFrac=1.0 column after the client leaves fullscreen.
-    if (fullscreen && m_tiled && m_workspace != nullptr) {
-      const int column = m_workspace->layout().columnOf(this);
-      if (m_workspace->layout().isFullWidth(column)) {
-        m_workspace->layout().clearFullWidthState(column);
-        wlr_xdg_toplevel_set_maximized(m_toplevel, false);
-      }
     }
     if (fullscreen) {
       if (m_pinned) {

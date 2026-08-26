@@ -1068,6 +1068,67 @@ namespace umbriel {
     }
   }
 
+  void Overview::onViewWorkspaceChanged(View* view) {
+    if (!m_active || view == nullptr || !view->mapped()) {
+      return;
+    }
+
+    Card* card = findCard(view);
+    Workspace* workspace = view->workspace();
+    OutputState* target = stateForWorkspace(workspace);
+    if (card == nullptr) {
+      if (target != nullptr) {
+        createCard(*target, view, workspace->index());
+        layoutOutput(*target);
+        wlr_output_schedule_frame(target->output->wlr());
+      }
+      return;
+    }
+
+    OutputState* source = card->owner;
+    if (target == nullptr) {
+      if (m_pressCard == card) {
+        m_pressCard = nullptr;
+      }
+      dropCard(view);
+      if (source != nullptr) {
+        layoutOutput(*source);
+        wlr_output_schedule_frame(source->output->wlr());
+      }
+      return;
+    }
+
+    card->row = workspace->index();
+    if (source == target) {
+      layoutOutput(*target);
+      wlr_output_schedule_frame(target->output->wlr());
+      return;
+    }
+    if (source == nullptr) {
+      rebuildCard(view);
+      return;
+    }
+
+    const auto it = std::ranges::find_if(source->cards, [card](const std::unique_ptr<Card>& candidate) {
+      return candidate.get() == card;
+    });
+    if (it == source->cards.end()) {
+      rebuildCard(view);
+      return;
+    }
+
+    std::unique_ptr<Card> moved = std::move(*it);
+    source->cards.erase(it);
+    moved->owner = target;
+    wlr_scene_node_reparent(&moved->tree->node, target->tree);
+    target->cards.push_back(std::move(moved));
+
+    layoutOutput(*source);
+    layoutOutput(*target);
+    wlr_output_schedule_frame(source->output->wlr());
+    wlr_output_schedule_frame(target->output->wlr());
+  }
+
   void Overview::onWorkspaceActivated(WorkspaceGroup* group) {
     if (!m_active || m_closing || group == nullptr || group->active() == nullptr) {
       return;

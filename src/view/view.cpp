@@ -261,6 +261,9 @@ namespace umbriel {
         output->updateHdr();
       }
     }
+    if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+      overview->onViewWorkspaceChanged(this);
+    }
   }
 
   void View::detachWorkspace() {

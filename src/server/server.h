@@ -285,6 +285,11 @@ namespace umbriel {
     // The tablet-v2 handle for a wlroots tablet, or nullptr when unknown.
     [[nodiscard]] wlr_tablet_v2_tablet* tabletV2FromWlr(const wlr_tablet* tablet) const;
 
+    // Create and destroy headless outputs at runtime, which is how a test drives a monitor being unplugged and coming
+    // back. Returns the new output's name, or an empty string with `error` set.
+    std::string createHeadlessOutput(const std::string& name, std::string* error);
+    bool destroyOutput(const std::string& name, std::string* error);
+
     void removeOutput(Output* output);
     void reassignOutputViews(Output* source, Output* destination);
     void scheduleDisplacedViewRestore();
@@ -521,6 +526,8 @@ namespace umbriel {
     // removes itself when it runs, so a non-null pointer means "already queued".
     wl_event_source* m_ipcWindowsIdle = nullptr;
     wl_event_source* m_displacedRestoreIdle = nullptr;
+    // Name to give the next output the backend hands over, set while createHeadlessOutput is adding one.
+    std::string m_pendingOutputName;
     // SIGINT / SIGTERM, delivered on the event loop rather than in a signal
     // handler, so shutdown runs ordinary code instead of async-signal-safe code.
     wl_event_source* m_signalSources[2]{};

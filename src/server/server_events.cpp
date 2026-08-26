@@ -984,6 +984,10 @@ namespace umbriel {
   void Server::raiseLockTree() { wlr_scene_node_raise_to_top(&m_lockTree->node); }
 
   void Server::addOutput(wlr_output* output) {
+    if (!m_pendingOutputName.empty()) {
+      // Before the Output exists: adding it to the layout advertises the name to clients, and it cannot change after.
+      wlr_output_set_name(output, m_pendingOutputName.c_str());
+    }
     m_outputs.push_back(std::make_unique<Output>(*this, output));
     scheduleDisplacedViewRestore();
     markDirty(Dirty::Backdrop | Dirty::Banner | Dirty::Cheatsheet | Dirty::QuitConfirm);

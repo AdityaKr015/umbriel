@@ -1217,7 +1217,7 @@ namespace umbriel {
     return nullptr;
   }
 
-  Workspace* Overview::rowAt(double lx, double ly, OutputState** outState, size_t* outRow) {
+  Workspace* Overview::rowAt(double lx, double ly, OutputState** outState, size_t* outRow, bool extendHorizontal) {
     for (const auto& state : m_outputs) {
       RowMetrics metrics{};
       if (!rowMetrics(*state, *m_server, zoom(), metrics)) {
@@ -1228,12 +1228,23 @@ namespace umbriel {
         continue;
       }
       for (size_t row = 0; row < state->workspaceBackgrounds.size(); ++row) {
-        const wlr_box box{metrics.rowX, rowTop(metrics, state->rowScroll, row), metrics.rowW, metrics.rowH};
-        if (!boxContains(box, lx, ly)) {
-          continue;
-        }
         Workspace* workspace = group->workspaceAt(row);
         if (workspace == nullptr) {
+          continue;
+        }
+        // Horizontal cards intentionally form one output-wide filmstrip even
+        // when they overhang the centered workspace preview. Drag targeting
+        // must cover that same visible area or the extreme gaps become dead
+        // zones. Background clicks retain the narrower preview hitbox.
+        const bool fullWidth =
+            extendHorizontal && workspace->scrollingLayout() != nullptr && !workspace->scrollingVertical();
+        const wlr_box box{
+            fullWidth ? metrics.outputBox.x : metrics.rowX,
+            rowTop(metrics, state->rowScroll, row),
+            fullWidth ? metrics.outputBox.width : metrics.rowW,
+            metrics.rowH,
+        };
+        if (!boxContains(box, lx, ly)) {
           continue;
         }
         if (outState != nullptr) {
@@ -1346,7 +1357,7 @@ namespace umbriel {
     m_pressX = lx;
     m_pressY = ly;
     if (card == nullptr) {
-      m_pressWorkspace = rowAt(lx, ly, nullptr, nullptr);
+      m_pressWorkspace = rowAt(lx, ly, nullptr, nullptr, false);
     }
     return true;
   }
@@ -1506,7 +1517,7 @@ namespace umbriel {
     m_dropWorkspaceGroup = nullptr;
 
     size_t row = 0;
-    Workspace* workspace = rowAt(lx, ly, &state, &row);
+    Workspace* workspace = rowAt(lx, ly, &state, &row, true);
     m_drop = {.workspace = workspace};
     if (workspace == nullptr || state == nullptr) {
       hideDropHint();
@@ -1524,7 +1535,19 @@ namespace umbriel {
     const double worldY = metrics.outputBox.y + (ly - rowTop(metrics, state->rowScroll, row)) / metrics.zoom;
 
     if (card->view->tiled()) {
-      m_drop = computeDropTarget(*workspace, worldX, worldY, card->view);
+      // The overview applies its own projection after target selection. Keep
+      // horizontal hints attached to content that is outside the normal
+      // viewport but visible in the overview margin. Other layouts retain
+      // their normal usable-area bounds.
+      const bool horizontalScrolling = workspace->scrollingLayout() != nullptr && !workspace->scrollingVertical();
+      m_drop = computeDropTarget(
+          *workspace, worldX, worldY, card->view,
+          DropTargetOptions{
+              .clipHintToUsable = !horizontalScrolling,
+              .reserveScrollingViewportEdges = false,
+              .endpointGapsOutsideColumns = horizontalScrolling,
+          }
+      );
     } else {
       m_drop = {
           .workspace = workspace,
@@ -1668,10 +1691,17 @@ namespace umbriel {
         .width = std::max(1, static_cast<int>(std::lround(worldBox.width * z))),
         .height = std::max(1, static_cast<int>(std::lround(worldBox.height * z))),
     };
+    wlr_box visibleBox{};
+    if (!wlr_box_intersection(&visibleBox, &mappedBox, &metrics.outputBox)) {
+      hideDropHint();
+      return;
+    }
     if (m_dropHint == nullptr) {
       m_dropHint = std::make_unique<HintRect>(*m_server, m_tree);
     }
-    m_dropHint->show(output, mappedBox, static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom)));
+    m_dropHint->show(
+        output, visibleBox, static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom))
+    );
     if (m_dragCard != nullptr && m_dragCard->tree != nullptr) {
       wlr_scene_node_raise_to_top(&m_dragCard->tree->node);
     }

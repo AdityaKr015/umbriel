@@ -1590,7 +1590,14 @@ namespace umbriel {
     }
 
     Workspace* workspace = output->workspaceGroup()->active();
-    grab->drop = computeDropTarget(*workspace, m_cursor->x, m_cursor->y, grab->view);
+    grab->drop = computeDropTarget(
+        *workspace, m_cursor->x, m_cursor->y, grab->view,
+        DropTargetOptions{
+            .clipHintToUsable = true,
+            .reserveScrollingViewportEdges = true,
+            .endpointGapsOutsideColumns = false,
+        }
+    );
     if (grab->drop.hintBox.width > 0 && grab->drop.hintBox.height > 0) {
       m_server->insertHint().show(output, grab->drop.hintBox, config().appearance.cornerRadius);
     } else {

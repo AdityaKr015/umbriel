@@ -79,11 +79,11 @@ set.
 A second `session-quit` while the confirmation is open also quits. While the
 session is locked, `session-quit` quits without the dialog.
 
-Workspace selectors use exact names. Numeric selectors prefer the focused
-output: an exact numeric name wins, otherwise the number selects that 1-based
-position in a static custom-named workspace list. On a dynamic output, a number
-beyond the current workspace list selects the last workspace. Unique names
-resolve globally; duplicate names resolve on the preferred output. Add
+Workspace selectors first resolve exact names globally, including numeric
+names. A unique name selects its workspace on any output. Duplicate names
+resolve on the preferred output. When no exact numeric name exists, the number
+selects that 1-based position on the preferred output. On a dynamic output, a
+number beyond the current workspace list selects the last workspace. Add
 `/output` to target another output explicitly.
 
 When `workspace-switch` targets a workspace on another monitor, the cursor warps

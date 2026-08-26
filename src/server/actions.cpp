@@ -60,7 +60,8 @@ namespace umbriel {
     }
 
     // Resolve `<workspace>` or `<workspace>/<output>` against the current output layout. Qualified selectors address
-    // exactly one group; unqualified ones prefer the focused output, then a unique match anywhere.
+    // exactly one group. Unqualified selectors resolve exact names globally, using the focused output to disambiguate
+    // duplicates, then fall back to a position on the focused output.
     std::expected<Workspace*, std::string> resolveWorkspaceSelector(Server& server, const Keybind& bind) {
       const auto* selector = payloadIf<WorkspaceArg>(bind);
       if (selector == nullptr) {
@@ -84,17 +85,6 @@ namespace umbriel {
 
       Output* preferred = server.outputFromWlr(server.preferredOutput());
       WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
-
-      // Numeric selectors address positions on the focused output. Resolve
-      // them first so an existing numeric name elsewhere cannot steal a local
-      // request from a static group with custom workspace names.
-      const bool numericSelector = !selector->name.empty()
-          && std::ranges::all_of(selector->name, [](char value) { return value >= '0' && value <= '9'; });
-      if (preferredGroup != nullptr && numericSelector) {
-        if (Workspace* target = preferredGroup->workspaceForSelector(selector->name)) {
-          return target;
-        }
-      }
 
       Workspace* target = nullptr;
       bool ambiguous = false;

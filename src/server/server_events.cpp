@@ -1506,7 +1506,7 @@ namespace umbriel {
       ++restored;
     }
     if (m_scratchpadManager != nullptr) {
-      m_scratchpadManager->adoptOrphans(fallback);
+      restored += m_scratchpadManager->restoreDisplaced(fallback);
     }
     if (restored > 0) {
       kLog.info("restored {} displaced windows", restored);

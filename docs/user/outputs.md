@@ -7,8 +7,8 @@ headless outputs use `HEADLESS-1`.
 When an output is disconnected or disabled through configuration, Umbriel moves
 its windows to the active workspace on another enabled output, and moves them
 back to the workspace they came from when it returns. Scratchpad windows move
-with that output assignment. If no enabled output remains, windows stay without
-a workspace until one becomes available.
+with that output assignment and return with it too. If no enabled output
+remains, windows stay without a workspace until one becomes available.
 
 Run `umbriel outputs` inside a session to list connector names and modes.
 

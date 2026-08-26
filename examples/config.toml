@@ -225,6 +225,14 @@ follows_mouse = false
 # "Mod+C" = "window-center"
 # "Mod+Shift+T" = "workspace-set-layout:toggle"
 
+# Media and volume (see docs/user/keybinds.md#example-media-and-brightness-keys)
+# "XF86AudioRaiseVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
+# "XF86AudioLowerVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+# "Mod+XF86AudioMute"   = "spawn:wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+# "XF86AudioPlay"       = "spawn:playerctl play-pause"
+# "XF86AudioNext"       = "spawn:playerctl next"
+# "XF86AudioPrev"       = "spawn:playerctl prev"
+
 # Window and layer rules (see docs/user/rules.md) ---------------------------
 
 # Blur all windows

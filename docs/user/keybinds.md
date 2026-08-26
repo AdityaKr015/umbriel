@@ -318,9 +318,9 @@ and widgets via `noctalia msg`. Typical bindings:
 ## Example: media and brightness keys
 
 ```toml
-# Volume (via Noctalia OSD)
-"XF86AudioRaiseVolume" = "spawn:noctalia msg volume-up 2%"
-"XF86AudioLowerVolume" = "spawn:noctalia msg volume-down 2%"
+# Volume
+"XF86AudioRaiseVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
+"XF86AudioLowerVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
 "Mod+XF86AudioMute" = "spawn:wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
 
 # Media playback (playerctl)
@@ -336,3 +336,5 @@ and widgets via `noctalia msg`. Typical bindings:
 XF86 keys accept the same `Mod`, `Ctrl`, `Alt`, `Shift`, and `Super`
 combinations as other keys. Modifier chords also work when the XF86 key is
 reported by a separate laptop hotkey device.
+
+Volume control requires `wpctl` (from WirePlumber/PipeWire) while media playback requires `playerctl`.

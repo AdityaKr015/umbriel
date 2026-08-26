@@ -278,6 +278,7 @@ namespace {
       return Group::Focus;
     case A::ColumnMoveLeft:
     case A::ColumnMoveRight:
+    case A::ColumnCenter:
     case A::WindowMoveUp:
     case A::WindowMoveDown:
     case A::WindowMoveOrWorkspaceUp:

@@ -101,6 +101,7 @@ These take no argument.
 | `window-focus-next` | Cycle focus to the next mapped window on the active workspace. |
 | `window-move-to-workspace-next` / `window-move-to-workspace-previous` | Move the focused window to the adjacent workspace and follow it. These actions do not wrap around. |
 | `column-move-left` / `column-move-right` | Move the focused window's column left or right. |
+| `column-center` | Center the focused column in the scrolling viewport; a no-op on a dwindle workspace. |
 | `window-move-up` / `window-move-down` | Move the focused window up or down within its column. |
 | `window-move-or-workspace-up` / `window-move-or-workspace-down` | Move the focused window up or down within its column; at the boundary, move it to the adjacent workspace. |
 | `window-consume-left` | Pull the focused window into the column to its left. |

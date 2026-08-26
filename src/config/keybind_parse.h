@@ -99,6 +99,7 @@ namespace umbriel {
     DpmsOn,
     WorkspaceMoveDown,
     WorkspaceMoveUp,
+    ColumnCenter,
     Count,
   };
 

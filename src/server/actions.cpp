@@ -591,6 +591,16 @@ namespace umbriel {
       return true;
     }
 
+    bool actionColumnCenter(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      if (scratchpadHoldsFocus(server)) {
+        return true;
+      }
+      if (Workspace* workspace = activeWorkspace(server)) {
+        workspace->centerFocusedColumn();
+      }
+      return true;
+    }
+
     bool actionFocusNext(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       server.focusNextWindow();
       return true;
@@ -1068,6 +1078,7 @@ namespace umbriel {
         &actionDpms<true>,
         &actionWorkspaceMove<1>,
         &actionWorkspaceMove<-1>,
+        &actionColumnCenter,
     };
 
     consteval bool everyActionHasHandler() {

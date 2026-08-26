@@ -90,7 +90,19 @@ namespace umbriel {
     // activation chrome the focus manager drives from outside.
     void setBorderFocused(bool focused);
     void setWorkspace(Workspace* workspace, bool attachToLayout = true);
+    // A move the user asked for: the view belongs where it lands, and any displaced home is dropped.
+    void moveToWorkspace(Workspace* workspace, bool attachToLayout = true);
     void detachWorkspace();
+
+    // The output and workspace the view sat on when its output went away; restoreDisplacedViews puts it back there.
+    struct DisplacedHome {
+      std::string outputName;
+      std::string workspaceName;
+    };
+    [[nodiscard]] const std::optional<DisplacedHome>& displacedHome() const { return m_displacedHome; }
+    void markDisplaced(DisplacedHome home) { m_displacedHome = std::move(home); }
+    void clearDisplaced() { m_displacedHome.reset(); }
+
     void setOnActiveWorkspace(bool active);
     void setScratchpadBorder(bool scratchpad);
     void animateTo(int x, int y);
@@ -316,6 +328,7 @@ namespace umbriel {
     wlr_output* m_foreignOutput = nullptr;
     wlr_ext_image_capture_source_v1* m_captureSource = nullptr;
     Workspace* m_workspace = nullptr;
+    std::optional<DisplacedHome> m_displacedHome;
     bool m_mapped = false;
     // Saved client state commonly requests maximization while the surface is
     // opening. Layout policy owns that transition; later requests are valid.

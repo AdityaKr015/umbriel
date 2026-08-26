@@ -1641,7 +1641,7 @@ namespace umbriel {
       view->setPosition(x, y);
     } else if (output != nullptr && output->workspaceGroup() != nullptr) {
       if (Workspace* target = output->workspaceGroup()->active(); view->workspace() != target) {
-        view->setWorkspace(target);
+        view->moveToWorkspace(target);
         view->setPosition(x, y);
       }
     }

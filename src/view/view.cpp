@@ -220,6 +220,11 @@ namespace umbriel {
 
   wlr_scene_tree* View::captureTree() const { return m_captureScene != nullptr ? &m_captureScene->tree : nullptr; }
 
+  void View::moveToWorkspace(Workspace* workspace, bool attachToLayout) {
+    m_displacedHome.reset();
+    setWorkspace(workspace, attachToLayout);
+  }
+
   void View::setWorkspace(Workspace* workspace, bool attachToLayout) {
     if (workspace != nullptr
         && m_server->scratchpadManager() != nullptr

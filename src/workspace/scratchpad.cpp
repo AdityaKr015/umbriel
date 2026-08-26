@@ -90,7 +90,7 @@ namespace umbriel {
         );
       }
     }
-    view->setWorkspace(nullptr);
+    view->moveToWorkspace(nullptr);
     wlr_scene_node_reparent(&view->sceneTree()->node, m_root);
     view->reparentShadow(m_shadowRoot);
     view->setScratchpadBorder(true);
@@ -261,7 +261,7 @@ namespace umbriel {
     }
     view->reparentShadow(nullptr);
     view->setScratchpadBorder(false);
-    view->setWorkspace(workspace, false);
+    view->moveToWorkspace(workspace, false);
     if (entry.returnTiled) {
       view->setFloating(false);
     } else {
@@ -308,12 +308,40 @@ namespace umbriel {
     }
     for (Entry& entry : m_entries) {
       if (entry.output == from) {
+        if (entry.displacedOutput.empty() && from != nullptr && from->wlr()->name != nullptr) {
+          entry.displacedOutput = from->wlr()->name;
+        }
         entry.output = to;
       }
     }
     if (wasVisible && to != nullptr) {
       setVisible(to, true);
     }
+  }
+
+  size_t ScratchpadManager::restoreDisplaced(Output* fallback) {
+    if (fallback == nullptr || m_server == nullptr) {
+      return 0;
+    }
+    size_t restored = 0;
+    for (Entry& entry : m_entries) {
+      Output* home = entry.displacedOutput.empty() ? nullptr : m_server->outputFromName(entry.displacedOutput);
+      if (home != nullptr) {
+        entry.displacedOutput.clear();
+      }
+      Output* target = home != nullptr ? home : (entry.output == nullptr ? fallback : nullptr);
+      if (target == nullptr || target == entry.output) {
+        continue;
+      }
+      entry.output = target;
+      if (entry.view != nullptr) {
+        const bool visible = std::ranges::find(m_visibleOutputs, target) != m_visibleOutputs.end();
+        entry.view->setOnActiveWorkspace(visible);
+        entry.view->setNodeEnabled(visible);
+      }
+      ++restored;
+    }
+    return restored;
   }
 
 } // namespace umbriel

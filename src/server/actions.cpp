@@ -147,7 +147,7 @@ namespace umbriel {
       if (floating) {
         view.rememberFloatingPosition();
       }
-      view.setWorkspace(&target); // layoutAttach self-guards on tiled()
+      view.moveToWorkspace(&target); // layoutAttach self-guards on tiled()
       target.group()->activate(&target);
       if (floating) {
         view.restoreFloatingPosition();
@@ -733,14 +733,14 @@ namespace umbriel {
       const double width = source->layout().columns()[static_cast<size_t>(column)].widthFrac;
 
       View* first = columnViews.front();
-      first->setWorkspace(destination, /*attachToLayout=*/false);
+      first->moveToWorkspace(destination, /*attachToLayout=*/false);
       destination->layout().insertView(first, static_cast<int>(destination->layout().columns().size()));
       if (destination->scrollingLayout() != nullptr) {
         destination->layout().setWidthFraction(destination->layout().columnOf(first), width);
       }
       for (size_t i = 1; i < columnViews.size(); ++i) {
         View* view = columnViews[i];
-        view->setWorkspace(destination, /*attachToLayout=*/false);
+        view->moveToWorkspace(destination, /*attachToLayout=*/false);
         destination->layout().insertViewIntoColumn(view, destination->layout().columnOf(first), static_cast<int>(i));
       }
       destination->markArrange();
@@ -790,20 +790,20 @@ namespace umbriel {
           continue;
         }
         View* first = column.views.front();
-        first->setWorkspace(destination, /*attachToLayout=*/false);
+        first->moveToWorkspace(destination, /*attachToLayout=*/false);
         destination->layout().insertView(first, static_cast<int>(destination->layout().columns().size()));
         if (destination->scrollingLayout() != nullptr) {
           destination->layout().setWidthFraction(destination->layout().columnOf(first), column.widthFrac);
         }
         for (size_t i = 1; i < column.views.size(); ++i) {
           View* view = column.views[i];
-          view->setWorkspace(destination, /*attachToLayout=*/false);
+          view->moveToWorkspace(destination, /*attachToLayout=*/false);
           destination->layout().insertViewIntoColumn(view, destination->layout().columnOf(first), static_cast<int>(i));
         }
       }
       for (View* view : floats) {
         view->rememberFloatingPosition();
-        view->setWorkspace(destination);
+        view->moveToWorkspace(destination);
         view->restoreFloatingPosition();
       }
 

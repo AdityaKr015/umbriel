@@ -1666,7 +1666,7 @@ namespace umbriel {
     } else if (target != nullptr && dropState != nullptr && insertedWorkspace) {
       view->rememberFloatingPosition();
       if (view->workspace() != target) {
-        view->setWorkspace(target, /*attachToLayout=*/false);
+        view->moveToWorkspace(target, /*attachToLayout=*/false);
       }
       view->restoreFloatingPosition();
       m_server->focusView(view, FocusReason::DragDrop);
@@ -1681,7 +1681,7 @@ namespace umbriel {
                           std::lround((cardBox.y - rowTop(metrics, dropState->rowScroll, targetRow)) / metrics.zoom)
             );
         if (view->workspace() != target) {
-          view->setWorkspace(target, /*attachToLayout=*/false);
+          view->moveToWorkspace(target, /*attachToLayout=*/false);
         }
         view->setPosition(x, y);
       }

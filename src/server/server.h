@@ -285,8 +285,14 @@ namespace umbriel {
     // The tablet-v2 handle for a wlroots tablet, or nullptr when unknown.
     [[nodiscard]] wlr_tablet_v2_tablet* tabletV2FromWlr(const wlr_tablet* tablet) const;
 
+    // Create and destroy headless outputs at runtime, which is how a test drives a monitor being unplugged and coming
+    // back. Returns the new output's name, or an empty string with `error` set.
+    std::string createHeadlessOutput(const std::string& name, std::string* error);
+    bool destroyOutput(const std::string& name, std::string* error);
+
     void removeOutput(Output* output);
     void reassignOutputViews(Output* source, Output* destination);
+    void scheduleDisplacedViewRestore();
     void removeKeyboard(Keyboard* keyboard);
     void removeView(View* view);
     void removeLayerSurface(LayerSurface* layerSurface, wlr_output* output);
@@ -342,6 +348,7 @@ namespace umbriel {
     static int onBackgroundFrameTimer(void* data);
     static int onTerminateSignal(int signal, void* data);
     static void onIpcWindowsIdle(void* data);
+    static void onDisplacedRestoreIdle(void* data);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -384,6 +391,7 @@ namespace umbriel {
     void handleWorkspaceCommit(void* data);
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     void applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly);
+    void restoreDisplacedViews();
     [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 
     struct IdleInhibitorWatch {
@@ -517,6 +525,9 @@ namespace umbriel {
     // Non-null while a windows-event idle callback is pending. The idle source
     // removes itself when it runs, so a non-null pointer means "already queued".
     wl_event_source* m_ipcWindowsIdle = nullptr;
+    wl_event_source* m_displacedRestoreIdle = nullptr;
+    // Name to give the next output the backend hands over, set while createHeadlessOutput is adding one.
+    std::string m_pendingOutputName;
     // SIGINT / SIGTERM, delivered on the event loop rather than in a signal
     // handler, so shutdown runs ordinary code instead of async-signal-safe code.
     wl_event_source* m_signalSources[2]{};

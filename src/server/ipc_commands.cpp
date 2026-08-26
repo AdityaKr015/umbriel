@@ -58,6 +58,8 @@ namespace umbriel {
       }
     }
 
+    void printOutputName(const nlohmann::json& ok) { std::println("{}", ok.get<std::string>()); }
+
     std::string fourccName(uint32_t format) {
       if (format == DRM_FORMAT_INVALID) {
         return "invalid";
@@ -398,12 +400,33 @@ namespace umbriel {
     return nlohmann::json{{"ok", nullptr}};
   }
 
+  nlohmann::json IpcCommands::outputCreate(Server& server, std::string_view arg) {
+    std::string error;
+    const std::string name = server.createHeadlessOutput(std::string(arg), &error);
+    if (!error.empty()) {
+      return nlohmann::json{{"err", error}};
+    }
+    return nlohmann::json{{"ok", name}};
+  }
+
+  nlohmann::json IpcCommands::outputDestroy(Server& server, std::string_view arg) {
+    std::string error;
+    if (!server.destroyOutput(std::string(arg), &error)) {
+      return nlohmann::json{{"err", error}};
+    }
+    return nlohmann::json{{"ok", nullptr}};
+  }
+
   static constexpr IpcCommandSpec kIpcCommands[] = {
       {"msg", "<action> [args...]", "send an action to the compositor", true, &IpcCommands::msg, nullptr},
       {"windows", "", "list windows (app id and title)", false, &IpcCommands::windows, &printWindows},
       {"layers", "", "list layer-shell surfaces", false, &IpcCommands::layers, &printLayers},
       {"color", "", "show color-management state", false, &IpcCommands::color, &printColor},
       {"keyboard-layouts", "", "list keyboard layouts", false, &IpcCommands::keyboardLayouts, nullptr},
+      {"output-create", "<name>", "create a headless output (headless sessions only)", true, &IpcCommands::outputCreate,
+       &printOutputName},
+      {"output-destroy", "<name>", "destroy an output (headless sessions only)", true, &IpcCommands::outputDestroy,
+       nullptr},
   };
 
   std::span<const IpcCommandSpec> ipcCommands() { return kIpcCommands; }

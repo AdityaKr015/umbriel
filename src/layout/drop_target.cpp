@@ -398,7 +398,7 @@ namespace umbriel {
       if (view.workspace() != &target) {
         // Auto-attach would split the focused leaf and send a stale configure
         // before the explicit placement below.
-        view.setWorkspace(&target, /*attachToLayout=*/false);
+        view.moveToWorkspace(&target, /*attachToLayout=*/false);
       } else {
         dwindle->removeView(&view);
       }
@@ -414,7 +414,7 @@ namespace umbriel {
     }
 
     if (view.workspace() != &target) {
-      view.setWorkspace(&target, /*attachToLayout=*/false);
+      view.moveToWorkspace(&target, /*attachToLayout=*/false);
     }
     if (drop.row >= 0) {
       target.layout().insertViewIntoColumn(&view, std::max(0, drop.column), drop.row);

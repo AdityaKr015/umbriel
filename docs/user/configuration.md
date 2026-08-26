@@ -99,7 +99,7 @@ is locked.
 
 ## Configuration topics
 
-Use these pages for the detailed reference:
+Use these pages for detailed topic references:
 
 - [Appearance](appearance.md): colors, borders, blur, and shadows.
 - [Workspace Overview](workspace-overview.md): workspace overview and hot corners.

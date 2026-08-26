@@ -248,6 +248,13 @@ namespace umbriel {
     if (m_workspace != nullptr) {
       m_workspace->addView(this, attachToLayout);
     } else {
+      // A pinned view normally hangs below output-owned clipping roots. Park both of its scene branches on the
+      // server-owned pinned roots before the last output is destroyed, then addView() can rehome them when an output
+      // returns. Leaving either branch under the dying output frees nodes that the live View still owns.
+      if (m_pinned) {
+        wlr_scene_node_reparent(&m_sceneTree->node, m_server->pinnedTree());
+        reparentShadow(m_server->pinnedShadowTree());
+      }
       setOnActiveWorkspace(true);
     }
     notifyOutputScale();
@@ -2017,14 +2024,11 @@ namespace umbriel {
       return;
     }
     Output* output = currentOutput();
-    if (output == nullptr) {
-      return;
-    }
     // Ordering stays on the server-level trees; only the content hangs under the output's clipped roots.
     wlr_scene_node_place_above(&m_server->pinnedShadowTree()->node, &m_server->fullscreenTree()->node);
     wlr_scene_node_place_above(&m_server->pinnedTree()->node, &m_server->pinnedShadowTree()->node);
-    wlr_scene_node_reparent(&m_sceneTree->node, output->pinnedRoot());
-    reparentShadow(output->pinnedShadowRoot());
+    wlr_scene_node_reparent(&m_sceneTree->node, output != nullptr ? output->pinnedRoot() : m_server->pinnedTree());
+    reparentShadow(output != nullptr ? output->pinnedShadowRoot() : m_server->pinnedShadowTree());
     setNodeEnabled(true);
     raiseToTop();
   }

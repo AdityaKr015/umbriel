@@ -53,6 +53,7 @@ namespace {
     int height = 64;
     bool mapped = false;
     bool closed = false;
+    bool redrawOnClose = false;
     bool keyboardFocused = false;
     bool requestMaximized = false;
     bool maximizeRequested = false;
@@ -313,6 +314,13 @@ namespace {
     if (!state.mapped) {
       return;
     }
+    if (state.redrawOnClose) {
+      wl_surface_damage_buffer(state.surface, 0, 0, state.width, state.height);
+      wl_surface_commit(state.surface);
+      std::println("redrawn");
+      std::fflush(stdout);
+      return;
+    }
     if (state.colorChildLifecycle) {
       if (state.colorChildLifecyclePhase == 0) {
         wl_surface_attach(state.colorChildSurface, state.colorChildBuffer.resource, 0, 0);
@@ -426,6 +434,7 @@ int main(int argc, char** argv) {
   }
 
   State state;
+  state.redrawOnClose = std::getenv("REDRAW_ON_CLOSE") != nullptr;
   state.requestMaximized = std::getenv("REQUEST_MAXIMIZED") != nullptr;
   state.requestFullscreen = std::getenv("REQUEST_FULLSCREEN") != nullptr;
   state.requestHdr = std::getenv("COLOR_HDR") != nullptr;

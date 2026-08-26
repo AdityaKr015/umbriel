@@ -1543,6 +1543,12 @@ namespace umbriel {
       setMaximized(true);
     }
 
+    // After default_maximize so maximize-to-edges wins the column, but before
+    // fullscreen: setFullscreen leaves and restores the maximize-to-edges state.
+    if (rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges) {
+      setMaximizedToEdges(true);
+    }
+
     // Fullscreen after workspace + focus so the view lands in the right place.
     if (rule.defaultFullscreen && *rule.defaultFullscreen) {
       setFullscreen(true);
@@ -2392,6 +2398,12 @@ namespace umbriel {
         && *rule.defaultFullscreen
         && !m_toplevel->scheduled.fullscreen) {
       setFullscreen(true);
+    }
+
+    if (changedInitialRule(rule.defaultMaximizeToEdges, initiallyApplied.defaultMaximizeToEdges)
+        && *rule.defaultMaximizeToEdges
+        && !m_maximizedToEdges) {
+      setMaximizedToEdges(true);
     }
 
     if (changedInitialRule(rule.defaultMaximize, initiallyApplied.defaultMaximize)

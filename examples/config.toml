@@ -247,6 +247,11 @@ follows_mouse = false
 blur = true
 blur_optimized = true
 
+# Open a specific app maximized to the usable-area edges (no gaps or borders)
+# [[window_rule]]
+# match.app_id = "^discord$"
+# default_maximize_to_edges = true
+
 [[window_rule]]
 match.app_id = "^dev.noctalia.Noctalia$"
 default_floating = true

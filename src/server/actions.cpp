@@ -539,6 +539,31 @@ namespace umbriel {
       return true;
     }
 
+    bool actionFocusSwitchFloating(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      Workspace* workspace = activeWorkspace(server);
+      if (workspace == nullptr) {
+        return true;
+      }
+      View* focused = workspace->focusedView();
+      const bool seekFloating = focused == nullptr || !focused->floating();
+      View* target = nullptr;
+      for (const auto& entry : server.registry().all()) {
+        View* view = entry.get();
+        if (view == focused || !view->mapped() || view->workspace() != workspace) {
+          continue;
+        }
+        if (view->floating() != seekFloating) {
+          continue;
+        }
+        target = view;
+        break;
+      }
+      if (target != nullptr && target != focused) {
+        server.focusView(target, FocusReason::Directional);
+      }
+      return true;
+    }
+
     // Workspaces
     bool actionWorkspace(Server& server, const Keybind& bind, std::string* error) {
       const std::expected<Workspace*, std::string> target = resolveWorkspaceSelector(server, bind);
@@ -879,6 +904,7 @@ namespace umbriel {
         &actionFocusAdjacent<1>,
         &actionFocusVertical<-1>,
         &actionFocusVertical<1>,
+        &actionFocusSwitchFloating,
         &actionMoveColumn<-1>,
         &actionMoveColumn<1>,
         &actionMoveVertical<-1>,

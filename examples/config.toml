@@ -195,6 +195,7 @@ follows_mouse = false
 [keybinds]
 "Mod+Return" = "spawn:kitty"
 "Mod+T" = "window-toggle-floating"
+"Mod+Shift+T" = "window-focus-switch-floating"
 "Mod+P" = "window-toggle-pinned"
 "Mod+M" = "window-toggle-maximize-to-edges"
 "Mod+Shift+Q" = "window-close"

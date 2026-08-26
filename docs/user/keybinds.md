@@ -132,6 +132,9 @@ Vertical-heavy configurations should bind wheel chords to
 The first time a window floats, Umbriel places it slightly below and to the
 right of its tiled position while keeping it on-screen.
 
+`window-focus-switch-floating` switches focus to the most recently focused
+window with the opposite floating state.
+
 `window-toggle-pinned` makes the focused window float and keeps it above
 fullscreen windows on its output. Pinned windows remain visible when you
 switch workspaces. You cannot pin a fullscreen window, and making a pinned

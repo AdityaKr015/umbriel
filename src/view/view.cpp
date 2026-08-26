@@ -998,8 +998,8 @@ namespace umbriel {
     // Apps that draw through subsurfaces (Firefox renders all of its chrome and web content into one desynchronized
     // MozContainer subsurface) leave their content square unless those buffers round too. Every buffer under the
     // toplevel's surface tree is visited: the main surface rounds unconditionally (its quad is the content box in every
-    // clipped and animated state), a subsurface rounds only the corners where its quad — already cropped to the content
-    // box by setSurfaceTreeClip — actually reaches a content-box corner, so an interior subsurface (embedded video)
+    // clipped and animated state), a subsurface rounds only the corners where its quad, already cropped to the content
+    // box by setSurfaceTreeClip, actually reaches a content-box corner, so an interior subsurface (embedded video)
     // stays square. Popups are excluded: their surface is its own root.
     const int radius = surfaceRadius();
     // A tiled view's committed geometry lags the layout, so the presented size is the box the corners must match; a

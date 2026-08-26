@@ -60,8 +60,8 @@ A fake-fullscreen game (borderless window at output size) that receives a
 compositor-imposed windowed size, then returns to fullscreen, keeps a stale
 mouse mapping: X geometry, stacking, focus, and event delivery all recover,
 but hover and clicks die outside the transient size. This is upstream
-Wine/satellite behavior, reproduced identically under niri; the boundary of
-the dead zone always equals whatever transient size the compositor sent.
+Wine/satellite behavior, reproduced outside Umbriel; the boundary of the dead
+zone always equals whatever transient size the compositor sent.
 
 Umbriel therefore guarantees that compositor-driven fullscreen round trips
 never emit a size change:
@@ -87,8 +87,7 @@ never emit a size change:
      tiles immediately;
    - the grace expires untouched: the client ignored the state change, and
      fullscreen is re-asserted rather than forcing a resize that would kill
-     its input. This mirrors the observed niri behavior where such games
-     effectively cannot be unfullscreened.
+     its input. Such games effectively cannot be unfullscreened.
    Client-initiated unfullscreen requests skip the grace (the client wants
    windowed mode), and Wayland-native views keep immediate column sizing:
    they survive resizes, and many keep their size on 0x0, which would

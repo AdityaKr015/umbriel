@@ -122,6 +122,92 @@ if [[ $after_w -gt $((before_w - 200)) || $after_w -lt $((before_w - 320)) ]]; t
   echo "expected width to shrink by roughly 20% of the viewport (252), got $before_w -> $after_w"
   exit 1
 fi
+
+# A moved view from a stacked full-width column must carry the saved width that
+# window-toggle-maximize restores, not the destination's default width.
+narrow_w=$after_w
+spawn_client stacked-move
+wait_for_windows 2
+stacked_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "stacked-move") | .id')
+accepts "window-focus:$stacked_id"
+accepts "window-consume-left"
+stacked=false
+for _ in $(seq 40); do
+  if "$UMBRIEL" windows --json | jq -e --argjson want "$narrow_w" \
+      'length == 2 and all(.[]; .w == $want) and ([.[].y] | unique | length == 2)' > /dev/null; then
+    stacked=true
+    break
+  fi
+  sleep 0.1
+done
+if [[ $stacked != true ]]; then
+  echo "expected two rows in a stacked column of width $narrow_w"
+  exit 1
+fi
+
+accepts "window-toggle-maximize"
+maximized_w=$narrow_w
+for _ in $(seq 40); do
+  maximized_w=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "stacked-move") | .w')
+  [[ $maximized_w -ge $((narrow_w + 400)) ]] && break
+  sleep 0.1
+done
+if [[ $maximized_w -lt $((narrow_w + 400)) ]]; then
+  echo "expected stacked column to become full width, got $maximized_w"
+  exit 1
+fi
+
+accepts "window-move-to-workspace-next"
+current_workspace=$start_workspace
+moved_w=0
+for _ in $(seq 40); do
+  read -r current_workspace moved_w <<< "$("$UMBRIEL" windows --json \
+    | jq -r '.[] | select(.title == "stacked-move") | "\(.workspace) \(.w)"')"
+  [[ $current_workspace == "$moved_workspace" && $moved_w -eq $maximized_w ]] && break
+  sleep 0.1
+done
+if [[ $current_workspace != "$moved_workspace" || $moved_w -ne $maximized_w ]]; then
+  echo "expected full-width state $maximized_w on $moved_workspace, got $moved_w on $current_workspace"
+  exit 1
+fi
+
+accepts "window-toggle-maximize"
+restored_narrow_w=$moved_w
+for _ in $(seq 40); do
+  restored_narrow_w=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "stacked-move") | .w')
+  [[ $restored_narrow_w -eq $narrow_w ]] && break
+  sleep 0.1
+done
+if [[ $restored_narrow_w -ne $narrow_w ]]; then
+  echo "expected stacked column's saved width $narrow_w, got $restored_narrow_w"
+  exit 1
+fi
+
+accepts "window-move-to-workspace-previous"
+for _ in $(seq 40); do
+  current_workspace=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "stacked-move") | .workspace')
+  [[ $current_workspace == "$start_workspace" ]] && break
+  sleep 0.1
+done
+if [[ $current_workspace != "$start_workspace" ]]; then
+  echo "expected stacked-move back on $start_workspace, got $current_workspace"
+  exit 1
+fi
+accepts "window-close"
+wait_for_windows 1
+
+# The source column remained full width when one stacked row moved away.
+accepts "window-toggle-maximize"
+source_w=0
+for _ in $(seq 40); do
+  source_w=$("$UMBRIEL" windows --json | jq -r '.[0].w')
+  [[ $source_w -eq $narrow_w ]] && break
+  sleep 0.1
+done
+if [[ $source_w -ne $narrow_w ]]; then
+  echo "expected source column to restore width $narrow_w, got $source_w"
+  exit 1
+fi
 accepts "window-modify-width:+0.2"
 restored_w=0
 for _ in $(seq 40); do
@@ -223,4 +309,4 @@ if [[ $min_h -ge 600 ]]; then
   exit 1
 fi
 
-echo "directional actions reject on one output; workspace navigation and moves, width delta, center, and layout mode all behave"
+echo "directional actions reject on one output; workspace moves preserve width and other actions behave"

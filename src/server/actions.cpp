@@ -144,10 +144,36 @@ namespace umbriel {
     // land proportionally via their remembered usable-area fraction.
     void moveViewToWorkspace(Server& server, View& view, Workspace& target) {
       const bool floating = view.floating();
+      std::optional<double> widthFrac;
+      bool fullWidth = false;
+      if (!floating && target.scrollingLayout() != nullptr) {
+        const Workspace* source = view.workspace();
+        const ScrollingLayout* sourceLayout = source != nullptr ? source->scrollingLayout() : nullptr;
+        if (sourceLayout != nullptr) {
+          const int column = sourceLayout->columnOf(&view);
+          const auto& columns = sourceLayout->columns();
+          if (column >= 0 && column < static_cast<int>(columns.size())) {
+            const Column& sourceColumn = columns[static_cast<size_t>(column)];
+            widthFrac = sourceColumn.savedWidthFrac > 0.0 ? sourceColumn.savedWidthFrac : sourceColumn.widthFrac;
+            fullWidth = sourceLayout->isFullWidth(column);
+          }
+        }
+      }
       if (floating) {
         view.rememberFloatingPosition();
       }
       view.moveToWorkspace(&target); // layoutAttach self-guards on tiled()
+      if (widthFrac.has_value()) {
+        ScrollingLayout* targetLayout = target.scrollingLayout();
+        const int column = targetLayout != nullptr ? targetLayout->columnOf(&view) : -1;
+        if (column >= 0) {
+          targetLayout->setWidthFraction(column, *widthFrac);
+          if (fullWidth && !targetLayout->isFullWidth(column)) {
+            targetLayout->toggleFullWidth(column);
+          }
+          target.markArrange(true);
+        }
+      }
       target.group()->activate(&target);
       if (floating) {
         view.restoreFloatingPosition();

@@ -217,7 +217,11 @@ namespace umbriel {
           .create_parametric_creator = handleCreateParametricCreator,
           .create_windows_scrgb = handleCreateWindowsScrgb,
           .get_image_description = handleGetReferencedImageDescription,
+      // create_windows_bt2100 (protocol v3) is deliberately unimplemented: v3 is never
+      // advertised, so the member is only initialized when the header declares it.
+#ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
           .create_windows_bt2100 = nullptr,
+#endif
       };
       return implementation;
     }

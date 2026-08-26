@@ -34,7 +34,7 @@ add_project_arguments(
 
 wayland_server_dep = dependency('wayland-server', version: '>=1.23')
 wayland_client_dep = dependency('wayland-client')
-wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.32')
+wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.47')
 wlroots_dep = dependency('wlroots-0.20')
 # Prefer an installed SceneFX only when it provides Umbriel's patched API.
 # Otherwise, build the patched git submodule.

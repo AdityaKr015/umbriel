@@ -850,7 +850,9 @@ namespace umbriel {
       }
     } else if (m_server->exclusiveKeyboardLayer() == nullptr) {
       if (view != nullptr) {
-        m_server->focusView(view, FocusReason::PointerPress);
+        if (!isXdgPopupSurface(surface)) {
+          m_server->focusView(view, FocusReason::PointerPress);
+        }
       } else {
         wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
         m_server->refocus(m_server->outputFromWlr(wlrOutput));
@@ -1011,7 +1013,7 @@ namespace umbriel {
           if (!isXdgPopupSurface(surface)) {
             layer->focus();
           }
-        } else if (view != nullptr) {
+        } else if (view != nullptr && !isXdgPopupSurface(surface)) {
           m_server->focusView(view, FocusReason::PointerPress);
         }
       }
@@ -1493,7 +1495,7 @@ namespace umbriel {
         if (!isXdgPopupSurface(surface)) {
           layer->focus();
         }
-      } else if (m_server->exclusiveKeyboardLayer() == nullptr && view != nullptr) {
+      } else if (m_server->exclusiveKeyboardLayer() == nullptr && view != nullptr && !isXdgPopupSurface(surface)) {
         m_server->focusView(view, FocusReason::PointerPress);
       }
       wlr_tablet_v2_tablet_tool_notify_down(state->v2);

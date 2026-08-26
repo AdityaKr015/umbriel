@@ -66,6 +66,7 @@ namespace umbriel {
     WindowMoveToScratchpad,
     ScratchpadToggle,
     WindowRestoreFromScratchpad,
+    WindowToggleScratchpad,
     ScratchpadFocusNext,
     Submap,
     WindowFocusId,

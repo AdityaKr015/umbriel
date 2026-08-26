@@ -228,6 +228,7 @@ remaining on a workspace.
 | `window-move-to-scratchpad` | Move the focused window from its workspace into the scratchpad. |
 | `scratchpad-toggle` | Show or hide the output's scratchpad windows. |
 | `window-restore-from-scratchpad` | Return the focused scratchpad window to its saved workspace. |
+| `window-toggle-scratchpad` | Move the focused window into the scratchpad, or restore it if it's already the scratchpad's focused window. |
 | `scratchpad-focus-next` | Focus the next visible scratchpad window. |
 
 Add `:<output>` to any action to target a specific output, for example

@@ -211,6 +211,8 @@ namespace umbriel {
         {"window-toggle-maximize", "", KeybindAction::ToggleMaximize},
         {"window-toggle-maximize-to-edges", "", KeybindAction::ToggleMaximizeToEdges},
         {"window-toggle-pinned", "", KeybindAction::TogglePinned},
+        {"window-toggle-scratchpad", "[<output>]", KeybindAction::WindowToggleScratchpad,
+         ActionArgKind::OptionalOutput},
         {"workspace-move-down", "", KeybindAction::WorkspaceMoveDown},
         {"workspace-move-to-output-down", "", KeybindAction::WorkspaceMoveToOutputDown},
         {"workspace-move-to-output-left", "", KeybindAction::WorkspaceMoveToOutputLeft},

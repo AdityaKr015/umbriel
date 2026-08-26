@@ -229,6 +229,30 @@ UMBRIEL_TEST(modKeyIsUserConfigurable) {
   CHECK(containsDiagnostic(store, "unknown general.mod_key"));
 }
 
+UMBRIEL_TEST(keybindTableLoadsAllowWhenLocked) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write(
+      "[keybinds]\n"
+      "\"XF86AudioRaiseVolume\" = { action = \"spawn:volume-up\", allow_when_locked = true }\n"
+      "\"XF86AudioLowerVolume\" = \"spawn:volume-down\"\n"
+  );
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().keybinds.size(), size_t{2});
+
+  bool allowedWhenLocked = false;
+  bool defaultsToBlocked = false;
+  for (const auto& bind : store.config().keybinds) {
+    allowedWhenLocked = allowedWhenLocked || bind.allowWhenLocked;
+    defaultsToBlocked = defaultsToBlocked || !bind.allowWhenLocked;
+  }
+  CHECK(allowedWhenLocked);
+  CHECK(defaultsToBlocked);
+  CHECK(!containsDiagnostic(store, "allow_when_locked"));
+}
+
 UMBRIEL_TEST(hotCornersLoadActionsAndValidate) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

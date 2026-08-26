@@ -161,6 +161,7 @@ namespace umbriel {
     WheelDirection wheel = WheelDirection::None;
     uint32_t mouseButton = 0; // evdev BTN_* code, 0 = not a mouse bind
     bool repeat = true;
+    bool allowWhenLocked = false;
 
     // What it does.
     KeybindAction action = KeybindAction::None;

@@ -368,7 +368,8 @@ thirds of both tiled and floating windows. Dragging from a corner region resizes
 both axes. Mod+Right-click in the center region starts no resize and preserves
 the window's maximize state. For tiled windows, a center click also scrolls the
 focused window into view. When a tiled resize ends, the focused scrolling column
-animates back into view.
+animates back into view. In the dwindle layout, only edges backed by an internal
+split propose a resize, so screen-facing edges propose nothing.
 
 When focus moves to a partially or fully hidden column, Umbriel scrolls by the
 shortest distance needed to reveal it completely. A column entering from the

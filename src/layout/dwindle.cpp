@@ -726,51 +726,7 @@ namespace umbriel {
     if (box.width <= 0 || box.height <= 0) {
       return 0;
     }
-    const double distLeft = std::abs(cx - box.x);
-    const double distRight = std::abs(cx - (box.x + box.width));
-    const double distTop = std::abs(cy - box.y);
-    const double distBottom = std::abs(cy - (box.y + box.height));
-    const double nearestH = std::min(distLeft, distRight);
-    const double nearestV = std::min(distTop, distBottom);
-
-    const uint32_t avail = resizableEdges(view);
-    if (avail == 0) {
-      return 0;
-    }
-    constexpr double kInfinity = std::numeric_limits<double>::max();
-    uint32_t hEdge = 0;
-    double hDist = kInfinity;
-    if ((avail & WLR_EDGE_LEFT) != 0 && (avail & WLR_EDGE_RIGHT) != 0) {
-      hEdge = distLeft <= distRight ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
-      hDist = nearestH;
-    } else if ((avail & WLR_EDGE_LEFT) != 0) {
-      hEdge = WLR_EDGE_LEFT;
-      hDist = distLeft;
-    } else if ((avail & WLR_EDGE_RIGHT) != 0) {
-      hEdge = WLR_EDGE_RIGHT;
-      hDist = distRight;
-    }
-    uint32_t vEdge = 0;
-    double vDist = kInfinity;
-    if ((avail & WLR_EDGE_TOP) != 0 && (avail & WLR_EDGE_BOTTOM) != 0) {
-      vEdge = distTop <= distBottom ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
-      vDist = nearestV;
-    } else if ((avail & WLR_EDGE_TOP) != 0) {
-      vEdge = WLR_EDGE_TOP;
-      vDist = distTop;
-    } else if ((avail & WLR_EDGE_BOTTOM) != 0) {
-      vEdge = WLR_EDGE_BOTTOM;
-      vDist = distBottom;
-    }
-    // Resize both axes at once near a corner; otherwise the nearest boundary.
-    constexpr double kCornerSlop = 60.0;
-    if (hEdge != 0 && vEdge != 0 && hDist < kCornerSlop && vDist < kCornerSlop) {
-      return hEdge | vEdge;
-    }
-    if (hEdge != 0 && (vEdge == 0 || hDist <= vDist)) {
-      return hEdge;
-    }
-    return vEdge;
+    return sanitizeResizeEdges(view, resizeEdgesForPoint(box, cx, cy));
   }
 
   uint32_t DwindleLayout::sanitizeResizeEdges(const View* view, uint32_t edges) const {

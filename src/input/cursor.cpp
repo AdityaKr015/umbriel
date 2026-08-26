@@ -5,6 +5,7 @@
 #include "input/seat.h"
 #include "layer/layer_surface.h"
 #include "layout/drop_target.h"
+#include "layout/layout.h"
 #include "layout/scrolling.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
@@ -1696,23 +1697,8 @@ namespace umbriel {
     const wlr_box& geo = view->toplevel()->base->geometry;
     const int x = view->sceneTree()->node.x + geo.x;
     const int y = view->sceneTree()->node.y + geo.y;
-    const double cx = m_cursor->x;
-    const double cy = m_cursor->y;
-    const double px = cx - x;
-    const double py = cy - y;
-
-    uint32_t edges = 0;
-    if (px < geo.width / 3.0) {
-      edges |= WLR_EDGE_LEFT;
-    } else if (px > 2.0 * geo.width / 3.0) {
-      edges |= WLR_EDGE_RIGHT;
-    }
-    if (py < geo.height / 3.0) {
-      edges |= WLR_EDGE_TOP;
-    } else if (py > 2.0 * geo.height / 3.0) {
-      edges |= WLR_EDGE_BOTTOM;
-    }
-    return edges;
+    const wlr_box box{.x = x, .y = y, .width = geo.width, .height = geo.height};
+    return resizeEdgesForPoint(box, m_cursor->x, m_cursor->y);
   }
 
   uint32_t Cursor::hoverResizeEdges(View* view) const {

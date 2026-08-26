@@ -531,4 +531,41 @@ UMBRIEL_TEST(cycleWidthBackWalksThePresetsInReverse) {
 // compiled any more. That is the point. Callers reach those through Workspace::scrollingLayout(), which is null for a
 // dwindle workspace.
 
+UMBRIEL_TEST(resizeEdgesComeFromTileThirds) {
+  Fixture fixture;
+  fixture.addLeaves(2);
+  fixture.layout.arrange(kUsable);
+
+  // Landscape area splits horizontally: leaf 0 is the left half, leaf 1 the right. Only the shared
+  // vertical boundary is resizable, so leaf 1 resizes only from its left third.
+  const wlr_box right = fixture.layout.targetBox(stub(1));
+  const double rightCenterY = right.y + right.height / 2.0;
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), right.x + right.width / 6.0, rightCenterY),
+           static_cast<uint32_t>(WLR_EDGE_LEFT));
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), right.x + right.width / 2.0, rightCenterY), 0U);
+  // Right third proposes the screen-facing right edge, which sanitize drops.
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), right.x + 5.0 * right.width / 6.0, rightCenterY), 0U);
+
+  // Leaf 0's left third proposes the screen-facing left edge, also dropped.
+  const wlr_box left = fixture.layout.targetBox(stub(0));
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(0), left.x + left.width / 6.0, left.y + left.height / 2.0), 0U);
+}
+
+UMBRIEL_TEST(cornerNinthGrabsBothInternalBoundaries) {
+  Fixture fixture;
+  fixture.addLeaves(3);
+  fixture.layout.arrange(kUsable);
+
+  // The right half stacks: leaf 1 is top-right, with an internal left boundary (shared with leaf 0)
+  // and an internal bottom boundary (shared with leaf 2). Confirm the arrangement before probing.
+  CHECK_EQ(fixture.layout.resizableEdges(stub(1)), static_cast<uint32_t>(WLR_EDGE_LEFT | WLR_EDGE_BOTTOM));
+
+  const wlr_box box = fixture.layout.targetBox(stub(1));
+  // Bottom-left corner ninth: left third and bottom third both back internal boundaries.
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), box.x + box.width / 6.0, box.y + 5.0 * box.height / 6.0),
+           static_cast<uint32_t>(WLR_EDGE_LEFT | WLR_EDGE_BOTTOM));
+  // Top-right corner ninth proposes right and top, both screen-facing, so nothing survives sanitize.
+  CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), box.x + 5.0 * box.width / 6.0, box.y + box.height / 6.0), 0U);
+}
+
 int main() { return RUN_TESTS(); }

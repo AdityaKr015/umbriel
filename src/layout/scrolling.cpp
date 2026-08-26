@@ -851,20 +851,7 @@ namespace umbriel {
     if (box.width <= 0 || box.height <= 0) {
       return WLR_EDGE_RIGHT;
     }
-    const double px = cx - box.x;
-    const double py = cy - box.y;
-    uint32_t edges = 0;
-    if (px < box.width / 3.0) {
-      edges |= WLR_EDGE_LEFT;
-    } else if (px > 2.0 * box.width / 3.0) {
-      edges |= WLR_EDGE_RIGHT;
-    }
-    if (py < box.height / 3.0) {
-      edges |= WLR_EDGE_TOP;
-    } else if (py > 2.0 * box.height / 3.0) {
-      edges |= WLR_EDGE_BOTTOM;
-    }
-    return sanitizeResizeEdges(view, edges);
+    return sanitizeResizeEdges(view, resizeEdgesForPoint(box, cx, cy));
   }
 
   uint32_t ScrollingLayout::sanitizeResizeEdges(const View* view, uint32_t edges) const {

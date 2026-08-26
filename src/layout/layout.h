@@ -172,6 +172,11 @@ namespace umbriel {
     LayoutConstraintsFn m_constraints = nullptr;
   };
 
+  // Single source of truth for the pointer-to-edge proposal shared by every layout and by floating resize:
+  // the outer thirds of the box propose that side's edge per axis, the middle third proposes none, and a
+  // corner ninth proposes both axes. Callers guard degenerate boxes; layouts mask via sanitizeResizeEdges.
+  [[nodiscard]] uint32_t resizeEdgesForPoint(const wlr_box& box, double cx, double cy);
+
   [[nodiscard]] std::unique_ptr<Layout> createLayout(LayoutMode mode);
 
 } // namespace umbriel

@@ -474,7 +474,7 @@ namespace umbriel {
           server.focusView(target, FocusReason::Directional);
         } else {
           // No window in this direction within the current workspace.
-          // Switch to the adjacent workspace, matching Niri's behavior.
+          // Switch to the adjacent workspace.
           WorkspaceGroup* group = workspace->group();
           if (group == nullptr) {
             return true;

@@ -362,6 +362,8 @@ above, and `window-expel-right` creates the next lane, which is visually below.
 The three-finger vertical swipe continues to switch workspaces. The
 three-finger horizontal strip gesture is inert on vertical workspaces, so use
 keyboard or wheel bindings to scroll the strip.
+On a horizontal scrolling workspace, a three-finger horizontal swipe moves the
+strip and uses release velocity when settling a column against a viewport edge.
 
 Mod+Right-drag selects horizontal and vertical resize edges from the outer
 thirds of both tiled and floating windows. Dragging from a corner region resizes

@@ -32,6 +32,7 @@ namespace umbriel {
         .view = view,
         .output = output,
         .returnOutput = {},
+        .displacedOutput = {},
         .returnWorkspace = {},
         .returnTiled = view->tiled(),
     };

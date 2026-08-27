@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 namespace umbriel {
 
   // Undo everything the compositor did to the process that a child must not inherit. `wl_event_loop_add_signal` blocks
@@ -8,9 +10,8 @@ namespace umbriel {
   // alongside `restoreFileDescriptorLimit`.
   void resetChildSignalState();
 
-  // Would `execlp(name, ...)` find something to run? Handles both a bare name resolved against PATH and an explicit
-  // path. Inherently a check-then-use race, but the alternative is forking only to discover the exec failed, which
-  // costs a process and an error path for the common "not installed" case.
-  [[nodiscard]] bool executableOnPath(const char* name);
+  // Resolve a bare executable against PATH, or validate an explicit path. An
+  // empty result means no executable was found.
+  [[nodiscard]] std::string resolveExecutable(const char* name);
 
 } // namespace umbriel

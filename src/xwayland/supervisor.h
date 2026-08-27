@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <string>
 #include <sys/types.h>
+#include <utility>
+#include <vector>
 
 struct wl_event_loop;
 struct wl_event_source;
@@ -45,7 +47,9 @@ namespace umbriel {
 
     wl_event_loop* m_loop = nullptr;
     std::string m_waylandSocket;
+    std::string m_executable;
     std::string m_display;
+    std::vector<std::pair<std::string, std::string>> m_environment;
     pid_t m_pid = -1;
     int m_pidfd = -1;
     wl_event_source* m_exitSource = nullptr;

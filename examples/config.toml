@@ -19,6 +19,11 @@ show_cheatsheet = true         # show keybinds overlay on startup
 focus_on_activate = false      # activation requests mark urgent without stealing focus
 honor_restored_maximize = false # let apps restore their saved maximized state
 
+# Applied only at session startup. Native sessions also publish these values to
+# newly started systemd session services and applications they launch. D-Bus
+# receives only graphical connection variables. Nested sessions do not modify the
+# host session environment. Without systemd, direct Umbriel children still inherit
+# the values. Relaunch applications that were already running.
 # [environment]
 # GTK_THEME = "Adwaita:dark"
 # QT_QPA_PLATFORMTHEME = "qt5ct"

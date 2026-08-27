@@ -1,6 +1,7 @@
 #include "check.h"
 #include "config/store.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -1019,6 +1020,40 @@ enabled = true
   CHECK(containsDiagnostic(store, "unknown key appearance.animations"));
   CHECK(containsDiagnostic(store, "unknown key animations"));
   CHECK(containsDiagnostic(store, "unknown key animation.fade"));
+}
+
+UMBRIEL_TEST(environmentRequiresStringValuesAndPortableNames) {
+  const TempConfig file;
+  file.write(R"(
+[environment]
+DXVK_HDR = "1"
+_PRIVATE = "kept"
+"9INVALID" = "ignored"
+"HAS-HYPHEN" = "ignored"
+NOT_A_STRING = 1
+WAYLAND_DISPLAY = "wrong"
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK_EQ(store.config().environment.variables.size(), size_t{2});
+  CHECK(
+      std::ranges::find(store.config().environment.variables, std::pair{std::string{"DXVK_HDR"}, std::string{"1"}})
+      != store.config().environment.variables.end()
+  );
+  CHECK(
+      std::ranges::find(store.config().environment.variables, std::pair{std::string{"_PRIVATE"}, std::string{"kept"}})
+      != store.config().environment.variables.end()
+  );
+  CHECK(containsDiagnostic(store, R"(ignoring environment key "9INVALID" (expected [A-Za-z_][A-Za-z0-9_]*))"));
+  CHECK(containsDiagnostic(store, R"(ignoring environment key "HAS-HYPHEN" (expected [A-Za-z_][A-Za-z0-9_]*))"));
+  CHECK(containsDiagnostic(store, "ignoring environment.NOT_A_STRING (expected string)"));
+  CHECK(containsDiagnostic(store, "ignoring environment.WAYLAND_DISPLAY (reserved by Umbriel)"));
+  CHECK(!containsDiagnostic(store, "unknown key environment.DXVK_HDR"));
+  CHECK(!containsDiagnostic(store, "unknown key environment._PRIVATE"));
 }
 
 UMBRIEL_TEST(packagedAnimationDefaultsMatchCompiledDefaults) {

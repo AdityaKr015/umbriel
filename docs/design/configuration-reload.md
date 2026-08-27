@@ -40,6 +40,11 @@ Output state and workspace inventory are independent effects.
   the overview.
 - `general.autostart` commands run only during startup, never during reload.
 - `general.xwayland` changes require a compositor restart.
+- `[environment]` values are applied and synchronized to the systemd user
+  manager only during startup. A reload does not mutate the compositor, user
+  manager, or existing process environments. Traditional D-Bus activation sees
+  only the graphical connection variables. Removing a key does not unset a
+  value already held by the user manager.
 
 A section can affect more than one runtime consumer. Keep those dependencies
 explicit when adding configuration fields, rather than falling back to a full
@@ -54,3 +59,5 @@ The relevant regression coverage is in:
 - [`tests/harness/checks/050_config_reload.sh`](../../tests/harness/checks/050_config_reload.sh),
   which checks inert reloads, selective layout updates, border dependencies,
   and recovery after an included file fails to parse.
+- [`tests/harness/checks/045_session_environment.sh`](../../tests/harness/checks/045_session_environment.sh),
+  which checks that environment changes remain unapplied until restart.

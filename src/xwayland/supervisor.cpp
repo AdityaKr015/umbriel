@@ -1,5 +1,6 @@
 #include "xwayland/supervisor.h"
 
+#include "config/config.h"
 #include "core/fdlimit.h"
 #include "core/log.h"
 #include "core/process.h"
@@ -35,7 +36,8 @@ namespace umbriel {
   XwaylandSupervisor::~XwaylandSupervisor() { stop(); }
 
   void XwaylandSupervisor::start() {
-    if (!executableOnPath("xwayland-satellite")) {
+    m_executable = resolveExecutable("xwayland-satellite");
+    if (m_executable.empty()) {
       kLog.info("xwayland-satellite not on PATH; skipping");
       return;
     }
@@ -51,6 +53,7 @@ namespace umbriel {
       }
       m_display = ":" + num;
       setenv("DISPLAY", m_display.c_str(), 1);
+      m_environment = config().environment.variables;
       kLog.info("using DISPLAY={}", m_display);
       spawn();
       return;
@@ -73,7 +76,10 @@ namespace umbriel {
       unsetenv("WAYLAND_SOCKET");
       // Satellite provides DISPLAY; it must not consume one.
       unsetenv("DISPLAY");
-      execlp("xwayland-satellite", "xwayland-satellite", m_display.c_str(), nullptr);
+      for (const auto& [name, value] : m_environment) {
+        setenv(name.c_str(), value.c_str(), 1);
+      }
+      execl(m_executable.c_str(), "xwayland-satellite", m_display.c_str(), nullptr);
       _exit(kExecFailedStatus);
     }
 

@@ -23,4 +23,8 @@ namespace umbriel {
   // "1920x1080". Width and height are clamped to 1-16384, refresh to 0-1000 Hz.
   bool parseOutputMode(std::string_view text, OutputMode& output);
 
+  // Environment names accepted by systemd and ordinary shells: an ASCII letter or underscore followed by ASCII
+  // letters, digits, or underscores.
+  [[nodiscard]] bool isEnvironmentVariableName(std::string_view name);
+
 } // namespace umbriel

@@ -16,6 +16,7 @@
 // clang-format on
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <cmath>
@@ -33,6 +34,11 @@ namespace umbriel {
   namespace {
 
     constexpr Logger kLog("config");
+
+    constexpr std::array<std::string_view, 7> kReservedEnvironmentNames{
+        "WAYLAND_DISPLAY",     "WAYLAND_SOCKET",      "DISPLAY",          "UMBRIEL_SOCKET",
+        "XDG_CURRENT_DESKTOP", "XDG_SESSION_DESKTOP", "XDG_SESSION_TYPE",
+    };
 
     // Well past any real layout: a value this large already means "no limit".
     constexpr double kMaxFollowsMouseScroll = 100.0;
@@ -891,7 +897,32 @@ namespace umbriel {
     }
 
     void readEnvironment(Section& root, Config& loaded) {
-      root.sub("environment", [&](Section& s) { s.eachString(loaded.environment.variables); });
+      root.sub("environment", [&](Section& s) {
+        s.freeform();
+        std::vector<std::pair<std::string, std::string>> parsed;
+        parsed.reserve(s.table().size());
+        for (const auto& [key, value] : s.table()) {
+          const auto entry = value.value<std::string>();
+          if (!entry) {
+            warnAt(value.source(), "ignoring environment.{} (expected string)", key.str());
+            continue;
+          }
+          if (!isEnvironmentVariableName(key.str())) {
+            warnAt(key.source(), R"(ignoring environment key "{}" (expected [A-Za-z_][A-Za-z0-9_]*))", key.str());
+            continue;
+          }
+          if (std::ranges::find(kReservedEnvironmentNames, key.str()) != kReservedEnvironmentNames.end()) {
+            warnAt(key.source(), "ignoring environment.{} (reserved by Umbriel)", key.str());
+            continue;
+          }
+          if (entry->contains('\0')) {
+            warnAt(value.source(), "ignoring environment.{} (value contains NUL)", key.str());
+            continue;
+          }
+          parsed.emplace_back(std::string(key.str()), *entry);
+        }
+        loaded.environment.variables = std::move(parsed);
+      });
     }
 
     bool validateKeyboardInput(

@@ -88,4 +88,16 @@ namespace umbriel {
     return true;
   }
 
+  bool isEnvironmentVariableName(std::string_view name) {
+    const auto asciiLetter = [](char character) {
+      return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z');
+    };
+    if (name.empty() || (!asciiLetter(name.front()) && name.front() != '_')) {
+      return false;
+    }
+    return std::ranges::all_of(name.substr(1), [&](char character) {
+      return asciiLetter(character) || (character >= '0' && character <= '9') || character == '_';
+    });
+  }
+
 } // namespace umbriel

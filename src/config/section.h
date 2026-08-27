@@ -41,10 +41,6 @@ namespace umbriel {
     // An array of non-empty strings. A single bad element rejects the whole array: a half-applied autostart list is
     // worse than none, because the user cannot tell which entries ran.
     Section& strings(std::string_view key, std::vector<std::string>& target);
-    // Every key in the table read as a string, for tables whose keys are
-    // user-chosen names. Implies `freeform`.
-    Section& eachString(std::vector<std::pair<std::string, std::string>>& target);
-
     // Descend into a nested table, if it is there and is a table. `fn` takes a `Section&`. Taking a callback rather
     // than returning a Section keeps this type immovable, which is what makes the destructor-based warning safe.
     template <typename F> Section& sub(std::string_view key, F&& fn) {

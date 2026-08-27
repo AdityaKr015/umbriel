@@ -224,7 +224,7 @@ namespace umbriel {
     void relayoutBanner();
     void relayoutCheatsheet();
     void relayoutQuitConfirm();
-    void spawn(const char* command);
+    void spawn(const char* command, const char* description = nullptr);
     void handleConfigReload();
     // Re-evaluate application idle inhibitors after a surface's presentation
     // visibility changes.

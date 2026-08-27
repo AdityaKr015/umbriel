@@ -219,20 +219,4 @@ namespace umbriel {
     return *this;
   }
 
-  Section& Section::eachString(std::vector<std::pair<std::string, std::string>>& target) {
-    freeform();
-    std::vector<std::pair<std::string, std::string>> parsed;
-    parsed.reserve(m_table.size());
-    for (const auto& [key, value] : m_table) {
-      const auto entry = value.value<std::string>();
-      if (!entry) {
-        warn(value, std::format("ignoring {}.{} (expected string)", m_name, key.str()));
-        continue;
-      }
-      parsed.emplace_back(std::string(key.str()), *entry);
-    }
-    target = std::move(parsed);
-    return *this;
-  }
-
 } // namespace umbriel

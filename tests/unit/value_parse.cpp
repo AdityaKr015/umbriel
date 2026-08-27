@@ -101,4 +101,16 @@ UMBRIEL_TEST(rejectsMalformedOutputModes) {
   CHECK(!umbriel::parseOutputMode("1920 x 1080", mode));
 }
 
+UMBRIEL_TEST(validatesEnvironmentVariableNames) {
+  CHECK(umbriel::isEnvironmentVariableName("DXVK_HDR"));
+  CHECK(umbriel::isEnvironmentVariableName("_PRIVATE"));
+  CHECK(umbriel::isEnvironmentVariableName("A1"));
+
+  CHECK(!umbriel::isEnvironmentVariableName(""));
+  CHECK(!umbriel::isEnvironmentVariableName("1STARTS_WITH_DIGIT"));
+  CHECK(!umbriel::isEnvironmentVariableName("HAS-HYPHEN"));
+  CHECK(!umbriel::isEnvironmentVariableName("HAS.DOT"));
+  CHECK(!umbriel::isEnvironmentVariableName("NÄME"));
+}
+
 int main() { return RUN_TESTS(); }

@@ -126,7 +126,7 @@ no user or system configuration exists.
 
 The desktop entry must launch `start-umbriel`. The generated launcher and
 `umbriel.service` contain the configured absolute path to the `umbriel` binary.
-Packages using nonstandard paths must preserve all three references.
+Packages using nonstandard paths must preserve both configured references.
 
 ## Configuration lookup
 
@@ -176,9 +176,12 @@ user manager when available and directly executes Umbriel otherwise.
 
 The managed path imports the display manager environment and starts
 `umbriel.service`. The service naturally inherits variables generated from
-`environment.d`. Once ready, Umbriel publishes only its graphical-session
-variables and starts `umbriel-session.target`. The launcher activates
-`umbriel-shutdown.target` and removes those variables after Umbriel exits.
+`environment.d`. Once ready, Umbriel publishes its graphical session variables
+and validated `[environment]` assignments to the systemd user manager, then
+starts `umbriel-session.target`. Arbitrary configured values are not copied to
+traditional D-Bus activation. The configured values remain in the user manager
+for its lifetime. The launcher activates `umbriel-shutdown.target` and removes
+the graphical variables after Umbriel exits.
 
 No display manager or desktop shell is required by Umbriel itself. It can be
 paired with [Noctalia](https://github.com/noctalia-dev/noctalia) for panels,

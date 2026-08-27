@@ -497,7 +497,7 @@ namespace umbriel {
     } general;
 
     struct Environment {
-      // Ordered list of NAME=value pairs exported to the compositor process.
+      // Ordered NAME=value pairs exported to the compositor and the native session's systemd user manager.
       std::vector<std::pair<std::string, std::string>> variables;
       bool operator==(const Environment&) const = default;
     } environment;

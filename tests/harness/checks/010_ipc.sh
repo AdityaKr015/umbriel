@@ -120,6 +120,51 @@ if [[ $(jq -r '.[0].active' <<< "$windows") != $(jq -r '.[0].focused' <<< "$wind
   exit 1
 fi
 
+workspaces=$("$UMBRIEL" workspaces --json)
+if ! jq -e '
+  type == "array" and length >= 1
+  and all(.[];
+    (has("id") and (.id | type == "string"))
+    and (has("name") and (.name | type == "string"))
+    and (has("index") and (.index | type == "number") and .index >= 1)
+    and (has("output") and (.output | type == "string"))
+    and (has("active") and (.active | type == "boolean"))
+    and (has("focused") and (.focused | type == "boolean"))
+    and (has("layout") and (.layout | type == "string"))
+  )
+  and ([.[] | select(.active)] | length == 1)
+  and ([.[] | select(.focused)] | length == 1)
+  and all(.[] | select(.focused); .active)
+  and all(.[]; .layout == "scrolling")
+' <<< "$workspaces" > /dev/null; then
+  echo "workspaces --json has an unexpected initial shape: $workspaces"
+  exit 1
+fi
+if ! jq -e '
+  .[0].index == 1
+  and .[0].name == "1"
+  and .[0].output == "HEADLESS-1"
+  and (.[0].id | test("^HEADLESS-1:[0-9]+$"))
+' <<< "$workspaces" > /dev/null; then
+  echo "first workspace has unexpected identity fields: $workspaces"
+  exit 1
+fi
+
+# The listing reports the effective mode, including a runtime override, rather
+# than only the mode last loaded from configuration.
+"$UMBRIEL" msg workspace-set-layout:dwindle > /dev/null
+workspaces=$("$UMBRIEL" workspaces --json)
+if ! jq -e '[.[] | select(.focused) | .layout] == ["dwindle"]' <<< "$workspaces" > /dev/null; then
+  echo "focused workspace did not report its runtime layout override: $workspaces"
+  exit 1
+fi
+workspace_human=$("$UMBRIEL" workspaces)
+if ! grep -F "* HEADLESS-1: 1 [dwindle] (focused)" <<< "$workspace_human" > /dev/null; then
+  echo "human workspace listing does not identify the focused layout: $workspace_human"
+  exit 1
+fi
+"$UMBRIEL" msg workspace-set-layout:scrolling > /dev/null
+
 layers=$("$UMBRIEL" layers --json)
 if ! jq -e 'type == "array"' <<< "$layers" > /dev/null; then
   echo "layers --json is not an array: $layers"

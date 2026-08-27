@@ -373,6 +373,11 @@ namespace umbriel {
         output->resetTearingState();
       }
     }
+    if (effects.directScanoutPolicy) {
+      for (const auto& output : m_outputs) {
+        output->applyDirectScanoutConfig();
+      }
+    }
     if (effects.workspaceInventory) {
       for (const auto& output : m_outputs) {
         if (WorkspaceGroup* group = output->workspaceGroup()) {

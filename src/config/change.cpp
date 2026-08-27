@@ -47,6 +47,13 @@ namespace umbriel {
       return lhs.allowTearing == rhs.allowTearing;
     }
 
+    bool sameOutputDirectScanoutPolicy(const OutputRule* before, const OutputRule* after) {
+      static const OutputRule defaults;
+      const OutputRule& lhs = before != nullptr ? *before : defaults;
+      const OutputRule& rhs = after != nullptr ? *after : defaults;
+      return lhs.directScanout == rhs.directScanout;
+    }
+
     bool sameWindowTearingPolicy(const Config& before, const Config& after) {
       size_t beforeIndex = 0;
       size_t afterIndex = 0;
@@ -87,6 +94,7 @@ namespace umbriel {
     const bool outputState = outputProjectionChanged(before, after, sameOutputState);
     const bool tearingPolicy =
         outputProjectionChanged(before, after, sameOutputTearingPolicy) || !sameWindowTearingPolicy(before, after);
+    const bool directScanoutPolicy = outputProjectionChanged(before, after, sameOutputDirectScanoutPolicy);
     const bool workspaceInventory = outputProjectionChanged(before, after, sameWorkspaceInventory);
     const bool sceneBlur = before.appearance.blur != after.appearance.blur;
     const bool focusDim = before.animation.enabled != after.animation.enabled
@@ -94,6 +102,7 @@ namespace umbriel {
     return {
         .outputState = outputState,
         .tearingPolicy = tearingPolicy,
+        .directScanoutPolicy = directScanoutPolicy,
         .workspaceInventory = workspaceInventory,
         .workspaceLayout = workspaceInventory
             || before.layout != after.layout
@@ -113,6 +122,7 @@ namespace umbriel {
     return {
         .outputState = true,
         .tearingPolicy = true,
+        .directScanoutPolicy = true,
         .workspaceInventory = true,
         .workspaceLayout = true,
         .sceneBlur = true,
@@ -207,6 +217,7 @@ namespace umbriel {
     };
     add(outputState, "output state");
     add(tearingPolicy, "tearing policy");
+    add(directScanoutPolicy, "direct scanout policy");
     add(workspaceInventory, "workspace inventory");
     add(workspaceLayout, "workspace layout");
     add(sceneBlur, "scene blur");

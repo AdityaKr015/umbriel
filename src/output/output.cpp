@@ -61,6 +61,7 @@ namespace umbriel {
     applyCursorConfig();
     (void)applyConfiguredState();
     m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
+    wlr_scene_output_set_direct_scanout_enabled(m_sceneOutput, configuredDirectScanoutEnabled());
     updateSceneSdrWhite();
     if (configuredEnabled()) {
       wlr_output_layout_output* layoutOutput = addToLayout();
@@ -127,6 +128,11 @@ namespace umbriel {
     return rule != nullptr ? rule->sdrWhite : 203.0F;
   }
 
+  bool Output::configuredDirectScanoutEnabled() const {
+    const OutputRule* rule = findRule(m_output->name);
+    return rule == nullptr || rule->directScanout;
+  }
+
   bool Output::configuredTearingAllowed() const {
     const OutputRule* rule = findRule(m_output->name);
     return rule != nullptr && rule->allowTearing;
@@ -183,6 +189,10 @@ namespace umbriel {
     m_tearingFallbackReason.clear();
     m_tearingRecovery.reset();
     wlr_output_schedule_frame(m_output);
+  }
+
+  void Output::applyDirectScanoutConfig() {
+    wlr_scene_output_set_direct_scanout_enabled(m_sceneOutput, configuredDirectScanoutEnabled());
   }
 
   void Output::setHdrFallbackReason(std::string_view reason) {

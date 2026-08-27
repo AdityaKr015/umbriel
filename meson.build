@@ -109,6 +109,10 @@ if pkgconfig.found()
       'capture_sdr',
       prefix: '#include <scenefx/types/wlr_scene.h>',
       args: scenefx_cflags,
+    ) and cpp.has_header_symbol(
+      'scenefx/types/wlr_scene.h',
+      'wlr_scene_output_set_direct_scanout_enabled',
+      args: scenefx_cflags,
     )
   endif
 endif
@@ -127,6 +131,7 @@ else
     or not scenefx_header_source.contains('wlr_scene_output_set_sdr_white_level')
     or not scenefx_header_source.contains('wlr_scene_buffer_set_luminance_multiplier')
     or not scenefx_header_source.contains('capture_sdr')
+    or not scenefx_header_source.contains('wlr_scene_output_set_direct_scanout_enabled')
   )
     error('SceneFX submodule must provide Umbriel patched APIs')
   endif

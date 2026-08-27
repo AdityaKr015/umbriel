@@ -35,6 +35,9 @@ Output state and workspace inventory are independent effects.
 - Changing an output or window-rule tearing policy re-evaluates eligibility,
   clears async recovery state, and schedules a frame. It does not reapply
   output state or invalidate the overview.
+- Changing an output's direct scanout policy damages and schedules only outputs
+  whose resolved policy changed. It does not reapply output state or invalidate
+  the overview.
 - `general.autostart` commands run only during startup, never during reload.
 - `general.xwayland` changes require a compositor restart.
 

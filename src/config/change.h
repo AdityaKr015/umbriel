@@ -58,6 +58,9 @@ namespace umbriel {
     // Per-frame async presentation policy. This is separate from outputState
     // so a policy reload does not reapply modes, HDR, VRR, focus, or scale.
     bool tearingPolicy = false;
+    // Per-output direct scanout policy. Reloading it only forces a fresh frame
+    // on outputs whose resolved policy changed.
+    bool directScanoutPolicy = false;
     bool workspaceInventory = false;
     bool workspaceLayout = false;
     bool sceneBlur = false;
@@ -71,6 +74,7 @@ namespace umbriel {
     [[nodiscard]] bool any() const {
       return outputState
           || tearingPolicy
+          || directScanoutPolicy
           || workspaceInventory
           || workspaceLayout
           || sceneBlur

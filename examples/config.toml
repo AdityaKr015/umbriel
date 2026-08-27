@@ -193,6 +193,7 @@ default_width_fraction = 0.55  # 0.1-0.9
 # scale = 1.25
 # vrr = "fullscreen"            # "disabled" (default), "always", or "fullscreen"
 # tearing = true                 # allow eligible fullscreen clients to request tearing
+# direct_scanout = true           # false forces composition on this output
 # hdr = "auto"                  # "off", "on", metadata-driven "auto", or any-app "fullscreen"
 # sdr_white = 203                # SDR reference white in cd/m2 while HDR is active
 # enabled = true                # false removes it; re-enabling restores windows, layout, active workspace, and taskbar entries

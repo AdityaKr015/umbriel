@@ -245,6 +245,7 @@ UMBRIEL_TEST(firstLoadInvalidatesEveryRuntimeConsumer) {
   const ConfigEffects effects = ConfigEffects::everything();
   CHECK(effects.outputState);
   CHECK(effects.tearingPolicy);
+  CHECK(effects.directScanoutPolicy);
   CHECK(effects.workspaceInventory);
   CHECK(effects.workspaceLayout);
   CHECK(effects.sceneBlur);
@@ -391,6 +392,42 @@ UMBRIEL_TEST(tearingPolicyDoesNotReapplyOutputStateOrInvalidateOverview) {
   const ConfigEffects unrelatedEffects = ConfigEffects::between(before, unrelatedRule);
   CHECK(!unrelatedEffects.tearingPolicy);
   CHECK(unrelatedEffects.viewChrome);
+}
+
+UMBRIEL_TEST(directScanoutPolicyForcesOnlyItsRuntimeEffect) {
+  Config before;
+  OutputRule output;
+  output.name = "HEADLESS-1";
+  before.outputs.push_back(output);
+
+  Config disabled = before;
+  disabled.outputs[0].directScanout = false;
+  const ConfigEffects disableEffects = ConfigEffects::between(before, disabled);
+  CHECK(disableEffects.directScanoutPolicy);
+  CHECK(!disableEffects.outputState);
+  CHECK(!disableEffects.tearingPolicy);
+  CHECK(!disableEffects.workspaceInventory);
+  CHECK(!disableEffects.workspaceLayout);
+  CHECK(!disableEffects.invalidatesOverview());
+  CHECK_EQ(disableEffects.summary(), std::string("direct scanout policy"));
+
+  const ConfigEffects enableEffects = ConfigEffects::between(disabled, before);
+  CHECK(enableEffects.directScanoutPolicy);
+  CHECK(!enableEffects.outputState);
+
+  Config unrelatedOutput = before;
+  OutputRule second;
+  second.name = "DP-1";
+  unrelatedOutput.outputs.push_back(second);
+  CHECK(!ConfigEffects::between(before, unrelatedOutput).directScanoutPolicy);
+
+  Config onlyDisabled;
+  onlyDisabled.outputs.push_back(disabled.outputs[0]);
+  CHECK(ConfigEffects::between(onlyDisabled, Config{}).directScanoutPolicy);
+
+  Config onlyDefault;
+  onlyDefault.outputs.push_back(before.outputs[0]);
+  CHECK(!ConfigEffects::between(onlyDefault, Config{}).directScanoutPolicy);
 }
 
 UMBRIEL_TEST(vrrPolicyTracksFullscreenOnlyWhenRequested) {

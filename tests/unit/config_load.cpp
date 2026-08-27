@@ -422,6 +422,30 @@ UMBRIEL_TEST(outputTearingPermissionLoadsAndDefaultsDisabled) {
   CHECK(containsDiagnostic(store, "ignoring output.DP-1.tearing (expected boolean)"));
 }
 
+UMBRIEL_TEST(outputDirectScanoutPolicyLoadsAndDefaultsEnabled) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[output.DP-1]\ndirect_scanout = false\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK(!store.config().outputs[0].directScanout);
+
+  file.write("[output.DP-1]\ndirect_scanout = true\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].directScanout);
+
+  file.write("[output.DP-1]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].directScanout);
+
+  file.write("[output.DP-1]\ndirect_scanout = \"no\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].directScanout);
+  CHECK(containsDiagnostic(store, "ignoring output.DP-1.direct_scanout (expected boolean)"));
+}
+
 UMBRIEL_TEST(outputHdrPolicyAndSdrWhiteLoad) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

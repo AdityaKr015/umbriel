@@ -75,6 +75,7 @@ namespace umbriel {
     [[nodiscard]] bool hdrActive() const;
     [[nodiscard]] const std::string& hdrFallbackReason() const { return m_hdrFallbackReason; }
     [[nodiscard]] float configuredSdrWhite() const;
+    [[nodiscard]] bool configuredDirectScanoutEnabled() const;
     [[nodiscard]] bool configuredTearingAllowed() const;
     [[nodiscard]] bool tearingRequested() const;
     [[nodiscard]] bool lastCommitTearing() const { return m_lastCommitTearing; }
@@ -86,6 +87,7 @@ namespace umbriel {
     [[nodiscard]] bool tearingEligible(View* view) const;
     [[nodiscard]] View* tearingCandidate() const;
     void resetTearingState();
+    void applyDirectScanoutConfig();
     void applyCursorConfig();
     // Re-evaluate fullscreen-controlled VRR after a view or workspace changes.
     void updateVrr();

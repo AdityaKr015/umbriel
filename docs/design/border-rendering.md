@@ -25,8 +25,11 @@ independently rounded top, bottom, left, or right width.
 
 ## Fragment contract
 
-`border.frag` evaluates one rounded-rectangle signed distance from the content
-box. The same distance drives:
+`border.frag` evaluates one signed distance from the content box. Rounded
+corners use a Euclidean rounded-rectangle distance. A zero radius uses an
+$L_\infty$ rectangle distance so outward offset contours remain square instead
+of acquiring an implicit radius from Euclidean corner distance. The same
+distance drives:
 
 1. inner-edge coverage;
 2. the transition between inner and outer colors;
@@ -63,6 +66,8 @@ a second scene node or draw order.
 - `722_subsurface_border_corner.sh` checks the straight-to-curve tangency, inner
   corner coverage, the two-color seam, and opaque outer-corner coverage against
   a full-window subsurface.
+- `723_square_border_corner.sh` verifies that radius zero preserves the extreme
+  outer-corner pixel instead of rounding it away.
 - `border-ring` unit tests protect the transparent raster margin and content-hole
   geometry.
 

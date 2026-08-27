@@ -56,6 +56,8 @@ namespace umbriel {
     };
 
     void setVisible(Output* output, bool visible);
+    // Retarget the backdrop dim/blur fade for `output` and refresh its scene nodes.
+    void retargetBackdrop(Output* output, bool visible);
     wlr_scene_rect* dimRectFor(Output* output);
     wlr_scene_blur* blurNodeFor(Output* output);
     void updateDimAndBlur(Output* output);

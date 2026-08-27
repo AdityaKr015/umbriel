@@ -1052,7 +1052,9 @@ namespace umbriel {
   int View::borderInset() const { return decorated() ? config().appearance.totalBorderWidth() : 0; }
 
   int View::surfaceRadius() const {
-    return decorated() && !m_toplevel->scheduled.fullscreen ? config().appearance.cornerRadius : 0;
+    return decorated() && !m_toplevel->scheduled.fullscreen
+        ? nestedRadius(config().appearance.cornerRadius, borderInset())
+        : 0;
   }
 
   void View::setBorderFocused(bool focused) {
@@ -1193,9 +1195,9 @@ namespace umbriel {
   }
 
   void View::updateShadow(int contentWidth, int contentHeight) {
-    const int inset = borderInset();
+    const int borderTotal = borderInset();
     m_decoration.updateShadow(
-        contentWidth, contentHeight, inset, decorated() ? expandedRadius(config().appearance.cornerRadius, inset) : 0
+        contentWidth, contentHeight, borderTotal, decorated() ? config().appearance.cornerRadius : 0
     );
   }
 

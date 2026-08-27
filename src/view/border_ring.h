@@ -8,16 +8,26 @@
 
 namespace umbriel {
 
-  // Raster bounds and the content hole for a single-pass border.
+  // Raster bounds, content hole, and nested radii for a single-pass border.
   struct BorderRing {
     wlr_box box;
     wlr_box hole;
     fx_corner_radii inner;
+    fx_corner_radii seam;
+    fx_corner_radii outer;
   };
 
-  // Expands a rounded radius while preserving square corners.
-  [[nodiscard]] constexpr int expandedRadius(int radius, int thickness) { return radius > 0 ? radius + thickness : 0; }
+  // Smoothly reduces a positive outer radius without collapsing an inset contour to square.
+  [[nodiscard]] constexpr int nestedRadius(int radius, int inset) {
+    if (radius <= 0) {
+      return 0;
+    }
+    const int denominator = radius + inset;
+    const int rounded = (radius * radius + denominator / 2) / denominator;
+    return rounded > 0 ? rounded : 1;
+  }
 
-  [[nodiscard]] BorderRing makeBorderRing(int contentWidth, int contentHeight, int radius, int thickness);
+  [[nodiscard]] BorderRing
+  makeBorderRing(int contentWidth, int contentHeight, int outerRadius, int innerWidth, int outerWidth);
 
 } // namespace umbriel

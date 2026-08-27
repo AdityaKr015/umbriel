@@ -2,13 +2,14 @@
 
 #include "check.h"
 
-using umbriel::expandedRadius;
 using umbriel::makeBorderRing;
+using umbriel::nestedRadius;
 
-UMBRIEL_TEST(expandedRadiusKeepsSquareCornersSquare) {
-  CHECK_EQ(expandedRadius(0, 4), 0);
-  CHECK_EQ(expandedRadius(0, 0), 0);
-  CHECK_EQ(expandedRadius(10, 4), 14);
+UMBRIEL_TEST(nestedRadiusStaysRounded) {
+  CHECK_EQ(nestedRadius(0, 4), 0);
+  CHECK_EQ(nestedRadius(4, 4), 2);
+  CHECK_EQ(nestedRadius(1, 9), 1);
+  CHECK_EQ(nestedRadius(10, 4), 7);
 }
 
 UMBRIEL_TEST(roundedRingIncludesRasterMargin) {
@@ -16,7 +17,7 @@ UMBRIEL_TEST(roundedRingIncludesRasterMargin) {
   constexpr int kHeight = 120;
   constexpr int kThickness = 4;
   constexpr int kExtent = kThickness + 1;
-  const auto ring = makeBorderRing(kWidth, kHeight, 10, kThickness);
+  const auto ring = makeBorderRing(kWidth, kHeight, 10, kThickness, 0);
 
   CHECK_EQ(ring.box.x, -kExtent);
   CHECK_EQ(ring.box.y, -kExtent);
@@ -29,7 +30,7 @@ UMBRIEL_TEST(ringHoleMatchesTheWindow) {
   constexpr int kHeight = 120;
   constexpr int kThickness = 4;
   constexpr int kExtent = kThickness + 1;
-  const auto ring = makeBorderRing(kWidth, kHeight, 10, kThickness);
+  const auto ring = makeBorderRing(kWidth, kHeight, 10, kThickness, 0);
 
   CHECK_EQ(ring.hole.x, kExtent);
   CHECK_EQ(ring.hole.y, kExtent);
@@ -37,21 +38,21 @@ UMBRIEL_TEST(ringHoleMatchesTheWindow) {
   CHECK_EQ(ring.hole.height, kHeight);
 }
 
-UMBRIEL_TEST(ringHoleUsesContentRadius) {
-  constexpr int kRadius = 10;
-  const auto ring = makeBorderRing(200, 120, kRadius, 4);
+UMBRIEL_TEST(ringUsesSmoothNestedRadii) {
+  constexpr int kRadius = 8;
+  const auto ring = makeBorderRing(200, 120, kRadius, 1, 8);
 
-  CHECK_EQ(static_cast<int>(ring.inner.top_left), kRadius);
-  CHECK_EQ(static_cast<int>(ring.inner.top_right), kRadius);
-  CHECK_EQ(static_cast<int>(ring.inner.bottom_right), kRadius);
-  CHECK_EQ(static_cast<int>(ring.inner.bottom_left), kRadius);
+  CHECK_EQ(static_cast<int>(ring.outer.top_left), kRadius);
+  CHECK_EQ(static_cast<int>(ring.seam.top_right), 4);
+  CHECK_EQ(static_cast<int>(ring.inner.bottom_right), 4);
+  CHECK_EQ(static_cast<int>(ring.outer.bottom_left), kRadius);
 }
 
-UMBRIEL_TEST(squareRingKeepsSquareContentHole) {
-  const auto ring = makeBorderRing(200, 120, 0, 4);
+UMBRIEL_TEST(squareRingKeepsSquareOuterEdge) {
+  const auto ring = makeBorderRing(200, 120, 0, 4, 0);
 
-  CHECK_EQ(static_cast<int>(ring.inner.top_left), 0);
-  CHECK_EQ(static_cast<int>(ring.inner.bottom_right), 0);
+  CHECK_EQ(static_cast<int>(ring.outer.top_left), 0);
+  CHECK_EQ(static_cast<int>(ring.outer.bottom_right), 0);
   CHECK_EQ(ring.box.x, -5);
   CHECK_EQ(ring.hole.x, 5);
 }

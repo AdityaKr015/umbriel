@@ -176,17 +176,18 @@ namespace umbriel {
     const auto& appearance = config().appearance;
     const int total = appearance.totalBorderWidth();
     const bool decorated = total > 0 && !view->toplevel()->current.fullscreen && !view->maximizedToEdges();
-    const int radius = decorated ? static_cast<int>(std::lround(appearance.cornerRadius * z)) : 0;
+    const int outerRadius = decorated ? static_cast<int>(std::lround(appearance.cornerRadius * z)) : 0;
     const auto scaledWidth = [z](int width) {
       return width > 0 ? std::max(1, static_cast<int>(std::lround(width * z))) : 0;
     };
     const int innerWidth = scaledWidth(appearance.borderWidth);
     const int outerWidth = scaledWidth(appearance.outerBorderWidth);
+    const int surfaceRadius = nestedRadius(outerRadius, innerWidth + outerWidth);
     const bool borderVisible = decorated && innerWidth + outerWidth > 0;
     wlr_scene_node_set_enabled(&card.border->node, borderVisible);
     if (borderVisible) {
       applyBorderGeometry(
-          card.border, makeBorderRing(contentW, contentH, radius, innerWidth + outerWidth), innerWidth, outerWidth
+          card.border, makeBorderRing(contentW, contentH, outerRadius, innerWidth, outerWidth), innerWidth, outerWidth
       );
       // Every row advertises its own focused window, not just the active one:
       // the filmstrip is a browsing aid, and the border identifies its target.
@@ -246,11 +247,11 @@ namespace umbriel {
       wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
       wlr_scene_buffer_set_source_box(entry->buffer, &src);
       wlr_scene_buffer_set_dest_size(entry->buffer, contentW, contentH);
-      wlr_scene_buffer_set_corner_radii(entry->buffer, corner_radii_all(radius));
+      wlr_scene_buffer_set_corner_radii(entry->buffer, corner_radii_all(surfaceRadius));
       const wlr_box blurBox{0, 0, contentW, contentH};
       card.blur.setAlpha(1.0F);
       card.blur.update(
-          card.tree, surface, blurBox, geometry, radius, nullptr, view->blurOptions(), entry->buffer->opacity,
+          card.tree, surface, blurBox, geometry, surfaceRadius, nullptr, view->blurOptions(), entry->buffer->opacity,
           entry->buffer
       );
       blurUpdated = true;
@@ -563,7 +564,7 @@ namespace umbriel {
       if (copy != nullptr) {
         wlr_scene_border_set_geometry(
             copy, card.border->width, card.border->height, card.border->inner_width, card.border->outer_width,
-            card.border->clipped_region
+            card.border->clipped_region, card.border->seam_corners, card.border->outer_corners
         );
         wlr_scene_node_set_position(
             &copy->node, card.tree->node.x + card.border->node.x, card.tree->node.y + card.border->node.y

@@ -698,11 +698,10 @@ namespace umbriel {
   }
 
   Server::CloseSnapshot::CloseSnapshot(
-      Server& server, Output* output, wlr_scene_tree* tree,
-      std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects, int durationMs, const AnimationCurve& curve,
-      std::string_view style
+      Server& server, Output* output, wlr_scene_tree* tree, std::vector<BorderSnapshot> borders, int durationMs,
+      const AnimationCurve& curve, std::string_view style
   )
-      : m_server(&server), m_tree(tree), m_output(output), m_rects(std::move(rects)) {
+      : m_server(&server), m_tree(tree), m_output(output), m_borders(std::move(borders)) {
     if (m_tree != nullptr) {
       m_origX = m_tree->node.x;
       m_origY = m_tree->node.y;
@@ -745,10 +744,12 @@ namespace umbriel {
     for (auto& [buffer, baseOpacity] : m_buffers) {
       wlr_scene_buffer_set_opacity(buffer, std::clamp(baseOpacity * alpha, 0.0F, 1.0F));
     }
-    for (auto& [rect, base] : m_rects) {
-      float color[4];
-      premultiplied(color, base, alpha);
-      wlr_scene_rect_set_color(rect, color);
+    for (auto& border : m_borders) {
+      float innerColor[4];
+      float outerColor[4];
+      premultiplied(innerColor, border.innerColor, alpha);
+      premultiplied(outerColor, border.outerColor, alpha);
+      wlr_scene_border_set_colors(border.node, innerColor, outerColor);
     }
 
     if (m_tree != nullptr && movedY) {
@@ -820,7 +821,7 @@ namespace umbriel {
   }
 
   void Server::animateCloseSnapshot(
-      Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects,
+      Output* output, wlr_scene_tree* tree, std::vector<BorderSnapshot> borders,
       std::optional<CloseSnapshotOverrides> overrides
   ) {
     int durationMs = 0;
@@ -846,7 +847,7 @@ namespace umbriel {
       return;
     }
 
-    auto snapshot = std::make_unique<CloseSnapshot>(*this, output, tree, std::move(rects), durationMs, curve, style);
+    auto snapshot = std::make_unique<CloseSnapshot>(*this, output, tree, std::move(borders), durationMs, curve, style);
     registerAnimatable(snapshot.get());
     m_closeSnapshots.push_back(std::move(snapshot));
   }

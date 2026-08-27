@@ -11,6 +11,7 @@ boundaries, or regression-sensitive behavior.
 - [Configuration reload](configuration-reload.md)
 - [Workspace lifecycle](workspace-lifecycle.md)
 - [Overview rendering](overview-rendering.md)
+- [Border rendering](border-rendering.md)
 - [Xwayland input stability](xwayland-input-stability.md)
 - [Client buffer constraints](client-buffer-constraints.md)
 

@@ -176,31 +176,27 @@ namespace umbriel {
     const auto& appearance = config().appearance;
     const int total = appearance.totalBorderWidth();
     const bool decorated = total > 0 && !view->toplevel()->current.fullscreen && !view->maximizedToEdges();
-    // Scale the radius and each thickness once, then derive the rings from those scaled values. Rounding the outer
-    // radius on its own drifts from the ring's own thickness at fractional zoom, so the curve stops matching the
-    // stroke.
     const int radius = decorated ? static_cast<int>(std::lround(appearance.cornerRadius * z)) : 0;
-    const auto paintRing = [&](wlr_scene_rect* rect, int thickness, const std::array<float, 4>& base) {
-      if (rect == nullptr) {
-        return;
-      }
-      const int scaled = thickness > 0 ? std::max(1, static_cast<int>(std::lround(thickness * z))) : 0;
-      const bool visible = decorated && scaled > 0;
-      wlr_scene_node_set_enabled(&rect->node, visible);
-      if (visible) {
-        applyBorderRing(rect, makeBorderRing(contentW, contentH, radius, scaled));
-        const std::array<float, 4> color = tint(base, presentedOpacity);
-        wlr_scene_rect_set_color(rect, color.data());
-      }
+    const auto scaledWidth = [z](int width) {
+      return width > 0 ? std::max(1, static_cast<int>(std::lround(width * z))) : 0;
     };
-    // The outer ring spans both widths so the inner ring tucks into it without a
-    // seam, exactly as ViewDecoration draws a real window.
-    paintRing(card.outerBorder, appearance.outerBorderWidth > 0 ? total : 0, appearance.outerBorderColor);
-    // Every row advertises its own focused window, not just the active one: the filmstrip is a browsing aid, and the
-    // border is what tells you where each workspace will land you when you zoom into it.
-    const Workspace* workspace = view->workspace();
-    const bool focused = workspace != nullptr && workspace->focusedView() == view && m_dragCard != &card;
-    paintRing(card.border, appearance.borderWidth, focused ? appearance.borderFocused : appearance.borderUnfocused);
+    const int innerWidth = scaledWidth(appearance.borderWidth);
+    const int outerWidth = scaledWidth(appearance.outerBorderWidth);
+    const bool borderVisible = decorated && innerWidth + outerWidth > 0;
+    wlr_scene_node_set_enabled(&card.border->node, borderVisible);
+    if (borderVisible) {
+      applyBorderGeometry(
+          card.border, makeBorderRing(contentW, contentH, radius, innerWidth + outerWidth), innerWidth, outerWidth
+      );
+      // Every row advertises its own focused window, not just the active one:
+      // the filmstrip is a browsing aid, and the border identifies its target.
+      const Workspace* workspace = view->workspace();
+      const bool focused = workspace != nullptr && workspace->focusedView() == view && m_dragCard != &card;
+      const std::array<float, 4> innerColor =
+          tint(focused ? appearance.borderFocused : appearance.borderUnfocused, presentedOpacity);
+      const std::array<float, 4> outerColor = tint(appearance.outerBorderColor, presentedOpacity);
+      wlr_scene_border_set_colors(card.border, innerColor.data(), outerColor.data());
+    }
 
     const double fx = static_cast<double>(contentW) / geometry.width;
     const double fy = static_cast<double>(contentH) / geometry.height;
@@ -408,9 +404,6 @@ namespace umbriel {
     wl_signal_add(&buffer->events.frame_done, &entry->frameDone);
     syncCardBuffer(*entry);
     card->surfaces.push_back(std::move(entry));
-    if (card->outerBorder != nullptr) {
-      wlr_scene_node_raise_to_top(&card->outerBorder->node);
-    }
     if (card->border != nullptr) {
       wlr_scene_node_raise_to_top(&card->border->node);
     }
@@ -503,12 +496,13 @@ namespace umbriel {
     if (card->tree == nullptr) {
       return nullptr;
     }
-    // Outer first so the inner ring, which carries the focus colour, draws over
-    // it. The punched hole keeps both above the card buffers.
+    const std::array<float, 4> innerColor = tint(config().appearance.borderUnfocused, 1.0);
     const std::array<float, 4> outerColor = tint(config().appearance.outerBorderColor, 1.0);
-    card->outerBorder = wlr_scene_rect_create(card->tree, 1, 1, outerColor.data());
-    const std::array<float, 4> borderColor = tint(config().appearance.borderUnfocused, 1.0);
-    card->border = wlr_scene_rect_create(card->tree, 1, 1, borderColor.data());
+    card->border = wlr_scene_border_create(card->tree, innerColor.data(), outerColor.data());
+    if (card->border == nullptr) {
+      wlr_scene_node_destroy(&card->tree->node);
+      return nullptr;
+    }
     Card* raw = card.get();
     state.cards.push_back(std::move(card));
 
@@ -563,32 +557,40 @@ namespace umbriel {
       ++buffersCopied;
     }
 
-    std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects;
-    const float presentedOpacity = card.view->presentedOpacity();
-    const auto snapshotRect = [&](wlr_scene_rect* source, std::array<float, 4> base) {
-      if (source == nullptr || !source->node.enabled) {
-        return;
+    std::vector<BorderSnapshot> borders;
+    if (card.border != nullptr && card.border->node.enabled) {
+      wlr_scene_border* copy = wlr_scene_border_create(snapshot, card.border->inner_color, card.border->outer_color);
+      if (copy != nullptr) {
+        wlr_scene_border_set_geometry(
+            copy, card.border->width, card.border->height, card.border->inner_width, card.border->outer_width,
+            card.border->clipped_region
+        );
+        wlr_scene_node_set_position(
+            &copy->node, card.tree->node.x + card.border->node.x, card.tree->node.y + card.border->node.y
+        );
+        const Workspace* workspace = card.view->workspace();
+        const bool focused = workspace != nullptr && workspace->focusedView() == card.view;
+        std::array<float, 4> innerColor =
+            focused ? config().appearance.borderFocused : config().appearance.borderUnfocused;
+        std::array<float, 4> outerColor = config().appearance.outerBorderColor;
+        const float presentedOpacity = card.view->presentedOpacity();
+        innerColor[3] *= presentedOpacity;
+        outerColor[3] *= presentedOpacity;
+        borders.push_back(
+            BorderSnapshot{
+                .node = copy,
+                .innerColor = innerColor,
+                .outerColor = outerColor,
+            }
+        );
       }
-      wlr_scene_rect* copy = wlr_scene_rect_create(snapshot, source->width, source->height, source->color);
-      if (copy == nullptr) {
-        return;
-      }
-      wlr_scene_node_set_position(&copy->node, card.tree->node.x + source->node.x, card.tree->node.y + source->node.y);
-      wlr_scene_rect_set_corner_radii(copy, source->corners);
-      wlr_scene_rect_set_clipped_region(copy, source->clipped_region);
-      base[3] *= presentedOpacity;
-      rects.emplace_back(copy, base);
-    };
-    const Workspace* workspace = card.view->workspace();
-    const bool focused = workspace != nullptr && workspace->focusedView() == card.view;
-    snapshotRect(card.outerBorder, config().appearance.outerBorderColor);
-    snapshotRect(card.border, focused ? config().appearance.borderFocused : config().appearance.borderUnfocused);
+    }
 
-    if (buffersCopied == 0 && rects.empty()) {
+    if (buffersCopied == 0 && borders.empty()) {
       wlr_scene_node_destroy(&snapshot->node);
       return;
     }
-    m_server->animateCloseSnapshot(card.owner->output, snapshot, std::move(rects));
+    m_server->animateCloseSnapshot(card.owner->output, snapshot, std::move(borders));
     wlr_output_schedule_frame(card.owner->output->wlr());
   }
 
@@ -604,7 +606,6 @@ namespace umbriel {
       wlr_scene_node_destroy(&card->tree->node);
       card->tree = nullptr;
     }
-    card->outerBorder = nullptr;
     card->border = nullptr;
   }
 

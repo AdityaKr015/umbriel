@@ -6,15 +6,16 @@ extern "C" {
 
 namespace umbriel {
 
-  void applyBorderRing(wlr_scene_rect* rect, const BorderRing& ring) {
-    if (rect == nullptr) {
+  void applyBorderGeometry(wlr_scene_border* border, const BorderRing& ring, int innerWidth, int outerWidth) {
+    if (border == nullptr) {
       return;
     }
 
-    wlr_scene_node_set_position(&rect->node, ring.box.x, ring.box.y);
-    wlr_scene_rect_set_size(rect, ring.box.width, ring.box.height);
-    wlr_scene_rect_set_corner_radii(rect, ring.outer);
-    wlr_scene_rect_set_clipped_region(rect, clipped_region{.area = ring.hole, .corners = ring.inner});
+    wlr_scene_node_set_position(&border->node, ring.box.x, ring.box.y);
+    wlr_scene_border_set_geometry(
+        border, ring.box.width, ring.box.height, innerWidth, outerWidth,
+        clipped_region{.area = ring.hole, .corners = ring.inner}
+    );
   }
 
 } // namespace umbriel

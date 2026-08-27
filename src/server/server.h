@@ -2,6 +2,7 @@
 #include "core/animation.h"
 #include "core/dirty.h"
 #include "input/modifier_tap.h"
+#include "scene/border_rect.h"
 #include "server/focus.h"
 #include "view/registry.h"
 
@@ -320,7 +321,7 @@ namespace umbriel {
       std::string style = "fade";
     };
     void animateCloseSnapshot(
-        Output* output, wlr_scene_tree* tree, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects,
+        Output* output, wlr_scene_tree* tree, std::vector<BorderSnapshot> borders,
         std::optional<CloseSnapshotOverrides> overrides = std::nullopt
     );
 
@@ -489,8 +490,7 @@ namespace umbriel {
     class CloseSnapshot : public Animatable {
     public:
       CloseSnapshot(
-          Server& server, Output* output, wlr_scene_tree* tree,
-          std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> rects, int durationMs,
+          Server& server, Output* output, wlr_scene_tree* tree, std::vector<BorderSnapshot> borders, int durationMs,
           const AnimationCurve& curve, std::string_view style
       );
       ~CloseSnapshot() override;
@@ -509,7 +509,7 @@ namespace umbriel {
       int m_origX = 0;
       int m_origY = 0;
       std::vector<std::pair<wlr_scene_buffer*, float>> m_buffers;
-      std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> m_rects;
+      std::vector<BorderSnapshot> m_borders;
     };
     // unique_ptr because the registry holds raw pointers to these: a vector of
     // values would move them out from under it on reallocation.

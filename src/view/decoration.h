@@ -1,14 +1,14 @@
 #pragma once
 
+#include "scene/border_rect.h"
 #include "scene/surface_blur.h"
 #include "scene/surface_shadow.h"
-#include "view/border_ring.h"
 
 #include <array>
 #include <utility>
 #include <vector>
 
-struct wlr_scene_rect;
+struct wlr_scene_border;
 struct wlr_scene_tree;
 struct wlr_surface;
 
@@ -26,8 +26,7 @@ namespace umbriel {
   // read from the config directly, as the other scene classes do.
   class ViewDecoration {
   public:
-    // The ring is reused so fullscreen toggles preserve scene-node ordering that
-    // keeps the inner ring above the outer one.
+    // The single node resolves inner and outer colors from one shared curve.
     void ensureBorders(wlr_scene_tree* parent);
     // True while the ring exists and is showing. Fullscreen disables the tree
     // rather than destroying it, so existence alone does not answer this.
@@ -40,11 +39,8 @@ namespace umbriel {
     // True when the drawn ring no longer matches the given content size, i.e. a
     // client commit changed geometry behind the layout's back.
     [[nodiscard]] bool borderGeometryStale(int contentWidth, int contentHeight) const;
-    // Copy the ring into a close-animation snapshot tree. Each entry pairs the
-    // copied rect with the color it should animate toward.
-    void snapshotBorders(
-        wlr_scene_tree* snapshot, bool focused, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>>& out
-    ) const;
+    // Copy the border into a close-animation snapshot tree.
+    void snapshotBorders(wlr_scene_tree* snapshot, bool focused, std::vector<BorderSnapshot>& out) const;
 
     // Blur
     [[nodiscard]] SurfaceBlurOptions blurOptions() const { return m_blurOptions; }
@@ -73,8 +69,7 @@ namespace umbriel {
 
   private:
     wlr_scene_tree* m_borderTree = nullptr;
-    wlr_scene_rect* m_borderRect = nullptr;
-    wlr_scene_rect* m_outerBorderRect = nullptr;
+    wlr_scene_border* m_border = nullptr;
     SurfaceBlur m_blur;
     SurfaceBlurOptions m_blurOptions;
     SurfaceBlurOptions m_popupBlurOptions;

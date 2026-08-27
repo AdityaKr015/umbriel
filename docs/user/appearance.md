@@ -67,6 +67,9 @@ drag_opacity = 0.75
 
 Colors are `#RRGGBB` or `#RRGGBBAA`.
 
+Border widths and corner radius are measured in logical pixels. Inner and outer
+borders render outside the window and are included in layout spacing.
+
 See [Scratchpads](scratchpad.md) for how scratchpad windows behave and use the
 dedicated border colors.
 

@@ -1252,10 +1252,8 @@ namespace umbriel {
     }
     wlr_scene_node_set_position(&snap->node, m_sceneTree->node.x, m_sceneTree->node.y);
 
-    // Collect border rects for the snapshot.
-    std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>> snapRects;
-
-    m_decoration.snapshotBorders(snap, m_borderFocusedState, snapRects);
+    std::vector<BorderSnapshot> snapBorders;
+    m_decoration.snapshotBorders(snap, m_borderFocusedState, snapBorders);
 
     // Copy surface buffers.
     struct CopyCtx {
@@ -1301,7 +1299,7 @@ namespace umbriel {
       return;
     }
 
-    m_server->animateCloseSnapshot(output, snap, std::move(snapRects));
+    m_server->animateCloseSnapshot(output, snap, std::move(snapBorders));
     wlr_output_schedule_frame(output->wlr());
   }
 

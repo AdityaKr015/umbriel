@@ -16,6 +16,7 @@ extern "C" {
 }
 
 struct wlr_scene_buffer;
+struct wlr_scene_border;
 struct wlr_scene_blur;
 struct wlr_scene_rect;
 struct wlr_scene_tree;
@@ -120,9 +121,7 @@ namespace umbriel {
       View* view = nullptr;
       size_t row = 0; // workspace index inside the output's group
       wlr_scene_tree* tree = nullptr;
-      // Outer below, inner on top, as ViewDecoration stacks them.
-      wlr_scene_rect* outerBorder = nullptr;
-      wlr_scene_rect* border = nullptr;
+      wlr_scene_border* border = nullptr;
       SurfaceBlur blur;
       std::vector<std::unique_ptr<CardSurface>> surfaces;
       wlr_box box{}; // content box in layout coordinates

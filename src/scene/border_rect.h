@@ -2,14 +2,20 @@
 
 #include "view/border_ring.h"
 
-struct wlr_scene_rect;
+#include <array>
+
+struct wlr_scene_border;
 
 namespace umbriel {
 
-  // Draw `ring` on `rect`, in coordinates relative to the content box origin. The ring is one rounded rectangle with
-  // the content punched out of it, so it never sits behind the window: a filled rect would tint every translucent
-  // client with the border colour, which would then visibly change with focus. Containment on an output is not this
-  // function's business; the caller's scene tree carries the clip.
-  void applyBorderRing(wlr_scene_rect* rect, const BorderRing& ring);
+  struct BorderSnapshot {
+    wlr_scene_border* node = nullptr;
+    std::array<float, 4> innerColor{};
+    std::array<float, 4> outerColor{};
+  };
+
+  // Position and size the single-pass border relative to the content origin.
+  // The render margin belongs only to raster coverage; widths remain logical.
+  void applyBorderGeometry(wlr_scene_border* border, const BorderRing& ring, int innerWidth, int outerWidth);
 
 } // namespace umbriel

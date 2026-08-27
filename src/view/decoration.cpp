@@ -16,11 +16,12 @@ namespace umbriel {
       return;
     }
     m_borderTree = wlr_scene_tree_create(parent);
-    // Outer below, then inner on top so the focus ring stays visible.
-    m_outerBorderRect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.outerBorderColor.data());
-    m_borderRect = wlr_scene_rect_create(m_borderTree, 0, 0, config().appearance.borderUnfocused.data());
-    wlr_scene_node_raise_to_top(&m_borderRect->node);
-    // The punched hole protects client content, so keep the ring above the
+    float innerColor[4];
+    float outerColor[4];
+    premultiplied(innerColor, config().appearance.borderUnfocused, 1.0F);
+    premultiplied(outerColor, config().appearance.outerBorderColor, 1.0F);
+    m_border = wlr_scene_border_create(m_borderTree, innerColor, outerColor);
+    // The punched hole protects client content, so keep the border above the
     // toplevel surface that would otherwise cover its outermost pixels.
     wlr_scene_node_raise_to_top(&m_borderTree->node);
   }
@@ -34,32 +35,15 @@ namespace umbriel {
   }
 
   void ViewDecoration::updateBorderGeometry(int contentWidth, int contentHeight) {
-    if (m_borderTree == nullptr) {
+    if (m_border == nullptr) {
       return;
     }
 
     const auto& appearance = config().appearance;
-    if (m_borderRect != nullptr) {
-      applyBorderRing(
-          m_borderRect, makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.borderWidth)
-      );
-    }
-
-    if (m_outerBorderRect != nullptr) {
-      if (appearance.outerBorderWidth <= 0) {
-        wlr_scene_rect_set_size(m_outerBorderRect, 0, 0);
-      } else {
-        // The outer color tucks under the inner ring, leaving no gap between them.
-        applyBorderRing(
-            m_outerBorderRect,
-            makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth())
-        );
-      }
-    }
-
-    if (m_borderRect != nullptr) {
-      wlr_scene_node_raise_to_top(&m_borderRect->node);
-    }
+    applyBorderGeometry(
+        m_border, makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth()),
+        appearance.borderWidth, appearance.outerBorderWidth
+    );
   }
 
   void ViewDecoration::setBorderColor(bool focused, bool scratchpad, float alpha) {
@@ -73,59 +57,48 @@ namespace umbriel {
   }
 
   void ViewDecoration::setBorderRawColor(const std::array<float, 4>& baseColor, float alpha) {
-    if (m_borderTree == nullptr) {
+    if (m_border == nullptr) {
       return;
     }
-    float color[4];
-    premultiplied(color, baseColor, alpha);
-    if (m_borderRect != nullptr) {
-      wlr_scene_rect_set_color(m_borderRect, color);
-    }
-    if (m_outerBorderRect != nullptr) {
-      float outerColor[4];
-      premultiplied(outerColor, config().appearance.outerBorderColor, alpha);
-      wlr_scene_rect_set_color(m_outerBorderRect, outerColor);
-    }
+    float innerColor[4];
+    float outerColor[4];
+    premultiplied(innerColor, baseColor, alpha);
+    premultiplied(outerColor, config().appearance.outerBorderColor, alpha);
+    wlr_scene_border_set_colors(m_border, innerColor, outerColor);
   }
 
   bool ViewDecoration::borderGeometryStale(int contentWidth, int contentHeight) const {
-    if (m_borderTree == nullptr) {
+    if (m_border == nullptr) {
       return false;
     }
-    const int inner = config().appearance.borderWidth;
-    const int expectedOuterWidth =
-        config().appearance.outerBorderWidth > 0 ? contentWidth + 2 * config().appearance.totalBorderWidth() : 0;
-    return (m_borderRect != nullptr
-            && (m_borderRect->width != contentWidth + 2 * inner || m_borderRect->height != contentHeight + 2 * inner))
-        || (m_outerBorderRect != nullptr && m_outerBorderRect->width != expectedOuterWidth);
+    const auto& appearance = config().appearance;
+    const BorderRing ring =
+        makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth());
+    return m_border->width != ring.box.width || m_border->height != ring.box.height;
   }
 
-  void ViewDecoration::snapshotBorders(
-      wlr_scene_tree* snapshot, bool focused, std::vector<std::pair<wlr_scene_rect*, std::array<float, 4>>>& out
-  ) const {
-    if (!bordersVisible()) {
+  void ViewDecoration::snapshotBorders(wlr_scene_tree* snapshot, bool focused, std::vector<BorderSnapshot>& out) const {
+    if (!bordersVisible() || m_border == nullptr) {
       return;
     }
-    const auto& focusedColor = focused ? config().appearance.borderFocused : config().appearance.borderUnfocused;
-    const auto copyRect = [&](wlr_scene_rect* src, const std::array<float, 4>& target) {
-      wlr_scene_rect* copy = wlr_scene_rect_create(snapshot, src->width, src->height, src->color);
-      if (copy == nullptr) {
-        return;
-      }
-      // Snapshot coordinates are relative to the view, so fold in the border
-      // tree's own offset: the snapshot tree has no equivalent parent.
-      wlr_scene_node_set_position(&copy->node, m_borderTree->node.x + src->node.x, m_borderTree->node.y + src->node.y);
-      wlr_scene_rect_set_corner_radii(copy, src->corners);
-      wlr_scene_rect_set_clipped_region(copy, src->clipped_region);
-      out.emplace_back(copy, target);
-    };
 
-    if (m_borderRect != nullptr) {
-      copyRect(m_borderRect, focusedColor);
+    wlr_scene_border* copy = wlr_scene_border_create(snapshot, m_border->inner_color, m_border->outer_color);
+    if (copy == nullptr) {
+      return;
     }
-    if (m_outerBorderRect != nullptr && config().appearance.outerBorderWidth > 0) {
-      copyRect(m_outerBorderRect, config().appearance.outerBorderColor);
-    }
+    wlr_scene_border_set_geometry(
+        copy, m_border->width, m_border->height, m_border->inner_width, m_border->outer_width, m_border->clipped_region
+    );
+    wlr_scene_node_set_position(
+        &copy->node, m_borderTree->node.x + m_border->node.x, m_borderTree->node.y + m_border->node.y
+    );
+    out.push_back(
+        BorderSnapshot{
+            .node = copy,
+            .innerColor = focused ? config().appearance.borderFocused : config().appearance.borderUnfocused,
+            .outerColor = config().appearance.outerBorderColor,
+        }
+    );
   }
 
   // Blur

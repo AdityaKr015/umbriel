@@ -41,57 +41,62 @@ back_and_forth = false
 
 [animation]
 enabled = true
-duration_ms = 200              # 1-10000
-curve = "snappy"
+duration_ms = 250              # 1-10000
+curve = "easeout"
 
 [animation.windows_in]
 enabled = true
-duration_ms = 200
-curve = "snappy"
+duration_ms = 150
+curve = "easeout"
 style = "popin"                # popin, zoom, slide, fade, none
 scale = 0.85                   # 0.1-1.0, used by popin
 
 [animation.windows_out]
 enabled = true
-duration_ms = 200
-curve = "snappy"
+duration_ms = 150
+curve = "easeout"
 style = "fade"                 # fade, slide
 
 [animation.windows_move]
 enabled = true
-duration_ms = 200
+duration_ms = 250
 curve = "snappy"
 
 [animation.workspaces]
 enabled = true
 duration_ms = 250
-curve = "snappy"
+curve = "easeout"
 
-[animation.scratchpad]
+[animation.overview]
 enabled = true
 duration_ms = 250
-curve = "snappy"
-dim = 0.2                      # 0.0-1.0
+curve = "easeout"
+
+[animation.scratchpad]
+enabled = false
+duration_ms = 250
+curve = "easeout"
+dim = 0.5                      # 0.0-1.0
 blur = false
 scale = 0.0                    # 0 preserves the window geometry
 maximize = false
 fullscreen = false
 
 [animation.border]
-enabled = true
-duration_ms = 200
-curve = "snappy"
+enabled = false
+duration_ms = 250
+curve = "easeout"
 
 [animation.dim_unfocused]
-enabled = true
-duration_ms = 200
-curve = "snappy"
+enabled = false
+duration_ms = 250
+curve = "easeout"
 dim = 0.0                      # 0.0-1.0
 
 [animation.layers]
-enabled = true
-duration_ms = 200
-curve = "snappy"
+enabled = false
+duration_ms = 250
+curve = "easeout"
 
 # Appearance -----------------------------------------------------------------
 

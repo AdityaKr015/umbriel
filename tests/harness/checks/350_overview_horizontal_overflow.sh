@@ -21,7 +21,7 @@ wait_for_count() {
 
 cat >> "$UMBRIEL_CONFIG" <<'EOF'
 
-[animation]
+[animation.overview]
 duration_ms = 1000
 
 [appearance]

@@ -8,7 +8,6 @@
 
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -344,15 +343,15 @@ namespace umbriel {
 
     struct Animation {
       bool enabled = true;
-      int durationMs = 200;
-      AnimationCurve curve{.easing = Easing::Snappy};
+      int durationMs = 250;
+      AnimationCurve curve{.easing = Easing::EaseOutCubic};
       std::map<std::string, BezierCurve> beziers;
       std::map<std::string, SpringConfig> springs;
 
       struct WindowsIn {
         bool enabled = true;
-        int durationMs = 200;
-        AnimationCurve curve{.easing = Easing::Snappy};
+        int durationMs = 150;
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
         std::string style = "popin";
         double scale = 0.85;
         bool operator==(const WindowsIn&) const = default;
@@ -360,15 +359,15 @@ namespace umbriel {
 
       struct WindowsOut {
         bool enabled = true;
-        int durationMs = 200;
-        AnimationCurve curve{.easing = Easing::Snappy};
+        int durationMs = 150;
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
         std::string style = "fade";
         bool operator==(const WindowsOut&) const = default;
       } windowsOut;
 
       struct WindowsMove {
         bool enabled = true;
-        int durationMs = 200;
+        int durationMs = 250;
         AnimationCurve curve{.easing = Easing::Snappy};
         bool operator==(const WindowsMove&) const = default;
       } windowsMove;
@@ -376,15 +375,22 @@ namespace umbriel {
       struct Workspaces {
         bool enabled = true;
         int durationMs = 250;
-        AnimationCurve curve{.easing = Easing::Snappy};
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
         bool operator==(const Workspaces&) const = default;
       } workspaces;
 
-      struct Scratchpad {
+      struct Overview {
         bool enabled = true;
         int durationMs = 250;
-        AnimationCurve curve{.easing = Easing::Snappy};
-        double dim = 0.2;
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
+        bool operator==(const Overview&) const = default;
+      } overview;
+
+      struct Scratchpad {
+        bool enabled = false;
+        int durationMs = 250;
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
+        double dim = 0.5;
         bool blur = false;
         double scale = 0.0;
         bool maximize = false;
@@ -393,24 +399,24 @@ namespace umbriel {
       } scratchpad;
 
       struct Border {
-        bool enabled = true;
-        int durationMs = 200;
-        AnimationCurve curve{.easing = Easing::Snappy};
+        bool enabled = false;
+        int durationMs = 250;
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
         bool operator==(const Border&) const = default;
       } border;
 
       struct DimUnfocused {
-        bool enabled = true;
-        int durationMs = 200;
-        AnimationCurve curve{.easing = Easing::Snappy};
+        bool enabled = false;
+        int durationMs = 250;
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
         double dim = 0.0;
         bool operator==(const DimUnfocused&) const = default;
       } dimUnfocused;
 
       struct Layers {
-        bool enabled = true;
-        int durationMs = 200;
-        AnimationCurve curve{.easing = Easing::Snappy};
+        bool enabled = false;
+        int durationMs = 250;
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
         bool operator==(const Layers&) const = default;
       } layers;
 

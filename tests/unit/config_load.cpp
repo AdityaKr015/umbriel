@@ -946,6 +946,11 @@ scale = 0.7
 curve = "bouncy"
 style = "slide"
 
+[animation.overview]
+enabled = false
+duration_ms = 700
+curve = "custom"
+
 [animation.scratchpad]
 dim = 0.4
 blur = true
@@ -967,6 +972,9 @@ blur = true
   CHECK_EQ(animation.windowsIn.scale, 0.7);
   CHECK(animation.windowsOut.curve.easing == umbriel::Easing::Spring);
   CHECK_EQ(animation.windowsOut.style, std::string{"slide"});
+  CHECK(!animation.overview.enabled);
+  CHECK_EQ(animation.overview.durationMs, 700);
+  CHECK(animation.overview.curve.easing == umbriel::Easing::CustomBezier);
   CHECK_EQ(animation.windowsMove.durationMs, 320);
   CHECK_EQ(animation.scratchpad.dim, 0.4);
   CHECK(animation.scratchpad.blur);
@@ -979,11 +987,11 @@ enabled = false
 enabled = false
 
 [animation.fade]
-enabled = false
+enabled = true
 )");
   CHECK(store.reload().success);
   CHECK(store.config().animation.enabled);
-  CHECK(store.config().animation.layers.enabled);
+  CHECK(!store.config().animation.layers.enabled);
   CHECK(containsDiagnostic(store, "unknown key appearance.animations"));
   CHECK(containsDiagnostic(store, "unknown key animations"));
   CHECK(containsDiagnostic(store, "unknown key animation.fade"));

@@ -26,6 +26,7 @@ duration_ms = 2000
 enabled = false
 
 [animation.scratchpad]
+enabled = true
 duration_ms = 2000
 curve = "linear"
 dim = 0.0

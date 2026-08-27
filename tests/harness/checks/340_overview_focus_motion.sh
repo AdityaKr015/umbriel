@@ -28,7 +28,7 @@ wait_for_count() {
   return 1
 }
 
-printf '\n[animation]\nduration_ms = 2000\n' >> "$UMBRIEL_CONFIG"
+printf '\n[animation.overview]\nduration_ms = 2000\n' >> "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 
 spawn_client overview-motion-first

@@ -650,6 +650,7 @@ namespace umbriel {
         animation.windowsOut.durationMs = *defaultDuration;
         animation.windowsMove.durationMs = *defaultDuration;
         animation.workspaces.durationMs = *defaultDuration;
+        animation.overview.durationMs = *defaultDuration;
         animation.scratchpad.durationMs = *defaultDuration;
         animation.border.durationMs = *defaultDuration;
         animation.dimUnfocused.durationMs = *defaultDuration;
@@ -663,6 +664,7 @@ namespace umbriel {
           animation.windowsOut.curve = *curve;
           animation.windowsMove.curve = *curve;
           animation.workspaces.curve = *curve;
+          animation.overview.curve = *curve;
           animation.scratchpad.curve = *curve;
           animation.border.curve = *curve;
           animation.dimUnfocused.curve = *curve;
@@ -714,6 +716,11 @@ namespace umbriel {
         section.boolean("enabled", animation.workspaces.enabled)
             .integer("duration_ms", 1, 10000, animation.workspaces.durationMs);
         readCurve(section, "animation.workspaces", animation.workspaces.curve);
+      });
+      s.sub("overview", [&](Section& section) {
+        section.boolean("enabled", animation.overview.enabled)
+            .integer("duration_ms", 1, 10000, animation.overview.durationMs);
+        readCurve(section, "animation.overview", animation.overview.curve);
       });
       s.sub("scratchpad", [&](Section& section) {
         section.boolean("enabled", animation.scratchpad.enabled)

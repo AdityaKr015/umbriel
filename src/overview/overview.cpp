@@ -875,7 +875,8 @@ namespace umbriel {
     m_targetProgress = target;
     m_progressFrom = m_progress;
     const auto& animation = config().animation;
-    if (!animation.enabled) {
+    const auto& overview = animation.overview;
+    if (!animation.enabled || !overview.enabled) {
       m_anim.snap(1.0);
       m_progress = target;
       for (const auto& state : m_outputs) {
@@ -885,7 +886,7 @@ namespace umbriel {
       return;
     }
     m_anim.snap(0.0);
-    m_anim.retarget(1.0, animation.durationMs, animation.curve);
+    m_anim.retarget(1.0, overview.durationMs, overview.curve);
     // Animations only tick from an output frame; kick one so the zoom starts on
     // an idle desktop (the value itself clocks from its first tick).
     scheduleFrames();

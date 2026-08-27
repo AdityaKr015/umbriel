@@ -407,12 +407,12 @@ namespace umbriel {
         bool operator==(const DimUnfocused&) const = default;
       } dimUnfocused;
 
-      struct Fade {
+      struct Layers {
         bool enabled = true;
         int durationMs = 200;
         AnimationCurve curve{.easing = Easing::Snappy};
-        bool operator==(const Fade&) const = default;
-      } fade;
+        bool operator==(const Layers&) const = default;
+      } layers;
 
       bool operator==(const Animation&) const = default;
     } animation;

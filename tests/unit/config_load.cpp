@@ -977,11 +977,16 @@ enabled = false
 
 [animations]
 enabled = false
+
+[animation.fade]
+enabled = false
 )");
   CHECK(store.reload().success);
   CHECK(store.config().animation.enabled);
+  CHECK(store.config().animation.layers.enabled);
   CHECK(containsDiagnostic(store, "unknown key appearance.animations"));
   CHECK(containsDiagnostic(store, "unknown key animations"));
+  CHECK(containsDiagnostic(store, "unknown key animation.fade"));
 }
 
 UMBRIEL_TEST(packagedAnimationDefaultsMatchCompiledDefaults) {

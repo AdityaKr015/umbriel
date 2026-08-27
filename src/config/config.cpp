@@ -653,7 +653,7 @@ namespace umbriel {
         animation.scratchpad.durationMs = *defaultDuration;
         animation.border.durationMs = *defaultDuration;
         animation.dimUnfocused.durationMs = *defaultDuration;
-        animation.fade.durationMs = *defaultDuration;
+        animation.layers.durationMs = *defaultDuration;
       }
 
       if (const toml::node* node = s.take("curve")) {
@@ -666,7 +666,7 @@ namespace umbriel {
           animation.scratchpad.curve = *curve;
           animation.border.curve = *curve;
           animation.dimUnfocused.curve = *curve;
-          animation.fade.curve = *curve;
+          animation.layers.curve = *curve;
         }
       }
 
@@ -736,9 +736,10 @@ namespace umbriel {
             .real("dim", 0.0, 1.0, animation.dimUnfocused.dim);
         readCurve(section, "animation.dim_unfocused", animation.dimUnfocused.curve);
       });
-      s.sub("fade", [&](Section& section) {
-        section.boolean("enabled", animation.fade.enabled).integer("duration_ms", 1, 10000, animation.fade.durationMs);
-        readCurve(section, "animation.fade", animation.fade.curve);
+      s.sub("layers", [&](Section& section) {
+        section.boolean("enabled", animation.layers.enabled)
+            .integer("duration_ms", 1, 10000, animation.layers.durationMs);
+        readCurve(section, "animation.layers", animation.layers.curve);
       });
     }
 

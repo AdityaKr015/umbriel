@@ -109,8 +109,8 @@ namespace umbriel {
   void LayerSurface::beginCloseAnimation() {
     Output* out = output();
     const auto& animation = config().animation;
-    const auto& fadeCfg = animation.fade;
-    if (out == nullptr || m_scene == nullptr || !animation.enabled || !fadeCfg.enabled) {
+    const auto& layers = animation.layers;
+    if (out == nullptr || m_scene == nullptr || !animation.enabled || !layers.enabled) {
       return;
     }
 
@@ -165,7 +165,7 @@ namespace umbriel {
 
     m_server->animateCloseSnapshot(
         out, snap, {},
-        Server::CloseSnapshotOverrides{.durationMs = fadeCfg.durationMs, .curve = fadeCfg.curve, .style = "fade"}
+        Server::CloseSnapshotOverrides{.durationMs = layers.durationMs, .curve = layers.curve, .style = "fade"}
     );
     wlr_output_schedule_frame(out->wlr());
   }
@@ -335,11 +335,11 @@ namespace umbriel {
     updateBlur();
 
     const auto& animation = config().animation;
-    const auto& fadeCfg = animation.fade;
-    if (animation.enabled && fadeCfg.enabled) {
+    const auto& layers = animation.layers;
+    if (animation.enabled && layers.enabled) {
       m_fade.snap(0.0);
       applyFadeAlpha();
-      m_fade.retarget(1.0, fadeCfg.durationMs, fadeCfg.curve);
+      m_fade.retarget(1.0, layers.durationMs, layers.curve);
       if (Output* out = output()) {
         wlr_output_schedule_frame(out->wlr());
       }

@@ -88,7 +88,7 @@ duration_ms = 200
 curve = "snappy"
 dim = 0.0                      # 0.0-1.0
 
-[animation.fade]
+[animation.layers]
 enabled = true
 duration_ms = 200
 curve = "snappy"

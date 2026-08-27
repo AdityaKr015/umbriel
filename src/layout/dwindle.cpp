@@ -15,6 +15,26 @@ extern "C" {
 
 namespace umbriel {
 
+  namespace {
+
+    struct DwindleSnapshot final : LayoutSnapshot {
+      struct SavedNode {
+        DwindleLayout::Node::Type type = DwindleLayout::Node::Leaf;
+        std::unique_ptr<SavedNode> left;
+        std::unique_ptr<SavedNode> right;
+        double ratio = 0.5;
+        LayoutMemberId member = 0;
+      };
+
+      [[nodiscard]] LayoutMode mode() const override { return LayoutMode::Dwindle; }
+      [[nodiscard]] size_t memberCount() const override { return members; }
+
+      std::unique_ptr<SavedNode> root;
+      size_t members = 0;
+    };
+
+  } // namespace
+
   DwindleLayout::Node* DwindleLayout::findNode(const View* view) const {
     if (m_root == nullptr) {
       return nullptr;
@@ -311,6 +331,83 @@ namespace umbriel {
   }
 
   int DwindleLayout::rowOf(const View* /*view*/) const { return 0; }
+
+  LayoutCapture DwindleLayout::captureState() const {
+    auto snapshot = std::make_shared<DwindleSnapshot>();
+    LayoutCapture capture{.snapshot = snapshot, .members = {}};
+    const auto saveNode = [&capture](auto&& self, const Node* node) -> std::unique_ptr<DwindleSnapshot::SavedNode> {
+      if (node == nullptr) {
+        return nullptr;
+      }
+      auto saved = std::make_unique<DwindleSnapshot::SavedNode>();
+      saved->type = node->type;
+      saved->ratio = node->ratio;
+      if (node->type == Node::Leaf) {
+        const auto id = static_cast<LayoutMemberId>(capture.members.size());
+        capture.members.push_back({.id = id, .view = node->view});
+        saved->member = id;
+      } else {
+        saved->left = self(self, node->left.get());
+        saved->right = self(self, node->right.get());
+      }
+      return saved;
+    };
+    snapshot->root = saveNode(saveNode, m_root.get());
+    snapshot->members = capture.members.size();
+    return capture;
+  }
+
+  bool DwindleLayout::restoreState(const LayoutSnapshot& base, std::span<const LayoutMember> members) {
+    const auto* snapshot = dynamic_cast<const DwindleSnapshot*>(&base);
+    if (snapshot == nullptr || m_root != nullptr) {
+      return false;
+    }
+    const std::optional<std::vector<View*>> resolved = resolveLayoutMembers(snapshot->memberCount(), members);
+    if (!resolved) {
+      return false;
+    }
+
+    const auto restoreNode =
+        [&resolved](auto&& self, const DwindleSnapshot::SavedNode* saved, Node* parent) -> std::unique_ptr<Node> {
+      if (saved == nullptr) {
+        return nullptr;
+      }
+      if (saved->type == Node::Leaf) {
+        View* view = (*resolved)[static_cast<size_t>(saved->member)];
+        if (view == nullptr) {
+          return nullptr;
+        }
+        auto node = std::make_unique<Node>();
+        node->type = Node::Leaf;
+        node->parent = parent;
+        node->view = view;
+        return node;
+      }
+
+      auto node = std::make_unique<Node>();
+      node->type = saved->type;
+      node->parent = parent;
+      node->ratio = saved->ratio;
+      node->left = self(self, saved->left.get(), node.get());
+      node->right = self(self, saved->right.get(), node.get());
+      if (node->left == nullptr) {
+        if (node->right != nullptr) {
+          node->right->parent = parent;
+        }
+        return std::move(node->right);
+      }
+      if (node->right == nullptr) {
+        node->left->parent = parent;
+        return std::move(node->left);
+      }
+      return node;
+    };
+
+    m_root = restoreNode(restoreNode, snapshot->root.get(), nullptr);
+    m_targets.clear();
+    rebuildFlatColumns();
+    return true;
+  }
 
   void DwindleLayout::insertView(View* view, int columnIndex) {
     if (view == nullptr || findNode(view) != nullptr) {

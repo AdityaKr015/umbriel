@@ -1,12 +1,15 @@
 #include "config/change.h"
 #include "config/config.h"
 #include "config/config_watcher.h"
+#include "config/resolve.h"
+#include "config/store.h"
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/gestures.h"
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
+#include "layout/scrolling.h"
 #include "lock/session_lock.h"
 #include "output/output.h"
 #include "overview/overview.h"
@@ -1347,9 +1350,6 @@ namespace umbriel {
   }
 
   void Server::removeOutput(Output* output) {
-    if (m_scratchpadManager != nullptr) {
-      m_scratchpadManager->releaseOutput(output);
-    }
     m_overview->onOutputRemoved(output);
     m_gestures->cancelForOutput(output);
     if (!m_cursor->isPassthrough()) {
@@ -1392,6 +1392,9 @@ namespace umbriel {
     }
 
     reassignOutputViews(output, fallback);
+    if (m_scratchpadManager != nullptr) {
+      m_scratchpadManager->releaseOutput(output);
+    }
 
     std::erase_if(m_outputs, [output](const std::unique_ptr<Output>& entry) { return entry.get() == output; });
     markDirty(Dirty::Banner | Dirty::Cheatsheet | Dirty::QuitConfirm);
@@ -1412,26 +1415,92 @@ namespace umbriel {
         ? destination->workspaceGroup()->active()
         : nullptr;
     const char* sourceName = source->wlr()->name;
+    if (sourceGroup != nullptr && sourceGroup->active() != nullptr && sourceName != nullptr) {
+      const auto existing = std::ranges::find_if(m_displacedWorkspaceSelections, [sourceName](const auto& selection) {
+        return selection.outputName == sourceName;
+      });
+      if (existing == m_displacedWorkspaceSelections.end()) {
+        m_displacedWorkspaceSelections.push_back({
+            .outputName = sourceName,
+            .workspaceName = sourceGroup->active()->name(),
+            .workspaceIndex = sourceGroup->active()->index(),
+        });
+      }
+    }
+    const auto rememberWorkspace = [this](Workspace* workspace, Output* output, bool tiledOnly) {
+      if (workspace == nullptr || output == nullptr || output->wlr()->name == nullptr) {
+        return;
+      }
+      const wlr_box outputBox = output->layoutBox();
+      const LayoutCapture capture = workspace->scrollingLayout() != nullptr
+          ? workspace->scrollingLayout()->captureStateForViewport(workspace->scrollViewportExtent())
+          : workspace->layout().captureState();
+      for (const auto& view : m_registry.all()) {
+        if (view->workspace() != workspace || view->displacedHome()) {
+          continue;
+        }
+        const auto member = std::ranges::find_if(capture.members, [view = view.get()](const LayoutMember& entry) {
+          return entry.view == view;
+        });
+        if (tiledOnly && member == capture.members.end()) {
+          continue;
+        }
+        if (view->floating()) {
+          view->rememberFloatingPosition();
+        }
+        View::DisplacedHome home{
+            .outputName = output->wlr()->name,
+            .workspaceName = workspace->name(),
+            .layoutSnapshot = nullptr,
+            .layoutMember = 0,
+            .layoutModeOverride = workspace->layoutModeOverride(),
+            .floatingOutputPosition = std::nullopt,
+            .configGeneration = configStore().generation(),
+            .layoutProtectionOnly = tiledOnly,
+        };
+        if (view->floating() && outputBox.width > 0 && outputBox.height > 0) {
+          home.floatingOutputPosition = {{
+              static_cast<double>(view->sceneTree()->node.x - outputBox.x) / outputBox.width,
+              static_cast<double>(view->sceneTree()->node.y - outputBox.y) / outputBox.height,
+          }};
+        }
+        if (member != capture.members.end()) {
+          home.layoutSnapshot = capture.snapshot;
+          home.layoutMember = member->id;
+        }
+        view->markDisplaced(std::move(home));
+      }
+    };
+
     if (sourceGroup != nullptr) {
-      // Record every home before the first move; setWorkspace empties workspaces as views leave and a dynamic group
-      // renumbers what is left, under the windows that have not been read yet.
       std::vector<View*> leaving;
       for (const auto& view : m_registry.all()) {
         Workspace* workspace = view->workspace();
         if (workspace == nullptr || workspace->group() != sourceGroup) {
           continue;
         }
-        if (!view->displacedHome() && sourceName != nullptr) {
-          if (view->floating()) {
-            // Capture this before moving any view. A later output loss may encounter the same displaced view on a
-            // temporary fallback, but its home geometry must remain the one recorded here.
-            view->rememberFloatingPosition();
-          }
-          view->markDisplaced({.outputName = sourceName, .workspaceName = workspace->name()});
-        }
         leaving.push_back(view.get());
       }
+
+      // Capture every source workspace before the first move. Moving a view can
+      // collapse and renumber a dynamic workspace group.
+      for (size_t index = 0; index < sourceGroup->workspaceCount(); ++index) {
+        rememberWorkspace(sourceGroup->workspaceAt(index), source, false);
+      }
+      // Refugees alter the destination's tiled structure. Preserve its native
+      // members before the first refugee joins, so a later loss of that output
+      // does not snapshot an already mixed layout.
+      const bool contaminatesDestination = !leaving.empty();
+      if (contaminatesDestination && targetWorkspace != nullptr) {
+        rememberWorkspace(targetWorkspace, destination, true);
+      }
+
       for (View* view : leaving) {
+        if (view->displacedHome() && view->displacedHome()->layoutProtectionOnly) {
+          View::DisplacedHome home = *view->displacedHome();
+          home.layoutProtectionOnly = false;
+          view->markDisplaced(std::move(home));
+        }
         const bool floating = view->floating();
         view->setWorkspace(targetWorkspace);
         if (floating && targetWorkspace != nullptr) {
@@ -1455,7 +1524,6 @@ namespace umbriel {
     m_displacedRestoreIdle = wl_event_loop_add_idle(wl_display_get_event_loop(m_display), onDisplacedRestoreIdle, this);
     if (m_displacedRestoreIdle == nullptr) {
       kLog.error("failed to register displaced window restore idle source");
-      restoreDisplacedViews();
     }
   }
 
@@ -1476,11 +1544,25 @@ namespace umbriel {
         displaced.push_back(entry.get());
       }
     }
-    // Restore in workspace order; a dynamic group only grows workspace N+1 once N is occupied, and a higher home
-    // reaching it first lands on the trailing empty workspace instead.
-    std::ranges::sort(displaced, [](const View* lhs, const View* rhs) {
+    const auto homeIsAvailable = [this](const View* view) {
+      const View::DisplacedHome& home = *view->displacedHome();
+      Output* output = outputFromName(home.outputName);
+      return output != nullptr && output->workspaceGroup() != nullptr;
+    };
+    // Available homes go first, before refugees can occupy their layouts.
+    // Within an output, resolving and populating numbered workspaces in order
+    // lets a dynamic group create workspace N+1 before it is requested.
+    std::ranges::sort(displaced, [homeIsAvailable](const View* lhs, const View* rhs) {
       const View::DisplacedHome& left = *lhs->displacedHome();
       const View::DisplacedHome& right = *rhs->displacedHome();
+      const bool leftAvailable = homeIsAvailable(lhs);
+      const bool rightAvailable = homeIsAvailable(rhs);
+      if (leftAvailable != rightAvailable) {
+        return leftAvailable;
+      }
+      if (leftAvailable && left.layoutProtectionOnly != right.layoutProtectionOnly) {
+        return !left.layoutProtectionOnly;
+      }
       if (left.outputName != right.outputName) {
         return left.outputName < right.outputName;
       }
@@ -1488,49 +1570,335 @@ namespace umbriel {
       const size_t rightIndex = workspaceOrder(right.workspaceName);
       return leftIndex != rightIndex ? leftIndex < rightIndex : left.workspaceName < right.workspaceName;
     });
+
+    struct RestoredViewport {
+      std::shared_ptr<const LayoutSnapshot> snapshot;
+      Workspace* workspace = nullptr;
+      bool geometryUnchanged = false;
+    };
+    std::vector<RestoredViewport> restoredViewports;
     size_t restored = 0;
-    for (View* view : displaced) {
-      const View::DisplacedHome home = *view->displacedHome();
-      Output* target = outputFromName(home.outputName);
-      WorkspaceGroup* group = target != nullptr ? target->workspaceGroup() : nullptr;
-      const bool atHome = group != nullptr;
-      if (!atHome) {
-        // The home output is still gone: rescue only a view left with no workspace at all, and leave the rest put.
-        if (view->workspace() != nullptr) {
-          continue;
+
+    for (size_t first = 0; first < displaced.size();) {
+      const View::DisplacedHome groupHome = *displaced[first]->displacedHome();
+      size_t last = first + 1;
+      while (last < displaced.size()) {
+        const View::DisplacedHome& candidate = *displaced[last]->displacedHome();
+        if (candidate.outputName != groupHome.outputName
+            || candidate.workspaceName != groupHome.workspaceName
+            || candidate.layoutProtectionOnly != groupHome.layoutProtectionOnly) {
+          break;
         }
-        group = fallback->workspaceGroup();
-        if (group == nullptr) {
-          continue;
+        ++last;
+      }
+
+      Output* target = outputFromName(groupHome.outputName);
+      WorkspaceGroup* targetGroup = target != nullptr ? target->workspaceGroup() : nullptr;
+      if (targetGroup == nullptr) {
+        WorkspaceGroup* fallbackGroup = fallback->workspaceGroup();
+        Workspace* refuge = fallbackGroup != nullptr ? fallbackGroup->active() : nullptr;
+        if (refuge != nullptr) {
+          for (size_t index = first; index < last; ++index) {
+            View* view = displaced[index];
+            if (view->workspace() != nullptr) {
+              continue;
+            }
+            const bool floating = view->floating();
+            view->setWorkspace(refuge);
+            if (floating) {
+              view->restoreFloatingPosition(false);
+            }
+            ++restored;
+          }
         }
-      }
-      Workspace* workspace = atHome ? group->workspaceForSelector(home.workspaceName) : nullptr;
-      if (workspace == nullptr) {
-        workspace = group->active();
-      }
-      if (workspace == nullptr) {
+        first = last;
         continue;
       }
-      if (atHome) {
-        view->clearDisplaced();
+
+      Workspace* workspace = nullptr;
+      if (targetGroup->dynamic()) {
+        const size_t desired = workspaceOrder(groupHome.workspaceName);
+        if (desired != std::numeric_limits<size_t>::max() && desired >= 1) {
+          // A recreated dynamic group starts with workspace 1. Materialize an
+          // empty active workspace before a surviving workspace 2 is restored,
+          // then ordinary reconciliation can retain both.
+          while (targetGroup->workspaceCount() < desired) {
+            if (targetGroup->insertDynamicWorkspace(targetGroup->workspaceCount()) == nullptr) {
+              break;
+            }
+          }
+          workspace = targetGroup->workspaceNamed(groupHome.workspaceName);
+        }
+      } else {
+        workspace = targetGroup->workspaceForSelector(groupHome.workspaceName);
       }
-      if (workspace == view->workspace()) {
+      const bool selectorMatched = workspace != nullptr;
+      if (workspace == nullptr) {
+        workspace = targetGroup->active();
+      }
+      if (workspace == nullptr) {
+        first = last;
         continue;
       }
-      const bool floating = view->floating();
-      view->setWorkspace(workspace);
-      if (floating) {
-        view->restoreFloatingPosition(atHome);
+
+      struct SnapshotCandidate {
+        std::shared_ptr<const LayoutSnapshot> snapshot;
+        std::vector<View*> views;
+        View::DisplacedHome representative;
+      };
+      std::vector<SnapshotCandidate> candidates;
+      if (selectorMatched) {
+        for (size_t index = first; index < last; ++index) {
+          View* view = displaced[index];
+          const View::DisplacedHome& home = *view->displacedHome();
+          if (!view->tiled() || home.layoutSnapshot == nullptr) {
+            continue;
+          }
+          auto candidate = std::ranges::find_if(candidates, [&home](const SnapshotCandidate& entry) {
+            return entry.snapshot.get() == home.layoutSnapshot.get();
+          });
+          if (candidate == candidates.end()) {
+            candidates.push_back({
+                .snapshot = home.layoutSnapshot,
+                .views = {},
+                .representative = home,
+            });
+            candidate = std::prev(candidates.end());
+          }
+          candidate->views.push_back(view);
+        }
       }
-      ++restored;
+
+      SnapshotCandidate* exact = nullptr;
+      for (SnapshotCandidate& candidate : candidates) {
+        if (exact == nullptr
+            || candidate.views.size() > exact->views.size()
+            || (candidate.views.size() == exact->views.size()
+                && candidate.snapshot->memberCount() > exact->snapshot->memberCount())) {
+          exact = &candidate;
+        }
+      }
+      if (exact != nullptr
+          && workspace->layoutMode() != exact->snapshot->mode()
+          && exact->representative.layoutModeOverride.has_value()
+          && *exact->representative.layoutModeOverride == exact->snapshot->mode()
+          && exact->representative.configGeneration == configStore().generation()) {
+        workspace->overrideLayoutMode(*exact->representative.layoutModeOverride);
+      }
+      if (exact != nullptr && workspace->layoutMode() != exact->snapshot->mode()) {
+        exact = nullptr;
+      }
+      const bool snapshotMemberIsUnmapped = exact != nullptr
+          && std::ranges::any_of(displaced.begin() + static_cast<std::ptrdiff_t>(first),
+                                 displaced.begin() + static_cast<std::ptrdiff_t>(last), [exact](const View* view) {
+                                   const auto& home = view->displacedHome();
+                                   return !view->mapped()
+                                       && home.has_value()
+                                       && home->layoutSnapshot.get() == exact->snapshot.get();
+                                 });
+
+      std::vector<View*> exactViews;
+      if (exact != nullptr) {
+        for (View* view : exact->views) {
+          view->setWorkspace(workspace, false);
+          if (view->workspace() == workspace && view->mapped() && view->tiled()) {
+            exactViews.push_back(view);
+          }
+        }
+      }
+
+      if (exact != nullptr && !exactViews.empty()) {
+        std::vector<View*> previousOrder;
+        for (const Column& column : workspace->layout().columns()) {
+          for (View* view : column.views) {
+            if (view != nullptr && std::ranges::find(previousOrder, view) == previousOrder.end()) {
+              previousOrder.push_back(view);
+            }
+          }
+        }
+        for (View* view : previousOrder) {
+          if (view->workspace() == workspace && workspace->layout().columnOf(view) >= 0) {
+            workspace->layoutDetach(view, false);
+          }
+        }
+
+        std::vector<LayoutMember> members;
+        members.reserve(exactViews.size());
+        for (View* view : exactViews) {
+          const View::DisplacedHome& home = *view->displacedHome();
+          members.push_back({.id = home.layoutMember, .view = view});
+        }
+        const bool restoredState = workspace->layout().restoreState(*exact->snapshot, members);
+        for (View* view : previousOrder) {
+          if (view->workspace() == workspace && view->mapped() && view->tiled()) {
+            workspace->layoutAttach(view);
+          }
+        }
+        if (!restoredState) {
+          for (View* view : exactViews) {
+            if (view->workspace() == workspace && view->mapped() && view->tiled()) {
+              workspace->layoutAttach(view);
+            }
+          }
+        } else {
+          if (workspace->scrollingLayout() != nullptr) {
+            restoredViewports.push_back({
+                .snapshot = exact->snapshot,
+                .workspace = workspace,
+                .geometryUnchanged = exact->representative.configGeneration == configStore().generation(),
+            });
+          }
+          workspace->markArrange(false);
+        }
+        restored += exactViews.size();
+      }
+
+      const bool foreignRefugeesRemain =
+          std::ranges::any_of(m_registry.all(), [&groupHome, workspace](const auto& entry) {
+            const auto& home = entry->displacedHome();
+            return entry->workspace() == workspace && home.has_value() && home->outputName != groupHome.outputName;
+          });
+      const bool retainLayoutProtection =
+          exact != nullptr && exact->representative.layoutProtectionOnly && foreignRefugeesRemain;
+      const auto retainHome = [exact, retainLayoutProtection, snapshotMemberIsUnmapped, selectorMatched,
+                               workspace](const View* view) {
+        const auto& home = view->displacedHome();
+        if (!home) {
+          return false;
+        }
+        return (retainLayoutProtection && home->layoutProtectionOnly)
+            || (snapshotMemberIsUnmapped && home->layoutSnapshot.get() == exact->snapshot.get())
+            || (!view->mapped()
+                && selectorMatched
+                && home->layoutSnapshot != nullptr
+                && workspace->layoutMode() == home->layoutSnapshot->mode());
+      };
+
+      for (size_t index = first; index < last; ++index) {
+        View* view = displaced[index];
+        if (std::ranges::find(exactViews, view) != exactViews.end()) {
+          if (!retainHome(view)) {
+            view->clearDisplaced();
+          }
+          continue;
+        }
+        const View::DisplacedHome home = *view->displacedHome();
+        const bool floating = view->floating();
+        if (!retainHome(view)) {
+          view->clearDisplaced();
+        }
+        const bool moved = view->workspace() != workspace;
+        if (moved) {
+          view->setWorkspace(workspace);
+        }
+        if (floating && home.floatingOutputPosition && target != nullptr) {
+          const wlr_box outputBox = target->layoutBox();
+          if (outputBox.width > 0 && outputBox.height > 0) {
+            view->cancelPositionAnimation();
+            view->setPosition(
+                outputBox.x + static_cast<int>(std::lround((*home.floatingOutputPosition)[0] * outputBox.width)),
+                outputBox.y + static_cast<int>(std::lround((*home.floatingOutputPosition)[1] * outputBox.height))
+            );
+          }
+        } else if (floating && moved) {
+          view->restoreFloatingPosition(true);
+        }
+        restored += moved ? 1 : 0;
+      }
+
+      first = last;
     }
+
     if (m_scratchpadManager != nullptr) {
       restored += m_scratchpadManager->restoreDisplaced(fallback);
     }
+
+    // A fixed-size client can finish mapping while every output is absent. It never had a workspace, so it has no
+    // displaced home for the restore pass above to find. Scratchpad entries are intentionally workspace-less; attach
+    // every other mapped orphan once an output can own it.
+    WorkspaceGroup* fallbackGroup = fallback->workspaceGroup();
+    Workspace* refuge = fallbackGroup != nullptr ? fallbackGroup->active() : nullptr;
+    if (refuge != nullptr) {
+      for (const auto& entry : m_registry.all()) {
+        View* view = entry.get();
+        if (!view->mapped()
+            || view->workspace() != nullptr
+            || (m_scratchpadManager != nullptr && m_scratchpadManager->contains(view))) {
+          continue;
+        }
+        const bool floating = view->floating();
+        const bool positioned = view->m_positioned;
+        const ResolvedWindowRule rule = view->resolvedRules();
+        if (!view->attachToAvailableWorkspace(rule)) {
+          continue;
+        }
+        if (floating) {
+          if (positioned) {
+            view->restoreFloatingPosition(false);
+          } else {
+            view->placeInUsableArea(rule.defaultPosition);
+          }
+          if (Workspace* workspace = view->workspace()) {
+            workspace->syncViewPresentation(view);
+          }
+        }
+        ++restored;
+      }
+    }
+
+    bool workspaceSelectionRestored = false;
+    for (auto selection = m_displacedWorkspaceSelections.begin(); selection != m_displacedWorkspaceSelections.end();) {
+      Output* output = outputFromName(selection->outputName);
+      WorkspaceGroup* group = output != nullptr ? output->workspaceGroup() : nullptr;
+      if (group == nullptr) {
+        ++selection;
+        continue;
+      }
+
+      Workspace* workspace = group->workspaceNamed(selection->workspaceName);
+      if (workspace == nullptr && group->dynamic()) {
+        while (group->workspaceCount() <= selection->workspaceIndex) {
+          if (group->insertDynamicWorkspace(group->workspaceCount()) == nullptr) {
+            break;
+          }
+        }
+        workspace = group->workspaceNamed(selection->workspaceName);
+      }
+      if (workspace == nullptr && group->workspaceCount() > 0) {
+        workspace = group->workspaceAt(std::min(selection->workspaceIndex, group->workspaceCount() - 1));
+      }
+      if (workspace == nullptr) {
+        ++selection;
+        continue;
+      }
+      group->activate(workspace, false);
+      selection = m_displacedWorkspaceSelections.erase(selection);
+      workspaceSelectionRestored = true;
+    }
+
     if (restored > 0) {
       kLog.info("restored {} displaced windows", restored);
       refreshSurfaceScales();
+    }
+    if (restored > 0 || workspaceSelectionRestored) {
       refocus();
+    }
+
+    // Refocus can reveal another scrolling lane. Reapply the snapshot anchor
+    // synchronously while both the snapshot and its surviving views are alive.
+    for (const RestoredViewport& restoredViewport : restoredViewports) {
+      Workspace* workspace = restoredViewport.workspace;
+      if (workspace == nullptr || workspace->layoutMode() != restoredViewport.snapshot->mode()) {
+        continue;
+      }
+      if (ScrollingLayout* scrolling = workspace->scrollingLayout(); scrolling != nullptr) {
+        scrolling->restoreSnapshotViewport(
+            *restoredViewport.snapshot, workspace->scrollViewportExtent(), restoredViewport.geometryUnchanged
+        );
+      }
+      workspace->markArrange(false);
+    }
+    if (restored > 0 || workspaceSelectionRestored) {
       scheduleIpcWindowsEvent();
     }
   }
@@ -1560,7 +1928,11 @@ namespace umbriel {
       replacement = workspace->removeView(view);
       view->detachWorkspace();
     }
+    const bool restoreAfterRemoval = view->displacedHome().has_value();
     m_registry.remove(view);
+    if (restoreAfterRemoval) {
+      scheduleDisplacedViewRestore();
+    }
     if (hadKeyboardFocus) {
       wlr_seat_keyboard_notify_clear_focus(m_seat->wlr());
       if (replacement != nullptr) {

@@ -22,6 +22,14 @@ namespace umbriel {
     [[nodiscard]] const std::vector<Column>& columns() const override { return m_columns; }
     [[nodiscard]] int columnOf(const View* view) const override;
     [[nodiscard]] int rowOf(const View* view) const override;
+    [[nodiscard]] LayoutCapture captureState() const override;
+    [[nodiscard]] LayoutCapture captureStateForViewport(int viewportPrimary) const;
+    bool restoreState(const LayoutSnapshot& snapshot, std::span<const LayoutMember> members) override;
+    // Structural replay records a surviving lane anchor. Once focus has
+    // settled, restore its viewport position using the returned output's
+    // current logical extent. Exact raw offsets are used only when geometry is
+    // known to be unchanged.
+    void restoreSnapshotViewport(const LayoutSnapshot& snapshot, int viewportPrimary, bool geometryUnchanged);
     [[nodiscard]] double scroll() const { return m_scroll; }
     [[nodiscard]] int columnX(int columnIndex, int viewportPrimary) const;
     [[nodiscard]] int columnWidth(int columnIndex, int viewportPrimary) const;
@@ -94,6 +102,11 @@ namespace umbriel {
     std::vector<Target> m_targets;
     double m_scroll = 0;
     bool m_centeredRest = false;
+    int m_lastViewportPrimary = 0;
+    const LayoutSnapshot* m_pendingViewportSnapshot = nullptr;
+    View* m_pendingViewportAnchor = nullptr;
+    double m_pendingViewportCenterFraction = 0.5;
+    bool m_pendingViewportComplete = false;
     // Cross extent available during the last arrange, used to preserve existing
     // pixel sizes when a drop converts an outer gap into another stacked view.
     int m_lastAvailableCross = 0;

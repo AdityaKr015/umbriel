@@ -5,6 +5,7 @@
 // clang-format off
 // See keybind_parse.cpp: <cmath> must precede the wayland chain.
 #include <cmath>
+#include <algorithm>
 #include <optional>
 extern "C" {
 #include <wlr/util/box.h>
@@ -570,6 +571,70 @@ UMBRIEL_TEST(cornerNinthGrabsBothInternalBoundaries) {
   );
   // Top-right corner ninth proposes right and top, both screen-facing, so nothing survives sanitize.
   CHECK_EQ(fixture.layout.resizeEdgesAt(stub(1), box.x + 5.0 * box.width / 6.0, box.y + box.height / 6.0), 0U);
+}
+
+UMBRIEL_TEST(snapshotRestoresTreeTopologyAndSplitRatios) {
+  Fixture source;
+  source.layout.insertView(stub(0), 0);
+  source.layout.insertViewSplitOnView(stub(1), stub(0), WLR_EDGE_RIGHT);
+  source.layout.insertViewSplitOnView(stub(2), stub(1), WLR_EDGE_BOTTOM);
+  source.layout.insertViewSplitOnView(stub(3), stub(0), WLR_EDGE_LEFT);
+  source.layout.arrange(kUsable);
+  CHECK(source.layout.setResizeBoundary(stub(0), WLR_EDGE_RIGHT, 0.63));
+  CHECK(source.layout.setResizeBoundary(stub(1), WLR_EDGE_BOTTOM, 0.72));
+  CHECK(source.layout.setResizeBoundary(stub(3), WLR_EDGE_RIGHT, 0.40));
+  source.layout.arrange(kUsable);
+
+  const auto capture = source.layout.captureState();
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, capture.members));
+  restored.layout.arrange(kUsable);
+
+  CHECK_EQ(restored.layout.columns().size(), source.layout.columns().size());
+  for (int id = 0; id < 4; ++id) {
+    const wlr_box expected = source.layout.targetBox(stub(id));
+    const wlr_box actual = restored.layout.targetBox(stub(id));
+    CHECK_EQ(actual.x, expected.x);
+    CHECK_EQ(actual.y, expected.y);
+    CHECK_EQ(actual.width, expected.width);
+    CHECK_EQ(actual.height, expected.height);
+  }
+}
+
+UMBRIEL_TEST(snapshotCollapsesTheParentOfAMissingLeaf) {
+  Fixture source;
+  source.addLeaves(3);
+  source.layout.arrange(kUsable);
+  const auto capture = source.layout.captureState();
+  auto survivors = capture.members;
+  std::erase_if(survivors, [](const auto& member) { return member.view == stub(1); });
+
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, survivors));
+  restored.layout.arrange(kUsable);
+  CHECK_EQ(restored.layout.columns().size(), size_t{2});
+  CHECK_EQ(restored.layout.columnOf(stub(1)), -1);
+  CHECK_EQ(restored.layout.targetBox(stub(0)).height, restored.layout.targetBox(stub(2)).height);
+}
+
+UMBRIEL_TEST(snapshotUsesMemberIdsInsteadOfCapturedViewPointers) {
+  Fixture source;
+  source.layout.insertView(stub(0), 0);
+  source.layout.insertViewSplitOnView(stub(1), stub(0), WLR_EDGE_RIGHT);
+  source.layout.insertViewSplitOnView(stub(2), stub(1), WLR_EDGE_BOTTOM);
+  const auto capture = source.layout.captureState();
+  auto remapped = capture.members;
+  for (auto& member : remapped) {
+    member.view = stub(10 + static_cast<int>(member.id));
+  }
+  std::ranges::reverse(remapped);
+
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, remapped));
+  restored.layout.arrange(kUsable);
+  CHECK(restored.layout.targetBox(stub(10)).x < restored.layout.targetBox(stub(11)).x);
+  CHECK_EQ(restored.layout.targetBox(stub(11)).x, restored.layout.targetBox(stub(12)).x);
+  CHECK(restored.layout.targetBox(stub(11)).y < restored.layout.targetBox(stub(12)).y);
 }
 
 int main() { return RUN_TESTS(); }

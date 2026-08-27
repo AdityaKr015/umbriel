@@ -544,6 +544,14 @@ namespace umbriel {
     // removes itself when it runs, so a non-null pointer means "already queued".
     wl_event_source* m_ipcWindowsIdle = nullptr;
     wl_event_source* m_displacedRestoreIdle = nullptr;
+    struct DisplacedWorkspaceSelection {
+      std::string outputName;
+      std::string workspaceName;
+      size_t workspaceIndex = 0;
+    };
+    // Output objects do not survive physical hotplug, so selected workspaces
+    // wait here until the output with the same stable name returns.
+    std::vector<DisplacedWorkspaceSelection> m_displacedWorkspaceSelections;
     // Name to give the next output the backend hands over, set while createHeadlessOutput is adding one.
     std::string m_pendingOutputName;
     // SIGINT / SIGTERM, delivered on the event loop rather than in a signal

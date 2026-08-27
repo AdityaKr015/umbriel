@@ -18,6 +18,21 @@ extern "C" {
 
 namespace umbriel {
 
+  std::optional<std::vector<View*>> resolveLayoutMembers(size_t memberCount, std::span<const LayoutMember> members) {
+    std::vector<View*> resolved(memberCount, nullptr);
+    for (const LayoutMember& member : members) {
+      const auto id = static_cast<size_t>(member.id);
+      if (member.view == nullptr
+          || id >= resolved.size()
+          || resolved[id] != nullptr
+          || std::ranges::find(resolved, member.view) != resolved.end()) {
+        return std::nullopt;
+      }
+      resolved[id] = member.view;
+    }
+    return resolved;
+  }
+
   wlr_box Layout::contentArea(const wlr_box& usable) const {
     const int edgePad = m_config != nullptr ? m_config->edgePad : 0;
     return {

@@ -50,7 +50,9 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* fullscreenRoot() const { return m_fullscreenRoot; }
     [[nodiscard]] wlr_scene_tree* pinnedRoot() const { return m_pinnedRoot; }
     [[nodiscard]] wlr_scene_tree* pinnedShadowRoot() const { return m_pinnedShadowRoot; }
-    [[nodiscard]] wlr_box usableArea() const { return m_usableArea; }
+    // Full logical box at the live layout origin, or the last arranged origin while temporarily removed.
+    [[nodiscard]] wlr_box layoutBox() const;
+    [[nodiscard]] wlr_box usableArea() const;
     [[nodiscard]] WorkspaceGroup* workspaceGroup() const { return m_workspaceGroup.get(); }
     // True from the moment a view starts entering fullscreen until its client
     // has committed the exit. Consumers such as hot corners must not act over
@@ -139,7 +141,9 @@ namespace umbriel {
     wlr_scene_tree* m_pinnedShadowRoot = nullptr;
     wlr_scene_optimized_blur* m_optimizedBlur = nullptr;
     std::unique_ptr<WorkspaceGroup> m_workspaceGroup;
-    wlr_box m_usableArea{};
+    wlr_box m_localUsableArea{};
+    int m_arrangedLayoutX = 0;
+    int m_arrangedLayoutY = 0;
 
     bool m_inFrame = false;
     bool m_hasDeferredMode = false;

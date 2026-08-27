@@ -19,6 +19,32 @@ namespace umbriel {
 
     constexpr double kMinHeightWeight = 0.05;
 
+    struct ScrollingSnapshot final : LayoutSnapshot {
+      struct Row {
+        LayoutMemberId member = 0;
+        double heightWeight = 1.0;
+      };
+
+      struct SavedColumn {
+        std::vector<Row> rows;
+        double topGapWeight = 0.0;
+        double bottomGapWeight = 0.0;
+        double widthFraction = 0.5;
+        double savedWidthFraction = 0.0;
+        double viewportCenterFraction = 0.5;
+      };
+
+      [[nodiscard]] LayoutMode mode() const override { return LayoutMode::Scrolling; }
+      [[nodiscard]] size_t memberCount() const override { return members; }
+
+      std::vector<SavedColumn> columns;
+      size_t members = 0;
+      double scroll = 0.0;
+      bool centeredRest = false;
+      int viewportPrimary = 0;
+      bool exactViewportRestorable = false;
+    };
+
     void ensureWeightCount(Column& column) {
       while (column.heightWeights.size() < column.views.size()) {
         column.heightWeights.push_back(1.0);
@@ -100,6 +126,151 @@ namespace umbriel {
     const auto& views = m_columns[static_cast<size_t>(column)].views;
     const auto it = std::ranges::find(views, view);
     return it == views.end() ? -1 : static_cast<int>(it - views.begin());
+  }
+
+  LayoutCapture ScrollingLayout::captureState() const { return captureStateForViewport(m_lastViewportPrimary); }
+
+  LayoutCapture ScrollingLayout::captureStateForViewport(int viewportPrimary) const {
+    auto snapshot = std::make_shared<ScrollingSnapshot>();
+    LayoutCapture capture{.snapshot = snapshot, .members = {}};
+    snapshot->columns.reserve(m_columns.size());
+    for (size_t columnIndex = 0; columnIndex < m_columns.size(); ++columnIndex) {
+      const Column& column = m_columns[columnIndex];
+      ScrollingSnapshot::SavedColumn saved{
+          .rows = {},
+          .topGapWeight = column.topGapWeight,
+          .bottomGapWeight = column.bottomGapWeight,
+          .widthFraction = column.widthFrac,
+          .savedWidthFraction = column.savedWidthFrac,
+          .viewportCenterFraction = 0.5,
+      };
+      if (viewportPrimary > 0) {
+        const double center = static_cast<double>(columnX(static_cast<int>(columnIndex), viewportPrimary))
+            + static_cast<double>(columnWidth(static_cast<int>(columnIndex), viewportPrimary)) / 2.0;
+        saved.viewportCenterFraction = (center - m_scroll) / static_cast<double>(viewportPrimary);
+      }
+      saved.rows.reserve(column.views.size());
+      for (size_t row = 0; row < column.views.size(); ++row) {
+        const auto id = static_cast<LayoutMemberId>(capture.members.size());
+        capture.members.push_back({.id = id, .view = column.views[row]});
+        saved.rows.push_back({
+            .member = id,
+            .heightWeight = row < column.heightWeights.size() ? column.heightWeights[row] : 1.0,
+        });
+      }
+      snapshot->columns.push_back(std::move(saved));
+    }
+    snapshot->members = capture.members.size();
+    snapshot->scroll = m_scroll;
+    snapshot->centeredRest = m_centeredRest;
+    snapshot->viewportPrimary = viewportPrimary;
+    if (viewportPrimary > 0) {
+      const auto maximum = static_cast<double>(maxScroll(viewportPrimary));
+      snapshot->exactViewportRestorable = m_centeredRest || (m_scroll >= 0.0 && m_scroll <= maximum);
+    }
+    return capture;
+  }
+
+  bool ScrollingLayout::restoreState(const LayoutSnapshot& base, std::span<const LayoutMember> members) {
+    m_pendingViewportSnapshot = nullptr;
+    m_pendingViewportAnchor = nullptr;
+    m_pendingViewportComplete = false;
+    const auto* snapshot = dynamic_cast<const ScrollingSnapshot*>(&base);
+    if (snapshot == nullptr || !m_columns.empty()) {
+      return false;
+    }
+    const std::optional<std::vector<View*>> resolved = resolveLayoutMembers(snapshot->memberCount(), members);
+    if (!resolved) {
+      return false;
+    }
+
+    m_pendingViewportSnapshot = base.mode() == LayoutMode::Scrolling ? &base : nullptr;
+    m_pendingViewportAnchor = nullptr;
+    m_pendingViewportCenterFraction = 0.5;
+    m_pendingViewportComplete = members.size() == snapshot->memberCount();
+    double bestCenterDistance = 0.0;
+    for (const ScrollingSnapshot::SavedColumn& saved : snapshot->columns) {
+      Column column{
+          .views = {},
+          .heightWeights = {},
+          .topGapWeight = saved.topGapWeight,
+          .bottomGapWeight = saved.bottomGapWeight,
+          .widthFrac = saved.widthFraction,
+          .savedWidthFrac = saved.savedWidthFraction,
+      };
+      for (const ScrollingSnapshot::Row& row : saved.rows) {
+        View* view = (*resolved)[static_cast<size_t>(row.member)];
+        if (view != nullptr) {
+          column.views.push_back(view);
+          column.heightWeights.push_back(row.heightWeight);
+        }
+      }
+      if (!column.views.empty()) {
+        const double centerDistance = std::abs(saved.viewportCenterFraction - 0.5);
+        if (m_pendingViewportAnchor == nullptr || centerDistance < bestCenterDistance) {
+          m_pendingViewportAnchor = column.views.front();
+          m_pendingViewportCenterFraction = saved.viewportCenterFraction;
+          bestCenterDistance = centerDistance;
+        }
+        m_columns.push_back(std::move(column));
+      }
+    }
+    m_targets.clear();
+    if (m_pendingViewportComplete) {
+      m_scroll = snapshot->scroll;
+      m_centeredRest = snapshot->centeredRest;
+    } else {
+      m_scroll = 0.0;
+      m_centeredRest = false;
+    }
+    m_lastAvailableCross = 0;
+    return true;
+  }
+
+  void
+  ScrollingLayout::restoreSnapshotViewport(const LayoutSnapshot& base, int viewportPrimary, bool geometryUnchanged) {
+    const auto* snapshot = dynamic_cast<const ScrollingSnapshot*>(&base);
+    if (snapshot == nullptr || m_pendingViewportSnapshot != &base) {
+      return;
+    }
+
+    viewportPrimary = std::max(1, viewportPrimary);
+    const int anchorColumn = columnOf(m_pendingViewportAnchor);
+    bool columnGeometryMatches = m_columns.size() == snapshot->columns.size();
+    if (columnGeometryMatches && snapshot->viewportPrimary == viewportPrimary) {
+      for (size_t index = 0; index < m_columns.size(); ++index) {
+        const double center = static_cast<double>(columnX(static_cast<int>(index), viewportPrimary))
+            + static_cast<double>(columnWidth(static_cast<int>(index), viewportPrimary)) / 2.0;
+        const double fraction = (center - snapshot->scroll) / static_cast<double>(viewportPrimary);
+        if (std::abs(fraction - snapshot->columns[index].viewportCenterFraction) > 1e-9) {
+          columnGeometryMatches = false;
+          break;
+        }
+      }
+    }
+    const bool exact = geometryUnchanged
+        && m_pendingViewportComplete
+        && snapshot->exactViewportRestorable
+        && snapshot->viewportPrimary == viewportPrimary
+        && columnGeometryMatches;
+    if (exact) {
+      m_scroll = snapshot->scroll;
+      m_centeredRest = snapshot->centeredRest;
+    } else if (anchorColumn < 0) {
+      m_scroll = 0.0;
+      m_centeredRest = false;
+    } else if (snapshot->centeredRest) {
+      centerColumn(anchorColumn, viewportPrimary);
+    } else {
+      const double center = static_cast<double>(columnX(anchorColumn, viewportPrimary))
+          + static_cast<double>(columnWidth(anchorColumn, viewportPrimary)) / 2.0;
+      const double restored = center - m_pendingViewportCenterFraction * static_cast<double>(viewportPrimary);
+      m_scroll = std::clamp(restored, 0.0, static_cast<double>(maxScroll(viewportPrimary)));
+      m_centeredRest = false;
+    }
+    m_pendingViewportSnapshot = nullptr;
+    m_pendingViewportAnchor = nullptr;
+    m_pendingViewportComplete = false;
   }
 
   int ScrollingLayout::columnWidth(int columnIndex, int viewportPrimary) const {
@@ -421,6 +592,7 @@ namespace umbriel {
     const bool v = vertical();
     const int edgePad = m_config->edgePad;
     const int viewportPrimary = std::max(1, (v ? usable.height : usable.width) - 2 * edgePad);
+    m_lastViewportPrimary = viewportPrimary;
     const int availableCross = std::max(1, (v ? usable.width : usable.height) - 2 * edgePad);
     m_lastAvailableCross = availableCross;
     const double maxScroll = static_cast<double>(std::max(0, totalWidth(viewportPrimary) - viewportPrimary));

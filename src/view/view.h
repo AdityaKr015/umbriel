@@ -33,6 +33,7 @@ struct wlr_xdg_toplevel;
 namespace umbriel {
 
   class Server;
+  class ScratchpadManager;
   class WineColorManager;
   class Workspace;
   struct ResolvedWindowRule;
@@ -101,10 +102,24 @@ namespace umbriel {
     void moveToWorkspace(Workspace* workspace, bool attachToLayout = true);
     void detachWorkspace();
 
-    // The output and workspace the view sat on when its output went away; restoreDisplacedViews puts it back there.
+    // The output, workspace, and layout member to restore after output loss.
+    // A still-live refuge output records its native members before displaced
+    // windows enter, so its own layout cannot be polluted by the evacuation.
+    // The snapshot itself never owns a View pointer.
     struct DisplacedHome {
       std::string outputName;
       std::string workspaceName;
+      std::shared_ptr<const LayoutSnapshot> layoutSnapshot;
+      LayoutMemberId layoutMember = 0;
+      std::optional<LayoutMode> layoutModeOverride;
+      // Position relative to the full logical output. Unlike the ordinary
+      // usable-area memory, this stays stable while a returning panel has not
+      // recreated its exclusive zone yet.
+      std::optional<std::array<double, 2>> floatingOutputPosition;
+      uint64_t configGeneration = 0;
+      // True while this view is still at home and only carries a clean
+      // snapshot taken before foreign refugees entered its layout.
+      bool layoutProtectionOnly = false;
     };
     [[nodiscard]] const std::optional<DisplacedHome>& displacedHome() const { return m_displacedHome; }
     void markDisplaced(DisplacedHome home) { m_displacedHome = std::move(home); }
@@ -174,6 +189,7 @@ namespace umbriel {
 
   private:
     friend class Cursor;
+    friend class ScratchpadManager;
     friend class WineColorManager;
     friend class Output;
     friend class Server;
@@ -306,8 +322,10 @@ namespace umbriel {
     void updateForeignIdentity();
     void updateForeignState();
     void enterForeignOutput();
+    void enterForeignOutput(Output* output);
     void leaveForeignOutput();
     void applyWindowRules(const ResolvedWindowRule& initiallyApplied);
+    bool attachToAvailableWorkspace(const ResolvedWindowRule& rule);
     // `resolved` lets a caller that already resolved the rules pass them in. Rule resolution runs every regex in the
     // config, and applyDynamicRules is reached on focus changes and on every title change, so resolving twice per pass
     // is work a terminal that retitles per command pays repeatedly.

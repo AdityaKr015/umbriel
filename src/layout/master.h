@@ -19,6 +19,8 @@ namespace umbriel {
     [[nodiscard]] const std::vector<Column>& columns() const override { return m_columns; }
     [[nodiscard]] int columnOf(const View* view) const override;
     [[nodiscard]] int rowOf(const View* view) const override;
+    [[nodiscard]] LayoutCapture captureState() const override;
+    bool restoreState(const LayoutSnapshot& snapshot, std::span<const LayoutMember> members) override;
 
     void insertView(View* view, int columnIndex) override;
     void insertViewIntoColumn(View* view, int columnIndex, int rowIndex) override;

@@ -20,6 +20,22 @@ namespace umbriel {
     constexpr double kFullWidth = 0.9;
     constexpr double kFractionEpsilon = 0.0001;
 
+    struct MasterSnapshot final : LayoutSnapshot {
+      struct Row {
+        LayoutMemberId member = 0;
+        double weight = 1.0;
+      };
+
+      [[nodiscard]] LayoutMode mode() const override { return LayoutMode::Master; }
+      [[nodiscard]] size_t memberCount() const override { return members; }
+
+      std::vector<Row> master;
+      std::vector<Row> stack;
+      size_t members = 0;
+      double masterFraction = -1.0;
+      double savedFraction = 0.0;
+    };
+
     std::pair<int, int> columnWidths(int contentWidth, int gap, double masterFraction) {
       const int available = std::max(2, contentWidth - gap);
       const int masterWidth = std::clamp(static_cast<int>(std::lround(masterFraction * available)), 1, available - 1);
@@ -132,6 +148,59 @@ namespace umbriel {
   int MasterStackLayout::rowOf(const View* view) const {
     const Area* area = areaOf(view);
     return area != nullptr ? rowInArea(*area, view) : -1;
+  }
+
+  LayoutCapture MasterStackLayout::captureState() const {
+    auto snapshot = std::make_shared<MasterSnapshot>();
+    LayoutCapture capture{.snapshot = snapshot, .members = {}};
+    const auto saveArea = [&capture](const Area& area, std::vector<MasterSnapshot::Row>& rows) {
+      rows.reserve(area.views.size());
+      for (size_t row = 0; row < area.views.size(); ++row) {
+        const auto id = static_cast<LayoutMemberId>(capture.members.size());
+        capture.members.push_back({.id = id, .view = area.views[row]});
+        rows.push_back({.member = id, .weight = row < area.weights.size() ? area.weights[row] : 1.0});
+      }
+    };
+    saveArea(m_master, snapshot->master);
+    saveArea(m_stack, snapshot->stack);
+    snapshot->members = capture.members.size();
+    snapshot->masterFraction = m_masterFrac;
+    snapshot->savedFraction = m_savedFrac;
+    return capture;
+  }
+
+  bool MasterStackLayout::restoreState(const LayoutSnapshot& base, std::span<const LayoutMember> members) {
+    const auto* snapshot = dynamic_cast<const MasterSnapshot*>(&base);
+    if (snapshot == nullptr || !m_master.views.empty() || !m_stack.views.empty()) {
+      return false;
+    }
+    const std::optional<std::vector<View*>> resolved = resolveLayoutMembers(snapshot->memberCount(), members);
+    if (!resolved) {
+      return false;
+    }
+
+    const auto restoreArea = [&resolved](const std::vector<MasterSnapshot::Row>& rows, Area& area) {
+      for (const MasterSnapshot::Row& row : rows) {
+        View* view = (*resolved)[static_cast<size_t>(row.member)];
+        if (view != nullptr) {
+          area.views.push_back(view);
+          area.weights.push_back(row.weight);
+        }
+      }
+    };
+    restoreArea(snapshot->master, m_master);
+    restoreArea(snapshot->stack, m_stack);
+    if (m_master.views.empty() && !m_stack.views.empty()) {
+      m_master.views.push_back(m_stack.views.front());
+      m_master.weights.push_back(m_stack.weights.front());
+      m_stack.views.erase(m_stack.views.begin());
+      m_stack.weights.erase(m_stack.weights.begin());
+    }
+    m_masterFrac = snapshot->masterFraction;
+    m_savedFrac = snapshot->savedFraction;
+    m_targets.clear();
+    rebuildColumns();
+    return true;
   }
 
   void MasterStackLayout::eraseFromAreas(View* view) {

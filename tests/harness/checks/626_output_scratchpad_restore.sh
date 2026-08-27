@@ -60,6 +60,21 @@ wait_for_count() {
   return 1
 }
 
+output_origin() {
+  "$UMBRIEL" outputs \
+    | awk -v name="$1" '$1 == name { found = 1; next } found && /Position:/ { split($2, p, ","); print p[1], p[2]; exit }'
+}
+
+scratchpad_offset() {
+  local output=$1 window_x window_y output_x output_y
+  read -r window_x window_y < <(
+    "$UMBRIEL" windows --json \
+      | jq -r '.[] | select(.title == "scratch-restore") | "\(.x) \(.y)"'
+  )
+  read -r output_x output_y < <(output_origin "$output")
+  printf '{"x":%d,"y":%d}' "$((window_x - output_x))" "$((window_y - output_y))"
+}
+
 # The drawer only opens on the output holding the window, and focuses it when it does. Closed again either way.
 shows_scratchpad() {
   local output=$1 active=
@@ -73,11 +88,28 @@ shows_scratchpad() {
   [[ $active == true ]]
 }
 
+write_config '[animation.scratchpad]
+scale = 0
+
+[[window_rule]]
+match.title = "^scratch-restore$"
+default_output = "HEADLESS-2"
+default_floating = true
+default_size = [420, 260]
+default_position = { x = 91, y = 73, anchor = "top_left" }'
+"$UMBRIEL" msg config-reload > /dev/null
+
 foot --title=scratch-restore sh -c 'sleep 120' > /dev/null 2>&1 &
 wait_for_count 1
 "$UMBRIEL" msg window-move-to-scratchpad:HEADLESS-2 > /dev/null
 if ! shows_scratchpad HEADLESS-2; then
   echo "window was not parked on the HEADLESS-2 scratchpad"
+  exit 1
+fi
+before=$(scratchpad_offset HEADLESS-2)
+expected='{"x":91,"y":73}'
+if [[ $before != "$expected" ]]; then
+  echo "scratchpad did not start at the configured off-center position: expected=$expected got=$before"
   exit 1
 fi
 
@@ -105,5 +137,10 @@ if shows_scratchpad HEADLESS-1; then
   echo "scratchpad window is still on HEADLESS-1 as well"
   exit 1
 fi
+after=$(scratchpad_offset HEADLESS-2)
+if [[ $after != "$before" ]]; then
+  echo "scratchpad output-relative position changed across restoration: before=$before after=$after"
+  exit 1
+fi
 
-echo "a scratchpad window parked on an output was rescued while it was gone and went back when it returned"
+echo "a scratchpad window was rescued while its output was gone, then returned with its position intact"

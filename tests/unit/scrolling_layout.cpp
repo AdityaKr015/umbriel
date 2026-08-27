@@ -5,6 +5,7 @@
 // clang-format off
 // See keybind_parse.cpp: <cmath> must precede the wayland chain.
 #include <cmath>
+#include <algorithm>
 #include <optional>
 #include <wlr/util/box.h>
 #include <wlr/util/edges.h>
@@ -635,7 +636,7 @@ UMBRIEL_TEST(snapVisibleCentersFullWidthColumn) {
   fixture.addColumns(3);
   fixture.layout.setConstraints([](const View* view) { return LayoutConstraints{.fullscreen = view == stub(1)}; });
   constexpr int column = 1;
-  const double expected = static_cast<double>(fixture.layout.columnX(column, kViewport) + fixture.config.edgePad);
+  const auto expected = static_cast<double>(fixture.layout.columnX(column, kViewport) + fixture.config.edgePad);
 
   fixture.layout.setScroll(0);
   fixture.layout.snapVisible(column, kViewport);
@@ -1071,6 +1072,181 @@ UMBRIEL_TEST(directionFlipKeepsFractionsAndRearranges) {
   CHECK_EQ(horizontal.height, 700);
   CHECK_EQ(vertical.width, 1260);
   CHECK_EQ(vertical.height, 344);
+}
+
+UMBRIEL_TEST(snapshotRestoresColumnsStacksWidthsAndViewport) {
+  Fixture source;
+  source.addColumns(4);
+  CHECK(source.layout.consumeLeft(stub(2)));
+  CHECK(source.layout.moveViewVertical(stub(2), -1));
+  source.layout.moveColumn(2, 0);
+
+  const int resized = source.layout.columnOf(stub(0));
+  const int stacked = source.layout.columnOf(stub(2));
+  CHECK(source.layout.setWidthFraction(resized, 0.67));
+  CHECK(source.layout.toggleFullWidth(resized));
+  CHECK(source.layout.setHeightWeight(stacked, 0, 2.5));
+  CHECK(source.layout.setTopGapWeight(stacked, 0.25));
+  CHECK(source.layout.setBottomGapWeight(stacked, 0.75));
+  source.layout.setScroll(137.0, true);
+  source.layout.arrange(kUsable);
+
+  const auto capture = source.layout.captureState();
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, capture.members));
+  restored.layout.setScroll(0.0);
+  restored.layout.restoreSnapshotViewport(*capture.snapshot, kViewport, true);
+  restored.layout.arrange(kUsable);
+
+  CHECK_EQ(restored.layout.columns().size(), source.layout.columns().size());
+  for (size_t column = 0; column < source.layout.columns().size(); ++column) {
+    const Column& expected = source.layout.columns()[column];
+    const Column& actual = restored.layout.columns()[column];
+    CHECK_EQ(actual.views, expected.views);
+    CHECK_EQ(actual.heightWeights, expected.heightWeights);
+    CHECK_EQ(actual.topGapWeight, expected.topGapWeight);
+    CHECK_EQ(actual.bottomGapWeight, expected.bottomGapWeight);
+    CHECK_EQ(actual.widthFrac, expected.widthFrac);
+    CHECK_EQ(actual.savedWidthFrac, expected.savedWidthFrac);
+  }
+  CHECK_EQ(restored.layout.scroll(), source.layout.scroll());
+  CHECK_EQ(restored.layout.centeredRest(), source.layout.centeredRest());
+  for (int id = 0; id < 4; ++id) {
+    const wlr_box expected = source.layout.targetBox(stub(id));
+    const wlr_box actual = restored.layout.targetBox(stub(id));
+    CHECK_EQ(actual.x, expected.x);
+    CHECK_EQ(actual.y, expected.y);
+    CHECK_EQ(actual.width, expected.width);
+    CHECK_EQ(actual.height, expected.height);
+  }
+
+  CHECK(!restored.layout.toggleFullWidth(restored.layout.columnOf(stub(0))));
+  CHECK(std::fabs(restored.layout.widthFraction(restored.layout.columnOf(stub(0))) - 0.67) < 1e-9);
+}
+
+UMBRIEL_TEST(snapshotPrunesMissingRowsAndColumns) {
+  Fixture source;
+  source.addColumns(3);
+  CHECK(source.layout.consumeLeft(stub(1)));
+  source.layout.arrange(kUsable);
+  source.layout.setScroll(636.0);
+  const auto capture = source.layout.captureState();
+  auto survivors = capture.members;
+  std::erase_if(survivors, [](const auto& member) { return member.view == stub(1) || member.view == stub(2); });
+
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, survivors));
+  restored.layout.restoreSnapshotViewport(*capture.snapshot, kViewport, true);
+  restored.layout.arrange(kUsable);
+  CHECK_EQ(restored.layout.columns().size(), size_t{1});
+  CHECK_EQ(restored.layout.columns()[0].views.size(), size_t{1});
+  CHECK_EQ(restored.layout.columns()[0].views[0], stub(0));
+  CHECK_EQ(restored.layout.scroll(), 0.0);
+  const wlr_box survivor = restored.layout.targetBox(stub(0));
+  CHECK(survivor.x < kUsable.x + kUsable.width);
+  CHECK(survivor.x + survivor.width > kUsable.x);
+}
+
+UMBRIEL_TEST(snapshotKeepsTheAnchorAtTheSameRelativePositionOnANewViewport) {
+  Fixture source;
+  source.addColumns(4);
+  source.layout.arrange(kUsable);
+  source.layout.setScroll(500.0);
+  source.layout.arrange(kUsable);
+  const int anchor = 1;
+  const double expectedFraction = (source.layout.columnX(anchor, kViewport)
+                                   + source.layout.columnWidth(anchor, kViewport) / 2.0
+                                   - source.layout.scroll())
+      / kViewport;
+
+  const auto capture = source.layout.captureState();
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, capture.members));
+  constexpr int newViewport = 800;
+  constexpr wlr_box newUsable{0, 0, newViewport + 20, 720};
+  restored.layout.restoreSnapshotViewport(*capture.snapshot, newViewport, false);
+  restored.layout.arrange(newUsable);
+
+  const double actualFraction = (restored.layout.columnX(anchor, newViewport)
+                                 + restored.layout.columnWidth(anchor, newViewport) / 2.0
+                                 - restored.layout.scroll())
+      / newViewport;
+  CHECK(std::fabs(actualFraction - expectedFraction) < 1e-9);
+  CHECK(restored.layout.scroll() >= 0.0);
+  CHECK(restored.layout.scroll() <= restored.layout.maxScroll(newViewport));
+}
+
+UMBRIEL_TEST(snapshotFallsBackToTheNearestLaneWhenTheCenteredLaneClosed) {
+  Fixture source;
+  source.addColumns(5);
+  source.layout.arrange(kUsable);
+  source.layout.setScroll(954.0);
+  source.layout.arrange(kUsable);
+  const double expectedFraction =
+      (source.layout.columnX(1, kViewport) + source.layout.columnWidth(1, kViewport) / 2.0 - source.layout.scroll())
+      / kViewport;
+
+  const auto capture = source.layout.captureState();
+  auto survivors = capture.members;
+  std::erase_if(survivors, [](const auto& member) { return member.view == stub(2); });
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, survivors));
+  restored.layout.restoreSnapshotViewport(*capture.snapshot, kViewport, true);
+  restored.layout.arrange(kUsable);
+
+  const int anchor = restored.layout.columnOf(stub(1));
+  const double actualFraction = (restored.layout.columnX(anchor, kViewport)
+                                 + restored.layout.columnWidth(anchor, kViewport) / 2.0
+                                 - restored.layout.scroll())
+      / kViewport;
+  CHECK(std::fabs(actualFraction - expectedFraction) < 1e-9);
+  CHECK(restored.layout.scroll() > 0.0);
+  CHECK(restored.layout.scroll() < restored.layout.maxScroll(kViewport));
+}
+
+UMBRIEL_TEST(snapshotRejectsRawScrollWhenLaneGeometryChanged) {
+  Fixture source;
+  source.addColumns(4);
+  source.layout.arrange(kUsable);
+  source.layout.setScroll(500.0);
+  source.layout.arrange(kUsable);
+  const double expectedFraction =
+      (source.layout.columnX(1, kViewport) + source.layout.columnWidth(1, kViewport) / 2.0 - source.layout.scroll())
+      / kViewport;
+
+  const auto capture = source.layout.captureState();
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, capture.members));
+  CHECK(restored.layout.setWidthFraction(0, 0.70));
+  restored.layout.restoreSnapshotViewport(*capture.snapshot, kViewport, true);
+  restored.layout.arrange(kUsable);
+
+  const int anchor = restored.layout.columnOf(stub(1));
+  const double actualFraction = (restored.layout.columnX(anchor, kViewport)
+                                 + restored.layout.columnWidth(anchor, kViewport) / 2.0
+                                 - restored.layout.scroll())
+      / kViewport;
+  CHECK(std::fabs(actualFraction - expectedFraction) < 1e-9);
+  CHECK(restored.layout.scroll() != source.layout.scroll());
+}
+
+UMBRIEL_TEST(snapshotUsesMemberIdsInsteadOfCapturedViewPointers) {
+  Fixture source;
+  source.addColumns(3);
+  CHECK(source.layout.consumeLeft(stub(2)));
+  const auto capture = source.layout.captureState();
+  auto remapped = capture.members;
+  for (auto& member : remapped) {
+    member.view = stub(10 + static_cast<int>(member.id));
+  }
+  std::ranges::reverse(remapped);
+
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, remapped));
+  CHECK_EQ(restored.layout.columns().size(), size_t{2});
+  CHECK_EQ(restored.layout.columns()[0].views[0], stub(10));
+  CHECK_EQ(restored.layout.columns()[1].views[0], stub(11));
+  CHECK_EQ(restored.layout.columns()[1].views[1], stub(12));
 }
 
 int main() { return RUN_TESTS(); }

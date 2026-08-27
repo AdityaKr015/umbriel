@@ -195,7 +195,7 @@ default_width_fraction = 0.55  # 0.1-0.9
 # tearing = true                 # allow eligible fullscreen clients to request tearing
 # hdr = "auto"                  # "off", "on", metadata-driven "auto", or any-app "fullscreen"
 # sdr_white = 203                # SDR reference white in cd/m2 while HDR is active
-# enabled = true                # false powers the monitor off and removes it from the desktop
+# enabled = true                # false removes it; re-enabling restores windows, layout, and active workspace
 # Dynamic workspaces are the default; use a count or name list for static workspaces.
 # workspaces = 5
 
@@ -275,6 +275,7 @@ follows_mouse = false
 "Mod+Space" = "scratchpad-toggle"
 "Mod+Ctrl+Space" = "window-restore-from-scratchpad"
 "Mod+Tab" = "scratchpad-focus-next"
+# Scratchpads return to their original output and position after temporary output loss.
 # Add `:DP-1` to any scratchpad action to target that output from anywhere.
 # "Mod+0" = "scratchpad-toggle:DP-1"
 # "Mod+Shift+0" = "window-move-to-scratchpad:DP-1"

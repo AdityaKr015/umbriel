@@ -31,6 +31,32 @@ namespace umbriel {
     Right,
   };
 
+  using LayoutMemberId = uint32_t;
+
+  struct LayoutMember {
+    LayoutMemberId id = 0;
+    View* view = nullptr;
+  };
+
+  // Immutable, layout-owned state. Member ids keep snapshots independent of
+  // View lifetimes while a physical output is absent.
+  class LayoutSnapshot {
+  public:
+    virtual ~LayoutSnapshot() = default;
+    [[nodiscard]] virtual LayoutMode mode() const = 0;
+    [[nodiscard]] virtual size_t memberCount() const = 0;
+  };
+
+  struct LayoutCapture {
+    std::shared_ptr<const LayoutSnapshot> snapshot;
+    // View pointers are consumed immediately by the caller and are never kept
+    // in the immutable snapshot.
+    std::vector<LayoutMember> members;
+  };
+
+  [[nodiscard]] std::optional<std::vector<View*>>
+  resolveLayoutMembers(size_t memberCount, std::span<const LayoutMember> members);
+
   // What a layout needs to know about a view in order to size it: the client's
   // size hints plus whether it is going fullscreen.
   struct LayoutConstraints {
@@ -117,6 +143,11 @@ namespace umbriel {
     [[nodiscard]] virtual int columnOf(const View* view) const = 0;
     [[nodiscard]] virtual int rowOf(const View* view) const = 0;
 
+    [[nodiscard]] virtual LayoutCapture captureState() const = 0;
+    // Restores into an empty layout. Missing member ids represent views that
+    // closed, moved deliberately, or became floating while displaced.
+    virtual bool restoreState(const LayoutSnapshot& snapshot, std::span<const LayoutMember> members) = 0;
+
     virtual void insertView(View* view, int columnIndex) = 0;
     virtual void insertViewIntoColumn(View* view, int columnIndex, int rowIndex) = 0;
     virtual bool consumeLeft(View* view) = 0;
@@ -153,7 +184,8 @@ namespace umbriel {
     virtual void clearFullWidthState(int columnIndex) = 0;
     [[nodiscard]] virtual double widthFraction(int columnIndex) const = 0;
 
-    // Interactive resize    // Edges grabbable at a pointer position (0 = none). Base = not resizable.
+    // Interactive resize
+    // Edges grabbable at a pointer position (0 = none). Base = not resizable.
     [[nodiscard]] virtual uint32_t resizeEdgesAt(const View* /*view*/, double /*cx*/, double /*cy*/) const { return 0; }
     // Drop edges this layout cannot resize. Base = unchanged.
     [[nodiscard]] virtual uint32_t sanitizeResizeEdges(const View* /*view*/, uint32_t edges) const { return edges; }

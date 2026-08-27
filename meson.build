@@ -514,6 +514,14 @@ drag_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper that reserves an exclusive zone on a named output. Output
+# restoration checks use it to reproduce a panel returning after windows do.
+layer_client = executable(
+  'layer-client',
+  ['tests/harness/clients/layer_client.cpp', layer_shell_client_h, layer_shell_client_c, xdg_shell_client_c],
+  dependencies: [wayland_client_dep],
+)
+
 # Harness helper that checks whether a Wayland global is visible to a newly
 # connected client.
 global_client = executable(
@@ -582,6 +590,7 @@ alias_target(
   pointer_client,
   input_method_client,
   drag_client,
+  layer_client,
   global_client,
   workspace_client,
   unmap_client,

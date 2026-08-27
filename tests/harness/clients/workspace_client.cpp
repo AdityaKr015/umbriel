@@ -111,9 +111,16 @@ namespace {
   };
 } // namespace
 
-// Default output is the active workspace of each group, one per line. `--all` lists every workspace as "id<TAB>name".
+// Default output is the active workspace of each group, one per line. `--all`
+// lists every workspace as "id<TAB>name"; `--active` lists active ones in the
+// same form so checks can associate each selection with its output.
 int main(int argc, char** argv) {
-  const bool listAll = argc > 1 && std::string_view(argv[1]) == "--all";
+  const bool listAll = argc == 2 && std::string_view(argv[1]) == "--all";
+  const bool listActive = argc == 2 && std::string_view(argv[1]) == "--active";
+  if (argc > 2 || (argc == 2 && !listAll && !listActive)) {
+    std::println(stderr, "usage: workspace-client [--all|--active]");
+    return 2;
+  }
   wl_display* display = wl_display_connect(nullptr);
   if (display == nullptr) {
     std::println(stderr, "workspace-client: cannot connect to WAYLAND_DISPLAY");
@@ -138,7 +145,9 @@ int main(int argc, char** argv) {
       std::println("{}\t{}", workspace->id, workspace->name);
     }
     if ((workspace->state & EXT_WORKSPACE_HANDLE_V1_STATE_ACTIVE) != 0) {
-      if (!listAll) {
+      if (listActive) {
+        std::println("{}\t{}", workspace->id, workspace->name);
+      } else if (!listAll) {
         std::println("{}", workspace->name);
       }
       ++active;
@@ -157,7 +166,7 @@ int main(int argc, char** argv) {
   wl_registry_destroy(state.registry);
   wl_display_disconnect(display);
 
-  if (!state.done || (!listAll && active != 1)) {
+  if (!state.done || (!listAll && !listActive && active != 1)) {
     std::println(stderr, "workspace-client: expected one active workspace, got {}", active);
     return 1;
   }

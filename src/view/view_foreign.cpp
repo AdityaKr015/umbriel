@@ -48,21 +48,25 @@ namespace umbriel {
   }
 
   void View::enterForeignOutput() {
-    if (m_foreign == nullptr) {
-      return;
-    }
-    wlr_output* output = nullptr;
+    Output* output = nullptr;
     if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
-      output = m_workspace->group()->output()->wlr();
+      output = m_workspace->group()->output();
     } else {
-      output = m_server->preferredOutput();
+      output = m_server->outputFromWlr(m_server->preferredOutput());
     }
-    if (output == nullptr || output == m_foreignOutput) {
+    enterForeignOutput(output);
+  }
+
+  void View::enterForeignOutput(Output* output) {
+    wlr_output* wlrOutput = output != nullptr ? output->wlr() : nullptr;
+    if (m_foreign == nullptr || wlrOutput == m_foreignOutput) {
       return;
     }
     leaveForeignOutput();
-    wlr_foreign_toplevel_handle_v1_output_enter(m_foreign, output);
-    m_foreignOutput = output;
+    if (wlrOutput != nullptr) {
+      wlr_foreign_toplevel_handle_v1_output_enter(m_foreign, wlrOutput);
+      m_foreignOutput = wlrOutput;
+    }
   }
 
   void View::leaveForeignOutput() {

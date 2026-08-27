@@ -3,16 +3,19 @@
 // never reaches Server::removeView, so any focus reassignment the compositor performs must happen at unmap time, the
 // same point a card disappears from the overview. Prints "mapped" once the toplevel is up and "unmapped" once the close
 // request lands, then keeps the connection alive until the harness kills it. Usage: unmap-client [title [width
-// height]]. The optional dimensions let pointer checks expose a surface that fills its assigned tile.
+// height]]. The optional dimensions let pointer checks expose a surface that fills its assigned tile. With
+// REMAP_ON_STDIN set, reading any byte performs a fresh initial commit and maps the same toplevel again.
 
 #include "color-management-v1-client-protocol.h"
 #include "tearing-control-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <poll.h>
 #include <print>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -452,6 +455,7 @@ int main(int argc, char** argv) {
   }
 
   State state;
+  const bool remapOnStdin = std::getenv("REMAP_ON_STDIN") != nullptr;
   if (const char* redraw = std::getenv("REDRAW_ON_CLOSE")) {
     state.redrawOnClose = true;
     state.redrawOnceOnClose = std::string_view(redraw) == "once";
@@ -602,7 +606,38 @@ int main(int argc, char** argv) {
   }
   wl_surface_commit(state.surface);
 
-  while (wl_display_dispatch(state.display) >= 0) {
+  if (!remapOnStdin) {
+    while (wl_display_dispatch(state.display) >= 0) {
+    }
+  } else {
+    pollfd sources[2] = {
+        {.fd = wl_display_get_fd(state.display), .events = POLLIN, .revents = 0},
+        {.fd = STDIN_FILENO, .events = POLLIN, .revents = 0},
+    };
+    while (wl_display_dispatch_pending(state.display) >= 0) {
+      wl_display_flush(state.display);
+      int ready = 0;
+      do {
+        ready = poll(sources, 2, -1);
+      } while (ready < 0 && errno == EINTR);
+      if (ready < 0 || (sources[0].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+        break;
+      }
+      if ((sources[1].revents & POLLIN) != 0) {
+        char command = 0;
+        if (read(STDIN_FILENO, &command, 1) > 0 && !state.mapped) {
+          state.closed = false;
+          xdg_toplevel_set_title(state.toplevel, argc > 1 ? argv[1] : "unmap-client");
+          wl_surface_attach(state.surface, nullptr, 0, 0);
+          wl_surface_commit(state.surface);
+          std::println("remap-requested");
+          std::fflush(stdout);
+        }
+      }
+      if ((sources[0].revents & POLLIN) != 0 && wl_display_dispatch(state.display) < 0) {
+        break;
+      }
+    }
   }
 
   if (state.toplevel != nullptr) {

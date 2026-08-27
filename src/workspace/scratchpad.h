@@ -2,6 +2,8 @@
 
 #include "core/animation.h"
 
+#include <array>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -50,6 +52,8 @@ namespace umbriel {
       Output* output = nullptr;
       std::string returnOutput;
       std::string displacedOutput;
+      // Full-output-relative x/y fractions retained until the displaced output returns.
+      std::optional<std::array<double, 2>> displacedPosition;
       std::string returnWorkspace;
       bool returnTiled = false;
       bool lastFocused = false;

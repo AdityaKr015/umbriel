@@ -63,6 +63,21 @@ wait_for_output() {
   return 1
 }
 
+active_workspace_on() {
+  "$WORKSPACE" --active | awk -F'\t' -v prefix="$1:" 'index($1, prefix) == 1 { print $2 }'
+}
+
+wait_for_active_workspace() {
+  local output=$1 expected=$2 active=
+  for _ in $(seq 40); do
+    active=$(active_workspace_on "$output")
+    [[ $active == "$expected" ]] && return 0
+    sleep 0.1
+  done
+  echo "expected '$output' to return to active workspace '$expected', got '$active'"
+  return 1
+}
+
 # Two windows on one output and one on the other, the same shape 625 uses, on dynamic workspaces.
 spawn_client hotplug-first
 wait_for_count 1
@@ -73,6 +88,7 @@ move_to_workspace hotplug-second 2/HEADLESS-1
 spawn_client hotplug-other
 wait_for_count 3
 move_to_workspace hotplug-other 1/HEADLESS-2
+"$UMBRIEL" msg workspace-switch:2/HEADLESS-1 > /dev/null
 
 # Unplug everything. Destroying the last output leaves the windows with no workspace at all.
 "$UMBRIEL" output-destroy HEADLESS-1 > /dev/null
@@ -95,5 +111,6 @@ wait_for_output hotplug-second HEADLESS-2
 wait_for_home hotplug-first HEADLESS-1/1
 wait_for_home hotplug-second HEADLESS-1/2
 wait_for_home hotplug-other HEADLESS-2/1
+wait_for_active_workspace HEADLESS-1 2
 
 echo "windows came home across outputs being destroyed and recreated"

@@ -221,8 +221,12 @@ namespace umbriel {
   wlr_scene_tree* View::captureTree() const { return m_captureScene != nullptr ? &m_captureScene->tree : nullptr; }
 
   void View::moveToWorkspace(Workspace* workspace, bool attachToLayout) {
+    const bool wasDisplaced = m_displacedHome.has_value();
     m_displacedHome.reset();
     setWorkspace(workspace, attachToLayout);
+    if (wasDisplaced) {
+      m_server->scheduleDisplacedViewRestore();
+    }
   }
 
   void View::setWorkspace(Workspace* workspace, bool attachToLayout) {
@@ -283,6 +287,22 @@ namespace umbriel {
     if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
       overview->onViewWorkspaceChanged(this);
     }
+  }
+
+  bool View::attachToAvailableWorkspace(const ResolvedWindowRule& rule) {
+    Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
+    WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
+    WorkspaceGroup* targetGroup = windowRuleWorkspaceGroup(*m_server, rule, preferredGroup);
+    Workspace* target = windowRuleWorkspace(targetGroup, rule);
+    if (target == nullptr) {
+      return false;
+    }
+    setWorkspace(target, false);
+    if (m_workspace != target) {
+      return false;
+    }
+    target->layoutAttach(this, rule.defaultWidth);
+    return true;
   }
 
   void View::detachWorkspace() {
@@ -1594,16 +1614,8 @@ namespace umbriel {
 
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(this, rule.defaultWidth);
-    } else {
-      Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
-      WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
-      WorkspaceGroup* targetGroup = windowRuleWorkspaceGroup(*m_server, rule, preferredGroup);
-      if (Workspace* target = windowRuleWorkspace(targetGroup, rule)) {
-        setWorkspace(target, /*attachToLayout=*/false);
-        target->layoutAttach(this, rule.defaultWidth);
-      } else {
-        setOnActiveWorkspace(true);
-      }
+    } else if (!attachToAvailableWorkspace(rule)) {
+      setOnActiveWorkspace(true);
     }
     if (rule.defaultPinned && *rule.defaultPinned) {
       setPinned(true, false);
@@ -1702,6 +1714,11 @@ namespace umbriel {
     if (Output* output = currentOutput()) {
       output->updateHdr();
     }
+    if (m_displacedHome) {
+      // Snapshot peers retain their member ids while this view is unmapped.
+      // Replay their shared structure now that this member is visible again.
+      m_server->scheduleDisplacedViewRestore();
+    }
   }
 
   void View::handleUnmap() {
@@ -1775,6 +1792,9 @@ namespace umbriel {
     m_ruleOpacity = 1.0F;
     m_hasMaximizeRestoreBox = false;
     m_floating.clearSizeRequest();
+    if (m_displacedHome) {
+      m_server->scheduleDisplacedViewRestore();
+    }
   }
 
   void View::handleCommit() {

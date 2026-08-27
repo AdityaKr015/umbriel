@@ -103,6 +103,21 @@ wait_for_output() {
   return 1
 }
 
+active_workspace_on() {
+  "$WORKSPACE" --active | awk -F'\t' -v prefix="$1:" 'index($1, prefix) == 1 { print $2 }'
+}
+
+wait_for_active_workspace() {
+  local output=$1 expected=$2 active=
+  for _ in $(seq 40); do
+    active=$(active_workspace_on "$output")
+    [[ $active == "$expected" ]] && return 0
+    sleep 0.1
+  done
+  echo "expected '$output' to return to active workspace '$expected', got '$active'"
+  return 1
+}
+
 move_to_workspace() {
   local title=$1 selector=$2
   "$UMBRIEL" msg "window-focus:$(field_of "$title" id)" > /dev/null
@@ -166,6 +181,7 @@ write_config '[output.HEADLESS-2]
 enabled = false'
 "$UMBRIEL" msg config-reload > /dev/null
 expect_log_since "$mark" "output 'HEADLESS-1': applied mode=" "HEADLESS-1 was not re-enabled on reload"
+wait_for_active_workspace HEADLESS-1 3
 wait_for_home first-ws1 "${HOME[first-ws1]}"
 wait_for_home first-ws2 "${HOME[first-ws2]}"
 wait_for_output second-ws1 HEADLESS-1

@@ -104,6 +104,7 @@ BINARY_DIR=$(dirname "$BINARY")
 export UMBRIEL_POINTER_CLIENT="$BINARY_DIR/pointer-client"
 export UMBRIEL_INPUT_METHOD_CLIENT="$BINARY_DIR/input-method-client"
 export UMBRIEL_DRAG_CLIENT="$BINARY_DIR/drag-client"
+export UMBRIEL_LAYER_CLIENT="$BINARY_DIR/layer-client"
 export UMBRIEL_GLOBAL_CLIENT="$BINARY_DIR/global-client"
 export UMBRIEL_WORKSPACE_CLIENT="$BINARY_DIR/workspace-client"
 export UMBRIEL_UNMAP_CLIENT="$BINARY_DIR/unmap-client"

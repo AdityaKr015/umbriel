@@ -5,6 +5,7 @@
 // clang-format off
 // See keybind_parse.cpp: <cmath> must precede the wayland chain.
 #include <cmath>
+#include <algorithm>
 #include <optional>
 extern "C" {
 #include <wlr/util/box.h>
@@ -312,6 +313,79 @@ UMBRIEL_TEST(aVerticalGrabTransfersHeightBetweenRows) {
   fixture.layout.arrange(kUsable);
   CHECK(fixture.layout.targetBox(stub(2)).height > topBefore);
   CHECK(fixture.layout.targetBox(stub(1)).height < bottomBefore);
+}
+
+UMBRIEL_TEST(snapshotRestoresAreasRowsAndWidthState) {
+  Fixture source;
+  source.addViews(4);
+  CHECK(source.layout.consumeLeft(stub(2)));
+  source.layout.arrange(kUsable);
+  CHECK(source.layout.moveViewVertical(stub(2), -1));
+  source.layout.arrange(kUsable);
+
+  auto resize = source.layout.beginResize(stub(2), WLR_EDGE_BOTTOM, kUsable);
+  CHECK(resize != nullptr);
+  resize->applyDelta(0.0, 55.0, kUsable);
+  const int masterColumn = source.layout.columnOf(stub(2));
+  CHECK(source.layout.setWidthFraction(masterColumn, 0.70));
+  CHECK(source.layout.toggleFullWidth(masterColumn));
+  source.layout.arrange(kUsable);
+
+  const auto capture = source.layout.captureState();
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, capture.members));
+  restored.layout.arrange(kUsable);
+
+  CHECK_EQ(restored.layout.columns().size(), source.layout.columns().size());
+  for (size_t column = 0; column < source.layout.columns().size(); ++column) {
+    CHECK_EQ(restored.layout.columns()[column].views, source.layout.columns()[column].views);
+    CHECK_EQ(restored.layout.columns()[column].heightWeights, source.layout.columns()[column].heightWeights);
+  }
+  for (int id = 0; id < 4; ++id) {
+    const wlr_box expected = source.layout.targetBox(stub(id));
+    const wlr_box actual = restored.layout.targetBox(stub(id));
+    CHECK_EQ(actual.x, expected.x);
+    CHECK_EQ(actual.y, expected.y);
+    CHECK_EQ(actual.width, expected.width);
+    CHECK_EQ(actual.height, expected.height);
+  }
+
+  const int restoredMaster = restored.layout.columnOf(stub(2));
+  CHECK(!restored.layout.toggleFullWidth(restoredMaster));
+  CHECK(std::fabs(restored.layout.widthFraction(restoredMaster) - 0.70) < 1e-9);
+}
+
+UMBRIEL_TEST(snapshotPromotesTheStackWhenTheMasterIsMissing) {
+  Fixture source;
+  source.addViews(3);
+  const auto capture = source.layout.captureState();
+  auto survivors = capture.members;
+  std::erase_if(survivors, [](const auto& member) { return member.view == stub(0); });
+
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, survivors));
+  CHECK_EQ(restored.layout.columns().size(), size_t{2});
+  CHECK_EQ(restored.layout.columnOf(stub(2)), 0);
+  CHECK_EQ(restored.layout.columnOf(stub(1)), 1);
+}
+
+UMBRIEL_TEST(snapshotUsesMemberIdsInsteadOfCapturedViewPointers) {
+  Fixture source;
+  source.addViews(3);
+  CHECK(source.layout.consumeLeft(stub(2)));
+  const auto capture = source.layout.captureState();
+  auto remapped = capture.members;
+  for (auto& member : remapped) {
+    member.view = stub(10 + static_cast<int>(member.id));
+  }
+  std::ranges::reverse(remapped);
+
+  Fixture restored;
+  CHECK(restored.layout.restoreState(*capture.snapshot, remapped));
+  CHECK_EQ(restored.layout.columns().size(), size_t{2});
+  CHECK_EQ(restored.layout.columns()[0].views[0], stub(10));
+  CHECK_EQ(restored.layout.columns()[0].views[1], stub(11));
+  CHECK_EQ(restored.layout.columns()[1].views[0], stub(12));
 }
 
 int main() { return RUN_TESTS(); }

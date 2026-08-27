@@ -175,6 +175,19 @@ layer_shell_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+foreign_toplevel_client_h = custom_target(
+  'wlr-foreign-toplevel-management-unstable-v1-client-protocol.h',
+  input: 'protocols/wlr-foreign-toplevel-management-unstable-v1.xml',
+  output: 'wlr-foreign-toplevel-management-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+foreign_toplevel_client_c = custom_target(
+  'wlr-foreign-toplevel-management-unstable-v1-client-protocol.c',
+  input: 'protocols/wlr-foreign-toplevel-management-unstable-v1.xml',
+  output: 'wlr-foreign-toplevel-management-unstable-v1-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 xdg_shell_client_h = custom_target(
   'xdg-shell-client-protocol.h',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'stable/xdg-shell/xdg-shell.xml',
@@ -537,6 +550,18 @@ workspace_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper that checks the output membership advertised for a foreign
+# toplevel, including while its workspace is inactive.
+foreign_toplevel_client = executable(
+  'foreign-toplevel-client',
+  [
+    'tests/harness/clients/foreign_toplevel_client.cpp',
+    foreign_toplevel_client_h,
+    foreign_toplevel_client_c,
+  ],
+  dependencies: [wayland_client_dep],
+)
+
 # Harness helper that unmaps its toplevel on a close request without destroying
 # it, so the compositor keeps the View registered but unmapped.
 unmap_client = executable(
@@ -593,6 +618,7 @@ alias_target(
   layer_client,
   global_client,
   workspace_client,
+  foreign_toplevel_client,
   unmap_client,
   popup_client,
   subsurface_client,

@@ -55,7 +55,7 @@ namespace umbriel {
         resolved.gap = *overrides.gap;
       }
       if (overrides.scrolling.defaultWidthFraction) {
-        resolved.scrolling.defaultWidthFraction = *overrides.scrolling.defaultWidthFraction;
+        resolved.scrolling.defaultWidthFraction = overrides.scrolling.defaultWidthFraction;
       }
       if (overrides.scrolling.centerUnderfullStrip) {
         resolved.scrolling.centerUnderfullStrip = *overrides.scrolling.centerUnderfullStrip;

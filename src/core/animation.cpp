@@ -5,13 +5,14 @@
 #include <cmath>
 #include <cstdio>
 #include <mutex>
+#include <numbers>
 #include <shared_mutex>
 #include <unordered_map>
 
 namespace umbriel {
 
   namespace {
-    constexpr double kPi = 3.14159265358979323846;
+    constexpr double kPi = std::numbers::pi;
 
     [[nodiscard]] std::string normalizeName(std::string_view name) {
       std::string out;

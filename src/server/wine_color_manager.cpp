@@ -374,7 +374,8 @@ namespace umbriel {
     }
 
     static void handleOutputCommit(wl_listener* listener, void* data) {
-      ManagedOutput* output = wl_container_of(listener, output, commit);
+      ManagedOutput* output;
+      output = wl_container_of(listener, output, commit);
       const auto* event = static_cast<wlr_output_event_commit*>(data);
       if ((event->state->committed & WLR_OUTPUT_STATE_IMAGE_DESCRIPTION) != 0) {
         wp_color_management_output_v1_send_image_description_changed(output->resource);
@@ -383,7 +384,8 @@ namespace umbriel {
     }
 
     static void handleWlrOutputDestroy(wl_listener* listener, void*) {
-      ManagedOutput* output = wl_container_of(listener, output, destroy);
+      ManagedOutput* output;
+      output = wl_container_of(listener, output, destroy);
       destroyManagedOutput(output, true);
     }
 
@@ -484,7 +486,8 @@ namespace umbriel {
     }
 
     static void handleSurfaceCommit(wl_listener* listener, void*) {
-      Surface* surface = wl_container_of(listener, surface, commit);
+      Surface* surface;
+      surface = wl_container_of(listener, surface, commit);
       const bool changed = surface->currentSet != surface->pendingSet
           || (surface->pendingSet && !descriptionsEqual(surface->currentDescription, surface->pendingDescription));
       surface->currentDescription = surface->pendingDescription;
@@ -495,17 +498,20 @@ namespace umbriel {
     }
 
     static void handleSurfaceMap(wl_listener* listener, void*) {
-      Surface* surface = wl_container_of(listener, surface, map);
+      Surface* surface;
+      surface = wl_container_of(listener, surface, map);
       surface->manager->refreshSurfaceHdr(surface->surface);
     }
 
     static void handleSurfaceUnmap(wl_listener* listener, void*) {
-      Surface* surface = wl_container_of(listener, surface, unmap);
+      Surface* surface;
+      surface = wl_container_of(listener, surface, unmap);
       surface->manager->refreshSurfaceHdr(surface->surface);
     }
 
     static void handleWlrSurfaceDestroy(wl_listener* listener, void*) {
-      Surface* surface = wl_container_of(listener, surface, destroy);
+      Surface* surface;
+      surface = wl_container_of(listener, surface, destroy);
       surface->wlrDestroying = true;
       wl_resource_destroy(surface->resource);
     }
@@ -561,7 +567,8 @@ namespace umbriel {
     }
 
     static void handleFeedbackSurfaceDestroy(wl_listener* listener, void*) {
-      SurfaceFeedback* feedback = wl_container_of(listener, feedback, destroy);
+      SurfaceFeedback* feedback;
+      feedback = wl_container_of(listener, feedback, destroy);
       destroySurfaceFeedback(feedback, true);
     }
 
@@ -1132,7 +1139,7 @@ namespace umbriel {
     }
 
     const std::string maps = readProcessFile(pid, "maps");
-    if (maps.find("winewayland.so") != std::string::npos) {
+    if (maps.contains("winewayland.so")) {
       return true;
     }
 

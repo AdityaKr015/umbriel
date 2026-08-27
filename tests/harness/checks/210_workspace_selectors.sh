@@ -70,11 +70,13 @@ workspace_name_of() {
 accepts "workspace-switch:1"
 accepts "workspace-switch:1/HEADLESS-1"
 accepts "window-move-to-workspace:1"
+accepts "column-move-to-workspace:1/HEADLESS-1"
 accepts "workspace-switch:99"
 
 rejects_with "workspace-switch:1/NOPE" "unknown output: NOPE"
 rejects_with "workspace-switch:nosuchname" "unknown workspace: nosuchname"
 rejects_with "window-move-to-workspace:1/NOPE" "unknown output: NOPE"
+rejects_with "column-move-to-workspace:1/NOPE" "unknown output: NOPE"
 
 # A unique numeric name wins globally. This supports split ranges such as 1 through 5 on one output and 6 through 10
 # on another without making the keybind depend on the currently focused output.

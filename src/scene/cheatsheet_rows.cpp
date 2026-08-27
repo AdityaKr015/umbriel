@@ -332,6 +332,9 @@ namespace {
     case A::ToggleFullscreen:
       return Group::Windows;
     case A::WorkspaceSwitch:
+    case A::ColumnMoveToWorkspace:
+    case A::ColumnMoveToWorkspaceNext:
+    case A::ColumnMoveToWorkspacePrevious:
     case A::WindowMoveToWorkspace:
     case A::WindowMoveToWorkspaceNext:
     case A::WindowMoveToWorkspacePrevious:
@@ -517,8 +520,8 @@ namespace umbriel {
       }
     }
 
-    // Collapse workspace digit runs: For each (submap, action in {WorkspaceSwitch, WindowMoveToWorkspace}, modifiers,
-    // useMod), check if digits 1..9 are present with workspaceName == digit. If so, collapse them.
+    // Collapse workspace digit runs for each workspace selector action. Group
+    // binds by submap and modifiers, then check for workspace digits 1..9.
     auto collapseWorkspaceRuns = [&](KeybindAction wsAction) {
       struct RunKey {
         std::string submap;
@@ -619,6 +622,7 @@ namespace umbriel {
     };
 
     collapseWorkspaceRuns(KeybindAction::WorkspaceSwitch);
+    collapseWorkspaceRuns(KeybindAction::ColumnMoveToWorkspace);
     collapseWorkspaceRuns(KeybindAction::WindowMoveToWorkspace);
 
     return rows;

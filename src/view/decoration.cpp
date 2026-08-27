@@ -41,7 +41,10 @@ namespace umbriel {
 
     const auto& appearance = config().appearance;
     applyBorderGeometry(
-        m_border, makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth()),
+        m_border,
+        makeBorderRing(
+            contentWidth, contentHeight, appearance.cornerRadius, appearance.borderWidth, appearance.outerBorderWidth
+        ),
         appearance.borderWidth, appearance.outerBorderWidth
     );
   }
@@ -72,8 +75,9 @@ namespace umbriel {
       return false;
     }
     const auto& appearance = config().appearance;
-    const BorderRing ring =
-        makeBorderRing(contentWidth, contentHeight, appearance.cornerRadius, appearance.totalBorderWidth());
+    const BorderRing ring = makeBorderRing(
+        contentWidth, contentHeight, appearance.cornerRadius, appearance.borderWidth, appearance.outerBorderWidth
+    );
     return m_border->width != ring.box.width || m_border->height != ring.box.height;
   }
 
@@ -87,7 +91,8 @@ namespace umbriel {
       return;
     }
     wlr_scene_border_set_geometry(
-        copy, m_border->width, m_border->height, m_border->inner_width, m_border->outer_width, m_border->clipped_region
+        copy, m_border->width, m_border->height, m_border->inner_width, m_border->outer_width, m_border->clipped_region,
+        m_border->seam_corners, m_border->outer_corners
     );
     wlr_scene_node_set_position(
         &copy->node, m_borderTree->node.x + m_border->node.x, m_borderTree->node.y + m_border->node.y

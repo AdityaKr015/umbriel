@@ -14,7 +14,7 @@ namespace umbriel {
     wlr_scene_node_set_position(&border->node, ring.box.x, ring.box.y);
     wlr_scene_border_set_geometry(
         border, ring.box.width, ring.box.height, innerWidth, outerWidth,
-        clipped_region{.area = ring.hole, .corners = ring.inner}
+        clipped_region{.area = ring.hole, .corners = ring.inner}, ring.seam, ring.outer
     );
   }
 

@@ -263,9 +263,9 @@ namespace umbriel {
     }
     notifyOutputScale();
     if (m_mapped) {
-      if (m_workspace != nullptr && m_onActiveWorkspace) {
+      if (m_workspace != nullptr) {
         enterForeignOutput();
-      } else if (m_workspace == nullptr) {
+      } else {
         // An unassigned view has no output to advertise. In particular, the preferred output may be the one currently
         // being destroyed, and foreign-toplevel output membership installs a bind listener that must be gone before
         // wlr_output_finish completes.

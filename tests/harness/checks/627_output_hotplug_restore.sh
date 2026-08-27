@@ -5,6 +5,7 @@
 set -euo pipefail
 
 readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/workspace-client}"
+readonly FOREIGN_TOPLEVEL="${UMBRIEL_FOREIGN_TOPLEVEL_CLIENT:-./build-debug/foreign-toplevel-client}"
 
 spawn_client() {
   foot --title="$1" sh -c 'sleep 120' > /dev/null 2>&1 &
@@ -88,7 +89,9 @@ move_to_workspace hotplug-second 2/HEADLESS-1
 spawn_client hotplug-other
 wait_for_count 3
 move_to_workspace hotplug-other 1/HEADLESS-2
-"$UMBRIEL" msg workspace-switch:2/HEADLESS-1 > /dev/null
+"$UMBRIEL" msg workspace-switch:3/HEADLESS-1 > /dev/null
+"$FOREIGN_TOPLEVEL" hotplug-first HEADLESS-1
+"$FOREIGN_TOPLEVEL" hotplug-second HEADLESS-1
 
 # Unplug everything. Destroying the last output leaves the windows with no workspace at all.
 "$UMBRIEL" output-destroy HEADLESS-1 > /dev/null
@@ -111,6 +114,10 @@ wait_for_output hotplug-second HEADLESS-2
 wait_for_home hotplug-first HEADLESS-1/1
 wait_for_home hotplug-second HEADLESS-1/2
 wait_for_home hotplug-other HEADLESS-2/1
-wait_for_active_workspace HEADLESS-1 2
+wait_for_active_workspace HEADLESS-1 3
+# Workspace 2 was neither the recreated group's initial workspace nor its
+# restored active workspace. Taskbars must learn this membership
+# without making the user visit the restored workspace first.
+"$FOREIGN_TOPLEVEL" hotplug-second HEADLESS-1
 
 echo "windows came home across outputs being destroyed and recreated"

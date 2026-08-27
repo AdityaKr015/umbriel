@@ -51,6 +51,10 @@ namespace umbriel {
       std::optional<ScrollingDirection> direction;
       bool operator==(const Scrolling&) const = default;
     } scrolling;
+    struct Dwindle {
+      std::optional<bool> preserveSplit;
+      bool operator==(const Dwindle&) const = default;
+    } dwindle;
     struct Master {
       std::optional<double> defaultWidthFraction;
       std::optional<MasterPosition> position;
@@ -81,6 +85,10 @@ namespace umbriel {
       ScrollingDirection direction = ScrollingDirection::Horizontal;
       bool operator==(const Scrolling&) const = default;
     } scrolling;
+    struct Dwindle {
+      bool preserveSplit = false;
+      bool operator==(const Dwindle&) const = default;
+    } dwindle;
     struct Master {
       double defaultWidthFraction = 0.55;
       MasterPosition position = MasterPosition::Left;
@@ -461,6 +469,10 @@ namespace umbriel {
         ScrollingDirection direction = ScrollingDirection::Horizontal;
         bool operator==(const Scrolling&) const = default;
       } scrolling;
+      struct Dwindle {
+        bool preserveSplit = false;
+        bool operator==(const Dwindle&) const = default;
+      } dwindle;
       struct Master {
         double defaultWidthFraction = 0.55;
         MasterPosition position = MasterPosition::Left;

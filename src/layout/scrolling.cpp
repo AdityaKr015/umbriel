@@ -649,8 +649,9 @@ namespace umbriel {
     }
   }
 
-  Layout::InitialSize
-  ScrollingLayout::initialSize(const wlr_box& usable, std::optional<double> ruleWidthFraction) const {
+  Layout::InitialSize ScrollingLayout::initialSize(
+      const wlr_box& usable, std::optional<double> ruleWidthFraction, const View* /*splitAnchor*/
+  ) const {
     const wlr_box content = contentArea(usable);
     const std::optional<double> fraction =
         ruleWidthFraction ? ruleWidthFraction : m_config->scrolling.defaultWidthFraction;

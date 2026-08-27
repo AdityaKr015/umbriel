@@ -246,3 +246,11 @@ and design discussion, join the community on [Discord](https://discord.noctalia.
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+## Star History
+
+<p align="center">
+  <a href="https://github.com/noctalia-dev/noctalia/stargazers">
+    <img src="https://api.noctalia.dev/stars/umbriel" alt="Star History" />
+  </a>
+</p>

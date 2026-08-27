@@ -70,6 +70,14 @@ namespace umbriel {
       }
     }
 
+    void printSubmap(const nlohmann::json& ok) {
+      if (!ok.is_string()) {
+        return;
+      }
+      const std::string name = ok.get<std::string>();
+      std::println("{}", name.empty() ? "unnamed" : name);
+    }
+
     void printLayers(const nlohmann::json& ok) {
       for (const auto& entry : ok) {
         const std::string layer = entry.value("layer", "");
@@ -376,6 +384,14 @@ namespace umbriel {
     return nlohmann::json{{"ok", workspaces}};
   }
 
+  nlohmann::json IpcCommands::submap(Server& server, std::string_view /*arg*/) {
+    nlohmann::json active = nullptr;
+    if (server.inSubmap()) {
+      active = server.activeSubmap();
+    }
+    return nlohmann::json{{"ok", std::move(active)}};
+  }
+
   nlohmann::json IpcCommands::layers(Server& server, std::string_view /*arg*/) {
     nlohmann::json layers = nlohmann::json::array();
     for (const auto& l : server.layerSurfaces()) {
@@ -570,6 +586,7 @@ namespace umbriel {
       {"msg", "<action> [args...]", "send an action to the compositor", true, &IpcCommands::msg, nullptr},
       {"windows", "", "list windows (app id and title)", false, &IpcCommands::windows, &printWindows},
       {"workspaces", "", "list workspaces and their layouts", false, &IpcCommands::workspaces, &printWorkspaces},
+      {"submap", "", "show the active keybind submap", false, &IpcCommands::submap, &printSubmap},
       {"layers", "", "list layer-shell surfaces", false, &IpcCommands::layers, &printLayers},
       {"color", "", "show color-management state", false, &IpcCommands::color, &printColor},
       {"tearing", "", "show tearing-control state", false, &IpcCommands::tearing, &printTearing},

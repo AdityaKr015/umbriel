@@ -165,6 +165,7 @@ action = "spawn:notify-send 'Bottom right'"
 
 [layout]
 mode = "scrolling"             # "scrolling", "dwindle", or "master"
+# Inspect every workspace's effective mode with `umbriel workspaces --json`.
 gap = 8                        # 0-500
 width_presets = [0.333, 0.5, 0.667] # shared by scrolling, dwindle, and master
 
@@ -178,7 +179,7 @@ center_underfull_strip = true  # center the strip whenever it is narrower than t
 position = "left"              # "left" or "right"
 default_width_fraction = 0.55  # 0.1-0.9
 
-# Workspace layout overrides (see docs/user/outputs.md#workspace-rules)
+# Workspace layout overrides (see docs/user/workspaces.md#workspace-rules)
 # [[workspace]]
 # name = "chat"
 # layout.mode = "dwindle"
@@ -286,6 +287,9 @@ follows_mouse = false
 "Mod+O" = "overview-toggle"
 # "Mod+Space" is taken above; pick a free chord for layout switching.
 # "Mod+Shift+K" = "keyboard-layout-next"
+# Submaps can nest; entry binds should not repeat. Inspect the active layer with `umbriel submap`.
+# "Mod+R" = { action = "submap:resize", repeat = false }
+# "submap[resize],Escape" = "submap:reset"
 
 # Output, workspace, and window movement actions.
 # "Mod+Home" = "column-focus-first"

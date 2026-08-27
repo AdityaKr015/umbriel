@@ -165,6 +165,47 @@ if ! grep -F "* HEADLESS-1: 1 [dwindle] (focused)" <<< "$workspace_human" > /dev
 fi
 "$UMBRIEL" msg workspace-set-layout:scrolling > /dev/null
 
+submap=$("$UMBRIEL" submap --json)
+if ! jq -e '. == null' <<< "$submap" > /dev/null; then
+  echo "submap --json did not report the default context: $submap"
+  exit 1
+fi
+if [[ $("$UMBRIEL" submap | wc -c) -ne 0 ]]; then
+  echo "human submap output printed text for the default context"
+  exit 1
+fi
+
+# Submaps nest, so current means the top layer that handles keybinds. Popping
+# that layer must reveal the previous one before returning to the default map.
+"$UMBRIEL" msg submap:outer > /dev/null
+submap=$("$UMBRIEL" submap --json)
+if ! jq -e '. == "outer"' <<< "$submap" > /dev/null; then
+  echo "submap --json did not report the active outer layer: $submap"
+  exit 1
+fi
+if [[ $("$UMBRIEL" submap) != "outer" ]]; then
+  echo "human submap output did not report the active outer layer"
+  exit 1
+fi
+"$UMBRIEL" msg submap:inner > /dev/null
+submap=$("$UMBRIEL" submap --json)
+if ! jq -e '. == "inner"' <<< "$submap" > /dev/null; then
+  echo "submap --json did not report the nested top layer: $submap"
+  exit 1
+fi
+"$UMBRIEL" msg submap:reset > /dev/null
+submap=$("$UMBRIEL" submap --json)
+if ! jq -e '. == "outer"' <<< "$submap" > /dev/null; then
+  echo "submap reset did not reveal the previous layer: $submap"
+  exit 1
+fi
+"$UMBRIEL" msg submap:reset > /dev/null
+submap=$("$UMBRIEL" submap --json)
+if ! jq -e '. == null' <<< "$submap" > /dev/null; then
+  echo "submap reset did not restore the default context: $submap"
+  exit 1
+fi
+
 layers=$("$UMBRIEL" layers --json)
 if ! jq -e 'type == "array"' <<< "$layers" > /dev/null; then
   echo "layers --json is not an array: $layers"

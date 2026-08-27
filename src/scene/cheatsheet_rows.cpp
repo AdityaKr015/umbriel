@@ -185,7 +185,7 @@ namespace {
           return name + ": " + spawn->command;
         }
         if (const auto* submap = umbriel::payloadIf<umbriel::SubmapArg>(bind)) {
-          return name + ": " + submap->name;
+          return name + ": " + (submap->name.empty() ? "unnamed" : submap->name);
         }
         return name;
       case umbriel::ActionArgKind::WidthFraction:

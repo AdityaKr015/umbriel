@@ -105,6 +105,14 @@ UMBRIEL_TEST(masterLayoutModeIsNamedInTheActionLabel) {
   CHECK(rows[0].action.contains("master"));
 }
 
+UMBRIEL_TEST(unnamedSubmapIsNamedInTheActionLabel) {
+  Keybind unnamed = bind(KeybindAction::Submap, XKB_KEY_s);
+  unnamed.payload = umbriel::SubmapArg{};
+  const auto rows = buildCheatsheetRows(std::vector<Keybind>{unnamed});
+  CHECK_EQ(rows.size(), size_t{1});
+  CHECK_EQ(rows[0].action, std::string{"submap: unnamed"});
+}
+
 UMBRIEL_TEST(bindsSharingAnActionMergeWithADitto) {
   // Mod+H and Mod+Left both focus left; the second row shows the chord and a
   // ditto rather than repeating the label.

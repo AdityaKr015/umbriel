@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <vector>
 
 struct wlr_box;
@@ -17,11 +18,17 @@ namespace umbriel {
   enum class LayoutMode {
     Scrolling,
     Dwindle,
+    Master,
   };
 
   enum class ScrollingDirection {
     Horizontal,
     Vertical,
+  };
+
+  enum class MasterPosition {
+    Left,
+    Right,
   };
 
   // What a layout needs to know about a view in order to size it: the client's
@@ -67,6 +74,19 @@ namespace umbriel {
     double widthFrac = 0.5;
     double savedWidthFrac = 0.0;
   };
+
+  struct LayoutTarget {
+    View* view = nullptr;
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+  };
+
+  // Directional focus prefers the smallest nonnegative gap, then the greatest
+  // overlap, then the closest perpendicular center.
+  [[nodiscard]] View*
+  directionalNeighbor(std::span<const LayoutTarget> targets, const View* view, bool horizontal, int direction);
 
   // Layout-owned interactive resize session. Cursor feeds a pointer delta; the session mutates only its layout's
   // geometry state (split ratios, width fractions, row weights). Protocol calls and arrange() stay in Cursor.
@@ -151,8 +171,8 @@ namespace umbriel {
       return nullptr;
     }
 
-    // Both layouts present their contents as columns: scrolling owns them
-    // directly, dwindle flattens its tree into them.
+    // Every layout presents its contents as columns. Scrolling owns them
+    // directly, dwindle flattens its tree, and master exposes its occupied areas.
     [[nodiscard]] virtual const std::vector<Column>& columns() const = 0;
     // Whether a column occupies the full viewport, however each layout gets there.
     [[nodiscard]] virtual bool isFullWidth(int columnIndex) const = 0;

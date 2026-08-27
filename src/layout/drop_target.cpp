@@ -36,6 +36,12 @@ namespace umbriel {
       wlr_box hint{};
     };
 
+    struct MasterTarget {
+      int column = 0;
+      int row = 0;
+      wlr_box hint{};
+    };
+
     wlr_box columnHintBox(
         const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, int gapIndex, double scroll
     ) {
@@ -273,6 +279,91 @@ namespace umbriel {
       }
       return {.column = nearestGap, .row = -1};
     }
+
+    MasterTarget computeMasterTarget(
+        const Workspace& workspace, const Layout& layout, const wlr_box& /*usable*/, double worldX, double worldY
+    ) {
+      if (layout.columns().empty()) {
+        return {};
+      }
+
+      int selectedColumn = 0;
+      wlr_box selectedArea{};
+      double selectedDistance = 0.0;
+      bool haveSelection = false;
+      for (int columnIndex = 0; columnIndex < static_cast<int>(layout.columns().size()); ++columnIndex) {
+        const Column& column = layout.columns()[static_cast<size_t>(columnIndex)];
+        wlr_box area{};
+        bool haveArea = false;
+        for (const View* view : column.views) {
+          const wlr_box box = layout.targetBox(view);
+          if (box.width <= 0 || box.height <= 0) {
+            continue;
+          }
+          if (!haveArea) {
+            area = box;
+            haveArea = true;
+          } else {
+            const int right = std::max(area.x + area.width, box.x + box.width);
+            const int bottom = std::max(area.y + area.height, box.y + box.height);
+            area.x = std::min(area.x, box.x);
+            area.y = std::min(area.y, box.y);
+            area.width = right - area.x;
+            area.height = bottom - area.y;
+          }
+        }
+        if (!haveArea) {
+          continue;
+        }
+
+        double distance = 0.0;
+        if (worldX < area.x) {
+          distance = area.x - worldX;
+        } else if (worldX > area.x + area.width) {
+          distance = worldX - (area.x + area.width);
+        }
+        if (!haveSelection || distance < selectedDistance) {
+          selectedColumn = columnIndex;
+          selectedArea = area;
+          selectedDistance = distance;
+          haveSelection = true;
+        }
+      }
+      if (!haveSelection) {
+        return {};
+      }
+
+      const Column& column = layout.columns()[static_cast<size_t>(selectedColumn)];
+      int nearestRow = 0;
+      double nearestDistance = std::abs(worldY - selectedArea.y);
+      const int rowCount = static_cast<int>(column.views.size());
+      for (int row = 1; row <= rowCount; ++row) {
+        const int boundary = row == rowCount
+            ? selectedArea.y + selectedArea.height
+            : layout.targetBox(column.views[static_cast<size_t>(row)]).y - workspace.layoutConfig().totalGap / 2;
+        const double distance = std::abs(worldY - boundary);
+        if (distance < nearestDistance) {
+          nearestRow = row;
+          nearestDistance = distance;
+        }
+      }
+
+      wlr_box hint{
+          .x = selectedArea.x,
+          .y = selectedArea.y,
+          .width = selectedArea.width,
+          .height = kRowHintEdgeHeight,
+      };
+      if (nearestRow == rowCount) {
+        hint.y = selectedArea.y + selectedArea.height - kRowHintEdgeHeight;
+      } else if (nearestRow > 0) {
+        const int boundary =
+            layout.targetBox(column.views[static_cast<size_t>(nearestRow)]).y - workspace.layoutConfig().totalGap / 2;
+        hint.y = boundary - kRowHintMidHeight / 2;
+        hint.height = kRowHintMidHeight;
+      }
+      return {.column = selectedColumn, .row = nearestRow, .hint = hint};
+    }
   } // namespace
   std::optional<DropColumnWidth> captureDropColumnWidth(const Workspace& source, const View* view) {
     const ScrollingLayout* scrolling = source.scrollingLayout();
@@ -306,8 +397,8 @@ namespace umbriel {
       return result;
     }
 
-    // Layout mode is a genuine policy fork here, not a capability check: the two
-    // layouts want different drop targets and different hint shapes.
+    // Layout mode is a genuine policy fork here. Each layout wants different
+    // drop targets and hint shapes.
     if (DwindleLayout* dwindle = workspace.dwindleLayout()) {
       const DwindleTarget target = computeDwindleTarget(*dwindle, worldX, worldY, excludedView);
       result.column = target.leaf >= 0 ? target.leaf : static_cast<int>(workspace.layout().columns().size());
@@ -316,6 +407,11 @@ namespace umbriel {
       if (target.view != nullptr && target.edge != 0) {
         result.hintBox = target.hint;
       }
+    } else if (workspace.layoutMode() == LayoutMode::Master) {
+      const MasterTarget target = computeMasterTarget(workspace, workspace.layout(), usable, worldX, worldY);
+      result.column = target.column;
+      result.row = target.row;
+      result.hintBox = target.hint;
     } else if (const ScrollingLayout* scrolling = workspace.scrollingLayout()) {
       const ScrollingLayout& layout = *scrolling;
       const double scroll = layout.scroll();
@@ -390,8 +486,8 @@ namespace umbriel {
       const bool fullscreen = view.toplevel()->current.fullscreen || view.toplevel()->scheduled.fullscreen;
       wlr_scene_node_reparent(&view.sceneTree()->node, fullscreen ? target.fullscreenTree() : target.viewLayer(true));
     };
-    // Policy fork again: a dwindle drop splits a leaf, a scrolling drop inserts
-    // a column.
+    // Policy fork again: a dwindle drop splits a leaf, while other layouts use
+    // the generic column and row insertion interface.
     if (DwindleLayout* dwindle = target.dwindleLayout()) {
       const bool splitDrop =
           drop.view != nullptr && drop.view != &view && drop.edge != 0 && dwindle->columnOf(drop.view) >= 0;

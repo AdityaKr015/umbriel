@@ -161,17 +161,20 @@ namespace umbriel {
       }
       const auto* value = node->as_string();
       if (value == nullptr) {
-        warnAt(node->source(), R"({}.mode must be a string ("scrolling" or "dwindle"))", context);
+        warnAt(node->source(), R"({}.mode must be a string ("scrolling", "dwindle", or "master"))", context);
         return std::nullopt;
       }
       const std::string_view mode = value->get();
       if (mode == "dwindle") {
         return LayoutMode::Dwindle;
       }
+      if (mode == "master") {
+        return LayoutMode::Master;
+      }
       if (mode == "scrolling") {
         return LayoutMode::Scrolling;
       }
-      warnAt(node->source(), R"(unknown {}.mode "{}" (expected "scrolling" or "dwindle"))", context, mode);
+      warnAt(node->source(), R"(unknown {}.mode "{}" (expected "scrolling", "dwindle", or "master"))", context, mode);
       return std::nullopt;
     }
 
@@ -193,6 +196,27 @@ namespace umbriel {
         return ScrollingDirection::Vertical;
       }
       warnAt(node->source(), R"(unknown {}.direction "{}" (expected "horizontal" or "vertical"))", context, direction);
+      return std::nullopt;
+    }
+
+    std::optional<MasterPosition> readMasterPosition(Section& section, std::string_view context) {
+      const toml::node* node = section.take("position");
+      if (node == nullptr) {
+        return std::nullopt;
+      }
+      const auto* value = node->as_string();
+      if (value == nullptr) {
+        warnAt(node->source(), R"({}.position must be a string ("left" or "right"))", context);
+        return std::nullopt;
+      }
+      const std::string_view position = value->get();
+      if (position == "left") {
+        return MasterPosition::Left;
+      }
+      if (position == "right") {
+        return MasterPosition::Right;
+      }
+      warnAt(node->source(), R"(unknown {}.position "{}" (expected "left" or "right"))", context, position);
       return std::nullopt;
     }
 
@@ -342,6 +366,12 @@ namespace umbriel {
               }
               sc.real("default_width_fraction", 0.1, 1.0, overrides.scrolling.defaultWidthFraction)
                   .boolean("center_underfull_strip", overrides.scrolling.centerUnderfullStrip);
+            });
+            s.sub("master", [&](Section& sm) {
+              if (const auto position = readMasterPosition(sm, layoutContext + ".master")) {
+                overrides.master.position = position;
+              }
+              sm.real("default_width_fraction", 0.1, 0.9, overrides.master.defaultWidthFraction);
             });
           },
           layoutContext
@@ -806,6 +836,12 @@ namespace umbriel {
           }
           sc.real("default_width_fraction", 0.1, 1.0, loaded.layout.scrolling.defaultWidthFraction)
               .boolean("center_underfull_strip", loaded.layout.scrolling.centerUnderfullStrip);
+        });
+        s.sub("master", [&](Section& sm) {
+          if (const auto position = readMasterPosition(sm, "layout.master")) {
+            loaded.layout.master.position = *position;
+          }
+          sm.real("default_width_fraction", 0.1, 0.9, loaded.layout.master.defaultWidthFraction);
         });
       });
     }

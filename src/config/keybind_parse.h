@@ -145,7 +145,7 @@ namespace umbriel {
     bool operator==(const WindowIdArg&) const = default;
   };
   struct LayoutModeArg {
-    std::optional<LayoutMode> mode; // nullopt = toggle between scrolling and dwindle
+    std::optional<LayoutMode> mode; // nullopt cycles scrolling to dwindle to master to scrolling
     bool operator==(const LayoutModeArg&) const = default;
   };
   struct QuitArg {

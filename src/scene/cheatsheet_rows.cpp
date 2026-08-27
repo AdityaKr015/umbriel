@@ -201,7 +201,18 @@ namespace {
       case umbriel::ActionArgKind::LayoutMode:
         if (const auto* arg = umbriel::payloadIf<umbriel::LayoutModeArg>(bind)) {
           if (arg->mode.has_value()) {
-            return name + ": " + (*arg->mode == umbriel::LayoutMode::Scrolling ? "scrolling" : "dwindle");
+            const auto modeName = [](umbriel::LayoutMode mode) {
+              switch (mode) {
+              case umbriel::LayoutMode::Scrolling:
+                return "scrolling";
+              case umbriel::LayoutMode::Dwindle:
+                return "dwindle";
+              case umbriel::LayoutMode::Master:
+                return "master";
+              }
+              return "scrolling";
+            };
+            return name + ": " + modeName(*arg->mode);
           }
           return name + ": toggle";
         }

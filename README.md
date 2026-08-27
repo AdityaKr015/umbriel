@@ -1,7 +1,7 @@
 # Umbriel
 
-Umbriel is a Wayland compositor designed for daily use, with scrolling and dwindle layouts, per-output workspaces,
-window rules, blur, shadows, and fluid animations.
+Umbriel is a Wayland compositor designed for daily use, with scrolling, dwindle, and master layouts, per-output
+workspaces, window rules, blur, shadows, and fluid animations.
 
 It runs independently and can be paired with [Noctalia](https://github.com/noctalia-dev/noctalia), which provides a
 first-class desktop shell experience for Umbriel. Umbriel is built in C++23 on
@@ -38,8 +38,8 @@ To understand the values and philosophy guiding the project, read our [ethos](ht
 
 ## Features
 
-- Scrolling and dwindle layouts with per-workspace selection, width presets, animated navigation, and mouse-driven
-  resizing and tiled reordering
+- Scrolling, dwindle, and master layouts with per-workspace selection, width presets, animated navigation, and
+  mouse-driven resizing and tiled reordering
 - Independent workspaces per output, with hotplug support and configurable modes, positions, scales, and transforms
 - Floating, pinned, and fullscreen windows with configurable placement, focus, sizing, opacity, and visual effects
 - [Per-output scratchpads](docs/user/scratchpad.md) for temporarily hiding
@@ -189,7 +189,7 @@ See [`examples/config.toml`](examples/config.toml) for the packaged starting con
 - [Configuration](docs/user/configuration.md): loading, includes, and global settings
 - [Appearance](docs/user/appearance.md): colors, borders, blur, and shadows
 - [Workspace Overview](docs/user/workspace-overview.md): workspace overview and hot corners
-- [Layout](docs/user/layout.md): scrolling and dwindle layout behavior
+- [Layout](docs/user/layout.md): scrolling, dwindle, and master layout behavior
 - [Input](docs/user/input.md): keyboard, pointer, tablet, cursor, and focus settings
 - [Keybinds](docs/user/keybinds.md): binding syntax, submaps, and binding behavior
 - [Actions](docs/user/actions.md): the complete keybind action reference

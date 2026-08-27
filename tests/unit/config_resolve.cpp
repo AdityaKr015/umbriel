@@ -42,11 +42,14 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   Config config;
   config.layout.gap = 8;
   config.appearance.borderWidth = 2;
+  config.layout.master.position = umbriel::MasterPosition::Right;
+  config.layout.master.defaultWidthFraction = 0.58;
 
   WorkspaceConfig global;
   global.name = "dev";
   global.layout.gap = 12;
   global.layout.scrolling.defaultWidthFraction = 0.6;
+  global.layout.master.defaultWidthFraction = 0.6;
   config.workspaceRules.push_back(std::move(global));
 
   WorkspaceConfig dpOne;
@@ -54,6 +57,8 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   dpOne.output = "DP-1";
   dpOne.layout.gap = 20;
   dpOne.layout.mode = LayoutMode::Dwindle;
+  dpOne.layout.master.position = umbriel::MasterPosition::Left;
+  dpOne.layout.master.defaultWidthFraction = 0.7;
   config.workspaceRules.push_back(std::move(dpOne));
 
   WorkspaceConfig dpTwo;
@@ -69,17 +74,23 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   CHECK_EQ(onDpOne.edgePad, 22);
   CHECK(onDpOne.scrolling.defaultWidthFraction.has_value());
   CHECK_EQ(*onDpOne.scrolling.defaultWidthFraction, 0.6);
+  CHECK(onDpOne.master.position == umbriel::MasterPosition::Left);
+  CHECK_EQ(onDpOne.master.defaultWidthFraction, 0.7);
 
   const auto onDpTwo = umbriel::resolveWorkspaceLayout(config, "DP-2", "dev", 0);
   CHECK(onDpTwo.mode == LayoutMode::Scrolling);
   CHECK_EQ(onDpTwo.gap, 30);
   CHECK(onDpTwo.scrolling.defaultWidthFraction.has_value());
   CHECK_EQ(*onDpTwo.scrolling.defaultWidthFraction, 0.6);
+  CHECK(onDpTwo.master.position == umbriel::MasterPosition::Right);
+  CHECK_EQ(onDpTwo.master.defaultWidthFraction, 0.6);
 
   const auto elsewhere = umbriel::resolveWorkspaceLayout(config, "HDMI-A-1", "dev", 0);
   CHECK_EQ(elsewhere.gap, 12);
   CHECK(elsewhere.scrolling.defaultWidthFraction.has_value());
   CHECK_EQ(*elsewhere.scrolling.defaultWidthFraction, 0.6);
+  CHECK(elsewhere.master.position == umbriel::MasterPosition::Right);
+  CHECK_EQ(elsewhere.master.defaultWidthFraction, 0.6);
 }
 
 UMBRIEL_TEST(omittedScrollingDefaultWidthRemainsUnset) {

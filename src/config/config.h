@@ -52,6 +52,11 @@ namespace umbriel {
       std::optional<ScrollingDirection> direction;
       bool operator==(const Scrolling&) const = default;
     } scrolling;
+    struct Master {
+      std::optional<double> defaultWidthFraction;
+      std::optional<MasterPosition> position;
+      bool operator==(const Master&) const = default;
+    } master;
 
     bool operator==(const WorkspaceLayoutOverrides&) const = default;
   };
@@ -77,6 +82,11 @@ namespace umbriel {
       ScrollingDirection direction = ScrollingDirection::Horizontal;
       bool operator==(const Scrolling&) const = default;
     } scrolling;
+    struct Master {
+      double defaultWidthFraction = 0.55;
+      MasterPosition position = MasterPosition::Left;
+      bool operator==(const Master&) const = default;
+    } master;
     // Derived from gap + appearance border widths; set by resolve function.
     int totalGap = 0; // gap + 2 * totalBorderWidth
     int edgePad = 0;  // gap + totalBorderWidth
@@ -443,6 +453,11 @@ namespace umbriel {
         ScrollingDirection direction = ScrollingDirection::Horizontal;
         bool operator==(const Scrolling&) const = default;
       } scrolling;
+      struct Master {
+        double defaultWidthFraction = 0.55;
+        MasterPosition position = MasterPosition::Left;
+        bool operator==(const Master&) const = default;
+      } master;
       bool operator==(const Layout&) const = default;
     } layout;
 

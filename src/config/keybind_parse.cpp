@@ -239,7 +239,7 @@ namespace umbriel {
         {"workspace-move-up", "", KeybindAction::WorkspaceMoveUp},
         {"workspace-next", "", KeybindAction::WorkspaceNext},
         {"workspace-previous", "", KeybindAction::WorkspacePrevious},
-        {"workspace-set-layout", "<scrolling|dwindle|toggle>", KeybindAction::WorkspaceSetLayout,
+        {"workspace-set-layout", "<scrolling|dwindle|master|toggle>", KeybindAction::WorkspaceSetLayout,
          ActionArgKind::LayoutMode},
         {"workspace-switch", "<workspace>[/<output>]", KeybindAction::WorkspaceSwitch, ActionArgKind::Workspace},
     };
@@ -435,6 +435,11 @@ namespace umbriel {
           if (arg == "dwindle") {
             output.action = spec.action;
             output.payload = LayoutModeArg{.mode = LayoutMode::Dwindle};
+            return true;
+          }
+          if (arg == "master") {
+            output.action = spec.action;
+            output.payload = LayoutModeArg{.mode = LayoutMode::Master};
             return true;
           }
           if (arg == "toggle") {

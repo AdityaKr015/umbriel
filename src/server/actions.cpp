@@ -841,9 +841,18 @@ namespace umbriel {
       if (arg == nullptr) {
         return true;
       }
-      const LayoutMode desired = arg->mode.value_or(
-          workspace->layoutMode() == LayoutMode::Scrolling ? LayoutMode::Dwindle : LayoutMode::Scrolling
-      );
+      const auto nextMode = [](LayoutMode mode) {
+        switch (mode) {
+        case LayoutMode::Scrolling:
+          return LayoutMode::Dwindle;
+        case LayoutMode::Dwindle:
+          return LayoutMode::Master;
+        case LayoutMode::Master:
+          return LayoutMode::Scrolling;
+        }
+        return LayoutMode::Scrolling;
+      };
+      const LayoutMode desired = arg->mode.value_or(nextMode(workspace->layoutMode()));
       if (desired == workspace->layoutMode()) {
         return true;
       }

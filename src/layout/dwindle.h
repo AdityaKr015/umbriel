@@ -78,16 +78,6 @@ namespace umbriel {
     [[nodiscard]] double widthFraction(int columnIndex) const override;
 
   private:
-    [[nodiscard]] View* directionalNeighbor(const View* view, bool horizontal, int direction) const;
-
-    struct Target {
-      View* view = nullptr;
-      int x = 0;
-      int y = 0;
-      int width = 0;
-      int height = 0;
-    };
-
     struct WidthSplit {
       Node* node = nullptr;
       bool first = false;
@@ -113,7 +103,7 @@ namespace umbriel {
 
     std::unique_ptr<Node> m_root;
     mutable std::vector<Column> m_flatColumns;
-    mutable std::vector<Target> m_targets;
+    mutable std::vector<LayoutTarget> m_targets;
   };
 
 } // namespace umbriel

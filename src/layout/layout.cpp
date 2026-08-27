@@ -2,11 +2,14 @@
 
 #include "config/config.h"
 #include "layout/dwindle.h"
+#include "layout/master.h"
 #include "layout/scrolling.h"
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
+#include <ranges>
 
 extern "C" {
 #include <wlr/util/box.h>
@@ -30,10 +33,62 @@ namespace umbriel {
     return std::max(1, static_cast<int>(std::lround(fraction * (viewportPrimary + gap) - gap)));
   }
 
+  View* directionalNeighbor(std::span<const LayoutTarget> targets, const View* view, bool horizontal, int direction) {
+    if (view == nullptr || direction == 0) {
+      return nullptr;
+    }
+
+    const auto sourceIt =
+        std::ranges::find_if(targets, [view](const LayoutTarget& target) { return target.view == view; });
+    if (sourceIt == targets.end()) {
+      return nullptr;
+    }
+
+    const LayoutTarget& source = *sourceIt;
+    View* best = nullptr;
+    int bestGap = std::numeric_limits<int>::max();
+    int bestOverlap = -1;
+    int bestCenterDistance = std::numeric_limits<int>::max();
+
+    for (const LayoutTarget& candidate : targets) {
+      if (candidate.view == nullptr || candidate.view == view) {
+        continue;
+      }
+
+      int gap = 0;
+      int overlap = 0;
+      int centerDistance = 0;
+      if (horizontal) {
+        gap = direction < 0 ? source.x - (candidate.x + candidate.width) : candidate.x - (source.x + source.width);
+        overlap = std::min(source.y + source.height, candidate.y + candidate.height) - std::max(source.y, candidate.y);
+        centerDistance = std::abs((2 * source.y + source.height) - (2 * candidate.y + candidate.height));
+      } else {
+        gap = direction < 0 ? source.y - (candidate.y + candidate.height) : candidate.y - (source.y + source.height);
+        overlap = std::min(source.x + source.width, candidate.x + candidate.width) - std::max(source.x, candidate.x);
+        centerDistance = std::abs((2 * source.x + source.width) - (2 * candidate.x + candidate.width));
+      }
+
+      if (gap < 0 || overlap <= 0) {
+        continue;
+      }
+      if (gap < bestGap
+          || (gap == bestGap && overlap > bestOverlap)
+          || (gap == bestGap && overlap == bestOverlap && centerDistance < bestCenterDistance)) {
+        best = candidate.view;
+        bestGap = gap;
+        bestOverlap = overlap;
+        bestCenterDistance = centerDistance;
+      }
+    }
+    return best;
+  }
+
   std::unique_ptr<Layout> createLayout(LayoutMode mode) {
     switch (mode) {
     case LayoutMode::Dwindle:
       return std::make_unique<DwindleLayout>();
+    case LayoutMode::Master:
+      return std::make_unique<MasterStackLayout>();
     case LayoutMode::Scrolling:
     default:
       return std::make_unique<ScrollingLayout>();

@@ -191,6 +191,44 @@ center_underfull_strip = true
   CHECK(containsDiagnostic(store, "unknown key general.prefer_no_csd"));
 }
 
+UMBRIEL_TEST(masterLayoutReadersLoadGlobalAndWorkspaceSettings) {
+  const TempConfig file;
+  file.write(R"(
+[layout]
+mode = "master"
+
+[layout.master]
+position = "right"
+default_width_fraction = 0.05
+surprise = true
+
+[output.DP-1]
+workspaces = ["dev"]
+
+[[workspace]]
+name = "dev"
+
+[workspace.layout.master]
+position = "left"
+default_width_fraction = 0.7
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK(store.config().layout.mode == LayoutMode::Master);
+  CHECK(store.config().layout.master.position == umbriel::MasterPosition::Right);
+  CHECK_EQ(store.config().layout.master.defaultWidthFraction, 0.1);
+  CHECK_EQ(store.config().workspaceRules.size(), size_t{1});
+  CHECK(store.config().workspaceRules[0].layout.master.position == umbriel::MasterPosition::Left);
+  CHECK(store.config().workspaceRules[0].layout.master.defaultWidthFraction.has_value());
+  CHECK_EQ(*store.config().workspaceRules[0].layout.master.defaultWidthFraction, 0.7);
+  CHECK(containsDiagnostic(store, "layout.master.default_width_fraction = 0.05 out of range, clamped to 0.1"));
+  CHECK(containsDiagnostic(store, "unknown key layout.master.surprise"));
+}
+
 UMBRIEL_TEST(scrollingDefaultWidthIsOptional) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

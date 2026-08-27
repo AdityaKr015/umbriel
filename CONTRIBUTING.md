@@ -160,7 +160,7 @@ src/
   lock/       ext-session-lock surfaces
   xwayland/   xwayland-satellite process supervisor
   workspace/  per-output workspaces and scratchpads
-  layout/     scrolling and dwindle layouts, insert and drop targets
+  layout/     scrolling, dwindle, and master layouts, insert and drop targets
   overview/   overview lifecycle and presentation
   scene/      blur, shadows, text, banners, and internal overlays
   config/     TOML parsing, resolution, reloads, and diagnostics

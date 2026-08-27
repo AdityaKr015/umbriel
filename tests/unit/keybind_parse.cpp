@@ -308,6 +308,10 @@ UMBRIEL_TEST(parsesLayoutModeActions) {
   const auto* dwindle = umbriel::payloadIf<umbriel::LayoutModeArg>(bind);
   CHECK(dwindle != nullptr && dwindle->mode == umbriel::LayoutMode::Dwindle);
 
+  CHECK(parseAction("workspace-set-layout:master", bind));
+  const auto* master = umbriel::payloadIf<umbriel::LayoutModeArg>(bind);
+  CHECK(master != nullptr && master->mode == umbriel::LayoutMode::Master);
+
   CHECK(parseAction("workspace-set-layout:toggle", bind));
   const auto* toggle = umbriel::payloadIf<umbriel::LayoutModeArg>(bind);
   CHECK(toggle != nullptr && !toggle->mode.has_value());

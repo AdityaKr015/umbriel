@@ -376,8 +376,8 @@ namespace umbriel {
       return;
     }
 
-    // One positioning path for both layouts: the layout owns the scroll, the
-    // targets below already include it, and each view animates or snaps itself.
+    // One positioning path for every layout: targets already include any
+    // layout-specific offset, and each view animates or snaps itself.
     applyPositions(animate);
     if (overviewActive) {
       overview->onWorkspaceArranged(this);

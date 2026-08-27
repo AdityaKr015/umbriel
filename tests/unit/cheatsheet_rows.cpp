@@ -48,6 +48,12 @@ namespace {
     return result;
   }
 
+  Keybind layoutBind(uint32_t keysym, umbriel::LayoutMode mode) {
+    Keybind result = bind(KeybindAction::WorkspaceSetLayout, keysym);
+    result.payload = umbriel::LayoutModeArg{.mode = mode};
+    return result;
+  }
+
   // The ditto mark a merged group's second and later rows carry.
   const std::string kDitto = "\xe2\x80\xb3";
 
@@ -90,6 +96,13 @@ UMBRIEL_TEST(oneRowPerBindWhenActionsDiffer) {
     CHECK(row.action != kDitto);
     CHECK(!row.chord.empty());
   }
+}
+
+UMBRIEL_TEST(masterLayoutModeIsNamedInTheActionLabel) {
+  const std::vector<Keybind> binds = {layoutBind(XKB_KEY_m, umbriel::LayoutMode::Master)};
+  const auto rows = buildCheatsheetRows(binds);
+  CHECK_EQ(rows.size(), size_t{1});
+  CHECK(rows[0].action.contains("master"));
 }
 
 UMBRIEL_TEST(bindsSharingAnActionMergeWithADitto) {

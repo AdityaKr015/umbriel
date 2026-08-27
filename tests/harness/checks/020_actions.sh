@@ -28,7 +28,7 @@ sample_arg() {
     '<delta>')                   echo '0.1' ;;
     '<workspace>[/<output>]')    echo '1' ;;
     '<name>')                    echo 'harness' ;;
-    '<scrolling|dwindle|toggle>') echo 'scrolling' ;; # harness default: exercising it is a no-op
+    '<scrolling|dwindle|master|toggle>') echo 'scrolling' ;; # harness default: exercising it is a no-op
     '[<output>]')                echo '' ;;
     '[<window-id>]')             echo '' ;;
     *)                           echo '' ;;

@@ -1,0 +1,317 @@
+#include "check.h"
+#include "config/config.h"
+#include "layout/master.h"
+
+// clang-format off
+// See keybind_parse.cpp: <cmath> must precede the wayland chain.
+#include <cmath>
+#include <optional>
+extern "C" {
+#include <wlr/util/box.h>
+#include <wlr/util/edges.h>
+}
+// clang-format on
+
+using umbriel::Layout;
+using umbriel::MasterStackLayout;
+using umbriel::ResolvedLayoutConfig;
+using umbriel::View;
+
+namespace {
+
+  View* stub(int id) { return reinterpret_cast<View*>(static_cast<uintptr_t>(0x3000 + (id * 0x10))); }
+
+  ResolvedLayoutConfig masterConfig() {
+    ResolvedLayoutConfig config;
+    config.mode = umbriel::LayoutMode::Master;
+    config.gap = 8;
+    config.totalGap = 12;
+    config.edgePad = 10;
+    config.master.position = umbriel::MasterPosition::Left;
+    config.master.defaultWidthFraction = 0.55;
+    return config;
+  }
+
+  constexpr wlr_box kUsable{0, 0, 1280, 720};
+
+  struct Fixture {
+    ResolvedLayoutConfig config = masterConfig();
+    MasterStackLayout layout;
+
+    Fixture() { layout.setConfig(&config); }
+
+    void addViews(int count) {
+      for (int i = 0; i < count; ++i) {
+        layout.insertView(stub(i), i);
+      }
+    }
+
+    [[nodiscard]] size_t viewCount() const {
+      size_t count = 0;
+      for (const auto& column : layout.columns()) {
+        count += column.views.size();
+      }
+      return count;
+    }
+  };
+
+} // namespace
+
+UMBRIEL_TEST(firstViewFillsTheContentArea) {
+  Fixture fixture;
+  fixture.addViews(1);
+  fixture.layout.arrange(kUsable);
+  const wlr_box box = fixture.layout.targetBox(stub(0));
+  CHECK_EQ(box.x, 10);
+  CHECK_EQ(box.y, 10);
+  CHECK_EQ(box.width, 1260);
+  CHECK_EQ(box.height, 700);
+}
+
+UMBRIEL_TEST(secondViewCreatesTheStack) {
+  Fixture fixture;
+  fixture.addViews(2);
+  fixture.layout.arrange(kUsable);
+  const wlr_box master = fixture.layout.targetBox(stub(0));
+  const wlr_box stack = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(master.x, 10);
+  CHECK_EQ(master.width, 686);
+  CHECK_EQ(master.height, 700);
+  CHECK_EQ(stack.x, 708);
+  CHECK_EQ(stack.width, 562);
+  CHECK_EQ(stack.height, 700);
+}
+
+UMBRIEL_TEST(newViewsJoinTheTopOfTheStack) {
+  Fixture fixture;
+  fixture.addViews(3);
+  fixture.layout.arrange(kUsable);
+  CHECK(fixture.layout.targetBox(stub(2)).y < fixture.layout.targetBox(stub(1)).y);
+  CHECK_EQ(fixture.layout.rowOf(stub(2)), 0);
+}
+
+UMBRIEL_TEST(stackRowsSplitTheHeightWithGaps) {
+  Fixture fixture;
+  fixture.addViews(3);
+  fixture.layout.arrange(kUsable);
+  const wlr_box top = fixture.layout.targetBox(stub(2));
+  const wlr_box bottom = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(top.y, 10);
+  CHECK_EQ(top.height, 344);
+  CHECK_EQ(bottom.y, 366);
+  CHECK_EQ(bottom.height, 344);
+  CHECK_EQ(bottom.y - (top.y + top.height), 12);
+}
+
+UMBRIEL_TEST(insertIsIdempotentPerView) {
+  Fixture fixture;
+  fixture.addViews(3);
+  fixture.layout.insertViewIntoColumn(stub(1), 1, 0);
+  CHECK_EQ(fixture.viewCount(), size_t{3});
+  CHECK_EQ(fixture.layout.rowOf(stub(1)), 0);
+}
+
+UMBRIEL_TEST(unknownViewHasNoColumn) {
+  Fixture fixture;
+  fixture.addViews(2);
+  CHECK_EQ(fixture.layout.columnOf(stub(99)), -1);
+  CHECK_EQ(fixture.layout.rowOf(stub(99)), -1);
+}
+
+UMBRIEL_TEST(arrangeOnAnEmptyLayoutIsHarmless) {
+  Fixture fixture;
+  fixture.layout.arrange(kUsable);
+  CHECK(fixture.layout.columns().empty());
+  CHECK_EQ(fixture.layout.targetBox(stub(0)).width, 0);
+}
+
+UMBRIEL_TEST(removingAnUnknownViewIsHarmless) {
+  Fixture fixture;
+  fixture.addViews(2);
+  fixture.layout.removeView(stub(99));
+  fixture.layout.removeView(nullptr);
+  CHECK_EQ(fixture.viewCount(), size_t{2});
+}
+
+UMBRIEL_TEST(removingTheLastMasterViewPromotesTheStackTop) {
+  Fixture fixture;
+  fixture.addViews(3);
+  fixture.layout.removeView(stub(0));
+  CHECK_EQ(fixture.layout.columnOf(stub(2)), 0);
+  CHECK_EQ(fixture.layout.rowOf(stub(2)), 0);
+  CHECK_EQ(fixture.layout.columnOf(stub(1)), 1);
+}
+
+UMBRIEL_TEST(expellingEveryMasterViewLeavesAFullWidthStack) {
+  Fixture fixture;
+  fixture.addViews(1);
+  CHECK(fixture.layout.expelRight(stub(0)));
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.columns().size(), size_t{1});
+  CHECK_EQ(fixture.layout.targetBox(stub(0)).width, 1260);
+}
+
+UMBRIEL_TEST(consumeLeftPullsAWindowIntoTheMaster) {
+  Fixture fixture;
+  fixture.addViews(2);
+  CHECK(fixture.layout.consumeLeft(stub(1)));
+  CHECK_EQ(fixture.layout.columns().size(), size_t{1});
+  CHECK_EQ(fixture.layout.rowOf(stub(0)), 0);
+  CHECK_EQ(fixture.layout.rowOf(stub(1)), 1);
+}
+
+UMBRIEL_TEST(aWindowOpenedWithAnEmptyMasterBecomesMaster) {
+  Fixture fixture;
+  fixture.addViews(2);
+  CHECK(fixture.layout.expelRight(stub(0)));
+  fixture.layout.insertView(stub(2), 0);
+  CHECK_EQ(fixture.layout.columnOf(stub(2)), 0);
+  CHECK_EQ(fixture.layout.rowOf(stub(2)), 0);
+}
+
+UMBRIEL_TEST(positionRightMirrorsTheAreas) {
+  Fixture fixture;
+  fixture.config.master.position = umbriel::MasterPosition::Right;
+  fixture.addViews(2);
+  fixture.layout.arrange(kUsable);
+  const wlr_box stack = fixture.layout.targetBox(stub(1));
+  const wlr_box master = fixture.layout.targetBox(stub(0));
+  CHECK_EQ(stack.x, 10);
+  CHECK_EQ(stack.width, 562);
+  CHECK_EQ(master.x, 584);
+  CHECK_EQ(master.width, 686);
+}
+
+UMBRIEL_TEST(widthFractionIsComplementaryAcrossColumns) {
+  Fixture fixture;
+  fixture.addViews(2);
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 0.55) < 1e-9);
+  CHECK(std::abs(fixture.layout.widthFraction(1) - 0.45) < 1e-9);
+  CHECK(std::abs(fixture.layout.widthFraction(0) + fixture.layout.widthFraction(1) - 1.0) < 1e-9);
+}
+
+UMBRIEL_TEST(setWidthFractionOnTheStackAdjustsTheComplement) {
+  Fixture fixture;
+  fixture.addViews(2);
+  CHECK(fixture.layout.setWidthFraction(1, 0.4));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 0.6) < 1e-9);
+  CHECK(std::abs(fixture.layout.widthFraction(1) - 0.4) < 1e-9);
+}
+
+UMBRIEL_TEST(cycleWidthWalksThePresets) {
+  Fixture fixture;
+  fixture.addViews(2);
+  CHECK(fixture.layout.cycleWidth(0, 1));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 2.0 / 3.0) < 1e-9);
+  CHECK(fixture.layout.cycleWidth(0, 1));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 1.0 / 3.0) < 1e-9);
+}
+
+UMBRIEL_TEST(toggleFullWidthExpandsAndRestores) {
+  Fixture fixture;
+  fixture.addViews(2);
+  CHECK(fixture.layout.toggleFullWidth(0));
+  CHECK(fixture.layout.isFullWidth(0));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 0.9) < 1e-9);
+  CHECK(!fixture.layout.toggleFullWidth(0));
+  CHECK(!fixture.layout.isFullWidth(0));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 0.55) < 1e-9);
+}
+
+UMBRIEL_TEST(widthActionsFailWithASingleArea) {
+  Fixture fixture;
+  fixture.addViews(1);
+  CHECK(!fixture.layout.cycleWidth(0, 1));
+  CHECK(!fixture.layout.toggleFullWidth(0));
+  CHECK(!fixture.layout.setWidthFraction(0, 0.7));
+  CHECK(!fixture.layout.isFullWidth(0));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 1.0) < 1e-9);
+}
+
+UMBRIEL_TEST(moveViewVerticalSwapsStackNeighbors) {
+  Fixture fixture;
+  fixture.addViews(3);
+  fixture.layout.arrange(kUsable);
+  CHECK(fixture.layout.moveViewVertical(stub(1), -1));
+  CHECK_EQ(fixture.layout.rowOf(stub(1)), 0);
+  CHECK_EQ(fixture.layout.targetBox(stub(1)).y, 10);
+  CHECK_EQ(fixture.layout.rowOf(stub(2)), 1);
+}
+
+UMBRIEL_TEST(moveColumnSwapsTheAreas) {
+  Fixture fixture;
+  fixture.addViews(2);
+  fixture.layout.moveColumn(0, 1);
+  CHECK_EQ(fixture.layout.columnOf(stub(1)), 0);
+  CHECK_EQ(fixture.layout.columnOf(stub(0)), 1);
+}
+
+UMBRIEL_TEST(directionalFocusCrossesTheMasterStackBoundary) {
+  Fixture fixture;
+  fixture.config.totalGap = 11;
+  fixture.addViews(4);
+  fixture.layout.arrange(kUsable);
+  const auto right = fixture.layout.focusHorizontalLeaf(stub(0), 1);
+  CHECK(right.has_value());
+  CHECK_EQ(*right, stub(2));
+  const auto left = fixture.layout.focusHorizontalLeaf(stub(2), -1);
+  CHECK(left.has_value());
+  CHECK_EQ(*left, stub(0));
+}
+
+UMBRIEL_TEST(initialSizeMatchesTheArrangeThatFollows) {
+  Fixture fixture;
+  for (int id = 0; id < 3; ++id) {
+    const Layout::InitialSize initial = fixture.layout.initialSize(kUsable, 0.25);
+    fixture.layout.insertView(stub(id), id);
+    fixture.layout.arrange(kUsable);
+    const wlr_box arranged = fixture.layout.targetBox(stub(id));
+    CHECK_EQ(initial.width, arranged.width);
+    CHECK_EQ(initial.height, arranged.height);
+  }
+}
+
+UMBRIEL_TEST(onlyTheBoundaryAndInnerRowEdgesAreResizable) {
+  Fixture fixture;
+  fixture.addViews(3);
+  fixture.layout.arrange(kUsable);
+  const uint32_t all = WLR_EDGE_LEFT | WLR_EDGE_RIGHT | WLR_EDGE_TOP | WLR_EDGE_BOTTOM;
+  CHECK_EQ(fixture.layout.sanitizeResizeEdges(stub(0), all), static_cast<uint32_t>(WLR_EDGE_RIGHT));
+  CHECK_EQ(fixture.layout.sanitizeResizeEdges(stub(2), all), static_cast<uint32_t>(WLR_EDGE_LEFT | WLR_EDGE_BOTTOM));
+  CHECK_EQ(fixture.layout.sanitizeResizeEdges(stub(1), all), static_cast<uint32_t>(WLR_EDGE_LEFT | WLR_EDGE_TOP));
+}
+
+UMBRIEL_TEST(aLoneViewHasNoResizableEdges) {
+  Fixture fixture;
+  fixture.addViews(1);
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.sanitizeResizeEdges(stub(0), WLR_EDGE_LEFT | WLR_EDGE_RIGHT), uint32_t{0});
+}
+
+UMBRIEL_TEST(aResizeGrabMovesTheMasterBoundary) {
+  Fixture fixture;
+  fixture.addViews(2);
+  fixture.layout.arrange(kUsable);
+  const int before = fixture.layout.targetBox(stub(0)).width;
+  auto resize = fixture.layout.beginResize(stub(0), WLR_EDGE_RIGHT, kUsable);
+  CHECK(resize != nullptr);
+  resize->applyDelta(100.0, 0.0, kUsable);
+  fixture.layout.arrange(kUsable);
+  CHECK(std::abs(fixture.layout.targetBox(stub(0)).width - before - 100) <= 1);
+}
+
+UMBRIEL_TEST(aVerticalGrabTransfersHeightBetweenRows) {
+  Fixture fixture;
+  fixture.addViews(3);
+  fixture.layout.arrange(kUsable);
+  const int topBefore = fixture.layout.targetBox(stub(2)).height;
+  const int bottomBefore = fixture.layout.targetBox(stub(1)).height;
+  auto resize = fixture.layout.beginResize(stub(2), WLR_EDGE_BOTTOM, kUsable);
+  CHECK(resize != nullptr);
+  resize->applyDelta(0.0, 40.0, kUsable);
+  fixture.layout.arrange(kUsable);
+  CHECK(fixture.layout.targetBox(stub(2)).height > topBefore);
+  CHECK(fixture.layout.targetBox(stub(1)).height < bottomBefore);
+}
+
+int main() { return RUN_TESTS(); }

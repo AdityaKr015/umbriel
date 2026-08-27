@@ -60,8 +60,10 @@ Umbriel requires APIs from the `umbriel` branch of the
 The repository tracks it in `subprojects/scenefx`.
 
 Meson accepts an installed `scenefx-0.5` only when its headers contain the
-required patched API. Otherwise it builds the submodule. An unpatched upstream
-SceneFX package is not a compatible substitute.
+required patched API. Otherwise it builds the submodule. The bundled static
+SceneFX archive is linked as a whole so its internal utility symbols remain
+available with distribution-provided LTO. An unpatched upstream SceneFX package
+is not a compatible substitute.
 
 Use `meson install --skip-subprojects` for distribution packages unless the
 package intentionally owns the SceneFX installation too.

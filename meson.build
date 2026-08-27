@@ -19,6 +19,24 @@ add_project_arguments(
   '-DUMBRIEL_VERSION="' + meson.project_version() + '"',
   language: 'cpp',
 )
+git_program = find_program('git', required: false)
+if git_program.found()
+  umbriel_git_revision_h = vcs_tag(
+    input: 'src/core/git_revision.h.in',
+    output: 'umbriel_git_revision.h',
+    command: [git_program, 'describe', '--tags', '--always', '--dirty=-dirty', '--abbrev=12'],
+    fallback: 'unknown',
+  )
+else
+  umbriel_git_revision_config = configuration_data()
+  umbriel_git_revision_config.set('VCS_TAG', 'unknown')
+  umbriel_git_revision_h = configure_file(
+    input: 'src/core/git_revision.h.in',
+    output: 'umbriel_git_revision.h',
+    configuration: umbriel_git_revision_config,
+  )
+endif
+
 umbriel_data_dir = get_option('prefix') / get_option('datadir')
 umbriel_build_config = configuration_data()
 umbriel_build_config.set_quoted('UMBRIEL_DATA_DIR', umbriel_data_dir)
@@ -426,7 +444,7 @@ umbriel_core_dep = declare_dependency(
 
 umbriel = executable(
   'umbriel',
-  'src/main.cpp',
+  ['src/main.cpp', umbriel_git_revision_h],
   cpp_args: jemalloc_cpp_args,
   dependencies: [umbriel_core_dep] + jemalloc_deps,
   install: true,

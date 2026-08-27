@@ -6,6 +6,7 @@
 #include "core/log.h"
 #include "server/ipc_commands.h"
 #include "server/server.h"
+#include "umbriel_git_revision.h"
 
 #include <algorithm>
 #include <csignal>
@@ -15,6 +16,7 @@
 #include <filesystem>
 #include <print>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #ifdef __GLIBC__
@@ -79,7 +81,7 @@ namespace {
     row("       ", "outputs", "list outputs and modes");
     row("       ", "validate [-c <config>]", "check the config file");
     row("       ", "help | -h | --help", "show this help");
-    row("       ", "--version", "print version");
+    row("       ", "-v | -V | --version", "print version");
     std::println(
         stream,
         "\nOptions:\n"
@@ -118,8 +120,14 @@ int main(int argc, char** argv) {
       printHelp(stdout);
       return EXIT_SUCCESS;
     }
-    if (std::strcmp(argv[1], "--version") == 0 || std::strcmp(argv[1], "-V") == 0) {
-      std::println("umbriel {}", UMBRIEL_VERSION);
+    if (std::strcmp(argv[1], "--version") == 0 || std::strcmp(argv[1], "-v") == 0 || std::strcmp(argv[1], "-V") == 0) {
+      constexpr std::string_view unknownRevision = "unknown";
+      const std::string_view revision = UMBRIEL_GIT_REVISION;
+      if (!revision.empty() && revision != unknownRevision) {
+        std::println("umbriel {} ({})", UMBRIEL_VERSION, revision);
+      } else {
+        std::println("umbriel {}", UMBRIEL_VERSION);
+      }
       return EXIT_SUCCESS;
     }
 

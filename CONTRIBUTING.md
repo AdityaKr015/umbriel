@@ -195,6 +195,7 @@ Run under AddressSanitizer with `just run asan`.
 The CLI doubles as a runtime inspection and IPC surface against a running compositor:
 
 ```sh
+umbriel -v | --version            # print the release version and build revision
 umbriel validate [-c <config>]   # check a config file without starting
 umbriel outputs                  # list connectors and modes
 umbriel windows                  # list windows (focused *, urgent !)

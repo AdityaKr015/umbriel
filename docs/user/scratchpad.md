@@ -126,7 +126,7 @@ See [Appearance](appearance.md) for the complete appearance
 reference.
 
 Scratchpad show and hide transitions, backdrop dimming and blur, and optional
-entry sizing are configured under [`animation.scratchpad`](configuration.md#animation).
+entry sizing are configured under [`animation.scratchpad`](animation.md#animation).
 
 While a scratchpad window has focus, `window-toggle-floating`,
 `window-toggle-pinned`, and `window-center` are inactive. Restore the window

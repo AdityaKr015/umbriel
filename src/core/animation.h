@@ -1,9 +1,9 @@
 #pragma once
+#include "scene/color.h"
 
 #include <array>
 #include <cstdint>
 #include <optional>
-#include <string>
 #include <string_view>
 
 namespace umbriel {
@@ -81,18 +81,6 @@ namespace umbriel {
   [[nodiscard]] inline double evaluateCurve(const AnimationCurve& curve, double progress) {
     return applyEasing(curve, progress);
   }
-
-  // Color space conversions and interpolation helpers
-  [[nodiscard]] std::array<float, 4>
-  lerpColor(const std::array<float, 4>& from, const std::array<float, 4>& to, double progress);
-  [[nodiscard]] std::array<float, 4>
-  lerpColorLinear(const std::array<float, 4>& from, const std::array<float, 4>& to, double progress);
-  [[nodiscard]] std::array<float, 4>
-  lerpColorOkLab(const std::array<float, 4>& from, const std::array<float, 4>& to, double progress);
-  void premultipliedColor(float out[4], const std::array<float, 4>& base, float opacity = 1.0f);
-  [[nodiscard]] std::array<float, 4> premultipliedColor(const std::array<float, 4>& base, float opacity = 1.0f);
-  [[nodiscard]] std::string colorToHex(const std::array<float, 4>& color);
-  [[nodiscard]] std::optional<std::array<float, 4>> parseColorHex(std::string_view hex);
 
   // Registry for named animation curves (supporting custom named beziers and springs)
   class CurveRegistry {
@@ -189,13 +177,13 @@ namespace umbriel {
   public:
     AnimatedColor() = default;
     explicit AnimatedColor(const std::array<float, 4>& initialColor)
-        : m_from(initialColor), m_target(initialColor), m_current(initialColor) {}
-    AnimatedColor(float r, float g, float b, float a = 1.0f)
-        : m_from{r, g, b, a}, m_target{r, g, b, a}, m_current{r, g, b, a} {}
+        : m_from(initialColor), m_target(initialColor), m_current(initialColor), m_fromOkLab(srgbToOkLab(initialColor)),
+          m_targetOkLab(m_fromOkLab) {}
+    AnimatedColor(float r, float g, float b, float a = 1.0F) : AnimatedColor(std::array<float, 4>{r, g, b, a}) {}
 
     // Snap immediately to target color
     void snap(const std::array<float, 4>& color);
-    void snap(float r, float g, float b, float a = 1.0f);
+    void snap(float r, float g, float b, float a = 1.0F);
 
     // Retargeting
     void retarget(const std::array<float, 4>& to, int durationMs, Easing easing = Easing::EaseOutCubic);
@@ -211,8 +199,6 @@ namespace umbriel {
 
     [[nodiscard]] const std::array<float, 4>& current() const { return m_current; }
     void current(float out[4]) const;
-    void currentPremultiplied(float out[4], float opacity = 1.0f) const;
-    [[nodiscard]] std::array<float, 4> currentPremultiplied(float opacity = 1.0f) const;
 
     [[nodiscard]] const std::array<float, 4>& target() const { return m_target; }
     [[nodiscard]] const std::array<float, 4>& from() const { return m_from; }
@@ -226,19 +212,17 @@ namespace umbriel {
     [[nodiscard]] float b() const { return m_current[2]; }
     [[nodiscard]] float a() const { return m_current[3]; }
 
-    void setLinearInterpolation(bool linear) { m_useLinearColorSpace = linear; }
-    [[nodiscard]] bool linearInterpolation() const { return m_useLinearColorSpace; }
-
   private:
-    std::array<float, 4> m_from{0.0f, 0.0f, 0.0f, 1.0f};
-    std::array<float, 4> m_target{0.0f, 0.0f, 0.0f, 1.0f};
-    std::array<float, 4> m_current{0.0f, 0.0f, 0.0f, 1.0f};
+    std::array<float, 4> m_from{0.0F, 0.0F, 0.0F, 1.0F};
+    std::array<float, 4> m_target{0.0F, 0.0F, 0.0F, 1.0F};
+    std::array<float, 4> m_current{0.0F, 0.0F, 0.0F, 1.0F};
+    OkLab m_fromOkLab;
+    OkLab m_targetOkLab;
     double m_progress = 1.0; // linear fraction as of the last tick(); 1.0 when never animating
     uint64_t m_startMsec = 0;
     uint64_t m_durationMsec = 1;
     AnimationCurve m_curve{.easing = Easing::EaseOutCubic};
     bool m_animating = false;
-    bool m_useLinearColorSpace = false;
   };
 
 } // namespace umbriel

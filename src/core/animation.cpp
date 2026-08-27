@@ -4,7 +4,6 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
-#include <format>
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
@@ -23,16 +22,6 @@ namespace umbriel {
         }
       }
       return out;
-    }
-
-    [[nodiscard]] inline float sRGBToLinear(float c) {
-      const float clamped = std::clamp(c, 0.0f, 1.0f);
-      return (clamped <= 0.04045f) ? (clamped / 12.92f) : std::pow((clamped + 0.055f) / 1.055f, 2.4f);
-    }
-
-    [[nodiscard]] inline float linearToSRGB(float c) {
-      const float clamped = std::clamp(c, 0.0f, 1.0f);
-      return (clamped <= 0.0031308f) ? (clamped * 12.92f) : (1.055f * std::pow(clamped, 1.0f / 2.4f) - 0.055f);
     }
 
     class CurveRegistryImpl {
@@ -599,167 +588,6 @@ namespace umbriel {
     return linear;
   }
 
-  std::array<float, 4> lerpColor(const std::array<float, 4>& from, const std::array<float, 4>& to, double progress) {
-    const float t = static_cast<float>(progress);
-    return {
-        std::clamp(from[0] + (to[0] - from[0]) * t, 0.0f, 1.0f),
-        std::clamp(from[1] + (to[1] - from[1]) * t, 0.0f, 1.0f),
-        std::clamp(from[2] + (to[2] - from[2]) * t, 0.0f, 1.0f),
-        std::clamp(from[3] + (to[3] - from[3]) * t, 0.0f, 1.0f),
-    };
-  }
-
-  std::array<float, 4>
-  lerpColorLinear(const std::array<float, 4>& from, const std::array<float, 4>& to, double progress) {
-    const float t = static_cast<float>(progress);
-    const float lR = sRGBToLinear(from[0]) + (sRGBToLinear(to[0]) - sRGBToLinear(from[0])) * t;
-    const float lG = sRGBToLinear(from[1]) + (sRGBToLinear(to[1]) - sRGBToLinear(from[1])) * t;
-    const float lB = sRGBToLinear(from[2]) + (sRGBToLinear(to[2]) - sRGBToLinear(from[2])) * t;
-    const float a = from[3] + (to[3] - from[3]) * t;
-
-    return {
-        std::clamp(linearToSRGB(lR), 0.0f, 1.0f),
-        std::clamp(linearToSRGB(lG), 0.0f, 1.0f),
-        std::clamp(linearToSRGB(lB), 0.0f, 1.0f),
-        std::clamp(a, 0.0f, 1.0f),
-    };
-  }
-
-  struct OkLabColor {
-    float L = 0.0f;
-    float a = 0.0f;
-    float b = 0.0f;
-  };
-
-  [[nodiscard]] static OkLabColor sRGBToOkLab(const std::array<float, 4>& c) {
-    const float r = sRGBToLinear(c[0]);
-    const float g = sRGBToLinear(c[1]);
-    const float b = sRGBToLinear(c[2]);
-
-    const float l = 0.4122214708f * r + 0.5363325363f * g + 0.0514459929f * b;
-    const float m = 0.2119034982f * r + 0.6806995451f * g + 0.1073969566f * b;
-    const float s = 0.0883024619f * r + 0.2817188376f * g + 0.6299787005f * b;
-
-    const float l_ = std::cbrtf(l);
-    const float m_ = std::cbrtf(m);
-    const float s_ = std::cbrtf(s);
-
-    return {
-        0.2104542553f * l_ + 0.7936177850f * m_ - 0.0040720468f * s_,
-        1.9779984951f * l_ - 2.4285922050f * m_ + 0.4505937099f * s_,
-        0.0259040371f * l_ + 0.7827717662f * m_ - 0.8086757660f * s_,
-    };
-  }
-
-  [[nodiscard]] static std::array<float, 4> okLabToSRGB(const OkLabColor& ok, float alpha) {
-    const float l_ = ok.L + 0.3963377774f * ok.a + 0.2158037573f * ok.b;
-    const float m_ = ok.L - 0.1055613458f * ok.a - 0.0638541728f * ok.b;
-    const float s_ = ok.L - 0.0894841775f * ok.a - 1.2914855480f * ok.b;
-
-    const float l = l_ * l_ * l_;
-    const float m = m_ * m_ * m_;
-    const float s = s_ * s_ * s_;
-
-    const float r = +4.0767439362f * l - 3.3077115913f * m + 0.2309699292f * s;
-    const float g = -1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s;
-    const float b = -0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s;
-
-    return {
-        std::clamp(linearToSRGB(r), 0.0f, 1.0f),
-        std::clamp(linearToSRGB(g), 0.0f, 1.0f),
-        std::clamp(linearToSRGB(b), 0.0f, 1.0f),
-        std::clamp(alpha, 0.0f, 1.0f),
-    };
-  }
-
-  std::array<float, 4>
-  lerpColorOkLab(const std::array<float, 4>& from, const std::array<float, 4>& to, double progress) {
-    const float t = static_cast<float>(progress);
-    const OkLabColor okFrom = sRGBToOkLab(from);
-    const OkLabColor okTo = sRGBToOkLab(to);
-
-    const OkLabColor okLerped{
-        okFrom.L + (okTo.L - okFrom.L) * t,
-        okFrom.a + (okTo.a - okFrom.a) * t,
-        okFrom.b + (okTo.b - okFrom.b) * t,
-    };
-    const float alpha = from[3] + (to[3] - from[3]) * t;
-    return okLabToSRGB(okLerped, alpha);
-  }
-
-  void premultipliedColor(float out[4], const std::array<float, 4>& base, float opacity) {
-    const float a = std::clamp(base[3] * opacity, 0.0f, 1.0f);
-    out[0] = std::clamp(base[0] * a, 0.0f, 1.0f);
-    out[1] = std::clamp(base[1] * a, 0.0f, 1.0f);
-    out[2] = std::clamp(base[2] * a, 0.0f, 1.0f);
-    out[3] = a;
-  }
-
-  std::array<float, 4> premultipliedColor(const std::array<float, 4>& base, float opacity) {
-    std::array<float, 4> out{};
-    premultipliedColor(out.data(), base, opacity);
-    return out;
-  }
-
-  std::string colorToHex(const std::array<float, 4>& color) {
-    const auto byte = [](float component) {
-      return static_cast<int>(std::lround(std::clamp(component, 0.0f, 1.0f) * 255.0f));
-    };
-    return std::format("#{:02X}{:02X}{:02X}{:02X}", byte(color[0]), byte(color[1]), byte(color[2]), byte(color[3]));
-  }
-
-  std::optional<std::array<float, 4>> parseColorHex(std::string_view hex) {
-    std::string s(hex);
-    if (s.starts_with("#")) {
-      s.erase(0, 1);
-    } else if (s.starts_with("0x") || s.starts_with("0X")) {
-      s.erase(0, 2);
-    }
-
-    if (s.size() == 3) { // RGB -> RRGGBB
-      int r = 0, g = 0, b = 0;
-      if (std::sscanf(s.c_str(), "%1x%1x%1x", &r, &g, &b) == 3) {
-        return std::array<float, 4>{
-            static_cast<float>(r * 17) / 255.0f,
-            static_cast<float>(g * 17) / 255.0f,
-            static_cast<float>(b * 17) / 255.0f,
-            1.0f,
-        };
-      }
-    } else if (s.size() == 4) { // RGBA -> RRGGBBAA
-      int r = 0, g = 0, b = 0, a = 0;
-      if (std::sscanf(s.c_str(), "%1x%1x%1x%1x", &r, &g, &b, &a) == 4) {
-        return std::array<float, 4>{
-            static_cast<float>(r * 17) / 255.0f,
-            static_cast<float>(g * 17) / 255.0f,
-            static_cast<float>(b * 17) / 255.0f,
-            static_cast<float>(a * 17) / 255.0f,
-        };
-      }
-    } else if (s.size() == 6) { // RRGGBB
-      int r = 0, g = 0, b = 0;
-      if (std::sscanf(s.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-        return std::array<float, 4>{
-            static_cast<float>(r) / 255.0f,
-            static_cast<float>(g) / 255.0f,
-            static_cast<float>(b) / 255.0f,
-            1.0f,
-        };
-      }
-    } else if (s.size() == 8) { // RRGGBBAA
-      int r = 0, g = 0, b = 0, a = 0;
-      if (std::sscanf(s.c_str(), "%02x%02x%02x%02x", &r, &g, &b, &a) == 4) {
-        return std::array<float, 4>{
-            static_cast<float>(r) / 255.0f,
-            static_cast<float>(g) / 255.0f,
-            static_cast<float>(b) / 255.0f,
-            static_cast<float>(a) / 255.0f,
-        };
-      }
-    }
-    return std::nullopt;
-  }
-
   // CurveRegistry methods
   void CurveRegistry::registerCurve(std::string_view name, const AnimationCurve& curve) {
     registryImpl().registerCurve(name, curve);
@@ -873,6 +701,8 @@ namespace umbriel {
     m_from = color;
     m_target = color;
     m_current = color;
+    m_fromOkLab = srgbToOkLab(color);
+    m_targetOkLab = m_fromOkLab;
     m_progress = 1.0;
     m_startMsec = 0;
     m_animating = false;
@@ -887,6 +717,8 @@ namespace umbriel {
   void AnimatedColor::retarget(const std::array<float, 4>& to, int durationMs, const AnimationCurve& curve) {
     m_from = m_current;
     m_target = to;
+    m_fromOkLab = srgbToOkLab(m_from);
+    m_targetOkLab = srgbToOkLab(m_target);
     m_durationMsec = static_cast<uint64_t>(std::max(1, durationMs));
     m_curve = curve;
     m_startMsec = 0;
@@ -938,12 +770,10 @@ namespace umbriel {
       return true;
     }
 
-    const double eased = applyEasing(m_curve, linear);
-    if (m_useLinearColorSpace) {
-      m_current = lerpColorLinear(m_from, m_target, eased);
-    } else {
-      m_current = lerpColorOkLab(m_from, m_target, eased);
-    }
+    const auto eased = static_cast<float>(applyEasing(m_curve, linear));
+    const OkLab interpolated = interpolateOkLab(m_fromOkLab, m_targetOkLab, eased);
+    const float alpha = std::lerp(m_from[3], m_target[3], eased);
+    m_current = okLabToSrgb(interpolated, alpha);
 
     return true;
   }
@@ -953,14 +783,6 @@ namespace umbriel {
     out[1] = m_current[1];
     out[2] = m_current[2];
     out[3] = m_current[3];
-  }
-
-  void AnimatedColor::currentPremultiplied(float out[4], float opacity) const {
-    premultipliedColor(out, m_current, opacity);
-  }
-
-  std::array<float, 4> AnimatedColor::currentPremultiplied(float opacity) const {
-    return premultipliedColor(m_current, opacity);
   }
 
 } // namespace umbriel

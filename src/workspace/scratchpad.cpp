@@ -143,6 +143,23 @@ namespace umbriel {
     return true;
   }
 
+  void ScratchpadManager::retargetBackdrop(Output* output, bool visible) {
+    if (output == nullptr) {
+      return;
+    }
+    const auto& animation = config().animation;
+    const auto& scratchpad = animation.scratchpad;
+    auto fadeIt = m_backdropFades.try_emplace(output, 0.0).first;
+    AnimatedValue& backdropFade = fadeIt->second;
+    const double fadeTarget = visible ? 1.0 : 0.0;
+    if (animation.enabled && scratchpad.enabled && (backdropFade.animating() || backdropFade.current() != fadeTarget)) {
+      backdropFade.retarget(fadeTarget, scratchpad.durationMs, scratchpad.curve);
+    } else {
+      backdropFade.snap(fadeTarget);
+    }
+    updateDimAndBlur(output);
+  }
+
   void ScratchpadManager::setVisible(Output* output, bool visible) {
     if (output == nullptr) {
       return;
@@ -160,14 +177,7 @@ namespace umbriel {
     }
     const auto& animation = config().animation;
     const auto& scratchpad = animation.scratchpad;
-    auto fadeIt = m_backdropFades.try_emplace(output, 0.0).first;
-    AnimatedValue& backdropFade = fadeIt->second;
-    const double fadeTarget = visible ? 1.0 : 0.0;
-    if (animation.enabled && scratchpad.enabled && (backdropFade.animating() || backdropFade.current() != fadeTarget)) {
-      backdropFade.retarget(fadeTarget, scratchpad.durationMs, scratchpad.curve);
-    } else {
-      backdropFade.snap(fadeTarget);
-    }
+    retargetBackdrop(output, visible);
 
     for (const Entry& entry : m_entries) {
       if (entry.output != output || entry.view == nullptr) {
@@ -449,6 +459,7 @@ namespace umbriel {
     m_entries.erase(it);
     if (std::ranges::none_of(m_entries, [output](const Entry& e) { return e.output == output; })) {
       std::erase(m_visibleOutputs, output);
+      retargetBackdrop(output, false);
     }
     if (m_focusedView == view) {
       m_focusedView = nullptr;
@@ -507,6 +518,7 @@ namespace umbriel {
     if (entryOutput != nullptr
         && std::ranges::none_of(m_entries, [entryOutput](const Entry& e) { return e.output == entryOutput; })) {
       std::erase(m_visibleOutputs, entryOutput);
+      retargetBackdrop(entryOutput, false);
     }
   }
 

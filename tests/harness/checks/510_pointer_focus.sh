@@ -91,4 +91,27 @@ wait_for_focus_at 10
 pointer click "$BTN_LEFT"
 wait_for_focus_at 646
 
-echo "click focus, hover behavior, and switcher cursor warp are correct"
+# Directional focus leaves the cursor in place while follows_focus has its
+# default disabled value. Focus moves right, then an unmoved click returns it
+# to the left window under the cursor.
+pointer move "$LEFT_X" "$MID_Y" click "$BTN_LEFT"
+wait_for_focus_at 10
+"$UMBRIEL" msg window-focus-right > /dev/null
+wait_for_focus_at 646
+pointer click "$BTN_LEFT"
+wait_for_focus_at 10
+
+# With follows_focus enabled, the same navigation moves the cursor into the
+# newly focused right window. Plain window-focus remains focus-only, so moving
+# keyboard focus left and clicking without pointer motion must return focus to
+# the right window under the warped cursor.
+printf '\n[input.cursor]\nfollows_focus = true\n' >> "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+"$UMBRIEL" msg window-focus-right > /dev/null
+wait_for_focus_at 646
+"$UMBRIEL" msg "window-focus:$left_id" > /dev/null
+wait_for_focus_at 10
+pointer click "$BTN_LEFT"
+wait_for_focus_at 646
+
+echo "click focus, hover behavior, and configured focus-navigation cursor warps are correct"

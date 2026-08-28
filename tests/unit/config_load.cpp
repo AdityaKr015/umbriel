@@ -859,11 +859,17 @@ UMBRIEL_TEST(touchpadTapDefaultsToEnabled) {
   CHECK(defaults.input.touchpad.tap == std::optional<bool>(true));
 }
 
+UMBRIEL_TEST(cursorFollowsFocusDefaultsToDisabled) {
+  const umbriel::Config defaults;
+  CHECK(!defaults.input.cursor.followsFocus);
+}
+
 UMBRIEL_TEST(hardwareCursorCanBeDisabled) {
   const TempConfig file;
   file.write(R"(
 [input.cursor]
 hardware_cursor = false
+follows_focus = true
 hide_when_typing = true
 )");
 
@@ -873,8 +879,10 @@ hide_when_typing = true
 
   CHECK(result.success);
   CHECK(!store.config().input.cursor.hardwareCursor);
+  CHECK(store.config().input.cursor.followsFocus);
   CHECK(store.config().input.cursor.hideWhenTyping);
   CHECK(!containsDiagnostic(store, "unknown key input.cursor.hardware_cursor"));
+  CHECK(!containsDiagnostic(store, "unknown key input.cursor.follows_focus"));
   CHECK(!containsDiagnostic(store, "unknown key input.cursor.hide_when_typing"));
 }
 

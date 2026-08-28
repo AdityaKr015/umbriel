@@ -1142,6 +1142,7 @@ namespace umbriel {
           c.text("theme", in.cursor.theme)
               .integer("size", 1, 512, in.cursor.size)
               .boolean("hardware_cursor", in.cursor.hardwareCursor)
+              .boolean("follows_focus", in.cursor.followsFocus)
               .boolean("hide_when_typing", in.cursor.hideWhenTyping)
               .integer("hide_timeout_ms", 0, 3600000, in.cursor.hideTimeoutMs);
         });

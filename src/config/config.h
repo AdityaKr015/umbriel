@@ -559,6 +559,8 @@ namespace umbriel {
         std::string theme;
         int size = 24;
         bool hardwareCursor = true;
+        // Warp to the window selected by explicit focus-navigation actions.
+        bool followsFocus = false;
         bool hideWhenTyping = false;
         // Milliseconds without pointer activity before hiding the cursor. Zero disables it.
         int hideTimeoutMs = 0;

@@ -802,7 +802,57 @@ namespace umbriel {
         s.real("zoom", 0.1, 0.75, loaded.overview.zoom)
             .boolean("background_blur", loaded.overview.backgroundBlur)
             .color("background_tint", loaded.overview.backgroundTint)
-            .color("workspace_background", loaded.overview.workspaceBackground);
+            .color("workspace_background", loaded.overview.workspaceBackground)
+            .boolean("shortcuts", loaded.overview.shortcuts);
+
+        if (const toml::node* badgeNode = s.take("badge_color")) {
+          const auto value = badgeNode->value<std::string>();
+          std::array<float, 4> parsed{};
+          if (!value) {
+            warnAt(badgeNode->source(), "ignoring overview.badge_color (expected color string)");
+          } else if (!parseColor(*value, parsed)) {
+            warnAt(badgeNode->source(), "ignoring overview.badge_color (invalid color '{}')", *value);
+          } else {
+            loaded.overview.badgeColor = parsed;
+          }
+        }
+
+        const toml::node* node = s.take("shortcut_keys");
+        if (node == nullptr) {
+          return;
+        }
+        const auto value = node->value<std::string>();
+        if (!value) {
+          warnAt(node->source(), "ignoring overview.shortcut_keys (expected string)");
+          return;
+        }
+        if (value->size() < 2) {
+          warnAt(node->source(), "ignoring overview.shortcut_keys (expected at least 2 characters)");
+          return;
+        }
+
+        std::string normalized;
+        normalized.reserve(value->size());
+        for (const unsigned char character : *value) {
+          if (character < 0x21 || character > 0x7E) {
+            warnAt(
+                node->source(), "ignoring overview.shortcut_keys (invalid character 0x{:02X})",
+                static_cast<unsigned int>(character)
+            );
+            return;
+          }
+          const char lowered =
+              character >= 'A' && character <= 'Z' ? static_cast<char>(character - 'A' + 'a') : character;
+          if (normalized.contains(lowered)) {
+            warnAt(
+                node->source(), R"(ignoring overview.shortcut_keys (duplicate key "{}" ignoring ASCII case))",
+                static_cast<char>(character)
+            );
+            return;
+          }
+          normalized.push_back(lowered);
+        }
+        loaded.overview.shortcutKeys = *value;
       });
     }
 

@@ -443,6 +443,13 @@ namespace umbriel {
       std::array<float, 4> backgroundTint{0.0627451F, 0.0627451F, 0.0784314F, 0.1882353F};
       // Rounded background behind each workspace; alpha controls opacity.
       std::array<float, 4> workspaceBackground{0.0F, 0.0F, 0.0F, 0.2666667F};
+      // Keyboard shortcut badges on overview cards. Pressing a badge key focuses
+      // that window and closes the overview.
+      bool shortcuts = true;
+      // Favorite badge keys in preference order, one ASCII character each.
+      std::string shortcutKeys = "1234567890";
+      // Badge accent override. Unset follows colors.accent_primary.
+      std::optional<std::array<float, 4>> badgeColor;
       bool operator==(const Overview&) const = default;
     } overview;
 

@@ -2,6 +2,7 @@
 #include "config/store.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -350,6 +351,60 @@ UMBRIEL_TEST(overviewBackgroundBlurLoads) {
   file.write("[overview]\nbackground_blur = false\n");
   CHECK(store.reload().success);
   CHECK(!store.config().overview.backgroundBlur);
+}
+
+UMBRIEL_TEST(overviewShortcutConfigurationLoads) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[overview]\nshortcuts = false\nshortcut_keys = \"asdf\"\nbadge_color = \"#12345678\"\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().overview.shortcuts);
+  CHECK_EQ(store.config().overview.shortcutKeys, std::string{"asdf"});
+  CHECK(store.config().overview.badgeColor.has_value());
+  const std::array<float, 4> badgeColor = store.config().overview.badgeColor.value_or(std::array<float, 4>{});
+  CHECK_EQ(badgeColor[0], 18.0F / 255.0F);
+  CHECK_EQ(badgeColor[1], 52.0F / 255.0F);
+  CHECK_EQ(badgeColor[2], 86.0F / 255.0F);
+  CHECK_EQ(badgeColor[3], 120.0F / 255.0F);
+}
+
+UMBRIEL_TEST(overviewShortcutKeysRejectInvalidValues) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[overview]\nshortcut_keys = \"a\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().overview.shortcutKeys, std::string{"1234567890"});
+  CHECK(containsDiagnostic(store, "expected at least 2 characters"));
+
+  file.write("[overview]\nshortcut_keys = \"aA\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().overview.shortcutKeys, std::string{"1234567890"});
+  CHECK(containsDiagnostic(store, "duplicate key"));
+
+  file.write("[overview]\nshortcut_keys = \"a b\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().overview.shortcutKeys, std::string{"1234567890"});
+  CHECK(containsDiagnostic(store, "invalid character 0x20"));
+
+  file.write("[overview]\nshortcut_keys = 12\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().overview.shortcutKeys, std::string{"1234567890"});
+  CHECK(containsDiagnostic(store, "expected string"));
+}
+
+UMBRIEL_TEST(overviewBadgeColorRejectsInvalidValues) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[overview]\nbadge_color = \"not-a-color\"\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().overview.badgeColor.has_value());
+  CHECK(containsDiagnostic(store, "overview.badge_color (invalid color"));
 }
 
 UMBRIEL_TEST(cornerRadiusClampsToItsRange) {

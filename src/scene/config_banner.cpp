@@ -11,7 +11,6 @@
 #include <cmath>
 #include <filesystem>
 #include <format>
-#include <glib.h>
 #include <string>
 #include <wayland-server-core.h>
 
@@ -150,26 +149,19 @@ namespace umbriel {
     // Build pango markup.
     const std::filesystem::path configDir = configRootPath().parent_path();
     std::string markup;
-    {
-      gchar* escapedHeading = g_markup_escape_text(heading, -1);
-      markup += std::format("<span foreground='{}'>{}</span>", headingColor, escapedHeading);
-      g_free(escapedHeading);
-    }
+    markup += std::format("<span foreground='{}'>{}</span>", headingColor, escapeMarkup(heading));
 
     int shown = 0;
     const int total = static_cast<int>(diagnostics.size());
     for (int i = 0; i < total && shown < kMaxLines; ++i, ++shown) {
       const auto& diagnostic = diagnostics[static_cast<size_t>(i)];
       const std::string loc = shortPath(diagnostic, configDir);
-      gchar* escapedMsg = g_markup_escape_text(diagnostic.message.c_str(), -1);
+      const std::string escapedMessage = escapeMarkup(diagnostic.message);
       if (loc.empty()) {
-        markup += std::format("\n<span foreground='{}'>{}</span>", textColor, escapedMsg);
+        markup += std::format("\n<span foreground='{}'>{}</span>", textColor, escapedMessage);
       } else {
-        gchar* escapedLoc = g_markup_escape_text(loc.c_str(), -1);
-        markup += std::format("\n<span foreground='{}'>{}: {}</span>", textColor, escapedLoc, escapedMsg);
-        g_free(escapedLoc);
+        markup += std::format("\n<span foreground='{}'>{}: {}</span>", textColor, escapeMarkup(loc), escapedMessage);
       }
-      g_free(escapedMsg);
     }
     if (total > kMaxLines) {
       const int remaining = total - kMaxLines;

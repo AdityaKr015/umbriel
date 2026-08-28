@@ -376,6 +376,7 @@ pure_sources = files(
   'src/layout/master.cpp',
   'src/output/direction.cpp',
   'src/scene/cheatsheet_rows.cpp',
+  'src/overview/shortcut_labels.cpp',
   'src/view/border_ring.cpp',
   'src/view/floating.cpp',
 )
@@ -513,6 +514,7 @@ unit_tests = [
   ['dwindle-layout', ['tests/unit/dwindle_layout.cpp'], []],
   ['master-layout', ['tests/unit/master_layout.cpp'], []],
   ['cheatsheet-rows', ['tests/unit/cheatsheet_rows.cpp'], []],
+  ['shortcut-labels', ['tests/unit/shortcut_labels.cpp'], []],
   ['border-ring', ['tests/unit/border_ring.cpp'], []],
   ['floating', ['tests/unit/floating.cpp'], []],
   ['maximize', ['tests/unit/maximize.cpp'], []],

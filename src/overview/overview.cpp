@@ -7,9 +7,11 @@
 #include "layout/drop_target.h"
 #include "layout/layout.h"
 #include "output/output.h"
+#include "overview/shortcut_labels.h"
 #include "scene/border_rect.h"
 #include "scene/color.h"
 #include "scene/hint_rect.h"
+#include "scene/text_buffer.h"
 #include "server/server.h"
 #include "server/wine_color_manager.h"
 #include "view/view.h"
@@ -17,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <linux/input-event-codes.h>
+#include <format>
 #include <ranges>
 #include <xkbcommon/xkbcommon.h>
 #include "wlr.h"
@@ -66,6 +69,30 @@ namespace umbriel {
     // Cards are pure output: hit testing runs off Overview's own boxes, so scene
     // input must never land on them (Server::viewAt then sees layer surfaces only).
     bool rejectInput(wlr_scene_buffer* /*buffer*/, double* /*sx*/, double* /*sy*/) { return false; }
+
+    char asciiLower(char character) {
+      return character >= 'A' && character <= 'Z' ? static_cast<char>(character - 'A' + 'a') : character;
+    }
+
+    char shortcutCharacter(uint32_t keysym) {
+      if (keysym >= XKB_KEY_KP_0 && keysym <= XKB_KEY_KP_9) {
+        return static_cast<char>('0' + (keysym - XKB_KEY_KP_0));
+      }
+      const xkb_keysym_t lowered = xkb_keysym_to_lower(keysym);
+      return lowered >= 0x21 && lowered <= 0x7E ? static_cast<char>(lowered) : '\0';
+    }
+
+    bool shortcutStartsWith(std::string_view label, std::string_view prefix) {
+      if (label.size() < prefix.size()) {
+        return false;
+      }
+      for (size_t index = 0; index < prefix.size(); ++index) {
+        if (asciiLower(label[index]) != prefix[index]) {
+          return false;
+        }
+      }
+      return true;
+    }
 
     wlr_scene_buffer* sourceBufferForSurface(wlr_scene_node* node, wlr_surface* surface) {
       if (node->type == WLR_SCENE_NODE_BUFFER) {
@@ -199,6 +226,20 @@ namespace umbriel {
       wlr_scene_border_set_colors(card.border, innerColor.data(), outerColor.data());
     }
 
+    if (card.badge != nullptr) {
+      const float badgeAlpha = static_cast<float>(m_progress);
+      const bool matched = card.shortcutMatched != SIZE_MAX;
+      const bool fits = contentW >= card.badgeWidth + 12 && contentH >= card.badgeHeight + 12;
+      const bool badgeOn =
+          !card.shortcut.empty() && matched && fits && !m_closing && &card != m_dragCard && badgeAlpha > 0.01F;
+      wlr_scene_node_set_enabled(&card.badge->node, badgeOn);
+      if (badgeOn) {
+        wlr_scene_buffer_set_opacity(card.badgeText, badgeAlpha);
+        const std::array<float, 4> background = tint(card.badgeBackground, badgeAlpha);
+        wlr_scene_rect_set_color(card.badgeRect, background.data());
+      }
+    }
+
     const double fx = static_cast<double>(contentW) / geometry.width;
     const double fy = static_cast<double>(contentH) / geometry.height;
     bool blurUpdated = false;
@@ -308,6 +349,10 @@ namespace umbriel {
   }
 
   void Overview::applyProgress() {
+    if (m_shortcutsDirty) {
+      m_shortcutsDirty = false;
+      updateShortcutAssignments();
+    }
     for (const auto& state : m_outputs) {
       layoutOutput(*state);
     }
@@ -408,6 +453,9 @@ namespace umbriel {
     if (card->border != nullptr) {
       wlr_scene_node_raise_to_top(&card->border->node);
     }
+    if (card->badge != nullptr) {
+      wlr_scene_node_raise_to_top(&card->badge->node);
+    }
   }
 
   void Overview::syncCardSurface(wlr_surface* surface, int sx, int sy, void* data) {
@@ -506,6 +554,7 @@ namespace umbriel {
     }
     Card* raw = card.get();
     state.cards.push_back(std::move(card));
+    m_shortcutsDirty = true;
 
     wlr_surface_for_each_surface(surface, addCardSurface, raw);
 
@@ -619,6 +668,7 @@ namespace umbriel {
       }
       destroyCard(it->get());
       state->cards.erase(it);
+      m_shortcutsDirty = true;
       return;
     }
   }
@@ -661,6 +711,178 @@ namespace umbriel {
       }
     }
     return nullptr;
+  }
+
+  void Overview::renderCardShortcut(Card& card) {
+    if (card.badge != nullptr) {
+      wlr_scene_node_destroy(&card.badge->node);
+    }
+    card.badge = nullptr;
+    card.badgeRect = nullptr;
+    card.badgeText = nullptr;
+    card.badgeWidth = 0;
+    card.badgeHeight = 0;
+
+    if (card.shortcut.empty() || card.tree == nullptr || card.owner == nullptr || card.owner->output == nullptr) {
+      return;
+    }
+
+    const double scale = std::max(1.0, std::ceil(static_cast<double>(card.owner->output->wlr()->scale)));
+    const size_t matched = card.shortcutMatched == SIZE_MAX ? 0 : std::min(card.shortcutMatched, card.shortcut.size());
+    const std::string_view shortcut(card.shortcut);
+    const auto& colors = config().colors;
+    const std::array<float, 4> badgeColor = config().overview.badgeColor.value_or(colors.accentPrimary);
+    card.badgeBackground = keycapBackgroundColor(colors.background, badgeColor);
+    const std::string markup = std::format(
+        "<span foreground='{}' weight='bold'>{}</span><span foreground='{}' weight='bold'>{}</span>",
+        rgbaHex(colors.textPrimary), escapeMarkup(shortcut.substr(0, matched)), rgbaHex(badgeColor),
+        escapeMarkup(shortcut.substr(matched))
+    );
+    TextBufferResult rendered = renderTextBuffer({
+        .markup = markup,
+        .font = "monospace 19",
+        .maxWidth = 350,
+        .padding = 7,
+        .scale = scale,
+        .bgA = 0.0,
+    });
+    if (rendered.buffer == nullptr) {
+      return;
+    }
+
+    card.badge = wlr_scene_tree_create(card.tree);
+    if (card.badge == nullptr) {
+      wlr_buffer_drop(rendered.buffer);
+      return;
+    }
+    wlr_scene_node_set_position(&card.badge->node, 6, 6);
+    const std::array<float, 4> background = tint(card.badgeBackground, 1.0);
+    card.badgeRect =
+        wlr_scene_rect_create(card.badge, rendered.logicalWidth, rendered.logicalHeight, background.data());
+    card.badgeText = wlr_scene_buffer_create(card.badge, rendered.buffer);
+    wlr_buffer_drop(rendered.buffer);
+    if (card.badgeRect == nullptr || card.badgeText == nullptr) {
+      wlr_scene_node_destroy(&card.badge->node);
+      card.badge = nullptr;
+      card.badgeRect = nullptr;
+      card.badgeText = nullptr;
+      return;
+    }
+
+    wlr_scene_rect_set_corner_radius(
+        card.badgeRect, std::min(config().appearance.cornerRadius, rendered.logicalHeight / 4)
+    );
+    wlr_scene_buffer_set_dest_size(card.badgeText, rendered.logicalWidth, rendered.logicalHeight);
+    card.badgeText->point_accepts_input = rejectInput;
+    card.badgeWidth = rendered.logicalWidth;
+    card.badgeHeight = rendered.logicalHeight;
+    wlr_scene_node_raise_to_top(&card.badge->node);
+    wlr_scene_node_set_enabled(&card.badge->node, false);
+  }
+
+  void Overview::assignShortcuts() {
+    m_shortcutInput.clear();
+    m_shortcutsDirty = true;
+    applyProgress();
+  }
+
+  void Overview::updateShortcutAssignments() {
+    const auto updateCard = [this](Card& card, std::string label) {
+      const bool changed = card.shortcut != label;
+      card.shortcut = std::move(label);
+      card.shortcutMatched = 0;
+      if (changed) {
+        renderCardShortcut(card);
+      }
+    };
+    const auto clearAll = [&]() {
+      for (const auto& state : m_outputs) {
+        for (const auto& card : state->cards) {
+          updateCard(*card, {});
+        }
+      }
+    };
+
+    if (!m_active || m_closing || !config().overview.shortcuts || config().overview.shortcutKeys.size() < 2) {
+      clearAll();
+      return;
+    }
+
+    std::vector<OutputState*> orderedStates;
+    orderedStates.reserve(m_outputs.size());
+    Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
+    if (OutputState* state = stateFor(preferred)) {
+      orderedStates.push_back(state);
+    }
+    for (const auto& state : m_outputs) {
+      if (orderedStates.empty() || state.get() != orderedStates.front()) {
+        orderedStates.push_back(state.get());
+      }
+    }
+
+    const double z = std::clamp(config().overview.zoom, 0.1, 0.75);
+    std::vector<Card*> eligible;
+    for (OutputState* state : orderedStates) {
+      RowMetrics metrics{};
+      if (state == nullptr || !rowMetrics(*state, *m_server, z, metrics)) {
+        continue;
+      }
+      WorkspaceGroup* group = state->output->workspaceGroup();
+      if (group == nullptr) {
+        continue;
+      }
+
+      std::vector<size_t> rows;
+      rows.reserve(group->workspaceCount());
+      for (size_t row = 0; row < group->workspaceCount(); ++row) {
+        const int top = rowTop(metrics, state->rowTo, row);
+        if (top < metrics.outputBox.y + metrics.outputBox.height && top + metrics.rowH > metrics.outputBox.y) {
+          rows.push_back(row);
+        }
+      }
+      std::stable_sort(rows.begin(), rows.end(), [state](size_t left, size_t right) {
+        const double leftDistance = std::abs(static_cast<double>(left) - state->rowTo);
+        const double rightDistance = std::abs(static_cast<double>(right) - state->rowTo);
+        return leftDistance == rightDistance ? left < right : leftDistance < rightDistance;
+      });
+
+      struct PositionedCard {
+        Card* card = nullptr;
+        int x = 0;
+        int y = 0;
+      };
+      for (const size_t row : rows) {
+        const int top = rowTop(metrics, state->rowTo, row);
+        std::vector<PositionedCard> rowCards;
+        for (const auto& card : state->cards) {
+          if (card->row != row || card->view == nullptr || !card->view->mapped()) {
+            continue;
+          }
+          const int x =
+              metrics.rowX + static_cast<int>(std::lround((card->view->layoutTargetX() - metrics.outputBox.x) * z));
+          const int y = top + static_cast<int>(std::lround((card->view->layoutTargetY() - metrics.outputBox.y) * z));
+          rowCards.push_back({.card = card.get(), .x = x, .y = y});
+        }
+        std::stable_sort(rowCards.begin(), rowCards.end(), [](const PositionedCard& left, const PositionedCard& right) {
+          return left.x == right.x ? left.y < right.y : left.x < right.x;
+        });
+        for (const PositionedCard& positioned : rowCards) {
+          eligible.push_back(positioned.card);
+        }
+      }
+    }
+
+    std::vector<std::string> labels = shortcutLabels(eligible.size(), config().overview.shortcutKeys);
+    for (size_t index = 0; index < eligible.size(); ++index) {
+      updateCard(*eligible[index], std::move(labels[index]));
+    }
+    for (const auto& state : m_outputs) {
+      for (const auto& card : state->cards) {
+        if (std::ranges::find(eligible, card.get()) == eligible.end()) {
+          updateCard(*card, {});
+        }
+      }
+    }
   }
 
   void Overview::populateCards(OutputState& state) {
@@ -779,6 +1001,7 @@ namespace umbriel {
         }
       }
     }
+    assignShortcuts();
 
     wlr_scene_node_set_enabled(&m_server->xdgTree()->node, false);
     wlr_scene_node_set_enabled(&m_server->fullscreenTree()->node, false);
@@ -986,6 +1209,7 @@ namespace umbriel {
     m_dropWorkspaceGroup = nullptr;
     m_cardPresentationDirty = false;
     m_gestureOpenedHere = false;
+    m_shortcutInput.clear();
     m_server->reconcileDynamicWorkspaces();
   }
 
@@ -1028,9 +1252,10 @@ namespace umbriel {
     if (state == nullptr || findCard(view) != nullptr) {
       return;
     }
-    createCard(*state, view, workspace->index());
-    layoutOutput(*state);
-    wlr_output_schedule_frame(state->output->wlr());
+    if (createCard(*state, view, workspace->index()) == nullptr) {
+      return;
+    }
+    assignShortcuts();
   }
 
   void Overview::onViewUnmapped(View* view) {
@@ -1082,6 +1307,7 @@ namespace umbriel {
       layoutOutput(*state);
       wlr_output_schedule_frame(state->output->wlr());
     }
+    assignShortcuts();
   }
 
   void Overview::onViewWorkspaceChanged(View* view) {
@@ -1098,6 +1324,7 @@ namespace umbriel {
         layoutOutput(*target);
         wlr_output_schedule_frame(target->output->wlr());
       }
+      assignShortcuts();
       return;
     }
 
@@ -1111,6 +1338,7 @@ namespace umbriel {
         layoutOutput(*source);
         wlr_output_schedule_frame(source->output->wlr());
       }
+      assignShortcuts();
       return;
     }
 
@@ -1118,10 +1346,12 @@ namespace umbriel {
     if (source == target) {
       layoutOutput(*target);
       wlr_output_schedule_frame(target->output->wlr());
+      assignShortcuts();
       return;
     }
     if (source == nullptr) {
       rebuildCard(view);
+      assignShortcuts();
       return;
     }
 
@@ -1130,6 +1360,7 @@ namespace umbriel {
     });
     if (it == source->cards.end()) {
       rebuildCard(view);
+      assignShortcuts();
       return;
     }
 
@@ -1143,6 +1374,7 @@ namespace umbriel {
     layoutOutput(*target);
     wlr_output_schedule_frame(source->output->wlr());
     wlr_output_schedule_frame(target->output->wlr());
+    assignShortcuts();
   }
 
   void Overview::onWorkspaceActivated(WorkspaceGroup* group) {
@@ -1163,6 +1395,7 @@ namespace umbriel {
     }
     target->rowTo = row;
     startAnimation(m_targetProgress, false);
+    assignShortcuts();
   }
 
   void Overview::onWorkspaceArranged(Workspace* workspace) {
@@ -1194,6 +1427,7 @@ namespace umbriel {
     syncWorkspaceRows(*state, *group);
     layoutOutput(*state);
     wlr_output_schedule_frame(state->output->wlr());
+    assignShortcuts();
   }
 
   void Overview::onFocusChanged() {
@@ -1203,9 +1437,10 @@ namespace umbriel {
   }
 
   void Overview::onViewPresentationChanged(View* view) {
-    if (m_active && view != nullptr && stateForWorkspace(view->workspace()) != nullptr) {
-      m_cardPresentationDirty = true;
+    if (!m_active || view == nullptr || stateForWorkspace(view->workspace()) == nullptr) {
+      return;
     }
+    m_cardPresentationDirty = true;
   }
 
   void Overview::onOutputRemoved(Output* output) {
@@ -1247,6 +1482,8 @@ namespace umbriel {
     m_outputs.erase(it);
     if (m_outputs.empty()) {
       forceClose();
+    } else {
+      assignShortcuts();
     }
   }
 
@@ -1508,9 +1745,90 @@ namespace umbriel {
     return true;
   }
 
+  void Overview::refreshShortcutMatches() {
+    for (const auto& state : m_outputs) {
+      for (const auto& card : state->cards) {
+        if (card->shortcut.empty()) {
+          continue;
+        }
+        const size_t matched = shortcutStartsWith(card->shortcut, m_shortcutInput) ? m_shortcutInput.size() : SIZE_MAX;
+        const size_t oldDisplayed = card->shortcutMatched == SIZE_MAX ? 0 : card->shortcutMatched;
+        const size_t newDisplayed = matched == SIZE_MAX ? 0 : matched;
+        card->shortcutMatched = matched;
+        if (oldDisplayed != newDisplayed) {
+          renderCardShortcut(*card);
+        }
+      }
+    }
+    applyProgress();
+    scheduleFrames();
+  }
+
+  void Overview::clearShortcutInput() {
+    m_shortcutInput.clear();
+    refreshShortcutMatches();
+  }
+
+  bool Overview::handleShortcutKey(uint32_t keysym) {
+    if (!config().overview.shortcuts || dragging()) {
+      return false;
+    }
+    if (!m_shortcutInput.empty() && keysym == XKB_KEY_BackSpace) {
+      m_shortcutInput.pop_back();
+      refreshShortcutMatches();
+      return true;
+    }
+    if (!m_shortcutInput.empty() && keysym == XKB_KEY_Escape) {
+      clearShortcutInput();
+      return true;
+    }
+
+    const char character = shortcutCharacter(keysym);
+    if (character == '\0' || std::ranges::none_of(config().overview.shortcutKeys, [character](char configured) {
+          return asciiLower(configured) == character;
+        })) {
+      return false;
+    }
+
+    std::string candidate = m_shortcutInput + character;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+      for (const auto& state : m_outputs) {
+        for (const auto& card : state->cards) {
+          if (card->shortcut.size() == candidate.size()
+              && shortcutStartsWith(card->shortcut, candidate)
+              && card->view != nullptr
+              && card->view->mapped()) {
+            closeToWorkspace(card->view->workspace(), card->view);
+            return true;
+          }
+        }
+      }
+      for (const auto& state : m_outputs) {
+        for (const auto& card : state->cards) {
+          if (shortcutStartsWith(card->shortcut, candidate)) {
+            m_shortcutInput = candidate;
+            refreshShortcutMatches();
+            return true;
+          }
+        }
+      }
+      if (m_shortcutInput.empty()) {
+        break;
+      }
+      m_shortcutInput.clear();
+      candidate.assign(1, character);
+    }
+
+    clearShortcutInput();
+    return true;
+  }
+
   bool Overview::handleFallbackKey(uint32_t keysym) {
     if (!interactive()) {
       return false;
+    }
+    if (handleShortcutKey(keysym)) {
+      return true;
     }
     switch (keysym) {
     case XKB_KEY_Escape:
@@ -1518,16 +1836,19 @@ namespace umbriel {
       return true;
     case XKB_KEY_Return:
     case XKB_KEY_KP_Enter:
+      clearShortcutInput();
       if (Workspace* workspace = preferredWorkspace()) {
         closeToWorkspace(workspace, workspace->focusedView());
       }
       return true;
     case XKB_KEY_Left:
     case XKB_KEY_Right:
+      clearShortcutInput();
       focusAdjacent(keysym == XKB_KEY_Left ? -1 : 1);
       return true;
     case XKB_KEY_Up:
     case XKB_KEY_Down:
+      clearShortcutInput();
       selectRelativeWorkspace(keysym == XKB_KEY_Up ? -1 : 1, nullptr);
       return true;
     default:

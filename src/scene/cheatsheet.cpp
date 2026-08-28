@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
-#include <glib.h>
 #include <limits>
 #include <linux/input-event-codes.h>
 #include <string>
@@ -21,9 +20,11 @@ namespace {
 
   using umbriel::balancedColumnHeight;
   using umbriel::CheatsheetRow;
+  using umbriel::escapeMarkup;
   using umbriel::Group;
   using umbriel::groupForAction;
   using umbriel::groupTitle;
+  using umbriel::keycapBackgroundColor;
   using umbriel::renderTextBuffer;
   using umbriel::rgbaHex;
   using umbriel::TextBufferResult;
@@ -38,12 +39,7 @@ namespace {
   };
 
   CheatsheetPalette makeCheatsheetPalette(const umbriel::Config::Colors& colors) {
-    constexpr float kKeycapLift = 0.09F;
-    std::array<float, 4> keycapBackground{};
-    for (size_t component = 0; component < 3; ++component) {
-      keycapBackground[component] = std::lerp(colors.background[component], colors.textPrimary[component], kKeycapLift);
-    }
-    keycapBackground[3] = 1.0F;
+    const std::array<float, 4> keycapBackground = keycapBackgroundColor(colors.background, colors.textPrimary);
     return {
         .textPrimary = rgbaHex(colors.textPrimary),
         .textMuted = rgbaHex(colors.textMuted),
@@ -64,15 +60,6 @@ namespace {
   // reached once every column count has been tried and the panel still does not fit. 9 is the floor because below it
   // the chord pills stop being readable at arm's length, which is the whole job.
   constexpr int kFontSizes[] = {11, 10, 9};
-
-  // Chord reconstruction helpers
-  // Escape text for Pango markup.
-  std::string escape(const std::string& text) {
-    gchar* escaped = g_markup_escape_text(text.c_str(), -1);
-    std::string result(escaped);
-    g_free(escaped);
-    return result;
-  }
 
   // Fixed groups in display order; submaps follow in first-seen order.
   constexpr Group kFixedGroups[] = {
@@ -97,9 +84,8 @@ namespace {
     lines.push_back({
         .isHeader = true,
         .group = groupId,
-        .text = std::format(
-            "<span foreground='{}' weight='bold'>{}</span>", palette.accentSecondary, escape(std::string(title))
-        ),
+        .text =
+            std::format("<span foreground='{}' weight='bold'>{}</span>", palette.accentSecondary, escapeMarkup(title)),
     });
   }
 
@@ -117,8 +103,8 @@ namespace {
         .group = groupId,
         .text = std::format(
             "<span background='{}' foreground='{}'> {} </span>{}  <span foreground='{}'>{}</span>",
-            palette.keycapBackground, palette.accentPrimary, escape(chord), std::string(extraPad, ' '),
-            isDitto ? palette.textMuted : palette.textPrimary, escape(label)
+            palette.keycapBackground, palette.accentPrimary, escapeMarkup(chord), std::string(extraPad, ' '),
+            isDitto ? palette.textMuted : palette.textPrimary, escapeMarkup(label)
         ),
     };
   }

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <format>
 #include <string>
 
@@ -79,6 +80,18 @@ namespace umbriel {
     out[1] = base[1] * a;
     out[2] = base[2] * a;
     out[3] = a;
+  }
+
+  // Keycap surface: a subtle lift from the panel background toward the key accent.
+  [[nodiscard]] inline std::array<float, 4>
+  keycapBackgroundColor(const std::array<float, 4>& background, const std::array<float, 4>& accent) {
+    constexpr float kLift = 0.09F;
+    std::array<float, 4> result{};
+    for (size_t component = 0; component < 3; ++component) {
+      result[component] = std::lerp(background[component], accent[component], kLift);
+    }
+    result[3] = 1.0F;
+    return result;
   }
 
   inline std::string rgbaHex(const std::array<float, 4>& color) {

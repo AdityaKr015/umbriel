@@ -5,9 +5,11 @@
 #include "scene/hint_rect.h"
 #include "scene/surface_blur.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 #include <wayland-server-core.h>
 
@@ -125,6 +127,14 @@ namespace umbriel {
       SurfaceBlur blur;
       std::vector<std::unique_ptr<CardSurface>> surfaces;
       wlr_box box{}; // content box in layout coordinates
+      wlr_scene_tree* badge = nullptr;
+      wlr_scene_rect* badgeRect = nullptr;
+      wlr_scene_buffer* badgeText = nullptr;
+      int badgeWidth = 0;
+      int badgeHeight = 0;
+      std::array<float, 4> badgeBackground{};
+      std::string shortcut;
+      size_t shortcutMatched = 0;
     };
 
     struct OutputState {
@@ -177,6 +187,12 @@ namespace umbriel {
     void applyProgress();
     void layoutOutput(OutputState& state);
     void layoutCard(Card& card, const RowMetrics& metrics, double rowScroll);
+    void assignShortcuts();
+    void renderCardShortcut(Card& card);
+    bool handleShortcutKey(uint32_t keysym);
+    void refreshShortcutMatches();
+    void clearShortcutInput();
+    void updateShortcutAssignments();
 
     void startAnimation(double target, bool closing);
     void finishAnimation();
@@ -212,6 +228,8 @@ namespace umbriel {
     View* m_pendingFocus = nullptr;
     bool m_cardPresentationDirty = false;
     bool m_gestureOpenedHere = false;
+    bool m_shortcutsDirty = true;
+    std::string m_shortcutInput;
 
     Card* m_pressCard = nullptr;
     Workspace* m_pressWorkspace = nullptr;

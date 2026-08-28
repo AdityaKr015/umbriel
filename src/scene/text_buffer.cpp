@@ -57,6 +57,13 @@ namespace {
 
 namespace umbriel {
 
+  std::string escapeMarkup(std::string_view text) {
+    gchar* escaped = g_markup_escape_text(text.data(), static_cast<gssize>(text.size()));
+    std::string result(escaped);
+    g_free(escaped);
+    return result;
+  }
+
   TextBufferResult renderTextBuffer(const TextBufferParams& params) {
     const double scale = std::max(1.0, params.scale);
 

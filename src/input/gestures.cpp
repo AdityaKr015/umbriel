@@ -173,7 +173,7 @@ namespace umbriel {
 
   void Gestures::handleSwipeBegin(void* data) {
     auto* event = static_cast<wlr_pointer_swipe_begin_event*>(data);
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
     m_server->cancelModifierTap();
     if (m_server->sessionLocked()) {
       silentCancel();
@@ -210,7 +210,7 @@ namespace umbriel {
 
   void Gestures::handleSwipeUpdate(void* data) {
     auto* event = static_cast<wlr_pointer_swipe_update_event*>(data);
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
     if (m_server->sessionLocked()) {
       silentCancel();
       return;
@@ -582,7 +582,7 @@ namespace umbriel {
 
   void Gestures::handlePinchBegin(void* data) {
     auto* event = static_cast<wlr_pointer_pinch_begin_event*>(data);
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
     m_server->cancelModifierTap();
     if (m_server->sessionLocked()) {
       return;
@@ -594,7 +594,7 @@ namespace umbriel {
 
   void Gestures::handlePinchUpdate(void* data) {
     auto* event = static_cast<wlr_pointer_pinch_update_event*>(data);
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
     if (m_server->sessionLocked()) {
       return;
     }
@@ -619,7 +619,7 @@ namespace umbriel {
 
   void Gestures::handleHoldBegin(void* data) {
     auto* event = static_cast<wlr_pointer_hold_begin_event*>(data);
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
     m_server->cancelModifierTap();
     if (m_server->sessionLocked()) {
       return;

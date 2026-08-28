@@ -622,7 +622,7 @@ namespace umbriel {
   void Cursor::handleMotion(void* data) {
     auto* event = static_cast<wlr_pointer_motion_event*>(data);
     noteActivity();
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
 
     wlr_relative_pointer_manager_v1_send_relative_motion(
         m_server->relativePointerManager(), m_server->seat()->wlr(), static_cast<uint64_t>(event->time_msec) * 1000,
@@ -656,7 +656,7 @@ namespace umbriel {
   void Cursor::handleMotionAbsolute(void* data) {
     auto* event = static_cast<wlr_pointer_motion_absolute_event*>(data);
     noteActivity();
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
     if (m_activeConstraint != nullptr && m_activeConstraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
       if (!constraintSurfaceActive()) {
         clearConstraint();
@@ -691,7 +691,11 @@ namespace umbriel {
 
   void Cursor::processButton(uint32_t timeMsec, uint32_t button, wl_pointer_button_state state) {
     noteActivity();
-    m_server->notifyIdleActivity();
+    if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+      m_server->notifyInputActivity();
+    } else {
+      m_server->notifyIdleActivity();
+    }
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
       cancelHotCorner();
       m_server->cancelModifierTap();
@@ -886,7 +890,11 @@ namespace umbriel {
   void Cursor::handleAxis(void* data) {
     auto* event = static_cast<wlr_pointer_axis_event*>(data);
     noteActivity();
-    m_server->notifyIdleActivity();
+    if (event->delta == 0 && event->delta_discrete == 0) {
+      m_server->notifyIdleActivity();
+    } else {
+      m_server->notifyInputActivity();
+    }
     m_server->cancelModifierTap();
     cancelHotCorner();
 
@@ -1006,7 +1014,7 @@ namespace umbriel {
 
   void Cursor::handleTouchDown(void* data) {
     auto* event = static_cast<wlr_touch_down_event*>(data);
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
     m_server->cancelModifierTap();
 
     double lx = 0;
@@ -1052,7 +1060,7 @@ namespace umbriel {
 
   void Cursor::handleTouchMotion(void* data) {
     auto* event = static_cast<wlr_touch_motion_event*>(data);
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
 
     wlr_seat* seat = m_server->seat()->wlr();
     wlr_touch_point* point = wlr_seat_touch_get_point(seat, event->touch_id);
@@ -1420,7 +1428,7 @@ namespace umbriel {
   void Cursor::handleTabletToolAxis(void* data) {
     auto* event = static_cast<wlr_tablet_tool_axis_event*>(data);
     noteActivity();
-    m_server->notifyIdleActivity();
+    m_server->notifyInputActivity();
     TabletToolState* state = toolState(event->tool);
     const double oldX = m_cursor->x;
     const double oldY = m_cursor->y;
@@ -1460,7 +1468,11 @@ namespace umbriel {
   void Cursor::handleTabletToolProximity(void* data) {
     auto* event = static_cast<wlr_tablet_tool_proximity_event*>(data);
     noteActivity();
-    m_server->notifyIdleActivity();
+    if (event->state == WLR_TABLET_TOOL_PROXIMITY_IN) {
+      m_server->notifyInputActivity();
+    } else {
+      m_server->notifyIdleActivity();
+    }
     if (event->state == WLR_TABLET_TOOL_PROXIMITY_IN) {
       TabletToolState* state = toolState(event->tool);
       state->x = event->x;
@@ -1497,7 +1509,11 @@ namespace umbriel {
   void Cursor::handleTabletToolTip(void* data) {
     auto* event = static_cast<wlr_tablet_tool_tip_event*>(data);
     noteActivity();
-    m_server->notifyIdleActivity();
+    if (event->state == WLR_TABLET_TOOL_TIP_DOWN) {
+      m_server->notifyInputActivity();
+    } else {
+      m_server->notifyIdleActivity();
+    }
     if (event->state == WLR_TABLET_TOOL_TIP_DOWN) {
       m_server->cancelModifierTap();
     }
@@ -1537,7 +1553,11 @@ namespace umbriel {
   void Cursor::handleTabletToolButton(void* data) {
     auto* event = static_cast<wlr_tablet_tool_button_event*>(data);
     noteActivity();
-    m_server->notifyIdleActivity();
+    if (event->state == WLR_BUTTON_PRESSED) {
+      m_server->notifyInputActivity();
+    } else {
+      m_server->notifyIdleActivity();
+    }
     TabletToolState* state = toolState(event->tool);
     const bool pressed = event->state == WLR_BUTTON_PRESSED;
     if (!state->emulating) {

@@ -306,8 +306,12 @@ namespace umbriel {
     void raiseLockTree();
     void updateLockBlank();
     void updateBackdrop();
+    // Continuations such as releases and repeats still reset the idle timer, but only a new press or motion may wake
+    // outputs that were powered off through a DPMS action.
     void notifyIdleActivity();
-    // Input activity wakes outputs powered down through the DPMS actions.
+    void notifyInputActivity();
+    // Input wake applies only when every configured output is powered off. A named DPMS action therefore remains in
+    // effect while another configured output is still awake.
     void wakeDpmsOutputs();
     void refocus(Output* preferred = nullptr) { m_focus.refocus(preferred); }
     void reconcileDynamicWorkspaces();

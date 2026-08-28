@@ -173,7 +173,11 @@ namespace umbriel {
 
   void Keyboard::handleKey(void* data) {
     auto* event = static_cast<wlr_keyboard_key_event*>(data);
-    m_server->notifyIdleActivity();
+    if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+      m_server->notifyInputActivity();
+    } else {
+      m_server->notifyIdleActivity();
+    }
     wlr_seat* seat = m_server->seat()->wlr();
 
     uint32_t keycode = event->keycode + 8;

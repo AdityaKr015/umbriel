@@ -220,6 +220,8 @@ default_width_fraction = 0.55  # 0.1-0.9
 middle_click_paste = true      # primary-selection clipboard, applies on reload
 
 [input.keyboard]
+# ASCII keybind fallback uses only layouts listed for this keyboard; a single
+# non-Latin layout has no implicit Latin fallback.
 layout = ""                    # "us,de" loads both; switch with keyboard-layout-next
 variant = ""
 options = ""                   # XKB options, e.g. "grp:alt_shift_toggle"

@@ -4,6 +4,7 @@
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "input/shortcut_keysym.h"
 #include "input/text_input.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
@@ -183,11 +184,9 @@ namespace umbriel {
     uint32_t keycode = event->keycode + 8;
     const xkb_keysym_t* syms = nullptr;
     int nsyms = xkb_state_key_get_syms(m_keyboard->xkb_state, keycode, &syms);
-    const xkb_keysym_t* rawSyms = nullptr;
     xkb_keymap* keymap = xkb_state_get_keymap(m_keyboard->xkb_state);
     const xkb_layout_index_t layout = xkb_state_key_get_layout(m_keyboard->xkb_state, keycode);
-    const int nraw = xkb_keymap_key_get_syms_by_level(keymap, keycode, layout, 0, &rawSyms);
-    const uint32_t rawSym = nraw > 0 ? rawSyms[0] : XKB_KEY_NoSymbol;
+    const uint32_t rawSym = rawShortcutKeysym(keymap, keycode, layout);
     const bool modifierOnly = nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R;
 
     bool handled = false;

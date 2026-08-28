@@ -317,7 +317,7 @@ namespace umbriel {
           // "submap" shares the name:<text> syntax with "spawn", but its
           // argument is a submap name rather than a shell command.
           if (spec.action == KeybindAction::Submap) {
-            if (arg == "disable") {
+            if (!validSubmapName(arg)) {
               return false;
             }
             output.payload = SubmapArg{.name = std::string(arg)};

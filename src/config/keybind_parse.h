@@ -6,6 +6,7 @@
 #include "layout/layout.h"
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -130,6 +131,11 @@ namespace umbriel {
     std::string name;
     bool operator==(const SubmapArg&) const = default;
   };
+
+  [[nodiscard]] inline bool validSubmapName(std::string_view name) {
+    return !name.empty() && name != "disable" && !name.contains(']');
+  }
+
   struct WidthArg {
     double fraction = 0.0;
     bool operator==(const WidthArg&) const = default;
@@ -174,6 +180,8 @@ namespace umbriel {
     // What it does.
     KeybindAction action = KeybindAction::None;
     KeybindPayload payload;
+    // Optional layer transition after the primary action is dispatched.
+    std::optional<SubmapArg> submapAfter;
 
     bool operator==(const Keybind&) const = default;
   };

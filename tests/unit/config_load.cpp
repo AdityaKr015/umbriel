@@ -308,6 +308,47 @@ UMBRIEL_TEST(keybindTableLoadsAllowWhenLocked) {
   CHECK(!containsDiagnostic(store, "allow_when_locked"));
 }
 
+UMBRIEL_TEST(keybindTableLoadsPostActionSubmaps) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write(
+      "[keybinds]\n"
+      "\"submap[outer],1\" = { action = \"workspace-switch:2\", submap = \"reset\" }\n"
+      "\"submap[outer],2\" = { action = \"workspace-switch:3\", submap = \"inner\", repeat = true }\n"
+      "\"submap[outer],3\" = { action = \"workspace-switch:4\", repeat = true }\n"
+  );
+  CHECK(store.reload().success);
+
+  bool resets = false;
+  bool entersInner = false;
+  bool remainsPersistent = false;
+  for (const auto& bind : store.config().keybinds) {
+    if (!bind.submapAfter.has_value()) {
+      remainsPersistent = remainsPersistent || (bind.submap == "outer" && bind.repeat);
+      continue;
+    }
+    CHECK(!bind.repeat);
+    resets = resets || umbriel::isSubmapReset(*bind.submapAfter);
+    entersInner = entersInner || bind.submapAfter->name == "inner";
+  }
+  CHECK(resets);
+  CHECK(entersInner);
+  CHECK(remainsPersistent);
+  CHECK(!containsDiagnostic(store, "submap"));
+
+  file.write(
+      "[keybinds]\n"
+      "\"submap[outer],1\" = { action = \"workspace-switch:2\", submap = \"\" }\n"
+      "\"submap[outer],2\" = { action = \"workspace-switch:3\", submap = \"disable\" }\n"
+      "\"submap[outer],3\" = { action = \"workspace-switch:4\", submap = \"invalid]name\" }\n"
+  );
+  CHECK(store.reload().success);
+  CHECK(containsDiagnostic(store, "submap must be a non-empty name"));
+  CHECK(std::ranges::none_of(store.config().keybinds, [](const auto& bind) { return bind.submap == "outer"; }));
+}
+
 UMBRIEL_TEST(hotCornersLoadActionsAndValidate) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

@@ -1344,6 +1344,8 @@ namespace umbriel {
       for (const auto& [key, entry] : *section) {
         const std::string chord(key.str());
         std::string actionStr;
+        std::string submapAfter;
+        bool hasSubmapAfter = false;
         bool repeatBind = true;
         bool allowWhenLocked = false;
 
@@ -1353,6 +1355,9 @@ namespace umbriel {
           // bad action must not also be told its `repeat` key is unknown.
           bind.boolean("repeat", repeatBind);
           bind.boolean("allow_when_locked", allowWhenLocked);
+          const toml::node* submapNode = bind.node("submap");
+          hasSubmapAfter = submapNode != nullptr && submapNode->is_string();
+          bind.text("submap", submapAfter);
           const toml::node* actionNode = bind.take("action");
           if (actionNode == nullptr) {
             warnAt(entry.source(), "ignoring keybind '{}' (table needs an 'action' string)", chord);
@@ -1373,6 +1378,14 @@ namespace umbriel {
           actionStr = *value;
         }
 
+        if (hasSubmapAfter && !validSubmapName(submapAfter)) {
+          warnAt(
+              entry.source(),
+              "ignoring keybind '{}' (submap must be a non-empty name without ']' and may not be 'disable')", chord
+          );
+          continue;
+        }
+
         Keybind binding;
         if (!parseChord(chord, binding)) {
           if (binding.keysym != XKB_KEY_NoSymbol && binding.modifiers == 0 && !binding.useMod) {
@@ -1382,7 +1395,10 @@ namespace umbriel {
           }
           continue;
         }
-        binding.repeat = binding.modifierOnly ? false : repeatBind;
+        if (hasSubmapAfter) {
+          binding.submapAfter = SubmapArg{.name = std::move(submapAfter)};
+        }
+        binding.repeat = repeatBind && !binding.modifierOnly && !binding.submapAfter.has_value();
         binding.allowWhenLocked = allowWhenLocked;
         if (!parseAction(actionStr, binding)) {
           warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, actionStr);

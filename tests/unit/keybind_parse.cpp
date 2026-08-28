@@ -226,6 +226,7 @@ UMBRIEL_TEST(submapNoLongerSharesStorageWithSpawn) {
 
   CHECK(!parseAction("submap", bind));
   CHECK(!parseAction("submap:", bind));
+  CHECK(!parseAction("submap:invalid]name", bind));
 
   CHECK(parseAction("spawn:resize", bind));
   CHECK(umbriel::payloadIf<umbriel::SubmapArg>(bind) == nullptr);

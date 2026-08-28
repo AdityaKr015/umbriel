@@ -239,18 +239,18 @@ namespace umbriel {
           quitConfirmConsumed = true;
         }
       }
-      const Keybind* matched = nullptr;
+      std::optional<Keybind> matched;
       if (!quitConfirmConsumed) {
         for (int i = 0; i < nsyms; ++i) {
-          const Keybind* result = m_server->handleKeybind(syms[i], rawSym, modifiers);
-          if (result != nullptr) {
-            matched = result;
+          std::optional<Keybind> result = m_server->handleKeybind(syms[i], rawSym, modifiers);
+          if (result.has_value()) {
+            matched = std::move(result);
             handled = true;
             break;
           }
         }
       }
-      if (matched != nullptr) {
+      if (matched.has_value()) {
         armRepeat(*matched, event->keycode);
       }
       // Unbound plain keys drive overview navigation instead of reaching clients, unless a layer surface (launcher,
@@ -267,7 +267,7 @@ namespace umbriel {
       // Any non-modifier key press dismisses the cheatsheet, except the key
       // that just toggled it.
       if (Cheatsheet* sheet = m_server->cheatsheet(); sheet != nullptr && sheet->visible()) {
-        const bool cheatsheetBind = matched != nullptr && isCheatsheetAction(matched->action);
+        const bool cheatsheetBind = matched.has_value() && isCheatsheetAction(matched->action);
         if (!cheatsheetBind && !modifierOnly) {
           sheet->hide();
         }

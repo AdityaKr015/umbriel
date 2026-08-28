@@ -364,6 +364,7 @@ default_size = [800, 600]
 # default_floating = true
 # default_focused = false
 # focus_on_activate = true
+# opacity = 0.95                 # bypassed while fullscreen, restored after leaving fullscreen
 # vrr = "always"                # override the output VRR policy while focused
 # tearing = true                 # force a tearing request; false vetoes the client hint
 # hdr = "fullscreen"            # override the output HDR policy while focused

@@ -258,14 +258,9 @@ namespace umbriel {
     // Record the dimensions currently rendered by the scene. Client geometry can lag a layout configure, so
     // presentation consumers must not infer their size independently from the committed geometry.
     void trackPresentedSize(int width, int height);
-    // Re-apply the effective fade, rule, and drag opacity to surface buffers. wlroots scene surface reconfigure (on
-    // commit or clip change) resets buffer opacity, so this must run afterward while opacity is below 1.
-    [[nodiscard]] float effectiveOpacity() const {
-      // Overshooting curves can push this past [0, 1]; wlr_scene_buffer_set_opacity asserts.
-      return std::clamp(
-          m_fadeAlpha * m_ruleOpacity * m_dragOpacity * static_cast<float>(m_focusDim.current()), 0.0F, 1.0F
-      );
-    }
+    // Re-apply compositor-owned opacity to surface buffers. Fullscreen bypasses window-rule opacity, while fades,
+    // drag opacity, focus dimming, and client-provided alpha remain active.
+    [[nodiscard]] float effectiveOpacity() const;
     void applyEffectiveOpacity();
     void flushPendingEffectiveOpacity();
     void watchOpacitySurfaceTree(wlr_surface* root);

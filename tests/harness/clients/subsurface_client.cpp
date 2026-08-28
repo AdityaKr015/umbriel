@@ -3,7 +3,8 @@
 // mostly empty GTK parent). The parent buffer is opaque red and the child buffer opaque blue, so a screenshot tells
 // which surface a pixel came from and whether the compositor rounded the subsurface to the window corner radius. Prints
 // "mapped" once both surfaces are up, then keeps the connection alive until the harness kills it. The optional
-// "animate" mode continually damages only the child, matching Firefox's independent MozContainer commits.
+// "animate" mode continually damages only the child, matching Firefox's independent MozContainer commits. Setting
+// TRANSLUCENT_CONTENT gives the child premultiplied half-alpha magenta content over a transparent parent.
 // Usage: subsurface-client [title [width height [animate]]]. The dimensions are a fallback: a configure adopts it.
 
 #include "xdg-shell-client-protocol.h"
@@ -48,6 +49,7 @@ namespace {
     bool initialFullscreen = false;
     bool fullscreenBeforeMap = false;
     bool transparentContent = false;
+    bool translucentContent = false;
     bool reportedFirstConfigure = false;
   };
 
@@ -125,8 +127,10 @@ namespace {
       return true;
     }
 
-    const uint32_t parentColor = state.transparentContent ? 0x00000000 : 0xFFFF0000;
-    const uint32_t childColor = state.transparentContent ? 0x00000000 : 0xFF0000FF;
+    const uint32_t parentColor = state.transparentContent || state.translucentContent ? 0x00000000 : 0xFFFF0000;
+    const uint32_t childColor = state.transparentContent ? 0x00000000
+        : state.translucentContent                       ? 0x80800080
+                                                         : 0xFF0000FF;
     Buffer parent = createBuffer(state, parentColor);
     Buffer child = createBuffer(state, childColor);
     if (parent.resource == nullptr || child.resource == nullptr) {
@@ -248,6 +252,7 @@ int main(int argc, char** argv) {
   state.initialFullscreen = std::getenv("INITIAL_FULLSCREEN") != nullptr;
   state.fullscreenBeforeMap = std::getenv("FULLSCREEN_BEFORE_MAP") != nullptr;
   state.transparentContent = std::getenv("TRANSPARENT_CONTENT") != nullptr;
+  state.translucentContent = std::getenv("TRANSLUCENT_CONTENT") != nullptr;
   if (argc > 2) {
     state.width = std::max(1, std::atoi(argv[2]));
   }

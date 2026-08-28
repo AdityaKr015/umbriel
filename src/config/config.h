@@ -544,6 +544,7 @@ namespace umbriel {
         std::optional<bool> naturalScroll;
         std::optional<AccelProfile> accelProfile;
         std::optional<double> sensitivity;
+        std::optional<bool> disableWhileTyping;
         bool operator==(const Touchpad&) const = default;
       } touchpad;
 
@@ -596,6 +597,7 @@ namespace umbriel {
         std::optional<bool> naturalScroll;
         std::optional<AccelProfile> accelProfile;
         std::optional<double> sensitivity;
+        std::optional<bool> disableWhileTyping;
         bool operator==(const Device&) const = default;
       };
 

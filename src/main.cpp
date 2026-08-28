@@ -254,7 +254,7 @@ int main(int argc, char** argv) {
   }
 
   try {
-    kLog.info("starting umbriel");
+    kLog.info("starting umbriel version={} commit={}", UMBRIEL_VERSION, UMBRIEL_GIT_REVISION);
     umbriel::loadConfig(configPath);
     umbriel::Server server;
 

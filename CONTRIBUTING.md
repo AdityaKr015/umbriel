@@ -187,15 +187,17 @@ in the submodule, and push to the fork.
 
 ## Debugging
 
-Debug and ASan builds log at debug level to stderr and to `$XDG_CACHE_HOME/umbriel/umbriel.log`
-(fallback `~/.cache/umbriel/umbriel.log`).
+- Debug and ASan builds log at debug level to stderr and to `$XDG_CACHE_HOME/umbriel/umbriel.log`
+  (fallback `~/.cache/umbriel/umbriel.log`). The first startup record includes the
+  release version and commit revision, which helps identify the exact binary
+  behind a report.
 
 Run under AddressSanitizer with `just run asan`.
 
 The CLI doubles as a runtime inspection and IPC surface against a running compositor:
 
 ```sh
-umbriel -v | --version            # print the release version and build revision
+umbriel -v | --version            # print the release version and commit revision
 umbriel validate [-c <config>]   # check a config file without starting
 umbriel outputs                  # list connectors and modes
 umbriel windows                  # list windows (focused *, urgent !)

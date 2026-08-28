@@ -872,9 +872,56 @@ namespace umbriel {
       }
     }
 
-    std::vector<std::string> labels = shortcutLabels(eligible.size(), config().overview.shortcutKeys);
-    for (size_t index = 0; index < eligible.size(); ++index) {
-      updateCard(*eligible[index], std::move(labels[index]));
+    const auto assignmentFor = [this](const View* view) -> ShortcutAssignment* {
+      const auto assignment = std::ranges::find_if(m_shortcutAssignments, [view](const ShortcutAssignment& item) {
+        return item.view == view;
+      });
+      return assignment == m_shortcutAssignments.end() ? nullptr : &*assignment;
+    };
+    for (Card* card : eligible) {
+      if (assignmentFor(card->view) == nullptr) {
+        m_shortcutAssignments.push_back({.view = card->view, .label = {}});
+      }
+    }
+
+    m_shortcutLabelCapacity = std::max(m_shortcutLabelCapacity, m_shortcutAssignments.size());
+    const std::vector<std::string> labels = shortcutLabels(m_shortcutLabelCapacity, config().overview.shortcutKeys);
+    std::vector<bool> used(labels.size(), false);
+    const auto labelIndex = [&labels](std::string_view label) {
+      for (size_t index = 0; index < labels.size(); ++index) {
+        if (labels[index] == label) {
+          return index;
+        }
+      }
+      return labels.size();
+    };
+
+    for (ShortcutAssignment& assignment : m_shortcutAssignments) {
+      const size_t index = labelIndex(assignment.label);
+      if (index == labels.size() || used[index]) {
+        assignment.label.clear();
+      } else {
+        used[index] = true;
+      }
+    }
+    size_t nextUnused = 0;
+    for (ShortcutAssignment& assignment : m_shortcutAssignments) {
+      if (!assignment.label.empty()) {
+        continue;
+      }
+      while (nextUnused < used.size() && used[nextUnused]) {
+        ++nextUnused;
+      }
+      if (nextUnused == labels.size()) {
+        break;
+      }
+      assignment.label = labels[nextUnused];
+      used[nextUnused] = true;
+    }
+
+    for (Card* card : eligible) {
+      ShortcutAssignment* assignment = assignmentFor(card->view);
+      updateCard(*card, assignment != nullptr ? assignment->label : std::string{});
     }
     for (const auto& state : m_outputs) {
       for (const auto& card : state->cards) {
@@ -1210,6 +1257,8 @@ namespace umbriel {
     m_cardPresentationDirty = false;
     m_gestureOpenedHere = false;
     m_shortcutInput.clear();
+    m_shortcutAssignments.clear();
+    m_shortcutLabelCapacity = 0;
     m_server->reconcileDynamicWorkspaces();
   }
 
@@ -1262,6 +1311,9 @@ namespace umbriel {
     if (!m_active || view == nullptr) {
       return;
     }
+    std::erase_if(m_shortcutAssignments, [view](const ShortcutAssignment& assignment) {
+      return assignment.view == view;
+    });
     if (m_pendingFocus == view) {
       m_pendingFocus = nullptr;
     }

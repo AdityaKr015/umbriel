@@ -127,10 +127,10 @@ sleep 0.5
 "$CLIENT" shortcut-fourth 1200 700 > "$FOURTH_LOG" 2>&1 &
 wait_for_count 4
 sleep 0.5
-pointer tap 2
+pointer tap 5
 sleep 0.5
 if [[ $(active_title) != shortcut-fourth ]]; then
-  echo "a window mapped during the overview did not receive shortcut 1: $("$UMBRIEL" windows --json)"
+  echo "a new window stole an existing badge instead of receiving shortcut 4: $("$UMBRIEL" windows --json)"
   exit 1
 fi
 
@@ -150,4 +150,4 @@ if [[ $(active_title) != shortcut-first ]]; then
   exit 1
 fi
 
-echo "overview shortcuts survive mapping, scrolling, and drag-drop while honoring opt-out"
+echo "overview shortcuts keep stable IDs through mapping, scrolling, and drag-drop while honoring opt-out"

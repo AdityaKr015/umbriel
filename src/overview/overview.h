@@ -137,6 +137,11 @@ namespace umbriel {
       size_t shortcutMatched = 0;
     };
 
+    struct ShortcutAssignment {
+      View* view = nullptr;
+      std::string label;
+    };
+
     struct OutputState {
       Output* output = nullptr;
       wlr_scene_tree* tree = nullptr;
@@ -230,6 +235,8 @@ namespace umbriel {
     bool m_gestureOpenedHere = false;
     bool m_shortcutsDirty = true;
     std::string m_shortcutInput;
+    std::vector<ShortcutAssignment> m_shortcutAssignments;
+    size_t m_shortcutLabelCapacity = 0;
 
     Card* m_pressCard = nullptr;
     Workspace* m_pressWorkspace = nullptr;

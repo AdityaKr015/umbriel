@@ -271,7 +271,12 @@ namespace umbriel {
     ResolvedWorkspaceSet result;
     if (!names) {
       result.dynamic = true;
-      result.workspaces.push_back({"1", resolveWorkspaceLayout(config, outputName, "1", 0)});
+      const size_t count = config.workspaces.emptyAbove ? 2 : 1;
+      result.workspaces.reserve(count);
+      for (size_t index = 0; index < count; ++index) {
+        const std::string name = std::to_string(index + 1);
+        result.workspaces.push_back({name, resolveWorkspaceLayout(config, outputName, name, index)});
+      }
       return result;
     }
 

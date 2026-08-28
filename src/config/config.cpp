@@ -913,7 +913,10 @@ namespace umbriel {
     }
 
     void readWorkspaceSettings(Section& root, Config& loaded) {
-      root.sub("workspaces", [&](Section& s) { s.boolean("back_and_forth", loaded.workspaces.backAndForth); });
+      root.sub("workspaces", [&](Section& s) {
+        s.boolean("back_and_forth", loaded.workspaces.backAndForth)
+            .boolean("empty_above", loaded.workspaces.emptyAbove);
+      });
     }
 
     void readGeneral(Section& root, Config& loaded) {

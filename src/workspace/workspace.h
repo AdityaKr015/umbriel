@@ -210,6 +210,7 @@ namespace umbriel {
   private:
     std::unique_ptr<Workspace> createConfiguredWorkspace(ResolvedWorkspace workspace, size_t index);
     Workspace* appendDynamicWorkspace();
+    Workspace* prependDynamicWorkspace();
     void refreshDynamicWorkspaceMetadata();
 
     struct Slide {

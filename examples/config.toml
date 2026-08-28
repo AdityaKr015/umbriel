@@ -30,6 +30,7 @@ honor_restored_maximize = false # let apps restore their saved maximized state
 
 [workspaces]
 back_and_forth = false
+empty_above = false
 
 # Colors ---------------------------------------------------------------------
 

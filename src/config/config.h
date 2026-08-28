@@ -496,6 +496,7 @@ namespace umbriel {
     struct Workspaces {
       // Re-selecting the active workspace jumps back to the previous one.
       bool backAndForth = false;
+      bool emptyAbove = false;
       bool operator==(const Workspaces&) const = default;
     } workspaces;
 

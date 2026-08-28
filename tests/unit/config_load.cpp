@@ -265,6 +265,25 @@ UMBRIEL_TEST(scrollingDefaultWidthIsOptional) {
   CHECK(!store.config().layout.scrolling.defaultWidthFraction.has_value());
 }
 
+UMBRIEL_TEST(expandSingleColumnParsesAndDefaultsToFalse) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("");
+
+  CHECK(store.reload().success);
+  CHECK(!store.config().layout.scrolling.expandSingleColumn);
+
+  file.write("[layout.scrolling]\nexpand_single_column = true\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().layout.scrolling.expandSingleColumn);
+
+  file.write("[layout.scrolling]\nexpand_single_column = false\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().layout.scrolling.expandSingleColumn);
+}
+
 UMBRIEL_TEST(modKeyIsUserConfigurable) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

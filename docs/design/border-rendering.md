@@ -85,10 +85,17 @@ fractional scale that crop edge falls between texels: the toolkit renders its
 window into a pixel-aligned sub-rect and leaves the straddling texel to its
 transparent shadow margin. Sampling it draws one see-through line along the
 cropped edge. `fx_render_texture_options.sample_box` carries the whole texels the
-source region owns, rounded inward, and the texture shaders clamp every
-coordinate into it. The edge texel inside the crop is duplicated instead, which
-is both opaque and sharp. An empty `sample_box` samples the whole texture, so a
-source box reaching past the buffer still duplicates its edge texel.
+source region owns, rounded inward, and selects a texture shader variant that
+clamps every coordinate into it. The edge texel inside the crop is duplicated
+instead, which is both opaque and sharp.
+
+The clamp variant is confined to source boxes that cross an interior crop edge.
+A source box reaching past the buffer itself, including the deliberate one-texel
+destination adoption above, already duplicates its edge texel through
+`GL_CLAMP_TO_EDGE` and stays on the regular shader. This split is deliberate:
+clamping inside every texture fetch caused constant full-session flicker and
+tearing on NVIDIA (595.71.05, open modules), so an empty `sample_box` must keep
+the fetch byte-identical to a build without the clamp.
 
 ## Scene lifecycle
 

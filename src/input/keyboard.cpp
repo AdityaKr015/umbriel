@@ -126,6 +126,13 @@ namespace umbriel {
     m_server->notifyKeyboardLayoutIpc();
   }
 
+  wlr_input_method_keyboard_grab_v2* Keyboard::activeInputMethodGrab() const {
+    if (m_server->sessionLocked()) {
+      return nullptr;
+    }
+    return m_server->inputMethodRelay()->grabForKeyboard(m_keyboard);
+  }
+
   Keyboard::~Keyboard() {
     if (m_repeatTimer != nullptr) {
       wl_event_source_remove(m_repeatTimer);
@@ -160,7 +167,7 @@ namespace umbriel {
     cancelRepeat();
     m_server->notifyIdleActivity();
     wlr_seat* seat = m_server->seat()->wlr();
-    wlr_input_method_keyboard_grab_v2* grab = m_server->inputMethodRelay()->grabForKeyboard(m_keyboard);
+    wlr_input_method_keyboard_grab_v2* grab = activeInputMethodGrab();
     if (grab != nullptr) {
       wlr_input_method_keyboard_grab_v2_set_keyboard(grab, m_keyboard);
       wlr_input_method_keyboard_grab_v2_send_modifiers(grab, &m_keyboard->modifiers);
@@ -273,7 +280,7 @@ namespace umbriel {
     }
 
     if (!handled) {
-      wlr_input_method_keyboard_grab_v2* grab = m_server->inputMethodRelay()->grabForKeyboard(m_keyboard);
+      wlr_input_method_keyboard_grab_v2* grab = activeInputMethodGrab();
       if (grab != nullptr) {
         wlr_input_method_keyboard_grab_v2_set_keyboard(grab, m_keyboard);
         wlr_input_method_keyboard_grab_v2_send_key(grab, event->time_msec, event->keycode, event->state);

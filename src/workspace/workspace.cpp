@@ -226,7 +226,18 @@ namespace umbriel {
     if (view == nullptr || !view->mapped() || !view->tiled() || m_layout->columnOf(view) >= 0) {
       return;
     }
-    const int focusedColumn = m_layout->columnOf(m_focusedView);
+    int focusedColumn = m_layout->columnOf(m_focusedView);
+    if (focusedColumn < 0 && m_group != nullptr) {
+      for (const auto& entry : m_group->server()->registry().all()) {
+        View* candidate = entry.get();
+        if (candidate != view && candidate->mapped() && candidate->tiled() && candidate->workspace() == this) {
+          focusedColumn = m_layout->columnOf(candidate);
+          if (focusedColumn >= 0) {
+            break;
+          }
+        }
+      }
+    }
     const int index = focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout->columns().size());
     m_layout->insertView(view, index);
     if (ScrollingLayout* scrolling = scrollingLayout(); scrolling != nullptr) {

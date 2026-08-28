@@ -203,8 +203,8 @@ default_width_fraction = 0.55  # 0.1-0.9
 
 # [output."DP-1"]
 # mode = "2560x1440@144"
-# position = [0, 0]
-# scale = 1.25
+# position = [0, 0]             # logical top-left; omit for automatic placement
+# scale = 1.25                  # divides the mode size in layout coordinates
 # vrr = "fullscreen"            # "disabled" (default), "always", or "fullscreen"
 # tearing = true                 # allow eligible fullscreen clients to request tearing
 # direct_scanout = true           # false forces composition on this output

@@ -14,6 +14,7 @@
 #include "workspace/workspace.h"
 
 #include <string_view>
+#include <utility>
 
 namespace umbriel {
   namespace {
@@ -242,8 +243,9 @@ namespace umbriel {
       if (effective != expected) {
         continue;
       }
-      const Keybind matched = bind;
-      return executeKeybindAction(matched) ? std::optional<Keybind>{matched} : std::nullopt;
+      std::optional<Keybind> matched{bind};
+      const bool handled = executeKeybindAction(*matched);
+      return handled ? std::move(matched) : std::nullopt;
     }
 
     return std::nullopt;

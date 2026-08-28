@@ -902,8 +902,8 @@ UMBRIEL_TEST(touchpadAccelerationDefaultsToUnset) {
 }
 
 UMBRIEL_TEST(touchpadScrollFactorDefaultsToUnset) {
-    const umbriel::Config defaults;
-    CHECK(!defaults.input.touchpad.scrollFactor.has_value());
+  const umbriel::Config defaults;
+  CHECK(!defaults.input.touchpad.scrollFactor.has_value());
 }
 
 UMBRIEL_TEST(touchpadDisableWhileTypingDefaultsToUnset) {

@@ -146,6 +146,12 @@ namespace umbriel {
     void setDragPosition(int x, int y);
     // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
     void clampFloatingPosition();
+    // Send a floating size configure; the pending request is the resize-action basis until committed.
+    void requestFloatingSize(int width, int height);
+    // The pending compositor request, else the committed geometry.
+    [[nodiscard]] std::array<int, 2> floatingSize() const;
+    // The home output's usable area.
+    [[nodiscard]] wlr_box floatingUsableArea() const;
     // Record the floating position as a fraction of the current usable area,
     // so a cross-output move can land the window proportionally. No-op when tiled.
     void rememberFloatingPosition();
@@ -177,6 +183,10 @@ namespace umbriel {
     void applyDeferredUnfullscreen();
     void setMaximizedToEdges(bool maximized);
     void toggleMaximizedToEdges();
+    // Leave maximized or edges-maximized state without restoring the pre-maximize
+    // box: the caller assigns its own size next. Floating windows only; tiled
+    // windows clear their full-width state through the layout.
+    void dropMaximizedForResize();
     // Detach from the scrolling layout (float) or re-insert as a tiled column.
     void setFloating(bool floating, bool focus = true);
     void toggleFloating();
@@ -318,13 +328,11 @@ namespace umbriel {
     void notifyOutputScale();
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
-    void requestFloatingSize(int width, int height);
     void beginFloatingResize(uint32_t edges);
     void resizeFloating(int width, int height);
     void finishFloatingResize();
     void syncFloatingResizePosition();
     void adoptFloatingClientSize();
-    [[nodiscard]] wlr_box floatingUsableArea() const;
     void placeInUsableArea(const std::optional<WindowPosition>& position = std::nullopt);
     void setPinned(bool pinned, bool focus);
     void updateForeignIdentity();

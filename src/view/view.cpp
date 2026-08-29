@@ -1486,7 +1486,15 @@ namespace umbriel {
   }
 
   void View::requestFloatingSize(int width, int height) {
-    m_floating.recordSizeRequest(wlr_xdg_toplevel_set_size(m_toplevel, width, height));
+    m_floating.recordSizeRequest(width, height, wlr_xdg_toplevel_set_size(m_toplevel, width, height));
+  }
+
+  std::array<int, 2> View::floatingSize() const {
+    if (const auto& pending = m_floating.pendingSize()) {
+      return *pending;
+    }
+    const wlr_box& geo = m_toplevel->base->geometry;
+    return {geo.width, geo.height};
   }
   void View::beginFloatingResize(uint32_t edges) {
     const wlr_box& geo = m_toplevel->base->geometry;
@@ -2285,6 +2293,28 @@ namespace umbriel {
   }
 
   void View::toggleMaximizedToEdges() { setMaximizedToEdges(!m_maximizedToEdges); }
+
+  void View::dropMaximizedForResize() {
+    if (m_tiled || !m_toplevel->base->initialized) {
+      return;
+    }
+    if (!m_maximizedToEdges && !m_toplevel->scheduled.maximized) {
+      return;
+    }
+    // Deliberately not setMaximized(false)/setMaximizedToEdges(false): those
+    // replay the restore box, which would undo the size the caller is about to
+    // request and snap the window back to its pre-maximize origin.
+    cancelSizeAnimation();
+    const bool wasEdges = m_maximizedToEdges;
+    m_maximizedToEdges = false;
+    m_restoreMaximizedToEdges = false;
+    m_hasMaximizeRestoreBox = false;
+    wlr_xdg_toplevel_set_maximized(m_toplevel, false);
+    if (wasEdges) {
+      showDecorations(!m_toplevel->scheduled.fullscreen);
+    }
+    updateForeignState();
+  }
 
   void View::handleRequestFullscreen() {
     if (!m_toplevel->base->initialized) {

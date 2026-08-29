@@ -1,5 +1,5 @@
-// Reserves a top exclusive zone on one named output and stays mapped until
-// that output closes the layer surface.
+// Maps either a top exclusive zone or, when the height is zero, a full-output
+// background layer. It stays mapped until that output closes the layer surface.
 
 #include <wayland-client.h>
 
@@ -46,6 +46,7 @@ namespace {
     bool ready = false;
     bool closed = false;
     bool failed = false;
+    uint32_t fillColor = 0xFF202020;
   };
 
   void
@@ -83,7 +84,7 @@ namespace {
       close(fd);
       return buffer;
     }
-    std::fill_n(static_cast<uint32_t*>(buffer.pixels), buffer.size / sizeof(uint32_t), 0xFF202020);
+    std::fill_n(static_cast<uint32_t*>(buffer.pixels), buffer.size / sizeof(uint32_t), state.fillColor);
     wl_shm_pool* pool = wl_shm_create_pool(state.shm, fd, static_cast<int>(buffer.size));
     buffer.resource = wl_shm_pool_create_buffer(pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
     wl_shm_pool_destroy(pool);
@@ -176,17 +177,21 @@ namespace {
 
 int main(int argc, char** argv) {
   if (argc != 3) {
-    std::println(stderr, "usage: layer-client <output> <exclusive-height>");
+    std::println(stderr, "usage: layer-client <output> <exclusive-height-or-zero-background>");
     return EXIT_FAILURE;
   }
   const std::string outputName = argv[1];
   const int exclusiveHeight = std::atoi(argv[2]);
-  if (exclusiveHeight <= 0) {
-    std::println(stderr, "layer-client: exclusive height must be positive");
+  if (exclusiveHeight < 0) {
+    std::println(stderr, "layer-client: exclusive height must not be negative");
     return EXIT_FAILURE;
   }
 
   State state;
+  const bool background = exclusiveHeight == 0;
+  if (background) {
+    state.fillColor = 0xFF5577AA;
+  }
   state.display = wl_display_connect(nullptr);
   if (state.display == nullptr) {
     std::println(stderr, "layer-client: cannot connect to WAYLAND_DISPLAY");
@@ -209,16 +214,20 @@ int main(int argc, char** argv) {
 
   state.surface = wl_compositor_create_surface(state.compositor);
   state.layerSurface = zwlr_layer_shell_v1_get_layer_surface(
-      state.layerShell, state.surface, (*selected)->resource, ZWLR_LAYER_SHELL_V1_LAYER_TOP,
+      state.layerShell, state.surface, (*selected)->resource,
+      background ? ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND : ZWLR_LAYER_SHELL_V1_LAYER_TOP,
       "umbriel-output-restore-regression"
   );
   zwlr_layer_surface_v1_add_listener(state.layerSurface, &kLayerSurfaceListener, &state);
-  zwlr_layer_surface_v1_set_size(state.layerSurface, 0, static_cast<uint32_t>(exclusiveHeight));
-  zwlr_layer_surface_v1_set_anchor(
-      state.layerSurface,
-      ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT
-  );
-  zwlr_layer_surface_v1_set_exclusive_zone(state.layerSurface, exclusiveHeight);
+  zwlr_layer_surface_v1_set_size(state.layerSurface, 0, background ? 0U : static_cast<uint32_t>(exclusiveHeight));
+  uint32_t anchors =
+      ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
+  if (background) {
+    anchors |= ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM;
+  } else {
+    zwlr_layer_surface_v1_set_exclusive_zone(state.layerSurface, exclusiveHeight);
+  }
+  zwlr_layer_surface_v1_set_anchor(state.layerSurface, anchors);
   wl_surface_commit(state.surface);
 
   while (!state.closed && wl_display_dispatch(state.display) >= 0) {

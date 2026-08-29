@@ -30,6 +30,7 @@ namespace {
     config.edgePad = 10;
     config.master.position = umbriel::MasterPosition::Left;
     config.master.defaultWidthFraction = 0.55;
+    config.master.newOnTop = true;
     return config;
   }
 
@@ -89,6 +90,15 @@ UMBRIEL_TEST(newViewsJoinTheTopOfTheStack) {
   fixture.layout.arrange(kUsable);
   CHECK(fixture.layout.targetBox(stub(2)).y < fixture.layout.targetBox(stub(1)).y);
   CHECK_EQ(fixture.layout.rowOf(stub(2)), 0);
+}
+
+UMBRIEL_TEST(newViewsJoinTheBottomOfTheStackWhenConfigured) {
+  Fixture fixture;
+  fixture.config.master.newOnTop = false;
+  fixture.addViews(3);
+  fixture.layout.arrange(kUsable);
+  CHECK(fixture.layout.targetBox(stub(2)).y > fixture.layout.targetBox(stub(1)).y);
+  CHECK_EQ(fixture.layout.rowOf(stub(2)), 1);
 }
 
 UMBRIEL_TEST(stackRowsSplitTheHeightWithGaps) {

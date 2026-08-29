@@ -192,6 +192,7 @@ expand_single_column = true # fill lone column to viewport width
 [layout.master]
 position = "left"              # "left" or "right"
 default_width_fraction = 0.55  # 0.1-0.9
+new_on_top = true             # place new windows at the top of the stack
 
 # Workspace layout overrides (see docs/user/workspaces.md#workspace-rules)
 # [[workspace]]

@@ -247,8 +247,9 @@ namespace umbriel {
       m_master.views.push_back(view);
       m_master.weights.push_back(1.0);
     } else {
-      m_stack.views.insert(m_stack.views.begin(), view);
-      m_stack.weights.insert(m_stack.weights.begin(), 1.0);
+      const bool newOnTop = m_config == nullptr || m_config->master.newOnTop;
+      m_stack.views.insert(newOnTop ? m_stack.views.begin() : m_stack.views.end(), view);
+      m_stack.weights.insert(newOnTop ? m_stack.weights.begin() : m_stack.weights.end(), 1.0);
     }
     rebuildColumns();
   }

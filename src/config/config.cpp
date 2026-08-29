@@ -396,7 +396,8 @@ namespace umbriel {
               if (const auto position = readMasterPosition(sm, layoutContext + ".master")) {
                 overrides.master.position = position;
               }
-              sm.real("default_width_fraction", 0.1, 0.9, overrides.master.defaultWidthFraction);
+              sm.real("default_width_fraction", 0.1, 0.9, overrides.master.defaultWidthFraction)
+                  .boolean("new_on_top", overrides.master.newOnTop);
             });
           },
           layoutContext
@@ -926,7 +927,8 @@ namespace umbriel {
           if (const auto position = readMasterPosition(sm, "layout.master")) {
             loaded.layout.master.position = *position;
           }
-          sm.real("default_width_fraction", 0.1, 0.9, loaded.layout.master.defaultWidthFraction);
+          sm.real("default_width_fraction", 0.1, 0.9, loaded.layout.master.defaultWidthFraction)
+              .boolean("new_on_top", loaded.layout.master.newOnTop);
         });
       });
     }

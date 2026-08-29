@@ -58,6 +58,7 @@ namespace umbriel {
     } dwindle;
     struct Master {
       std::optional<double> defaultWidthFraction;
+      std::optional<bool> newOnTop;
       std::optional<MasterPosition> position;
       bool operator==(const Master&) const = default;
     } master;
@@ -93,6 +94,7 @@ namespace umbriel {
     } dwindle;
     struct Master {
       double defaultWidthFraction = 0.55;
+      bool newOnTop = true;
       MasterPosition position = MasterPosition::Left;
       bool operator==(const Master&) const = default;
     } master;
@@ -511,6 +513,7 @@ namespace umbriel {
       } dwindle;
       struct Master {
         double defaultWidthFraction = 0.55;
+        bool newOnTop = true;
         MasterPosition position = MasterPosition::Left;
         bool operator==(const Master&) const = default;
       } master;

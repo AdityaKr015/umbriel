@@ -72,6 +72,9 @@ namespace umbriel {
       if (overrides.master.defaultWidthFraction) {
         resolved.master.defaultWidthFraction = *overrides.master.defaultWidthFraction;
       }
+      if (overrides.master.newOnTop) {
+        resolved.master.newOnTop = *overrides.master.newOnTop;
+      }
       if (overrides.master.position) {
         resolved.master.position = *overrides.master.position;
       }
@@ -253,6 +256,7 @@ namespace umbriel {
     resolved.scrolling.expandSingleColumn = config.layout.scrolling.expandSingleColumn;
     resolved.dwindle.preserveSplit = config.layout.dwindle.preserveSplit;
     resolved.master.defaultWidthFraction = config.layout.master.defaultWidthFraction;
+    resolved.master.newOnTop = config.layout.master.newOnTop;
     resolved.master.position = config.layout.master.position;
     const int borderWidth = config.appearance.totalBorderWidth();
     resolved.totalGap = resolved.gap + 2 * borderWidth;

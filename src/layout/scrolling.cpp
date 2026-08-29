@@ -557,6 +557,15 @@ namespace umbriel {
     return true;
   }
 
+  void ScrollingLayout::reconcileFocusedColumn(int columnIndex, int viewportPrimary) {
+    if (m_config->scrolling.centerFocused) {
+      centerColumn(columnIndex, viewportPrimary);
+      return;
+    }
+    m_centeredRest = false;
+    ensureVisible(columnIndex, viewportPrimary);
+  }
+
   double ScrollingLayout::targetScrollForEnsureVisible(int columnIndex, int viewportPrimary, bool force) const {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size()) || viewportPrimary <= 0) {
       return m_scroll;
@@ -568,6 +577,9 @@ namespace umbriel {
     if (width >= viewportPrimary) {
       const double cover = static_cast<double>(x) + static_cast<double>(width - viewportPrimary) / 2.0;
       return std::clamp(cover, 0.0, max);
+    }
+    if (m_config->scrolling.centerFocused) {
+      return static_cast<double>(x) - (viewportPrimary - width) / 2.0;
     }
     if (force) {
       return std::clamp(static_cast<double>(x), 0.0, max);
@@ -611,12 +623,12 @@ namespace umbriel {
 
   void ScrollingLayout::ensureVisible(int columnIndex, int viewportPrimary) {
     const double target = targetScrollForEnsureVisible(columnIndex, viewportPrimary, false);
-    m_centeredRest = m_centeredRest && target == m_scroll;
+    m_centeredRest = m_config->scrolling.centerFocused || (m_centeredRest && target == m_scroll);
     m_scroll = target;
   }
 
   void ScrollingLayout::snapVisible(int columnIndex, int viewportPrimary) {
-    m_centeredRest = false;
+    m_centeredRest = m_config->scrolling.centerFocused;
     m_scroll = targetScrollForEnsureVisible(columnIndex, viewportPrimary, true);
   }
 

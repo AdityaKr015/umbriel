@@ -726,6 +726,46 @@ UMBRIEL_TEST(snapVisibleCentersFullWidthColumn) {
   CHECK_EQ(fixture.layout.scroll(), expected);
 }
 
+UMBRIEL_TEST(centerFocusedCentersAnInteriorColumn) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.config.scrolling.centerFocused = true;
+
+  fixture.layout.ensureVisible(1, kViewport);
+
+  const int centeredX = fixture.layout.columnX(1, kViewport)
+      + fixture.layout.columnWidth(1, kViewport) / 2
+      - static_cast<int>(std::lround(fixture.layout.scroll()));
+  CHECK_EQ(centeredX, kViewport / 2);
+  CHECK(fixture.layout.centeredRest());
+}
+
+UMBRIEL_TEST(centerFocusedAllowsEdgeColumnsToOverscroll) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.config.scrolling.centerFocused = true;
+
+  fixture.layout.ensureVisible(0, kViewport);
+  CHECK(fixture.layout.scroll() < 0.0);
+
+  fixture.layout.ensureVisible(2, kViewport);
+  CHECK(fixture.layout.scroll() > static_cast<double>(fixture.layout.maxScroll(kViewport)));
+}
+
+UMBRIEL_TEST(disablingCenterFocusedReturnsTheFocusedColumnToTheScrollRange) {
+  Fixture fixture;
+  fixture.addColumns(3);
+  fixture.config.scrolling.centerFocused = true;
+  fixture.layout.reconcileFocusedColumn(2, kViewport);
+  CHECK(fixture.layout.scroll() > static_cast<double>(fixture.layout.maxScroll(kViewport)));
+
+  fixture.config.scrolling.centerFocused = false;
+  fixture.layout.reconcileFocusedColumn(2, kViewport);
+
+  CHECK_EQ(fixture.layout.scroll(), static_cast<double>(fixture.layout.maxScroll(kViewport)));
+  CHECK(!fixture.layout.centeredRest());
+}
+
 UMBRIEL_TEST(ensureVisibleIsANoOpForAnAlreadyVisibleColumn) {
   Fixture fixture;
   fixture.addColumns(6);

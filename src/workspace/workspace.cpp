@@ -1083,10 +1083,16 @@ namespace umbriel {
   }
 
   void Workspace::applyLayoutConfig(ResolvedLayoutConfig layoutConfig) {
+    const bool centerFocusedChanged = m_layoutConfig.scrolling.centerFocused != layoutConfig.scrolling.centerFocused;
     m_layoutConfig = std::move(layoutConfig);
     if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
       m_layout->setConfig(&m_layoutConfig);
       m_layout->setConstraints(&viewLayoutConstraints);
+      if (centerFocusedChanged) {
+        if (ScrollingLayout* scrolling = scrollingLayout(); scrolling != nullptr && m_focusedView != nullptr) {
+          scrolling->reconcileFocusedColumn(scrolling->columnOf(m_focusedView), scrollViewportExtent());
+        }
+      }
       markArrange(true);
       return;
     }

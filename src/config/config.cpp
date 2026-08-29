@@ -389,7 +389,8 @@ namespace umbriel {
               }
               sc.boolean("expand_single_column", overrides.scrolling.expandSingleColumn);
               sc.real("default_width_fraction", 0.1, 1.0, overrides.scrolling.defaultWidthFraction)
-                  .boolean("center_underfull_strip", overrides.scrolling.centerUnderfullStrip);
+                  .boolean("center_underfull_strip", overrides.scrolling.centerUnderfullStrip)
+                  .boolean("center_focused", overrides.scrolling.centerFocused);
             });
             s.sub("dwindle", [&](Section& sd) { sd.boolean("preserve_split", overrides.dwindle.preserveSplit); });
             s.sub("master", [&](Section& sm) {
@@ -920,7 +921,8 @@ namespace umbriel {
           }
           sc.boolean("expand_single_column", loaded.layout.scrolling.expandSingleColumn);
           sc.real("default_width_fraction", 0.1, 1.0, loaded.layout.scrolling.defaultWidthFraction)
-              .boolean("center_underfull_strip", loaded.layout.scrolling.centerUnderfullStrip);
+              .boolean("center_underfull_strip", loaded.layout.scrolling.centerUnderfullStrip)
+              .boolean("center_focused", loaded.layout.scrolling.centerFocused);
         });
         s.sub("dwindle", [&](Section& sd) { sd.boolean("preserve_split", loaded.layout.dwindle.preserveSplit); });
         s.sub("master", [&](Section& sm) {

@@ -331,7 +331,7 @@ namespace umbriel {
     // Session
     bool actionSpawn(Server& server, const Keybind& bind, std::string* /*error*/) {
       const auto* arg = payloadIf<SpawnArg>(bind);
-      server.spawn(arg != nullptr ? arg->command.c_str() : "");
+      server.spawn(arg != nullptr ? arg->command.c_str() : "", nullptr, true);
       return true;
     }
 

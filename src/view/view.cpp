@@ -15,6 +15,7 @@
 // clang-format off
 #include <algorithm>
 #include <cmath>
+#include <utility>
 #include "wlr.h"
 // clang-format on
 #include "workspace/scratchpad.h"
@@ -1700,8 +1701,14 @@ namespace umbriel {
 
     updateForeignIdentity();
     updateForeignState();
-    if (!m_server->sessionLocked() && rule.defaultFocused.value_or(true)) {
-      m_server->focusView(this);
+    const std::optional<bool> deferredActivation = std::exchange(m_deferredActivationCompositorIssued, std::nullopt);
+    const bool activateOnMap = deferredActivation.has_value()
+        && rule.focusOnActivate.value_or(*deferredActivation || config().general.focusOnActivate);
+    const bool focusOnMap = deferredActivation.has_value() ? activateOnMap : rule.defaultFocused.value_or(true);
+    if (!m_server->sessionLocked() && focusOnMap) {
+      m_server->focusView(this, activateOnMap ? FocusReason::XdgActivation : FocusReason::Startup);
+    } else if (deferredActivation.has_value()) {
+      setUrgent(true);
     }
 
     // Opening state is compositor-owned. Clients may restore a saved maximized
@@ -1857,6 +1864,14 @@ namespace umbriel {
     m_floating.clearSizeRequest();
     if (m_displacedHome) {
       m_server->scheduleDisplacedViewRestore();
+    }
+  }
+
+  void View::deferActivation(bool compositorIssued) {
+    // A compositor-issued launch request wins if clients race multiple tokens during role creation. An ordinary
+    // client request must not downgrade it before the first buffer arrives.
+    if (compositorIssued || !m_deferredActivationCompositorIssued.has_value()) {
+      m_deferredActivationCompositorIssued = compositorIssued;
     }
   }
 

@@ -16,7 +16,7 @@ autostart = []
 # mod_key = "Super"            # Mod in keybinds; defaults to Super (Alt when nested)
 xwayland = true                # requires restart to change
 show_cheatsheet = true         # show keybinds overlay on startup
-focus_on_activate = false      # activation requests mark urgent without stealing focus
+focus_on_activate = false      # unsolicited activation marks urgent; spawn launches may still focus
 honor_restored_maximize = false # let apps restore their saved maximized state
 
 # Applied only at session startup. Native sessions also publish these values to

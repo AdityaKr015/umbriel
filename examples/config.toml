@@ -362,6 +362,11 @@ follows_mouse = false
 blur = true
 blur_optimized = true
 
+# Open an app maximized while keeping its parented dialogs at their natural size
+# [[window_rule]]
+# match.app_id = "^example-app$"
+# default_maximize = true
+
 # Open a specific app maximized to the usable-area edges (no gaps or borders)
 # [[window_rule]]
 # match.app_id = "^discord$"

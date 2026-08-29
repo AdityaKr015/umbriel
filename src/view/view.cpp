@@ -2790,19 +2790,12 @@ namespace umbriel {
             clampXdgWidth((*rule.defaultSize)[0], hints), clampXdgHeight((*rule.defaultSize)[1], hints)
         );
       } else if (rule.defaultWidth || rule.defaultHeight) {
-        // Pixel rules outrank fractions, an axis without either keeps the last
-        // acked (then scheduled) size instead of reverting to client preference.
+        // Pixel rules outrank fractions; an axis without either keeps the size
+        // the float is heading to instead of reverting to client preference.
         const wlr_box usable = floatingUsableArea();
-        int width =
-            rule.defaultWidth ? floatingFractionSize(*rule.defaultWidth, usable.width) : m_toplevel->current.width;
-        int height =
-            rule.defaultHeight ? floatingFractionSize(*rule.defaultHeight, usable.height) : m_toplevel->current.height;
-        if (width <= 0) {
-          width = m_toplevel->scheduled.width;
-        }
-        if (height <= 0) {
-          height = m_toplevel->scheduled.height;
-        }
+        const auto [keepWidth, keepHeight] = floatingSize();
+        const int width = rule.defaultWidth ? floatingFractionSize(*rule.defaultWidth, usable.width) : keepWidth;
+        const int height = rule.defaultHeight ? floatingFractionSize(*rule.defaultHeight, usable.height) : keepHeight;
         requestFloatingSize(
             width > 0 ? clampXdgWidth(width, hints) : 0, height > 0 ? clampXdgHeight(height, hints) : 0
         );

@@ -1013,6 +1013,18 @@ namespace umbriel {
     if (m_focusedView != nullptr && m_focusedView->maximizedToEdges()) {
       m_focusedView->setMaximizedToEdges(false);
     }
+    if (m_focusedView != nullptr && m_focusedView->mapped() && m_focusedView->floating()) {
+      // A float owns no column, so the full-width analogue is filling the usable
+      // area, matching what default_maximize gives a float at map time.
+      // Fullscreen already covers the output and owns the geometry: toggling
+      // under it would capture a fullscreen-sized restore box and leave the
+      // maximized flag inverted once fullscreen is dropped.
+      if (m_focusedView->toplevel()->scheduled.fullscreen) {
+        return false;
+      }
+      m_focusedView->toggleMaximized();
+      return true;
+    }
     const int column = m_layout->columnOf(m_focusedView);
     if (column < 0) {
       return false;

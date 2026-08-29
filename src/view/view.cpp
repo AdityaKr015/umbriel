@@ -2218,13 +2218,13 @@ namespace umbriel {
       const wlr_box usable = floatingUsableArea();
       if (usable.width > 0 && usable.height > 0) {
         wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
-        wlr_scene_node_set_position(&m_sceneTree->node, usable.x, usable.y);
-        m_decoration.setShadowPosition(usable.x, usable.y);
+        // setPosition, not a raw scene move: the animated position keeps its own
+        // target, and a stale one snaps the window back off the usable origin.
+        setPosition(usable.x, usable.y);
       }
     } else if (!maximized && wasMaximized && m_hasMaximizeRestoreBox) {
       requestFloatingSize(m_maximizeRestoreBox.width, m_maximizeRestoreBox.height);
-      wlr_scene_node_set_position(&m_sceneTree->node, m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
-      m_decoration.setShadowPosition(m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
+      setPosition(m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
       m_hasMaximizeRestoreBox = false;
     }
     wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
@@ -2293,6 +2293,8 @@ namespace umbriel {
   }
 
   void View::toggleMaximizedToEdges() { setMaximizedToEdges(!m_maximizedToEdges); }
+
+  void View::toggleMaximized() { setMaximized(!m_toplevel->scheduled.maximized); }
 
   void View::dropMaximizedForResize() {
     if (m_tiled || !m_toplevel->base->initialized) {

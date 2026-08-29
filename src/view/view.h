@@ -183,6 +183,10 @@ namespace umbriel {
     void applyDeferredUnfullscreen();
     void setMaximizedToEdges(bool maximized);
     void toggleMaximizedToEdges();
+    // Compositor-driven maximize toggle (keybind). A floating window fills its
+    // output's usable area and restores to the box it had before; tiled windows
+    // toggle their column's full-width state.
+    void toggleMaximized();
     // Leave maximized or edges-maximized state without restoring the pre-maximize
     // box: the caller assigns its own size next. Floating windows only; tiled
     // windows clear their full-width state through the layout.

@@ -59,6 +59,7 @@ struct wlr_xdg_activation_v1;
 struct wlr_xdg_activation_token_v1;
 struct wlr_xdg_decoration_manager_v1;
 struct wlr_xdg_shell;
+struct wlr_xdg_toplevel_tag_manager_v1;
 struct wlr_server_decoration_manager;
 struct wlr_ext_workspace_group_handle_v1;
 struct wlr_ext_workspace_handle_v1;
@@ -333,6 +334,7 @@ namespace umbriel {
     static void onNewOutput(wl_listener* listener, void* data);
     static void onNewInput(wl_listener* listener, void* data);
     static void onNewXdgToplevel(wl_listener* listener, void* data);
+    static void onSetXdgToplevelTag(wl_listener* listener, void* data);
     static void onNewXdgPopup(wl_listener* listener, void* data);
     static void onNewXdgDecoration(wl_listener* listener, void* data);
     static void onNewLayerSurface(wl_listener* listener, void* data);
@@ -447,6 +449,7 @@ namespace umbriel {
     std::unique_ptr<WineColorManager> m_wineColorManager;
     wlr_scene_output_layout* m_sceneLayout = nullptr;
     wlr_xdg_shell* m_xdgShell = nullptr;
+    wlr_xdg_toplevel_tag_manager_v1* m_xdgToplevelTagManager = nullptr;
     wlr_xdg_decoration_manager_v1* m_xdgDecorationManager = nullptr;
     wlr_server_decoration_manager* m_serverDecorationManager = nullptr;
     wlr_layer_shell_v1* m_layerShell = nullptr;
@@ -566,6 +569,7 @@ namespace umbriel {
     wl_listener m_newOutput{};
     wl_listener m_newInput{};
     wl_listener m_newXdgToplevel{};
+    wl_listener m_setXdgToplevelTag{};
     wl_listener m_newXdgPopup{};
     wl_listener m_newXdgDecoration{};
     wl_listener m_newLayerSurface{};

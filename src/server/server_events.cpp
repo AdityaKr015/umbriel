@@ -603,6 +603,15 @@ namespace umbriel {
     self->m_registry.add(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
   }
 
+  void Server::onSetXdgToplevelTag(wl_listener* listener, void* data) {
+    Server* self;
+    self = wl_container_of(listener, self, m_setXdgToplevelTag);
+    const auto* event = static_cast<wlr_xdg_toplevel_tag_manager_v1_set_tag_event*>(data);
+    if (View* view = viewForToplevel(*self, event->toplevel)) {
+      view->setXdgTag(event->tag != nullptr ? event->tag : "");
+    }
+  }
+
   void Server::onNewXdgPopup(wl_listener* /*listener*/, void* data) {
     auto* popup = static_cast<wlr_xdg_popup*>(data);
     // Layer-shell popups (and any popup without a parent yet) are handled

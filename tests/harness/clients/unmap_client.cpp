@@ -6,12 +6,14 @@
 // height]]. The optional dimensions let pointer checks expose a surface that fills its assigned tile. With
 // REMAP_ON_STDIN set, reading any byte performs a fresh initial commit and maps the same toplevel again.
 // CONTENT_TYPE sets a surface hint before its initial commit. CONTENT_TYPE_ON_SUBSURFACE places it on a rendering
-// child, matching current Proton behavior. CONTENT_TYPE_AFTER_MAP and TITLE_AFTER_MAP update both on stdin.
+// child, matching current Proton behavior. XDG_TAG sets a toplevel tag before the initial commit.
+// CONTENT_TYPE_AFTER_MAP, XDG_TAG_AFTER_MAP, and TITLE_AFTER_MAP update their metadata on stdin.
 
 #include "color-management-v1-client-protocol.h"
 #include "content-type-v1-client-protocol.h"
 #include "tearing-control-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
+#include "xdg-toplevel-tag-v1-client-protocol.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -60,6 +62,7 @@ namespace {
     wl_subcompositor* subcompositor = nullptr;
     wl_shm* shm = nullptr;
     xdg_wm_base* wmBase = nullptr;
+    xdg_toplevel_tag_manager_v1* xdgTagManager = nullptr;
     wp_content_type_manager_v1* contentTypeManager = nullptr;
     wp_content_type_v1* contentType = nullptr;
     wl_surface* contentTypeSurface = nullptr;
@@ -105,7 +108,7 @@ namespace {
     bool colorManagerDone = false;
     bool imageDescriptionReady = false;
     bool imageDescriptionFailed = false;
-    bool contentTypeUpdated = false;
+    bool metadataUpdated = false;
     int tearingHint = -1;
   };
 
@@ -434,6 +437,10 @@ namespace {
       state.wmBase =
           static_cast<xdg_wm_base*>(wl_registry_bind(registry, name, &xdg_wm_base_interface, std::min(version, 1U)));
       xdg_wm_base_add_listener(state.wmBase, &kWmBaseListener, &state);
+    } else if (std::strcmp(interface, xdg_toplevel_tag_manager_v1_interface.name) == 0) {
+      state.xdgTagManager = static_cast<xdg_toplevel_tag_manager_v1*>(
+          wl_registry_bind(registry, name, &xdg_toplevel_tag_manager_v1_interface, std::min(version, 1U))
+      );
     } else if (std::strcmp(interface, wp_content_type_manager_v1_interface.name) == 0) {
       state.contentTypeManager = static_cast<wp_content_type_manager_v1*>(
           wl_registry_bind(registry, name, &wp_content_type_manager_v1_interface, std::min(version, 1U))
@@ -494,8 +501,10 @@ int main(int argc, char** argv) {
   const bool remapOnStdin = std::getenv("REMAP_ON_STDIN") != nullptr;
   const char* initialContentType = std::getenv("CONTENT_TYPE");
   const char* updatedContentType = std::getenv("CONTENT_TYPE_AFTER_MAP");
+  const char* initialXdgTag = std::getenv("XDG_TAG");
+  const char* updatedXdgTag = std::getenv("XDG_TAG_AFTER_MAP");
   const char* updatedTitle = std::getenv("TITLE_AFTER_MAP");
-  const bool updateOnStdin = updatedContentType != nullptr || updatedTitle != nullptr;
+  const bool updateOnStdin = updatedContentType != nullptr || updatedXdgTag != nullptr || updatedTitle != nullptr;
   if (parseContentType(initialContentType) < 0 || parseContentType(updatedContentType) < 0) {
     std::println(stderr, "unmap-client: CONTENT_TYPE values must be none, photo, video, or game");
     return EXIT_FAILURE;
@@ -547,6 +556,10 @@ int main(int argc, char** argv) {
   }
   if ((initialContentType != nullptr || updatedContentType != nullptr) && state.contentTypeManager == nullptr) {
     std::println(stderr, "unmap-client: compositor is missing wp_content_type_manager_v1");
+    return EXIT_FAILURE;
+  }
+  if ((initialXdgTag != nullptr || updatedXdgTag != nullptr) && state.xdgTagManager == nullptr) {
+    std::println(stderr, "unmap-client: compositor is missing xdg_toplevel_tag_manager_v1");
     return EXIT_FAILURE;
   }
 
@@ -664,6 +677,9 @@ int main(int argc, char** argv) {
   if (const char* appId = std::getenv("APP_ID")) {
     xdg_toplevel_set_app_id(state.toplevel, appId);
   }
+  if (initialXdgTag != nullptr) {
+    xdg_toplevel_tag_manager_v1_set_toplevel_tag(state.xdgTagManager, state.toplevel, initialXdgTag);
+  }
   if (state.requestMaximized) {
     // A restored client state is requested before the initial commit. This lets
     // the compositor include it in the first configure instead of treating it
@@ -695,19 +711,22 @@ int main(int argc, char** argv) {
       if ((sources[1].revents & POLLIN) != 0) {
         char command = 0;
         if (read(STDIN_FILENO, &command, 1) > 0) {
-          if (state.mapped && updateOnStdin && !state.contentTypeUpdated) {
+          if (state.mapped && updateOnStdin && !state.metadataUpdated) {
             if (updatedContentType != nullptr) {
               wp_content_type_v1_set_content_type(
                   state.contentType, static_cast<uint32_t>(parseContentType(updatedContentType))
               );
               wl_surface_commit(state.contentTypeSurface);
             }
+            if (updatedXdgTag != nullptr) {
+              xdg_toplevel_tag_manager_v1_set_toplevel_tag(state.xdgTagManager, state.toplevel, updatedXdgTag);
+            }
             if (updatedTitle != nullptr) {
               xdg_toplevel_set_title(state.toplevel, updatedTitle);
             }
             wl_display_flush(state.display);
-            state.contentTypeUpdated = true;
-            std::println("content-type-updated");
+            state.metadataUpdated = true;
+            std::println("{}", updatedXdgTag != nullptr ? "xdg-tag-updated" : "content-type-updated");
             std::fflush(stdout);
           } else if (!state.mapped && remapOnStdin) {
             state.closed = false;
@@ -762,6 +781,9 @@ int main(int argc, char** argv) {
   }
   if (state.contentTypeManager != nullptr) {
     wp_content_type_manager_v1_destroy(state.contentTypeManager);
+  }
+  if (state.xdgTagManager != nullptr) {
+    xdg_toplevel_tag_manager_v1_destroy(state.xdgTagManager);
   }
   if (state.keyboard != nullptr) {
     wl_keyboard_destroy(state.keyboard);

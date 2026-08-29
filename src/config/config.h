@@ -219,8 +219,10 @@ namespace umbriel {
   struct WindowRule {
     std::string appIdPattern;
     std::string titlePattern;
+    std::string xdgTagPattern;
     std::regex appIdRegex;
     std::regex titleRegex;
+    std::regex xdgTagRegex;
     std::optional<ContentType> matchContentType;
     std::optional<bool> matchFocused;
     std::optional<std::string> defaultOutput;
@@ -246,11 +248,12 @@ namespace umbriel {
     std::optional<double> blurIgnoreAlpha;
     std::optional<bool> blurOptimized;
 
-    // The compiled regexes are derived from the app ID and title patterns and
+    // The compiled regexes are derived from the app ID, title, and XDG tag patterns and
     // are not comparable, so equality is decided by the patterns themselves.
     [[nodiscard]] bool operator==(const WindowRule& other) const {
       return appIdPattern == other.appIdPattern
           && titlePattern == other.titlePattern
+          && xdgTagPattern == other.xdgTagPattern
           && matchContentType == other.matchContentType
           && matchFocused == other.matchFocused
           && defaultOutput == other.defaultOutput

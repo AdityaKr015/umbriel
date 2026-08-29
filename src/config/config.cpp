@@ -1491,6 +1491,20 @@ namespace umbriel {
                 valid = false;
               }
             }
+            if (const toml::node* xdgTagNode = matchKeys.take("xdg_tag")) {
+              if (const auto value = xdgTagNode->value<std::string>()) {
+                rule.xdgTagPattern = *value;
+                try {
+                  rule.xdgTagRegex = std::regex(rule.xdgTagPattern);
+                } catch (const std::regex_error& error) {
+                  warnAt(xdgTagNode->source(), "invalid regex in window_rule.match.xdg_tag: {}", error.what());
+                  valid = false;
+                }
+              } else {
+                warnAt(xdgTagNode->source(), "ignoring window_rule.match.xdg_tag (expected string)");
+                valid = false;
+              }
+            }
             if (const toml::node* contentTypeNode = matchKeys.take("content_type")) {
               if (const auto value = readContentType(*contentTypeNode)) {
                 rule.matchContentType = *value;

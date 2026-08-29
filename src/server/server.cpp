@@ -306,6 +306,13 @@ namespace umbriel {
     m_newXdgPopup.notify = onNewXdgPopup;
     wl_signal_add(&m_xdgShell->events.new_popup, &m_newXdgPopup);
 
+    m_xdgToplevelTagManager = wlr_xdg_toplevel_tag_manager_v1_create(m_display, 1);
+    if (m_xdgToplevelTagManager == nullptr) {
+      throw std::runtime_error("failed to create XDG toplevel tag manager");
+    }
+    m_setXdgToplevelTag.notify = onSetXdgToplevelTag;
+    wl_signal_add(&m_xdgToplevelTagManager->events.set_tag, &m_setXdgToplevelTag);
+
     m_xdgDecorationManager = wlr_xdg_decoration_manager_v1_create(m_display);
     m_newXdgDecoration.notify = onNewXdgDecoration;
     wl_signal_add(&m_xdgDecorationManager->events.new_toplevel_decoration, &m_newXdgDecoration);
@@ -397,6 +404,7 @@ namespace umbriel {
     wl_list_remove(&m_newOutput.link);
     wl_list_remove(&m_newInput.link);
     wl_list_remove(&m_newXdgToplevel.link);
+    wl_list_remove(&m_setXdgToplevelTag.link);
     wl_list_remove(&m_newXdgPopup.link);
     wl_list_remove(&m_newXdgDecoration.link);
     wl_list_remove(&m_newLayerSurface.link);

@@ -1663,6 +1663,7 @@ namespace umbriel {
     // using it.
     const ResolvedWindowRule rule = resolvedRules();
     m_initialRules = rule;
+    m_initialRulesXdgTag = m_xdgTag;
     m_initialRulesContentType = m_contentType;
     if (rule.defaultFloating) {
       m_tiled = !*rule.defaultFloating;
@@ -1851,12 +1852,24 @@ namespace umbriel {
     }
     m_initialRulesSettled = false;
     m_initialRules = {};
+    m_initialRulesXdgTag.clear();
     m_initialRulesContentType = ContentType::None;
     m_ruleOpacity = 1.0F;
     m_hasMaximizeRestoreBox = false;
     m_floating.clearSizeRequest();
     if (m_displacedHome) {
       m_server->scheduleDisplacedViewRestore();
+    }
+  }
+
+  void View::setXdgTag(std::string_view tag) {
+    if (m_xdgTag == tag) {
+      return;
+    }
+    m_xdgTag = tag;
+    m_server->scheduleIpcWindowsEvent();
+    if (m_mapped) {
+      applyDynamicRules();
     }
   }
 
@@ -2661,10 +2674,11 @@ namespace umbriel {
     if (!m_mapped) {
       return;
     }
-    // Late app ID or title settlement may select opening rules, but a content
-    // type changed after map must not select new one-shot behavior.
+    // Late app ID or title settlement may select opening rules, but identity
+    // hints changed after map must not select new one-shot behavior.
     const ResolvedWindowRule rule = resolveWindowRules(
-        config(), m_toplevel->app_id, m_toplevel->title, m_initialRulesContentType, m_borderFocusedState
+        config(), m_toplevel->app_id, m_toplevel->title, m_initialRulesXdgTag, m_initialRulesContentType,
+        m_borderFocusedState
     );
 
     // Identity can arrive after map. Apply a newly selected one-shot value, but
@@ -2728,7 +2742,7 @@ namespace umbriel {
       setMaximized(true);
     }
 
-    // Dynamic effects use the current content type, including one changed after map.
+    // Dynamic effects use the current identity hints, including ones changed after map.
     applyDynamicRules();
   }
 
@@ -2743,15 +2757,17 @@ namespace umbriel {
         && m_rulesFocused == m_borderFocusedState
         && m_rulesAppId == appIdView
         && m_rulesTitle == titleView
+        && m_rulesXdgTag == m_xdgTag
         && m_rulesContentType == m_contentType) {
       return m_rules;
     }
 
-    m_rules = resolveWindowRules(config(), appId, title, m_contentType, m_borderFocusedState);
+    m_rules = resolveWindowRules(config(), appId, title, m_xdgTag, m_contentType, m_borderFocusedState);
     m_rulesGeneration = generation;
     m_rulesFocused = m_borderFocusedState;
     m_rulesAppId = appIdView;
     m_rulesTitle = titleView;
+    m_rulesXdgTag = m_xdgTag;
     m_rulesContentType = m_contentType;
     return m_rules;
   }

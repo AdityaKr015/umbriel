@@ -49,6 +49,7 @@ namespace umbriel {
     View& operator=(const View&) = delete;
 
     [[nodiscard]] wlr_xdg_toplevel* toplevel() const { return m_toplevel; }
+    [[nodiscard]] const std::string& xdgTag() const { return m_xdgTag; }
     [[nodiscard]] ContentType contentType() const { return m_contentType; }
     [[nodiscard]] wlr_scene_tree* sceneTree() const { return m_sceneTree; }
     [[nodiscard]] wlr_scene_tree* captureTree() const;
@@ -234,6 +235,7 @@ namespace umbriel {
     void handleMap();
     void handleUnmap();
     void handleCommit(bool reconfigureOpeningState = false);
+    void setXdgTag(std::string_view tag);
     void syncContentType(wlr_surface* committedSurface = nullptr);
     void handleDestroy();
     void handleRequestMove();
@@ -333,10 +335,10 @@ namespace umbriel {
     // config, and applyDynamicRules is reached on focus changes and on every title change, so resolving twice per pass
     // is work a terminal that retitles per command pays repeatedly.
     void applyDynamicRules(const ResolvedWindowRule* resolved = nullptr);
-    // Window rules, resolved at most once per (config, app-id, title, content type, focus). Resolution runs every
-    // rule's regexes, and it is reached on focus changes and on every identity change; a terminal that retitles per
-    // command would otherwise pay the whole rule set on each one. Every input is part of the key: `match.is_focused`
-    // makes focus a matching criterion, not just a consumer of the result.
+    // Window rules, resolved at most once per (config, app-id, title, XDG tag, content type, focus). Resolution runs
+    // every rule's regexes, and it is reached on focus changes and on every identity change; a terminal that retitles
+    // per command would otherwise pay the whole rule set on each one. Every input is part of the key:
+    // `match.is_focused` makes focus a matching criterion, not just a consumer of the result.
     [[nodiscard]] const ResolvedWindowRule& resolvedRules();
 
     // Cache for resolvedRules(); m_rulesGeneration 0 means never resolved.
@@ -344,15 +346,18 @@ namespace umbriel {
     uint64_t m_rulesGeneration = 0;
     std::string m_rulesAppId;
     std::string m_rulesTitle;
+    std::string m_rulesXdgTag;
     ContentType m_rulesContentType = ContentType::None;
     bool m_rulesFocused = false;
     // One-shot effects already applied at map. Late identity resolution only
     // reapplies a field when its resolved value changes.
     ResolvedWindowRule m_initialRules;
+    std::string m_initialRulesXdgTag;
     ContentType m_initialRulesContentType = ContentType::None;
 
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
+    std::string m_xdgTag;
     ContentType m_contentType = ContentType::None;
     wlr_scene_tree* m_sceneTree = nullptr;
     // A separate scene containing only client-owned surfaces. Window capture

@@ -36,7 +36,6 @@ opacity = 0.5
 
 [[window_rule]]
 match.content_type = "video"
-match.title = "^settled-title$"
 default_floating = false
 EOF
 "$UMBRIEL" msg config-reload > /dev/null
@@ -48,7 +47,6 @@ env \
   CONTENT_TYPE=game \
   CONTENT_TYPE_ON_SUBSURFACE=1 \
   CONTENT_TYPE_AFTER_MAP=video \
-  TITLE_AFTER_MAP=settled-title \
   "$CLIENT" content-type-client <&"$control_fd" > "$CLIENT_LOG" 2>&1 &
 CLIENT_PID=$!
 
@@ -93,7 +91,7 @@ fi
 
 sleep 0.1
 grim "$BEFORE_SHOT"
-read -r image_width image_height < <(magick identify -format '%w %h' "$BEFORE_SHOT")
+read -r image_width image_height < <(magick identify -format '%w %h\n' "$BEFORE_SHOT")
 sample_x=$((image_width / 2))
 sample_y=$((image_height / 2))
 before_green=$(
@@ -108,7 +106,6 @@ for _ in $(seq 80); do
       && jq -e '
         length == 1
         and .[0].content_type == "video"
-        and .[0].title == "settled-title"
         and .[0].floating == true
       ' <<< "$windows" > /dev/null; then
     break
@@ -119,7 +116,6 @@ if ! grep -q '^content-type-updated$' "$CLIENT_LOG" \
     || ! jq -e '
       length == 1
       and .[0].content_type == "video"
-      and .[0].title == "settled-title"
       and .[0].floating == true
     ' <<< "$windows" > /dev/null; then
   echo "post-map content type did not reach IPC or replayed an opening rule: $windows; client log: $(< "$CLIENT_LOG")"

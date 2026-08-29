@@ -191,10 +191,11 @@ namespace umbriel {
         {"window-center", "", KeybindAction::WindowCenter},
         {"window-close", "[<window-id>]", KeybindAction::WindowClose, ActionArgKind::OptionalWindowId},
         {"window-consume-left", "", KeybindAction::WindowConsumeLeft},
-        {"window-consume-or-expel", "", KeybindAction::WindowConsumeOrExpel},
+        {"window-consume-or-expel-left", "", KeybindAction::WindowConsumeOrExpelLeft},
+        {"window-consume-or-expel-right", "", KeybindAction::WindowConsumeOrExpelRight},
+        {"window-consume-right", "", KeybindAction::WindowConsumeRight},
         {"window-cycle-width", "", KeybindAction::WindowCycleWidth},
         {"window-cycle-width-back", "", KeybindAction::WindowCycleWidthBack},
-        {"window-expel-right", "", KeybindAction::WindowExpelRight},
         {"window-focus", "<window-id>", KeybindAction::WindowFocusId, ActionArgKind::WindowId},
         {"window-focus-down", "", KeybindAction::WindowFocusDown},
         {"window-focus-last", "", KeybindAction::WindowFocusLast},
@@ -503,7 +504,7 @@ namespace umbriel {
     add(KeybindAction::WindowMoveDown, XKB_KEY_j, WLR_MODIFIER_SHIFT);
 
     add(KeybindAction::WindowConsumeLeft, XKB_KEY_comma);
-    add(KeybindAction::WindowExpelRight, XKB_KEY_period);
+    add(KeybindAction::WindowConsumeRight, XKB_KEY_period);
     add(KeybindAction::WindowCycleWidth, XKB_KEY_r);
     add(KeybindAction::WindowCycleWidthBack, XKB_KEY_r, WLR_MODIFIER_SHIFT);
     add(KeybindAction::ToggleFullscreen, XKB_KEY_f);

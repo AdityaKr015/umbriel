@@ -42,12 +42,7 @@ namespace umbriel {
       return error == std::errc{} && end == name.data() + name.size() ? index : std::numeric_limits<size_t>::max();
     }
 
-    View* viewForSurface(Server& server, wlr_surface* surface) {
-      if (surface == nullptr) {
-        return nullptr;
-      }
-      wlr_surface* root = wlr_surface_get_root_surface(surface);
-      wlr_xdg_toplevel* toplevel = wlr_xdg_toplevel_try_from_wlr_surface(root);
+    View* viewForToplevel(Server& server, wlr_xdg_toplevel* toplevel) {
       if (toplevel == nullptr) {
         return nullptr;
       }
@@ -57,6 +52,14 @@ namespace umbriel {
         }
       }
       return nullptr;
+    }
+
+    View* viewForSurface(Server& server, wlr_surface* surface) {
+      if (surface == nullptr) {
+        return nullptr;
+      }
+      wlr_surface* root = wlr_surface_get_root_surface(surface);
+      return viewForToplevel(server, wlr_xdg_toplevel_try_from_wlr_surface(root));
     }
 
     pid_t surfaceClientPid(wlr_surface* surface) {

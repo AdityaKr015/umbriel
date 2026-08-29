@@ -195,11 +195,33 @@ namespace umbriel {
     bool operator==(const WindowPosition&) const = default;
   };
 
+  enum class ContentType {
+    None,
+    Photo,
+    Video,
+    Game,
+  };
+
+  [[nodiscard]] inline constexpr std::string_view contentTypeName(ContentType type) {
+    switch (type) {
+    case ContentType::None:
+      return "none";
+    case ContentType::Photo:
+      return "photo";
+    case ContentType::Video:
+      return "video";
+    case ContentType::Game:
+      return "game";
+    }
+    return "none";
+  }
+
   struct WindowRule {
     std::string appIdPattern;
     std::string titlePattern;
     std::regex appIdRegex;
     std::regex titleRegex;
+    std::optional<ContentType> matchContentType;
     std::optional<bool> matchFocused;
     std::optional<std::string> defaultOutput;
     std::optional<bool> defaultFloating;
@@ -224,11 +246,12 @@ namespace umbriel {
     std::optional<double> blurIgnoreAlpha;
     std::optional<bool> blurOptimized;
 
-    // The compiled regexes are derived from the patterns and are not comparable,
-    // so equality is decided by the patterns they came from.
+    // The compiled regexes are derived from the app ID and title patterns and
+    // are not comparable, so equality is decided by the patterns themselves.
     [[nodiscard]] bool operator==(const WindowRule& other) const {
       return appIdPattern == other.appIdPattern
           && titlePattern == other.titlePattern
+          && matchContentType == other.matchContentType
           && matchFocused == other.matchFocused
           && defaultOutput == other.defaultOutput
           && defaultFloating == other.defaultFloating

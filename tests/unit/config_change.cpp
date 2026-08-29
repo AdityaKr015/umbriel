@@ -5,6 +5,7 @@ using umbriel::AccelProfile;
 using umbriel::Config;
 using umbriel::ConfigChange;
 using umbriel::ConfigEffects;
+using umbriel::ContentType;
 using umbriel::Keybind;
 using umbriel::LayerRule;
 using umbriel::ModifierKey;
@@ -220,13 +221,15 @@ UMBRIEL_TEST(ruleEqualityIgnoresTheCompiledRegex) {
   CHECK(!ConfigChange::between(before, after).windowRules);
 }
 
-UMBRIEL_TEST(ruleEqualityStillSeesAPatternChange) {
+UMBRIEL_TEST(ruleEqualityStillSeesAContentTypeChange) {
   Config before;
   Config after;
   WindowRule first;
   first.appIdPattern = "kitty";
+  first.matchContentType = ContentType::Game;
   WindowRule second;
-  second.appIdPattern = "foot";
+  second.appIdPattern = "kitty";
+  second.matchContentType = ContentType::Video;
   before.windowRules.push_back(std::move(first));
   after.windowRules.push_back(std::move(second));
 
@@ -379,6 +382,7 @@ UMBRIEL_TEST(tearingPolicyDoesNotReapplyOutputStateOrInvalidateOverview) {
   Config forcedByRule = before;
   WindowRule game;
   game.appIdPattern = "^game$";
+  game.matchContentType = ContentType::Game;
   game.allowTearing = true;
   forcedByRule.windowRules.push_back(game);
   const ConfigEffects ruleEffects = ConfigEffects::between(before, forcedByRule);
@@ -393,12 +397,13 @@ UMBRIEL_TEST(tearingPolicyDoesNotReapplyOutputStateOrInvalidateOverview) {
   CHECK(ConfigEffects::between(before, vetoedByRule).tearingPolicy);
 
   Config changedMatcher = forcedByRule;
-  changedMatcher.windowRules[0].appIdPattern = "^other-game$";
+  changedMatcher.windowRules[0].matchContentType = ContentType::Video;
   CHECK(ConfigEffects::between(forcedByRule, changedMatcher).tearingPolicy);
 
   Config unrelatedRule = before;
   WindowRule translucent;
   translucent.appIdPattern = "^terminal$";
+  translucent.matchContentType = ContentType::Photo;
   translucent.opacity = 0.9;
   unrelatedRule.windowRules.push_back(translucent);
   const ConfigEffects unrelatedEffects = ConfigEffects::between(before, unrelatedRule);

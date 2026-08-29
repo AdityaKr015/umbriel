@@ -107,6 +107,24 @@ namespace umbriel {
     }
 
   } // namespace
+
+  ContentType Server::surfaceContentType(wlr_surface* surface) const {
+    if (m_contentTypeManager == nullptr || surface == nullptr) {
+      return ContentType::None;
+    }
+    switch (wlr_surface_get_content_type_v1(m_contentTypeManager, surface)) {
+    case WP_CONTENT_TYPE_V1_TYPE_PHOTO:
+      return ContentType::Photo;
+    case WP_CONTENT_TYPE_V1_TYPE_VIDEO:
+      return ContentType::Video;
+    case WP_CONTENT_TYPE_V1_TYPE_GAME:
+      return ContentType::Game;
+    case WP_CONTENT_TYPE_V1_TYPE_NONE:
+    default:
+      return ContentType::None;
+    }
+  }
+
   bool Server::isXwaylandSurface(const wlr_surface* surface) const {
     if (m_xwayland == nullptr || surface == nullptr || surface->resource == nullptr) {
       return false;
@@ -183,6 +201,10 @@ namespace umbriel {
     m_tearingControlManager = wlr_tearing_control_manager_v1_create(m_display, 1);
     if (m_tearingControlManager == nullptr) {
       throw std::runtime_error("failed to create tearing-control manager");
+    }
+    m_contentTypeManager = wlr_content_type_manager_v1_create(m_display, 1);
+    if (m_contentTypeManager == nullptr) {
+      throw std::runtime_error("failed to create content-type manager");
     }
     wlr_ext_data_control_manager_v1_create(m_display, 1);
 

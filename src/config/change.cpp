@@ -74,6 +74,7 @@ namespace umbriel {
         const WindowRule& rhs = after.windowRules[afterIndex++];
         if (lhs.appIdPattern != rhs.appIdPattern
             || lhs.titlePattern != rhs.titlePattern
+            || lhs.matchContentType != rhs.matchContentType
             || lhs.matchFocused != rhs.matchFocused
             || lhs.allowTearing != rhs.allowTearing) {
           return false;

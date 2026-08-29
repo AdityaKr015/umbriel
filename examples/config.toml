@@ -367,6 +367,11 @@ blur_optimized = true
 # match.app_id = "^discord$"
 # default_maximize_to_edges = true
 
+# Match a standardized surface content hint
+# [[window_rule]]
+# match.content_type = "game"
+# vrr = "always"
+
 [[window_rule]]
 match.app_id = "^dev.noctalia.Noctalia$"
 default_floating = true

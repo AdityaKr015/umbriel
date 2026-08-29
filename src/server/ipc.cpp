@@ -24,6 +24,8 @@ namespace umbriel {
   namespace {
     constexpr Logger kLog("ipc");
     constexpr size_t kMaxRequestSize = 65536;
+    // A subscriber that stops reading must not grow the compositor's heap without bound.
+    constexpr size_t kMaxOutboundBacklog = 256 * 1024;
     constexpr int kConnectionTimeoutMs = 1000;
 
     nlohmann::json themeEvent() {
@@ -381,11 +383,19 @@ namespace umbriel {
 
   void Ipc::broadcastEvent(uint8_t event, const nlohmann::json& payload) {
     const std::string update = payload.dump() + '\n';
+    std::vector<Connection*> evicted;
     for (const auto& connection : m_connections) {
       if ((connection->subscribedEvents & event) == 0) {
         continue;
       }
       if (connection->responding) {
+        // output keeps everything written so far; only the undrained tail counts against the cap.
+        const size_t backlog = connection->output.size() - connection->writeOffset;
+        if (backlog + update.size() > kMaxOutboundBacklog) {
+          kLog.warn("subscriber fd {} is not draining ({} bytes queued), disconnecting", connection->fd, backlog);
+          evicted.push_back(connection.get());
+          continue;
+        }
         connection->output += update;
       } else {
         connection->output = update;
@@ -393,6 +403,9 @@ namespace umbriel {
         connection->responding = true;
       }
       wl_event_source_fd_update(connection->fdSource, WL_EVENT_READABLE | WL_EVENT_WRITABLE);
+    }
+    for (Connection* connection : evicted) {
+      removeConnection(connection);
     }
   }
 

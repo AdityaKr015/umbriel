@@ -1292,7 +1292,10 @@ namespace umbriel {
         removed->setActive(false);
         replacementActive = fallback;
       }
-      for (View* view : removed->allViews()) {
+      // setWorkspace() erases from the source workspace's view list, so relocate from a snapshot: allViews() hands
+      // back the live vector and iterating it here would invalidate the iterator on the first move.
+      const std::vector<View*> relocating = removed->allViews();
+      for (View* view : relocating) {
         view->setWorkspace(fallback);
         ++relocatedViews;
       }

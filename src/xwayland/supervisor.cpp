@@ -144,6 +144,8 @@ namespace umbriel {
           "xwayland-satellite keeps exiting; giving up "
           "(is it installed and is Xwayland >= 23.1 present?)"
       );
+      m_display.clear();
+      unsetenv("DISPLAY");
       return;
     }
 

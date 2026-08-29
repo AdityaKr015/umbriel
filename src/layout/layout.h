@@ -186,6 +186,12 @@ namespace umbriel {
     virtual void clearFullWidthState(int columnIndex) = 0;
     [[nodiscard]] virtual double widthFraction(int columnIndex) const = 0;
 
+    // Height of `view` as a fraction of its column's stacking extent. 1.0 when the
+    // view is alone on its stacking axis.
+    [[nodiscard]] virtual double heightFraction(const View* view) const = 0;
+    // Returns false when the view is not tiled here or is alone on its stacking axis.
+    virtual bool setHeightFraction(View* view, double fraction) = 0;
+
     // Interactive resize
     // Edges grabbable at a pointer position (0 = none). Base = not resizable.
     [[nodiscard]] virtual uint32_t resizeEdgesAt(const View* /*view*/, double /*cx*/, double /*cy*/) const { return 0; }

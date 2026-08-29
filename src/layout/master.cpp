@@ -591,6 +591,31 @@ namespace umbriel {
     return area == &m_master ? masterFrac() : 1.0 - masterFrac();
   }
 
+  double MasterStackLayout::heightFraction(const View* view) const {
+    const Area* area = areaOf(view);
+    if (area == nullptr || area->views.size() <= 1) {
+      return 1.0;
+    }
+    const int row = rowInArea(*area, view);
+    const double total = std::accumulate(area->weights.begin(), area->weights.end(), 0.0);
+    return area->weights[static_cast<size_t>(row)] / total;
+  }
+
+  bool MasterStackLayout::setHeightFraction(View* view, double fraction) {
+    Area* area = areaOf(view);
+    if (area == nullptr || area->views.size() <= 1) {
+      return false;
+    }
+    const int row = rowInArea(*area, view);
+    const auto index = static_cast<size_t>(row);
+    const double total = std::accumulate(area->weights.begin(), area->weights.end(), 0.0);
+    const double others = total - area->weights[index];
+    const double target = std::clamp(fraction, 0.1, 0.95);
+    area->weights[index] = target * others / (1.0 - target);
+    rebuildColumns();
+    return true;
+  }
+
   uint32_t MasterStackLayout::resizableEdges(const View* view) const {
     const Area* area = areaOf(view);
     if (area == nullptr) {

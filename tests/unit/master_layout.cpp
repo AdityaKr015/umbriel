@@ -104,6 +104,24 @@ UMBRIEL_TEST(stackRowsSplitTheHeightWithGaps) {
   CHECK_EQ(bottom.y - (top.y + top.height), 12);
 }
 
+UMBRIEL_TEST(setHeightFractionUpdatesAreaAndColumnWeights) {
+  Fixture fixture;
+  fixture.addViews(3);
+  CHECK(fixture.layout.setHeightFraction(stub(2), 0.7));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(2)) - 0.7) < 1e-9);
+
+  const auto& weights = fixture.layout.columns()[1].heightWeights;
+  CHECK_EQ(weights.size(), size_t{2});
+  CHECK(std::fabs(weights[0] / (weights[0] + weights[1]) - 0.7) < 1e-9);
+}
+
+UMBRIEL_TEST(setHeightFractionRejectsAViewAloneInItsArea) {
+  Fixture fixture;
+  fixture.addViews(3);
+  CHECK(!fixture.layout.setHeightFraction(stub(0), 0.7));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(0)) - 1.0) < 1e-9);
+}
+
 UMBRIEL_TEST(insertIsIdempotentPerView) {
   Fixture fixture;
   fixture.addViews(3);

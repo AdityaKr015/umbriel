@@ -773,6 +773,35 @@ namespace umbriel {
     return m_columns[static_cast<size_t>(columnIndex)].widthFrac;
   }
 
+  double ScrollingLayout::heightFraction(const View* view) const {
+    const int columnIndex = columnOf(view);
+    if (columnIndex < 0) {
+      return 1.0;
+    }
+    const Column& column = m_columns[static_cast<size_t>(columnIndex)];
+    if (column.views.size() <= 1) {
+      return 1.0;
+    }
+    const int row = rowOf(view);
+    return std::max(kMinHeightWeight, heightWeight(columnIndex, row)) / columnTotalWeight(column);
+  }
+
+  bool ScrollingLayout::setHeightFraction(View* view, double fraction) {
+    const int columnIndex = columnOf(view);
+    if (columnIndex < 0) {
+      return false;
+    }
+    const Column& column = m_columns[static_cast<size_t>(columnIndex)];
+    if (column.views.size() <= 1) {
+      return false;
+    }
+    const int row = rowOf(view);
+    const double oldWeight = std::max(kMinHeightWeight, heightWeight(columnIndex, row));
+    const double others = columnTotalWeight(column) - oldWeight;
+    const double target = std::clamp(fraction, 0.1, 0.95);
+    return setHeightWeight(columnIndex, row, target * others / (1.0 - target));
+  }
+
   bool ScrollingLayout::setRowBoundary(int columnIndex, int upperRow, double upperWeight, double lowerWeight) {
     if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {
       return false;

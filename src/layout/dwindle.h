@@ -81,9 +81,11 @@ namespace umbriel {
     bool setWidthFraction(int columnIndex, double fraction) override;
     void clearFullWidthState(int columnIndex) override;
     [[nodiscard]] double widthFraction(int columnIndex) const override;
+    [[nodiscard]] double heightFraction(const View* view) const override;
+    bool setHeightFraction(View* view, double fraction) override;
 
   private:
-    struct WidthSplit {
+    struct Split {
       Node* node = nullptr;
       bool first = false;
       double outerProduct = 1.0;
@@ -91,10 +93,10 @@ namespace umbriel {
 
     [[nodiscard]] Node* findNode(const View* view) const;
     [[nodiscard]] Node* nodeAtFlatIndex(int index) const;
-    [[nodiscard]] std::vector<WidthSplit> widthSplits(Node* node) const;
-    [[nodiscard]] static double widthShare(const WidthSplit& split);
-    static void setWidthShare(const WidthSplit& split, double share);
-    bool applyWidthFraction(const std::vector<WidthSplit>& splits, double fraction);
+    [[nodiscard]] std::vector<Split> splits(Node* node, Node::Type type) const;
+    [[nodiscard]] static double splitShare(const Split& split);
+    static void setSplitShare(const Split& split, double share);
+    bool applyFraction(const std::vector<Split>& splits, double fraction);
     void splitLeaf(Node* node, View* newView, Node::Type split, bool newFirst);
     [[nodiscard]] Node* boundaryNode(const View* view, uint32_t edge) const;
     void arrangeNode(Node* node, const wlr_box& area);

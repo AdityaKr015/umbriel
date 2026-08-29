@@ -114,6 +114,8 @@ namespace umbriel {
     // Incremental width change: apply `delta` to the focused column's current
     // width fraction, clamped to [0.1, 1.0].
     bool modifyFocusedWidth(double delta);
+    bool setFocusedHeight(double fraction);
+    bool modifyFocusedHeight(double delta);
     bool toggleFocusedFullWidth();
     bool toggleFocusedMaximizedToEdges();
     bool toggleFocusedFullscreen();

@@ -247,6 +247,28 @@ UMBRIEL_TEST(splitsFollowTheLongerEdgeOnALandscapeArea) {
   CHECK(second.y != third.y);
 }
 
+UMBRIEL_TEST(setHeightFractionResizesAStackedLeaf) {
+  Fixture fixture;
+  fixture.addLeaves(3);
+  fixture.layout.arrange(kUsable);
+
+  CHECK(fixture.layout.setHeightFraction(stub(2), 0.7));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(2)) - 0.7) < 1e-9);
+  fixture.layout.arrange(kUsable);
+
+  const int stackingExtent = kUsable.height - 2 * fixture.config.edgePad;
+  const int expectedHeight = static_cast<int>(std::lround(0.7 * stackingExtent)) - fixture.config.totalGap / 2;
+  CHECK(std::abs(fixture.layout.targetBox(stub(2)).height - expectedHeight) <= 1);
+}
+
+UMBRIEL_TEST(setHeightFractionRejectsAFullHeightLeaf) {
+  Fixture fixture;
+  fixture.addLeaves(3);
+  fixture.layout.arrange(kUsable);
+  CHECK(!fixture.layout.setHeightFraction(stub(0), 0.7));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(0)) - 1.0) < 1e-9);
+}
+
 UMBRIEL_TEST(directionalFocusFollowsScreenGeometry) {
   Fixture fixture;
   fixture.layout.insertView(stub(0), 0);

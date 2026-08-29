@@ -711,6 +711,15 @@ namespace umbriel {
       return true;
     }
 
+    bool actionConsumeOrExpel(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        if (!workspace->expelFocusedRight()) {
+          workspace->consumeFocusedLeft();
+        }
+      }
+      return true;
+    }
+
     template <int Direction> bool actionCycleWidth(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       if (Workspace* workspace = activeWorkspace(server)) {
         workspace->cycleFocusedWidth(Direction);
@@ -731,6 +740,24 @@ namespace umbriel {
       if (Workspace* workspace = activeWorkspace(server)) {
         if (const auto* arg = payloadIf<WidthArg>(bind)) {
           workspace->modifyFocusedWidth(arg->fraction);
+        }
+      }
+      return true;
+    }
+
+    bool actionSetHeight(Server& server, const Keybind& bind, std::string* /*error*/) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        if (const auto* arg = payloadIf<WidthArg>(bind)) {
+          workspace->setFocusedHeight(arg->fraction);
+        }
+      }
+      return true;
+    }
+
+    bool actionModifyHeight(Server& server, const Keybind& bind, std::string* /*error*/) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        if (const auto* arg = payloadIf<WidthArg>(bind)) {
+          workspace->modifyFocusedHeight(arg->fraction);
         }
       }
       return true;
@@ -847,6 +874,20 @@ namespace umbriel {
       server.focusView(view, FocusReason::ForeignActivation);
       if constexpr (Warp) {
         warpCursorToWindow(server, *view);
+      }
+      return true;
+    }
+
+    bool actionWindowFocusLast(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      View* current = focusedWindow(server);
+      for (const auto& entry : server.registry().all()) {
+        View* target = entry.get();
+        if (target == current || !target->mapped() || target->workspace() == nullptr) {
+          continue;
+        }
+        server.focusView(target, FocusReason::ForeignActivation);
+        maybeWarpCursorToWindow(server, target);
+        break;
       }
       return true;
     }
@@ -1338,6 +1379,10 @@ namespace umbriel {
         &actionSwapCycle<-1>,
         &actionMasterCountIncrease,
         &actionMasterCountDecrease,
+        &actionSetHeight,
+        &actionModifyHeight,
+        &actionWindowFocusLast,
+        &actionConsumeOrExpel,
     };
 
     consteval bool everyActionHasHandler() {

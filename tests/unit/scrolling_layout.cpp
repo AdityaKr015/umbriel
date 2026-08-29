@@ -142,6 +142,27 @@ UMBRIEL_TEST(expelRightFailsOnASingleViewColumn) {
   CHECK_EQ(fixture.layout.columns().size(), size_t{2});
 }
 
+// height math
+UMBRIEL_TEST(setHeightFractionResizesAStackedRow) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.consumeLeft(stub(1)));
+
+  CHECK(fixture.layout.setHeightFraction(stub(1), 0.7));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(1)) - 0.7) < 1e-9);
+  fixture.layout.arrange(kUsable);
+
+  const int stackCross = kUsable.height - 2 * fixture.config.edgePad - fixture.config.totalGap;
+  CHECK(std::abs(fixture.layout.targetBox(stub(1)).height - static_cast<int>(std::lround(0.7 * stackCross))) <= 1);
+}
+
+UMBRIEL_TEST(setHeightFractionRejectsASoloRow) {
+  Fixture fixture;
+  fixture.addColumns(1);
+  CHECK(!fixture.layout.setHeightFraction(stub(0), 0.7));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(0)) - 1.0) < 1e-9);
+}
+
 UMBRIEL_TEST(moveViewVerticalReordersWithinAColumn) {
   Fixture fixture;
   fixture.addColumns(2);

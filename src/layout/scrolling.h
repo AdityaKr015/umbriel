@@ -71,6 +71,8 @@ namespace umbriel {
     bool setWidthFraction(int columnIndex, double fraction) override;
     void clearFullWidthState(int columnIndex) override;
     [[nodiscard]] double widthFraction(int columnIndex) const override;
+    [[nodiscard]] double heightFraction(const View* view) const override;
+    bool setHeightFraction(View* view, double fraction) override;
 
     [[nodiscard]] uint32_t resizeEdgesAt(const View* view, double cx, double cy) const override;
     [[nodiscard]] uint32_t sanitizeResizeEdges(const View* view, uint32_t edges) const override;

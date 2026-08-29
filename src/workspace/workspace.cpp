@@ -868,6 +868,19 @@ namespace umbriel {
     return true;
   }
 
+  bool Workspace::setFocusedHeight(double fraction) {
+    if (m_focusedView != nullptr && m_focusedView->maximizedToEdges()) {
+      m_focusedView->setMaximizedToEdges(false);
+    }
+    if (!m_layout->setHeightFraction(m_focusedView, fraction)) {
+      return false;
+    }
+    wlr_xdg_toplevel_set_maximized(m_focusedView->toplevel(), false);
+    ensureFocusedVisible();
+    markArrange();
+    return true;
+  }
+
   bool Workspace::centerFocusedColumn() {
     ScrollingLayout* scrolling = scrollingLayout();
     if (scrolling == nullptr || m_focusedView == nullptr) {
@@ -889,6 +902,12 @@ namespace umbriel {
     // Clamp here, not in the layouts: ScrollingLayout clamps internally but
     // DwindleLayout does not, and both must land in [0.1, 1.0].
     return setFocusedWidth(std::clamp(m_layout->widthFraction(column) + delta, 0.1, 1.0));
+  }
+
+  bool Workspace::modifyFocusedHeight(double delta) {
+    // Clamp here, not in the layouts: DwindleLayout does not clamp the overall
+    // fraction, and every layout must land in [0.1, 1.0].
+    return setFocusedHeight(std::clamp(m_layout->heightFraction(m_focusedView) + delta, 0.1, 1.0));
   }
 
   bool Workspace::toggleFocusedFullWidth() {

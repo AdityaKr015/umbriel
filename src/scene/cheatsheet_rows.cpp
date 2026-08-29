@@ -294,6 +294,7 @@ namespace {
     case A::WindowFocusId:
     case A::WindowFocusWarpId:
     case A::WindowFocusSwitchFloating:
+    case A::WindowFocusLast:
       return Group::Focus;
     case A::ColumnMoveLeft:
     case A::ColumnMoveRight:
@@ -314,6 +315,9 @@ namespace {
     case A::WindowCycleWidthBack:
     case A::WindowSetWidth:
     case A::WindowModifyWidth:
+    case A::WindowSetHeight:
+    case A::WindowModifyHeight:
+    case A::WindowConsumeOrExpel:
     case A::WindowCenter:
     case A::LayoutScrollLeft:
     case A::LayoutScrollRight:

@@ -122,6 +122,10 @@ namespace umbriel {
     WindowSwapPrevious,
     MasterCountIncrease,
     MasterCountDecrease,
+    WindowSetHeight,
+    WindowModifyHeight,
+    WindowFocusLast,
+    WindowConsumeOrExpel,
     Count,
   };
 

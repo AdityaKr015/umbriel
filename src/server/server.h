@@ -235,19 +235,20 @@ namespace umbriel {
     // Re-evaluate application idle inhibitors after a surface's presentation
     // visibility changes.
     void updateIdleInhibit();
-    // Lock the next XKB group on every physical keyboard. False when no keyboard
-    // has a second layout to switch to.
+    // Lock the next group on one physical keyboard, then synchronize matching
+    // named layouts across the remaining keyboards.
     bool cycleKeyboardLayout();
+    // A physical keyboard changed groups through real input. It becomes the
+    // canonical source for IPC state and compatible keyboard synchronization.
+    void keyboardLayoutChanged(Keyboard* origin);
 
     struct KeyboardLayoutState {
       std::vector<std::string> names;
       uint32_t currentIndex = 0;
     };
-    // The layout names and effective group index of the first physical keyboard, the same device keyboardLayoutState
-    // callers observe cycling. Nullopt when no physical keyboard exists.
+    // The canonical physical keyboard's layout vocabulary and effective group.
+    // Nullopt when no configured physical keyboard exists.
     [[nodiscard]] std::optional<KeyboardLayoutState> keyboardLayoutState() const;
-    // Fires the IPC keyboard-layout event when the effective group of a physical keyboard actually changed. Config
-    // reloads re-send the current state even when the group did not move.
     void notifyKeyboardLayoutIpc();
     void notifyOverviewChanged();
     // Coalesced windows-event notification: at most one idle callback per frame
@@ -374,6 +375,7 @@ namespace umbriel {
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
+    void syncKeyboardLayout(Keyboard* source);
     void addPointer(wlr_input_device* device);
     void addTouch(wlr_input_device* device);
     struct TabletDevice {
@@ -597,6 +599,7 @@ namespace umbriel {
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;
+    Keyboard* m_keyboardLayoutSource = nullptr;
     ModifierTapState m_modifierTap;
     std::vector<std::unique_ptr<PointerDevice>> m_pointers;
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;

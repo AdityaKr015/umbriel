@@ -354,6 +354,10 @@ namespace umbriel {
       for (const auto& keyboard : m_keyboards) {
         keyboard->applyConfig();
       }
+      if (m_keyboardLayoutSource != nullptr) {
+        syncKeyboardLayout(m_keyboardLayoutSource);
+        notifyKeyboardLayoutIpc();
+      }
       for (const auto& pointer : m_pointers) {
         applyPointerConfig(pointer->device);
       }
@@ -1071,34 +1075,86 @@ namespace umbriel {
   }
 
   void Server::addKeyboard(wlr_input_device* device) {
-    m_keyboards.push_back(std::make_unique<Keyboard>(*this, device));
+    wlr_seat* seat = m_seat->wlr();
+    const bool seatHasKeyboard = wlr_seat_get_keyboard(seat) != nullptr;
+    auto entry = std::make_unique<Keyboard>(*this, device);
+    Keyboard* keyboard = entry.get();
+    m_keyboards.push_back(std::move(entry));
+
+    if (!keyboard->virtualDevice()) {
+      if (m_keyboardLayoutSource == nullptr) {
+        m_keyboardLayoutSource = keyboard;
+      } else {
+        keyboard->syncLayoutFrom(*m_keyboardLayoutSource);
+      }
+      notifyKeyboardLayoutIpc();
+    }
+
+    // A virtual keyboard may arrive before its client provides a keymap. Keep
+    // an existing seat keyboard until real input selects another device, but an
+    // empty seat needs one for focus enter and input-method keymap delivery.
+    if (!seatHasKeyboard) {
+      wlr_seat_set_keyboard(seat, keyboard->wlr());
+    }
   }
 
   bool Server::cycleKeyboardLayout() {
-    bool switched = false;
-    for (const auto& keyboard : m_keyboards) {
-      switched = keyboard->cycleLayout() || switched;
+    if (m_keyboardLayoutSource != nullptr && m_keyboardLayoutSource->cycleLayout()) {
+      return true;
     }
-    return switched;
+    for (const auto& keyboard : m_keyboards) {
+      if (keyboard.get() != m_keyboardLayoutSource && keyboard->cycleLayout()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void Server::syncKeyboardLayout(Keyboard* source) {
+    for (const auto& keyboard : m_keyboards) {
+      if (keyboard.get() != source) {
+        keyboard->syncLayoutFrom(*source);
+      }
+    }
+  }
+
+  void Server::keyboardLayoutChanged(Keyboard* origin) {
+    m_keyboardLayoutSource = origin;
+    syncKeyboardLayout(origin);
+    notifyKeyboardLayoutIpc();
   }
 
   std::optional<Server::KeyboardLayoutState> Server::keyboardLayoutState() const {
-    for (const auto& keyboard : m_keyboards) {
-      wlr_keyboard* wlrKeyboard = keyboard->wlr();
-      if (keyboard->virtualDevice() || wlrKeyboard->keymap == nullptr || wlrKeyboard->xkb_state == nullptr) {
-        continue;
+    const Keyboard* source = m_keyboardLayoutSource;
+    auto usable = [](const Keyboard* keyboard) {
+      return keyboard != nullptr
+          && !keyboard->virtualDevice()
+          && keyboard->wlr()->keymap != nullptr
+          && keyboard->wlr()->xkb_state != nullptr;
+    };
+    if (!usable(source)) {
+      source = nullptr;
+      for (const auto& keyboard : m_keyboards) {
+        if (usable(keyboard.get())) {
+          source = keyboard.get();
+          break;
+        }
       }
-      KeyboardLayoutState state;
-      const xkb_layout_index_t count = xkb_keymap_num_layouts(wlrKeyboard->keymap);
-      state.names.reserve(count);
-      for (xkb_layout_index_t i = 0; i < count; ++i) {
-        const char* name = xkb_keymap_layout_get_name(wlrKeyboard->keymap, i);
-        state.names.emplace_back(name != nullptr ? name : "");
-      }
-      state.currentIndex = xkb_state_serialize_layout(wlrKeyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
-      return state;
     }
-    return std::nullopt;
+    if (source == nullptr) {
+      return std::nullopt;
+    }
+
+    wlr_keyboard* wlrKeyboard = source->wlr();
+    KeyboardLayoutState state;
+    const xkb_layout_index_t count = xkb_keymap_num_layouts(wlrKeyboard->keymap);
+    state.names.reserve(count);
+    for (xkb_layout_index_t i = 0; i < count; ++i) {
+      const char* name = xkb_keymap_layout_get_name(wlrKeyboard->keymap, i);
+      state.names.emplace_back(name != nullptr ? name : "");
+    }
+    state.currentIndex = xkb_state_serialize_layout(wlrKeyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
+    return state;
   }
 
   void Server::notifyKeyboardLayoutIpc() {
@@ -1976,7 +2032,18 @@ namespace umbriel {
   }
 
   void Server::removeKeyboard(Keyboard* keyboard) {
+    const bool sourceRemoved = m_keyboardLayoutSource == keyboard;
     std::erase_if(m_keyboards, [keyboard](const std::unique_ptr<Keyboard>& entry) { return entry.get() == keyboard; });
+    if (sourceRemoved) {
+      m_keyboardLayoutSource = nullptr;
+      for (const auto& entry : m_keyboards) {
+        if (!entry->virtualDevice()) {
+          m_keyboardLayoutSource = entry.get();
+          break;
+        }
+      }
+      notifyKeyboardLayoutIpc();
+    }
     updateSeatCapabilities();
   }
 

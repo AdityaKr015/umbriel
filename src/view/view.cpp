@@ -2205,15 +2205,20 @@ namespace umbriel {
 
     const bool wasMaximized = m_toplevel->scheduled.maximized;
     if (maximized && !wasMaximized) {
+      // Capture where the float is heading, not where it currently sits.
+      // Dropping fullscreen queues a configure and starts a move, so
+      // base->geometry still holds the fullscreen size and the scene node is
+      // mid-flight from the fullscreen origin. Restoring from either would
+      // strand the float at output size with no way back.
+      const auto [restoreWidth, restoreHeight] = floatingSize();
       m_floating.clearSizeRequest();
-      const wlr_box& geometry = m_toplevel->base->geometry;
       m_maximizeRestoreBox = {
-          .x = m_sceneTree->node.x,
-          .y = m_sceneTree->node.y,
-          .width = geometry.width,
-          .height = geometry.height,
+          .x = layoutTargetX(),
+          .y = layoutTargetY(),
+          .width = restoreWidth,
+          .height = restoreHeight,
       };
-      m_hasMaximizeRestoreBox = geometry.width > 0 && geometry.height > 0;
+      m_hasMaximizeRestoreBox = restoreWidth > 0 && restoreHeight > 0;
 
       const wlr_box usable = floatingUsableArea();
       if (usable.width > 0 && usable.height > 0) {

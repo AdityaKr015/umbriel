@@ -152,6 +152,10 @@ namespace umbriel {
     [[nodiscard]] std::array<int, 2> floatingSize() const;
     // The home output's usable area.
     [[nodiscard]] wlr_box floatingUsableArea() const;
+    // The usable area an opening window is sized against: the target output's,
+    // then its full layout box, then whatever sits under the cursor. A hotplug
+    // race can leave an output with no usable area computed yet.
+    [[nodiscard]] wlr_box openingUsableArea(Output* targetOutput) const;
     // Record the floating position as a fraction of the current usable area,
     // so a cross-output move can land the window proportionally. No-op when tiled.
     void rememberFloatingPosition();

@@ -986,6 +986,21 @@ namespace umbriel {
     return m_server->usableAreaAt(m_sceneTree->node.x, m_sceneTree->node.y);
   }
 
+  wlr_box View::openingUsableArea(Output* targetOutput) const {
+    const wlr_cursor* cursor = m_server->cursor()->wlr();
+    if (targetOutput == nullptr) {
+      return m_server->usableAreaAt(cursor->x, cursor->y);
+    }
+    wlr_box usable = targetOutput->usableArea();
+    if (usable.width <= 0 || usable.height <= 0) {
+      wlr_output_layout_get_box(m_server->outputLayout(), targetOutput->wlr(), &usable);
+    }
+    if (usable.width <= 0 || usable.height <= 0) {
+      usable = m_server->usableAreaAt(cursor->x, cursor->y);
+    }
+    return usable;
+  }
+
   void View::clampFloatingPosition() {
     if (m_tiled
         || !m_mapped
@@ -1984,15 +1999,7 @@ namespace umbriel {
           wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
         }
       } else if (wantTiled) {
-        wlr_box usable = targetOutput != nullptr
-            ? targetOutput->usableArea()
-            : m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-        if (targetOutput != nullptr && (usable.width <= 0 || usable.height <= 0)) {
-          wlr_output_layout_get_box(m_server->outputLayout(), targetOutput->wlr(), &usable);
-        }
-        if (usable.width <= 0 || usable.height <= 0) {
-          usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-        }
+        const wlr_box usable = openingUsableArea(targetOutput);
 
         // No workspace yet (no output, or none active): fall back to a throwaway layout built from the global config,
         // so the sizing rule stays the layout's either way.
@@ -2027,9 +2034,7 @@ namespace umbriel {
       } else {
         const XdgSizeHints hints = xdgSizeHints(m_toplevel);
         if (wantMaximized) {
-          wlr_box usable = targetOutput != nullptr
-              ? targetOutput->usableArea()
-              : m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
+          const wlr_box usable = openingUsableArea(targetOutput);
           requestFloatingSize(usable.width, usable.height);
           wlr_xdg_toplevel_set_maximized(m_toplevel, true);
         } else if (rule.defaultSize) {
@@ -2040,15 +2045,7 @@ namespace umbriel {
           // Fractions of usable area per axis; default_size (pixels) outranks
           // them. An axis without a fraction stays 0 so the client keeps its own
           // preference there.
-          wlr_box usable = targetOutput != nullptr
-              ? targetOutput->usableArea()
-              : m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-          if (targetOutput != nullptr && (usable.width <= 0 || usable.height <= 0)) {
-            wlr_output_layout_get_box(m_server->outputLayout(), targetOutput->wlr(), &usable);
-          }
-          if (usable.width <= 0 || usable.height <= 0) {
-            usable = m_server->usableAreaAt(m_server->cursor()->wlr()->x, m_server->cursor()->wlr()->y);
-          }
+          const wlr_box usable = openingUsableArea(targetOutput);
           const int requestedWidth = rule.defaultWidth ? floatingFractionSize(*rule.defaultWidth, usable.width) : 0;
           const int requestedHeight = rule.defaultHeight ? floatingFractionSize(*rule.defaultHeight, usable.height) : 0;
           requestFloatingSize(

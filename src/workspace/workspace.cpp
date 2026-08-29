@@ -227,10 +227,7 @@ namespace umbriel {
     return replacement;
   }
 
-  void Workspace::layoutAttach(View* view, std::optional<double> initialWidth) {
-    if (view == nullptr || !view->mapped() || !view->tiled() || m_layout->columnOf(view) >= 0) {
-      return;
-    }
+  int Workspace::layoutAttachIndex(const View* view) const {
     int focusedColumn = m_layout->columnOf(m_focusedView);
     if (focusedColumn < 0 && m_group != nullptr) {
       for (const auto& entry : m_group->server()->registry().all()) {
@@ -243,7 +240,14 @@ namespace umbriel {
         }
       }
     }
-    const int index = focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout->columns().size());
+    return focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout->columns().size());
+  }
+
+  void Workspace::layoutAttach(View* view, std::optional<double> initialWidth) {
+    if (view == nullptr || !view->mapped() || !view->tiled() || m_layout->columnOf(view) >= 0) {
+      return;
+    }
+    const int index = layoutAttachIndex(view);
     m_layout->insertView(view, index);
     if (ScrollingLayout* scrolling = scrollingLayout(); scrolling != nullptr) {
       const int column = scrolling->columnOf(view);
@@ -261,6 +265,25 @@ namespace umbriel {
       }
     }
     markArrange(true);
+  }
+  Layout::InitialSize Workspace::initialMaximizedSize(View* view, const wlr_box& usable) const {
+    LayoutCapture capture = m_layout->captureState();
+    std::unique_ptr<Layout> preview = createLayout(m_layout->mode());
+    preview->setConfig(&m_layoutConfig);
+    preview->setConstraints(&viewLayoutConstraints);
+    if (capture.snapshot == nullptr || !preview->restoreState(*capture.snapshot, capture.members)) {
+      kLog.error("failed to restore layout while resolving initial maximized size");
+      return m_layout->initialSize(usable, 1.0, m_focusedView);
+    }
+
+    preview->insertView(view, layoutAttachIndex(view));
+    const int column = preview->columnOf(view);
+    if (column >= 0 && !preview->isFullWidth(column)) {
+      preview->toggleFullWidth(column);
+    }
+    preview->arrange(usable);
+    const wlr_box target = preview->targetBox(view);
+    return {.width = target.width, .height = target.height};
   }
 
   void Workspace::layoutDetach(View* view, bool animate) {

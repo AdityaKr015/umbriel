@@ -79,6 +79,9 @@ namespace umbriel {
     void addView(View* view, bool attachToLayout = true);
     View* removeView(View* view, bool reconcile = true);
     void layoutAttach(View* view, std::optional<double> initialWidth = std::nullopt);
+    // Predict the first configure by applying the same insertion and full-width
+    // transition that the mapped path will use on the authoritative layout.
+    [[nodiscard]] Layout::InitialSize initialMaximizedSize(View* view, const wlr_box& usable) const;
     void layoutDetach(View* view, bool animate = false);
     void arrange(bool animate = true);
     // Record that the layout is stale instead of rebuilding it now. The work runs once, before the next frame, however
@@ -132,6 +135,7 @@ namespace umbriel {
   private:
     void applyPositions(bool animate);
     [[nodiscard]] wlr_box tiledTargetBox(const View* view, const wlr_box& usable) const;
+    [[nodiscard]] int layoutAttachIndex(const View* view) const;
     // Pull the scroll offset back into [0, maxScroll]. Only for removals: a
     // touchpad swipe overscrolls on purpose.
     void clampScrollToRange();

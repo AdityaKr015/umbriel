@@ -810,11 +810,14 @@ namespace umbriel {
       return true;
     }
 
-    bool actionColumnCenter(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+    bool actionColumnCenter(Server& server, const Keybind& /*bind*/, std::string* error) {
       if (scratchpadHoldsFocus(server)) {
         return true;
       }
       if (Workspace* workspace = activeWorkspace(server)) {
+        if (workspace->layoutMode() != LayoutMode::Scrolling) {
+          return reject(error, "column-center requires the scrolling layout");
+        }
         workspace->centerFocusedColumn();
       }
       return true;

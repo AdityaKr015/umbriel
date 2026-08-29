@@ -247,6 +247,7 @@ namespace umbriel {
         {"window-toggle-pinned", "", KeybindAction::TogglePinned},
         {"window-toggle-scratchpad", "[<output>]", KeybindAction::WindowToggleScratchpad,
          ActionArgKind::OptionalOutput},
+        {"workspace-focus-last", "", KeybindAction::WorkspaceFocusLast},
         {"workspace-move-down", "", KeybindAction::WorkspaceMoveDown},
         {"workspace-move-to-output-down", "", KeybindAction::WorkspaceMoveToOutputDown},
         {"workspace-move-to-output-left", "", KeybindAction::WorkspaceMoveToOutputLeft},

@@ -892,6 +892,25 @@ namespace umbriel {
       return true;
     }
 
+    bool actionWorkspaceFocusLast(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      Workspace* workspace = activeWorkspace(server);
+      if (workspace == nullptr) {
+        return true;
+      }
+      WorkspaceGroup* group = workspace->group();
+      if (group == nullptr) {
+        return true;
+      }
+      Workspace* target = group->previous();
+      if (target == nullptr || target == group->active()) {
+        return true;
+      }
+      group->select(target);
+      Workspace* selected = group->active();
+      maybeWarpCursorToWindow(server, selected != nullptr ? selected->focusedView() : nullptr);
+      return true;
+    }
+
     bool actionFocusSwitchFloating(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       Workspace* workspace = activeWorkspace(server);
       if (workspace == nullptr) {
@@ -1386,6 +1405,7 @@ namespace umbriel {
         &actionCycleHeight<1>,
         &actionCycleHeight<-1>,
         &actionWindowFocusLast,
+        &actionWorkspaceFocusLast,
     };
 
     consteval bool everyActionHasHandler() {

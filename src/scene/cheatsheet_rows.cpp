@@ -295,6 +295,7 @@ namespace {
     case A::WindowFocusWarpId:
     case A::WindowFocusSwitchFloating:
     case A::WindowFocusLast:
+    case A::WorkspaceFocusLast:
       return Group::Focus;
     case A::ColumnMoveLeft:
     case A::ColumnMoveRight:

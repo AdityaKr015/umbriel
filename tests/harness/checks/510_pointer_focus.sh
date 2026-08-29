@@ -34,8 +34,11 @@ wait_for_count() {
   return 1
 }
 
-# x of the focused window, or "none".
-focused_x() { "$UMBRIEL" windows --json | jq -r '[.[] | select(.focused) | .x] | if length == 1 then .[0] else "none" end'; }
+# x of the focused window on the active workspace, or "none".
+focused_x() {
+  "$UMBRIEL" windows --json | jq -r \
+    '[.[] | select(.focused and .active) | .x] | if length == 1 then .[0] else "none" end'
+}
 
 wait_for_focus_at() {
   local want=$1
@@ -44,7 +47,7 @@ wait_for_focus_at() {
     sleep 0.25
   done
   echo "expected the window at x=$want to be focused, focus is at $(focused_x)"
-  echo "  windows: $("$UMBRIEL" windows --json | jq -c '[.[] | {x, focused}]')"
+  echo "  windows: $("$UMBRIEL" windows --json | jq -c '[.[] | {x, focused, active}]')"
   return 1
 }
 
@@ -114,4 +117,20 @@ wait_for_focus_at 10
 pointer click "$BTN_LEFT"
 wait_for_focus_at 646
 
-echo "click focus, hover behavior, and configured focus-navigation cursor warps are correct"
+# Workspace focus history is local to the focused output. Returning to that
+# output's previous workspace is still focus navigation, so follows_focus must
+# move the cursor to its restored focused window. Leave a second window under
+# the old pointer position, then click without motion after the transition.
+"$UMBRIEL" msg window-focus-left > /dev/null
+wait_for_focus_at 10
+"$UMBRIEL" msg workspace-switch:2 > /dev/null
+spawn_client
+wait_for_count 3
+pointer move "$RIGHT_X" "$MID_Y"
+"$UMBRIEL" msg workspace-focus-last > /dev/null
+wait_for_focus_at 10
+sleep 1
+pointer click "$BTN_LEFT"
+wait_for_focus_at 10
+
+echo "click focus and configured window and workspace focus-navigation cursor warps are correct"

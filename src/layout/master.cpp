@@ -277,9 +277,14 @@ namespace umbriel {
     rebuildColumns();
   }
 
-  bool MasterStackLayout::consumeLeft(View* view) {
-    Area* source = masterIsLeft() ? &m_stack : &m_master;
-    Area* destination = masterIsLeft() ? &m_master : &m_stack;
+  bool MasterStackLayout::consume(View* view, int direction) {
+    if (direction != -1 && direction != 1) {
+      return false;
+    }
+    Area* left = masterIsLeft() ? &m_master : &m_stack;
+    Area* right = masterIsLeft() ? &m_stack : &m_master;
+    Area* source = direction < 0 ? right : left;
+    Area* destination = direction < 0 ? left : right;
     const int row = rowInArea(*source, view);
     if (row < 0) {
       return false;
@@ -293,21 +298,7 @@ namespace umbriel {
     return true;
   }
 
-  bool MasterStackLayout::expelRight(View* view) {
-    Area* source = masterIsLeft() ? &m_master : &m_stack;
-    Area* destination = masterIsLeft() ? &m_stack : &m_master;
-    const int row = rowInArea(*source, view);
-    if (row < 0) {
-      return false;
-    }
-    const double weight = source->weights[static_cast<size_t>(row)];
-    source->views.erase(source->views.begin() + row);
-    source->weights.erase(source->weights.begin() + row);
-    destination->views.push_back(view);
-    destination->weights.push_back(weight);
-    rebuildColumns();
-    return true;
-  }
+  bool MasterStackLayout::expel(View* view, int direction) { return consume(view, direction); }
 
   bool MasterStackLayout::moveViewVertical(View* view, int direction) {
     View* neighbor = directionalNeighbor(m_targets, view, false, direction);

@@ -777,8 +777,8 @@ namespace umbriel {
     return true;
   }
 
-  bool Workspace::consumeFocusedLeft() {
-    if (!m_layout->consumeLeft(m_focusedView)) {
+  bool Workspace::consumeFocused(int direction) {
+    if (!m_layout->consume(m_focusedView, direction)) {
       return false;
     }
     ensureFocusedVisible();
@@ -786,8 +786,8 @@ namespace umbriel {
     return true;
   }
 
-  bool Workspace::expelFocusedRight() {
-    if (!m_layout->expelRight(m_focusedView)) {
+  bool Workspace::expelFocused(int direction) {
+    if (!m_layout->expel(m_focusedView, direction)) {
       return false;
     }
     ensureFocusedVisible();

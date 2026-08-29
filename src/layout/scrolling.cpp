@@ -422,32 +422,36 @@ namespace umbriel {
     column.heightWeights.insert(column.heightWeights.begin() + row, insertedWeight);
   }
 
-  bool ScrollingLayout::consumeLeft(View* view) {
+  bool ScrollingLayout::consume(View* view, int direction) {
     const int sourceColumn = columnOf(view);
-    if (sourceColumn <= 0) {
+    const int destinationColumn = sourceColumn + direction;
+    if ((direction != -1 && direction != 1)
+        || sourceColumn < 0
+        || destinationColumn < 0
+        || destinationColumn >= static_cast<int>(m_columns.size())) {
       return false;
     }
     Column& source = m_columns[static_cast<size_t>(sourceColumn)];
-    Column& dest = m_columns[static_cast<size_t>(sourceColumn - 1)];
+    Column& destination = m_columns[static_cast<size_t>(destinationColumn)];
     ensureWeightCount(source);
-    ensureWeightCount(dest);
+    ensureWeightCount(destination);
     const int row = rowOf(view);
     const double weight = row >= 0 ? source.heightWeights[static_cast<size_t>(row)] : 1.0;
     std::erase(source.views, view);
     if (row >= 0 && row < static_cast<int>(source.heightWeights.size())) {
       source.heightWeights.erase(source.heightWeights.begin() + row);
     }
-    dest.views.push_back(view);
-    dest.heightWeights.push_back(weight);
+    destination.views.push_back(view);
+    destination.heightWeights.push_back(weight);
     if (source.views.empty()) {
       m_columns.erase(m_columns.begin() + sourceColumn);
     }
     return true;
   }
 
-  bool ScrollingLayout::expelRight(View* view) {
+  bool ScrollingLayout::expel(View* view, int direction) {
     const int sourceColumn = columnOf(view);
-    if (sourceColumn < 0) {
+    if ((direction != -1 && direction != 1) || sourceColumn < 0) {
       return false;
     }
     Column& source = m_columns[static_cast<size_t>(sourceColumn)];
@@ -465,7 +469,8 @@ namespace umbriel {
     column.widthFrac = m_config->scrolling.defaultWidthFraction.value_or(0.5);
     column.views.push_back(view);
     column.heightWeights.push_back(weight);
-    m_columns.insert(m_columns.begin() + sourceColumn + 1, std::move(column));
+    const int destinationColumn = sourceColumn + (direction > 0 ? 1 : 0);
+    m_columns.insert(m_columns.begin() + destinationColumn, std::move(column));
     return true;
   }
 

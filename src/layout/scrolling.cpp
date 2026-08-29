@@ -486,6 +486,31 @@ namespace umbriel {
     return true;
   }
 
+  bool ScrollingLayout::swapViews(View* a, View* b) {
+    if (a == b) {
+      return false;
+    }
+    const int firstColumn = columnOf(a);
+    const int firstRow = rowOf(a);
+    const int secondColumn = columnOf(b);
+    const int secondRow = rowOf(b);
+    if (firstColumn < 0 || firstRow < 0 || secondColumn < 0 || secondRow < 0) {
+      return false;
+    }
+    std::swap(
+        m_columns[static_cast<size_t>(firstColumn)].views[static_cast<size_t>(firstRow)],
+        m_columns[static_cast<size_t>(secondColumn)].views[static_cast<size_t>(secondRow)]
+    );
+    for (Target& target : m_targets) {
+      if (target.view == a) {
+        target.view = b;
+      } else if (target.view == b) {
+        target.view = a;
+      }
+    }
+    return true;
+  }
+
   void ScrollingLayout::removeView(View* view) {
     const int columnIndex = columnOf(view);
     if (columnIndex < 0) {

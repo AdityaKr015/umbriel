@@ -5,6 +5,7 @@
 #include "core/log.h"
 #include "input/cursor.h"
 #include "layout/dwindle.h"
+#include "layout/master.h"
 #include "layout/scrolling.h"
 #include "output/output.h"
 #include "overview/overview.h"
@@ -106,6 +107,10 @@ namespace umbriel {
 
   DwindleLayout* Workspace::dwindleLayout() {
     return m_layoutMode == LayoutMode::Dwindle ? static_cast<DwindleLayout*>(m_layout.get()) : nullptr;
+  }
+
+  MasterStackLayout* Workspace::masterLayout() {
+    return m_layoutMode == LayoutMode::Master ? dynamic_cast<MasterStackLayout*>(m_layout.get()) : nullptr;
   }
 
   const ScrollingLayout* Workspace::scrollingLayout() const {
@@ -669,6 +674,68 @@ namespace umbriel {
       }
     }
     return nullptr;
+  }
+
+  View* Workspace::cycleFocusTarget(int direction) const {
+    std::vector<View*> ring;
+    for (const Column& column : m_layout->columns()) {
+      ring.insert(ring.end(), column.views.begin(), column.views.end());
+    }
+    ring.insert(ring.end(), m_floatingStack.begin(), m_floatingStack.end());
+    if (ring.size() < 2) {
+      return nullptr;
+    }
+
+    const auto focused = std::ranges::find(ring, m_focusedView);
+    if (focused == ring.end()) {
+      return direction > 0 ? ring.front() : ring.back();
+    }
+    const auto index = static_cast<std::ptrdiff_t>(focused - ring.begin());
+    const auto count = static_cast<std::ptrdiff_t>(ring.size());
+    const auto target = (index + direction % count + count) % count;
+    return ring[static_cast<size_t>(target)];
+  }
+
+  bool Workspace::swapFocusedInCycle(int direction) {
+    std::vector<View*> ring;
+    for (const Column& column : m_layout->columns()) {
+      ring.insert(ring.end(), column.views.begin(), column.views.end());
+    }
+    if (ring.size() < 2) {
+      return false;
+    }
+
+    const auto focused = std::ranges::find(ring, m_focusedView);
+    if (focused == ring.end()) {
+      return false;
+    }
+    const auto index = static_cast<std::ptrdiff_t>(focused - ring.begin());
+    const auto count = static_cast<std::ptrdiff_t>(ring.size());
+    const auto target = (index + direction % count + count) % count;
+    if (!m_layout->swapViews(m_focusedView, ring[static_cast<size_t>(target)])) {
+      return false;
+    }
+    markArrange();
+    ensureFocusedVisible();
+    return true;
+  }
+
+  bool Workspace::increaseMasterCount() {
+    MasterStackLayout* master = masterLayout();
+    if (master == nullptr || !master->promoteFromStack()) {
+      return false;
+    }
+    markArrange();
+    return true;
+  }
+
+  bool Workspace::decreaseMasterCount() {
+    MasterStackLayout* master = masterLayout();
+    if (master == nullptr || !master->demoteToStack()) {
+      return false;
+    }
+    markArrange();
+    return true;
   }
 
   bool Workspace::moveLaneAlongStrip(int direction) {

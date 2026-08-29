@@ -95,15 +95,6 @@ namespace umbriel {
     return true;
   }
 
-  bool Server::focusNextWindow() {
-    View* next = m_registry.rotateToNext([](const View& view) { return view.mapped() && view.onActiveWorkspace(); });
-    if (next == nullptr) {
-      return false;
-    }
-    focusView(next, FocusReason::Directional);
-    return true;
-  }
-
   void
   Server::armModifierTap(const void* source, uint32_t keycode, std::span<const uint32_t> keysyms, uint32_t modifiers) {
     if (m_modifierTap.cancelForKeyPress()) {

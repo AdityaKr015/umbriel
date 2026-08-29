@@ -117,6 +117,11 @@ namespace umbriel {
     ColumnFocusLast,
     ColumnMoveToFirst,
     ColumnMoveToLast,
+    WindowFocusPrevious,
+    WindowSwapNext,
+    WindowSwapPrevious,
+    MasterCountIncrease,
+    MasterCountDecrease,
     Count,
   };
 

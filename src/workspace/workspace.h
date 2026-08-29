@@ -17,6 +17,7 @@ struct wlr_scene_tree;
 namespace umbriel {
 
   class DwindleLayout;
+  class MasterStackLayout;
   class Output;
   class ScrollingLayout;
   class Server;
@@ -54,6 +55,7 @@ namespace umbriel {
     // At least 1, so callers can divide by it.
     [[nodiscard]] int scrollViewportExtent() const;
     [[nodiscard]] DwindleLayout* dwindleLayout();
+    [[nodiscard]] MasterStackLayout* masterLayout();
     [[nodiscard]] const ResolvedLayoutConfig& layoutConfig() const { return m_layoutConfig; }
     [[nodiscard]] LayoutMode layoutMode() const { return m_layoutMode; }
     // Runtime layout override set by workspace-set-layout. Empty = the configured mode applies. A config reload clears
@@ -93,12 +95,16 @@ namespace umbriel {
     [[nodiscard]] View* focusFirstColumn() const;
     [[nodiscard]] View* focusLastColumn() const;
     [[nodiscard]] View* focusReplacementForRemoval(const View* view) const;
+    [[nodiscard]] View* cycleFocusTarget(int direction) const;
     bool moveFocusedColumn(int direction);
     bool moveFocusedColumnFirst();
     bool moveFocusedColumnLast();
     bool consumeFocusedLeft();
     bool expelFocusedRight();
     bool moveFocusedVertical(int direction);
+    bool swapFocusedInCycle(int direction);
+    bool increaseMasterCount();
+    bool decreaseMasterCount();
     bool cycleFocusedWidth(int direction);
     bool setFocusedWidth(double fraction);
     bool centerFocusedColumn();

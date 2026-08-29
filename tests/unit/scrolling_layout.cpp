@@ -156,6 +156,25 @@ UMBRIEL_TEST(moveViewVerticalReordersWithinAColumn) {
   CHECK(!fixture.layout.moveViewVertical(stub(1), -1));
 }
 
+UMBRIEL_TEST(swapViewsAcrossColumnsKeepsGeometryWithTheSlots) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(0, 1.0 / 3.0));
+  CHECK(fixture.layout.setWidthFraction(1, 2.0 / 3.0));
+  fixture.layout.arrange(kUsable);
+  const wlr_box firstSlot = fixture.layout.targetBox(stub(0));
+  const wlr_box secondSlot = fixture.layout.targetBox(stub(1));
+
+  CHECK(fixture.layout.swapViews(stub(0), stub(1)));
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.columnOf(stub(1)), 0);
+  CHECK_EQ(fixture.layout.targetBox(stub(1)).x, firstSlot.x);
+  CHECK_EQ(fixture.layout.targetBox(stub(1)).width, firstSlot.width);
+  CHECK_EQ(fixture.layout.columnOf(stub(0)), 1);
+  CHECK_EQ(fixture.layout.targetBox(stub(0)).x, secondSlot.x);
+  CHECK_EQ(fixture.layout.targetBox(stub(0)).width, secondSlot.width);
+}
+
 // width math
 UMBRIEL_TEST(halfWidthColumnMatchesTheGapAwareFormula) {
   Fixture fixture;

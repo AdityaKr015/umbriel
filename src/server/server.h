@@ -229,9 +229,6 @@ namespace umbriel {
     // Re-evaluate application idle inhibitors after a surface's presentation
     // visibility changes.
     void updateIdleInhibit();
-    // Rotate the view registry until the front is a mapped view on the active
-    // workspace, and focus it. Repeated calls walk the list.
-    bool focusNextWindow();
     // Lock the next XKB group on every physical keyboard. False when no keyboard
     // has a second layout to switch to.
     bool cycleKeyboardLayout();

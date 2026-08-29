@@ -189,10 +189,6 @@ namespace umbriel {
       if (focused == nullptr) {
         return false;
       }
-      if (source.layout().mode() == LayoutMode::Master) {
-        moveViewToWorkspace(server, *focused, target);
-        return true;
-      }
       const int columnIndex = source.layout().columnOf(focused);
       const auto& sourceColumns = source.layout().columns();
       if (columnIndex < 0 || columnIndex >= static_cast<int>(sourceColumns.size())) {

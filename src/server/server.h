@@ -2,6 +2,7 @@
 #include "core/animation.h"
 #include "core/dirty.h"
 #include "input/modifier_tap.h"
+#include "input/surface_layouts.h"
 #include "scene/border_rect.h"
 #include "server/focus.h"
 #include "view/registry.h"
@@ -13,6 +14,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <sys/types.h>
 #include <utility>
 #include <vector>
@@ -242,6 +244,12 @@ namespace umbriel {
     // canonical source for IPC state and compatible keyboard synchronization.
     void keyboardLayoutChanged(Keyboard* origin);
 
+    // The one way keyboard focus reaches a surface. Toplevels, layer-shell
+    // surfaces and the lock screen all route through here so that
+    // input.keyboard.track_layout sees every focus change.
+    void notifyKeyboardEnter(wlr_surface* surface);
+    void notifyKeyboardClearFocus();
+
     struct KeyboardLayoutState {
       std::vector<std::string> names;
       uint32_t currentIndex = 0;
@@ -376,6 +384,8 @@ namespace umbriel {
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
     void syncKeyboardLayout(Keyboard* source);
+    // Restore a remembered named layout through a compatible physical keyboard.
+    bool setKeyboardLayout(std::string_view layout);
     void addPointer(wlr_input_device* device);
     void addTouch(wlr_input_device* device);
     struct TabletDevice {
@@ -599,6 +609,7 @@ namespace umbriel {
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;
+    SurfaceLayoutMemory m_surfaceLayouts;
     Keyboard* m_keyboardLayoutSource = nullptr;
     ModifierTapState m_modifierTap;
     std::vector<std::unique_ptr<PointerDevice>> m_pointers;

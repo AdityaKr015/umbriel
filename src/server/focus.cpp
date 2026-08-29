@@ -226,7 +226,7 @@ namespace umbriel {
     if (seat->drag == nullptr && wlr_seat_keyboard_has_grab(seat)) {
       wlr_seat_keyboard_end_grab(seat);
     }
-    wlr_seat_keyboard_notify_clear_focus(seat);
+    m_server.notifyKeyboardClearFocus();
     m_server.refreshOutputPolicies();
   }
 

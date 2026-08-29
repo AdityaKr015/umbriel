@@ -3,6 +3,7 @@
 #include "config/config.h"
 
 #include <string>
+#include <string_view>
 #include <wayland-server-core.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -33,6 +34,9 @@ namespace umbriel {
     // Adopt the source keyboard's effective layout when this keymap contains
     // the same named layout, without selecting this keyboard on the seat.
     void syncLayoutFrom(const Keyboard& source);
+    // Select a named layout on this physical keyboard without making it the
+    // seat's active input device. False when the keymap lacks that layout.
+    bool setLayoutByName(std::string_view name);
 
   private:
     static void onModifiers(wl_listener* listener, void* data);

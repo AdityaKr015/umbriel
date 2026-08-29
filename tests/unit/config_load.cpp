@@ -16,6 +16,7 @@ using umbriel::ContentType;
 using umbriel::HdrMode;
 using umbriel::LayoutMode;
 using umbriel::ModifierKey;
+using umbriel::TrackLayout;
 using umbriel::VrrMode;
 
 namespace {
@@ -1137,6 +1138,22 @@ options = "grp:win_space_toggle"
     CHECK(device->layout == std::optional<std::string>("us,fr"));
     CHECK(device->options == std::optional<std::string>("grp:win_space_toggle"));
   }
+}
+
+UMBRIEL_TEST(keyboardTrackLayoutLoadsAndRejectsUnknownValues) {
+  const TempConfig file;
+  file.write("[input.keyboard]\ntrack_layout = \"window\"\n");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().input.keyboard.trackLayout, TrackLayout::Window);
+  CHECK(!containsDiagnostic(store, "unknown key input.keyboard.track_layout"));
+
+  file.write("[input.keyboard]\ntrack_layout = \"surface\"\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().input.keyboard.trackLayout, TrackLayout::Global);
+  CHECK(containsDiagnostic(store, "expected global|window"));
 }
 
 UMBRIEL_TEST(tabletConfigLoads) {

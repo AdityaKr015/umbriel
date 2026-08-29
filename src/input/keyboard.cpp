@@ -124,6 +124,18 @@ namespace umbriel {
     }
   }
 
+  bool Keyboard::setLayoutByName(std::string_view name) {
+    if (m_virtual || m_keyboard->keymap == nullptr || m_keyboard->xkb_state == nullptr) {
+      return false;
+    }
+    const std::optional<xkb_layout_index_t> group = layoutGroupNamed(m_keyboard->keymap, name);
+    if (!group.has_value()) {
+      return false;
+    }
+    setLayout(*group);
+    return true;
+  }
+
   void Keyboard::setLayout(xkb_layout_index_t group) {
     if (m_virtual
         || m_keyboard->keymap == nullptr

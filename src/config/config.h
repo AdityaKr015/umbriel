@@ -122,6 +122,13 @@ namespace umbriel {
     Always,
     Fullscreen,
   };
+
+  // Whether a keyboard layout change applies to the whole session or only to the
+  // surface that was focused when it happened.
+  enum class TrackLayout : uint8_t {
+    Global,
+    Window,
+  };
   enum class HdrMode {
     Off,
     On,
@@ -575,6 +582,9 @@ namespace umbriel {
         int repeatRate = 25;
         int repeatDelay = 600;
         bool numlockToggle = false;
+        // Global by default: the layout is one session-wide setting, which is the
+        // behaviour every existing config already relies on.
+        TrackLayout trackLayout = TrackLayout::Global;
         bool operator==(const Keyboard&) const = default;
       } keyboard;
 

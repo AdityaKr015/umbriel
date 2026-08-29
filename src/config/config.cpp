@@ -65,6 +65,17 @@ namespace umbriel {
       return std::nullopt;
     }
 
+    std::optional<TrackLayout> readTrackLayout(const toml::node& node) {
+      const auto value = node.value<std::string>();
+      if (value == "global") {
+        return TrackLayout::Global;
+      }
+      if (value == "window") {
+        return TrackLayout::Window;
+      }
+      return std::nullopt;
+    }
+
     std::optional<HdrMode> readHdrMode(const toml::node& node) {
       const auto value = node.value<std::string>();
       if (value == "off") {
@@ -1136,6 +1147,13 @@ namespace umbriel {
               .integer("repeat_rate", 0, 1000, in.keyboard.repeatRate)
               .integer("repeat_delay", 0, 10000, in.keyboard.repeatDelay)
               .boolean("numlock_toggle", in.keyboard.numlockToggle);
+          if (const toml::node* trackNode = k.take("track_layout")) {
+            if (const auto value = readTrackLayout(*trackNode)) {
+              in.keyboard.trackLayout = *value;
+            } else {
+              warnAt(trackNode->source(), "ignoring input.keyboard.track_layout (expected global|window)");
+            }
+          }
         });
         if (const toml::node* keyboardNode = s.node("keyboard");
             keyboardNode != nullptr && !validateKeyboardInput(in.keyboard, keyboardNode->source(), "input.keyboard")) {

@@ -434,11 +434,7 @@ namespace umbriel {
     if (seat->drag == nullptr && wlr_seat_keyboard_has_grab(seat)) {
       wlr_seat_keyboard_end_grab(seat);
     }
-    if (wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat)) {
-      wlr_seat_keyboard_notify_enter(seat, surface, keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
-    } else {
-      wlr_seat_keyboard_notify_enter(seat, surface, nullptr, 0, nullptr);
-    }
+    m_server->notifyKeyboardEnter(surface);
   }
 
   void View::cancelPositionAnimation() {

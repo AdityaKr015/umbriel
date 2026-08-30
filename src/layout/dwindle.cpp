@@ -455,18 +455,10 @@ namespace umbriel {
 
   bool DwindleLayout::consume(View* view, int direction) {
     Node* node = findNode(view);
-    const int column = columnOf(view);
-    const int destinationColumn = column + direction;
-    if ((direction != -1 && direction != 1)
-        || node == nullptr
-        || destinationColumn < 0
-        || destinationColumn >= static_cast<int>(m_flatColumns.size())) {
+    if ((direction != -1 && direction != 1) || node == nullptr) {
       return false;
     }
-    Node* destination = nodeAtFlatIndex(destinationColumn);
-    if (destination == nullptr || destination->type != Node::Leaf) {
-      return false;
-    }
+    Node* destination = findNode(umbriel::directionalNeighbor(m_targets, view, true, direction));
     return swapLeafViews(node, destination);
   }
 

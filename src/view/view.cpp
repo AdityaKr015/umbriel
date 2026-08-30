@@ -2013,12 +2013,14 @@ namespace umbriel {
           fallbackLayout->setConfig(&globalConfig);
         }
         const Layout& layout = target != nullptr ? target->layout() : *fallbackLayout;
+        const wlr_box tiledArea =
+            target != nullptr ? target->tiledArea() : applyLayoutStruts(usable, globalConfig.struts);
 
         Layout::InitialSize initial;
         const std::optional<Layout::InitialSize> namedScrollingColumnInitial =
             target != nullptr && rule.defaultScrollingColumn
             ? target->initialNamedScrollingColumnSize(
-                  this, usable, *rule.defaultScrollingColumn, rule.defaultScrollingColumnOrder, wantMaximized
+                  this, tiledArea, *rule.defaultScrollingColumn, rule.defaultScrollingColumnOrder, wantMaximized
               )
             : std::nullopt;
         if (wantMaximizeToEdges) {
@@ -2026,10 +2028,10 @@ namespace umbriel {
         } else if (namedScrollingColumnInitial) {
           initial = *namedScrollingColumnInitial;
         } else if (wantMaximized && target != nullptr) {
-          initial = target->initialMaximizedSize(this, usable);
+          initial = target->initialMaximizedSize(this, tiledArea);
         } else {
           const std::optional<double> widthFraction = wantMaximized ? std::optional<double>(1.0) : rule.defaultWidth;
-          initial = layout.initialSize(usable, widthFraction, target != nullptr ? target->focusedView() : nullptr);
+          initial = layout.initialSize(tiledArea, widthFraction, target != nullptr ? target->focusedView() : nullptr);
         }
         const XdgSizeHints hints = xdgSizeHints(m_toplevel);
         const int requestedWidth = (rule.defaultSize && !wantMaximized && !namedScrollingColumnInitial)

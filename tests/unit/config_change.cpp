@@ -332,6 +332,36 @@ UMBRIEL_TEST(layoutGapDoesNotReapplyOutputState) {
   CHECK(!effects.viewChrome);
 }
 
+UMBRIEL_TEST(layoutStrutsOnlyRefreshWorkspaceLayout) {
+  const Config before;
+  Config after;
+  after.layout.struts.left = 32;
+  after.layout.struts.bottom = -8;
+
+  const ConfigEffects effects = ConfigEffects::between(before, after);
+  CHECK(effects.workspaceLayout);
+  CHECK(!effects.outputState);
+  CHECK(!effects.workspaceInventory);
+  CHECK(!effects.viewChrome);
+  CHECK(!effects.layerEffects);
+}
+
+UMBRIEL_TEST(workspaceRuleStrutsOnlyRefreshWorkspaceLayout) {
+  Config before;
+  umbriel::WorkspaceConfig rule;
+  rule.name = "dev";
+  before.workspaceRules.push_back(rule);
+  Config after = before;
+  after.workspaceRules[0].layout.struts.left = 24;
+
+  const ConfigEffects effects = ConfigEffects::between(before, after);
+  CHECK(effects.workspaceLayout);
+  CHECK(!effects.outputState);
+  CHECK(!effects.workspaceInventory);
+  CHECK(!effects.viewChrome);
+  CHECK(!effects.layerEffects);
+}
+
 UMBRIEL_TEST(outputStateAndWorkspaceInventoryAreIndependent) {
   Config before;
   OutputRule original;

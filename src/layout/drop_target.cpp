@@ -210,8 +210,8 @@ namespace umbriel {
     }
 
     ScrollingTarget computeScrollingTarget(
-        const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, double scroll, double worldX,
-        double worldY, const DropTargetOptions& options
+        const Workspace& workspace, const ScrollingLayout& layout, const wlr_box& usable, const wlr_box& visible,
+        double scroll, double worldX, double worldY, const DropTargetOptions& options
     ) {
       const bool v = workspace.scrollingVertical();
       const int edgePad = workspace.layoutConfig().edgePad;
@@ -220,7 +220,6 @@ namespace umbriel {
       const int columnCount = static_cast<int>(layout.columns().size());
       const double primaryWorld = v ? worldY : worldX;
       const int primaryOrigin = v ? usable.y : usable.x;
-      const int primaryExtent = v ? usable.height : usable.width;
       const double crossWorld = v ? worldX : worldY;
       const int crossOrigin = v ? usable.x : usable.y;
       const int crossExtent = v ? usable.width : usable.height;
@@ -229,10 +228,12 @@ namespace umbriel {
       // prepend and append targets when the strip overflows. Overview cards
       // projected beyond the viewport remain ordinary content targets.
       if (options.reserveScrollingViewportEdges && columnCount > 0 && layout.maxScroll(viewportPrimary) > 0) {
-        if (atStripStartEdge(primaryWorld, primaryOrigin)) {
+        const int visiblePrimaryOrigin = v ? visible.y : visible.x;
+        const int visiblePrimaryExtent = v ? visible.height : visible.width;
+        if (atStripStartEdge(primaryWorld, visiblePrimaryOrigin)) {
           return {.column = 0, .row = -1};
         }
-        if (atStripEndEdge(primaryWorld, primaryOrigin, primaryExtent)) {
+        if (atStripEndEdge(primaryWorld, visiblePrimaryOrigin, visiblePrimaryExtent)) {
           return {.column = columnCount, .row = -1};
         }
       }
@@ -392,7 +393,8 @@ namespace umbriel {
     if (workspace.group() == nullptr || workspace.group()->output() == nullptr) {
       return result;
     }
-    const wlr_box usable = workspace.group()->output()->usableArea();
+    const wlr_box visible = workspace.usableArea();
+    const wlr_box usable = workspace.tiledArea();
     if (usable.width <= 0 || usable.height <= 0) {
       return result;
     }
@@ -415,7 +417,8 @@ namespace umbriel {
     } else if (const ScrollingLayout* scrolling = workspace.scrollingLayout()) {
       const ScrollingLayout& layout = *scrolling;
       const double scroll = layout.scroll();
-      const ScrollingTarget target = computeScrollingTarget(workspace, layout, usable, scroll, worldX, worldY, options);
+      const ScrollingTarget target =
+          computeScrollingTarget(workspace, layout, usable, visible, scroll, worldX, worldY, options);
       result.column = target.column;
       result.row = target.row;
       if (target.row >= 0) {
@@ -423,8 +426,8 @@ namespace umbriel {
       } else {
         const bool v = workspace.scrollingVertical();
         const double primaryWorld = v ? worldY : worldX;
-        const int primaryOrigin = v ? usable.y : usable.x;
-        const int primaryExtent = v ? usable.height : usable.width;
+        const int primaryOrigin = v ? visible.y : visible.x;
+        const int primaryExtent = v ? visible.height : visible.width;
         const int edgePad = workspace.layoutConfig().edgePad;
         if (options.reserveScrollingViewportEdges
             && target.column == 0
@@ -433,12 +436,12 @@ namespace umbriel {
           result.hintBox = v
               ? wlr_box{
                     .x = usable.x + edgePad,
-                    .y = usable.y,
+                    .y = visible.y,
                     .width = std::max(1, usable.width - 2 * edgePad),
                     .height = kColumnHintWidth,
                 }
               : wlr_box{
-                    .x = usable.x,
+                    .x = visible.x,
                     .y = usable.y + edgePad,
                     .width = kColumnHintWidth,
                     .height = std::max(1, usable.height - 2 * edgePad),
@@ -451,12 +454,12 @@ namespace umbriel {
           result.hintBox = v
               ? wlr_box{
                     .x = usable.x + edgePad,
-                    .y = usable.y + usable.height - kColumnHintWidth,
+                    .y = visible.y + visible.height - kColumnHintWidth,
                     .width = std::max(1, usable.width - 2 * edgePad),
                     .height = kColumnHintWidth,
                 }
               : wlr_box{
-                    .x = usable.x + usable.width - kColumnHintWidth,
+                    .x = visible.x + visible.width - kColumnHintWidth,
                     .y = usable.y + edgePad,
                     .width = kColumnHintWidth,
                     .height = std::max(1, usable.height - 2 * edgePad),
@@ -470,7 +473,7 @@ namespace umbriel {
     }
 
     if (options.clipHintToUsable) {
-      result.hintBox = clampHintBox(result.hintBox, usable);
+      result.hintBox = clampHintBox(result.hintBox, visible);
     }
     return result;
   }

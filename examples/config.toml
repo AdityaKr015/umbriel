@@ -178,6 +178,14 @@ mode = "scrolling"             # "scrolling", "dwindle", or "master"
 gap = 8                        # 0-500
 width_presets = [0.333, 0.5, 0.667] # width and height cycling, tiled and floating alike
 
+[layout.struts]
+# Signed logical pixels around normal tiled layouts, applied after panels.
+# Negative values expand the tiled area beyond those bounds.
+left = 0                       # -65535 to 65535
+right = 0
+top = 0
+bottom = 0
+
 [layout.scrolling]
 # Vertical workspaces stack horizontal lanes from top to bottom.
 # direction = "horizontal"
@@ -200,6 +208,7 @@ new_on_top = true             # place new windows at the top of the stack
 # name = "chat"
 # layout.mode = "dwindle"
 # layout.gap = 4
+# layout.struts.top = 24       # override one edge and inherit the others
 # layout.scrolling.center_underfull_strip = false
 # layout.dwindle.preserve_split = true
 

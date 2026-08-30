@@ -215,6 +215,47 @@ UMBRIEL_TEST(dwindlePreserveSplitDefaultsToFalse) {
   CHECK(!store.config().layout.dwindle.preserveSplit);
 }
 
+UMBRIEL_TEST(layoutStrutsLoadGloballyAndPerWorkspace) {
+  const TempConfig file;
+  file.write(R"(
+[layout.struts]
+left = -12
+right = 24
+top = 36
+bottom = -48
+surprise = 1
+
+[output.DP-1]
+workspaces = ["dev"]
+
+[[workspace]]
+name = "dev"
+
+[workspace.layout.struts]
+left = 50
+bottom = -8
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK_EQ(store.config().layout.struts.left, -12);
+  CHECK_EQ(store.config().layout.struts.right, 24);
+  CHECK_EQ(store.config().layout.struts.top, 36);
+  CHECK_EQ(store.config().layout.struts.bottom, -48);
+  CHECK_EQ(store.config().workspaceRules.size(), size_t{1});
+  const auto& overrides = store.config().workspaceRules[0].layout.struts;
+  CHECK(overrides.left.has_value());
+  CHECK_EQ(*overrides.left, 50);
+  CHECK(!overrides.right.has_value());
+  CHECK(!overrides.top.has_value());
+  CHECK(overrides.bottom.has_value());
+  CHECK_EQ(*overrides.bottom, -8);
+  CHECK(containsDiagnostic(store, "unknown key layout.struts.surprise"));
+}
+
 UMBRIEL_TEST(masterLayoutReadersLoadGlobalAndWorkspaceSettings) {
   const TempConfig file;
   file.write(R"(

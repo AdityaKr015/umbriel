@@ -43,6 +43,7 @@ UMBRIEL_TEST(globalLayoutUsesTheCallerOwnedConfig) {
 UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   Config config;
   config.layout.gap = 8;
+  config.layout.struts = {.left = 1, .right = 2, .top = 3, .bottom = 4};
   config.appearance.borderWidth = 2;
   config.layout.master.position = umbriel::MasterPosition::Right;
   config.layout.master.defaultWidthFraction = 0.58;
@@ -52,6 +53,8 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   WorkspaceConfig global;
   global.name = "dev";
   global.layout.gap = 12;
+  global.layout.struts.left = 10;
+  global.layout.struts.top = 30;
   global.layout.scrolling.defaultWidthFraction = 0.6;
   global.layout.master.defaultWidthFraction = 0.6;
   global.layout.master.newOnTop = true;
@@ -62,6 +65,7 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   dpOne.name = "dev";
   dpOne.output = "DP-1";
   dpOne.layout.gap = 20;
+  dpOne.layout.struts.right = 20;
   dpOne.layout.mode = LayoutMode::Dwindle;
   dpOne.layout.master.position = umbriel::MasterPosition::Left;
   dpOne.layout.master.defaultWidthFraction = 0.7;
@@ -80,6 +84,10 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   CHECK_EQ(onDpOne.gap, 20);
   CHECK_EQ(onDpOne.totalGap, 24);
   CHECK_EQ(onDpOne.edgePad, 22);
+  CHECK_EQ(onDpOne.struts.left, 10);
+  CHECK_EQ(onDpOne.struts.right, 20);
+  CHECK_EQ(onDpOne.struts.top, 30);
+  CHECK_EQ(onDpOne.struts.bottom, 4);
   CHECK(onDpOne.scrolling.defaultWidthFraction.has_value());
   CHECK_EQ(*onDpOne.scrolling.defaultWidthFraction, 0.6);
   CHECK(onDpOne.master.position == umbriel::MasterPosition::Left);
@@ -90,6 +98,10 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   const auto onDpTwo = umbriel::resolveWorkspaceLayout(config, "DP-2", "dev", 0);
   CHECK(onDpTwo.mode == LayoutMode::Scrolling);
   CHECK_EQ(onDpTwo.gap, 30);
+  CHECK_EQ(onDpTwo.struts.left, 10);
+  CHECK_EQ(onDpTwo.struts.right, 2);
+  CHECK_EQ(onDpTwo.struts.top, 30);
+  CHECK_EQ(onDpTwo.struts.bottom, 4);
   CHECK(onDpTwo.scrolling.defaultWidthFraction.has_value());
   CHECK_EQ(*onDpTwo.scrolling.defaultWidthFraction, 0.6);
   CHECK(onDpTwo.master.position == umbriel::MasterPosition::Right);
@@ -99,6 +111,10 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
 
   const auto elsewhere = umbriel::resolveWorkspaceLayout(config, "HDMI-A-1", "dev", 0);
   CHECK_EQ(elsewhere.gap, 12);
+  CHECK_EQ(elsewhere.struts.left, 10);
+  CHECK_EQ(elsewhere.struts.right, 2);
+  CHECK_EQ(elsewhere.struts.top, 30);
+  CHECK_EQ(elsewhere.struts.bottom, 4);
   CHECK(elsewhere.scrolling.defaultWidthFraction.has_value());
   CHECK_EQ(*elsewhere.scrolling.defaultWidthFraction, 0.6);
   CHECK(elsewhere.master.position == umbriel::MasterPosition::Right);

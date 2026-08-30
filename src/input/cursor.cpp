@@ -499,7 +499,17 @@ namespace umbriel {
         return;
       }
       Layout& layout = workspace->layout();
-      const uint32_t resolvedEdges = layout.resolveResizeEdges(view, edges, m_cursor->x, m_cursor->y);
+      uint32_t resolvedEdges = 0;
+      if (edges != 0) {
+        resolvedEdges = layout.resolveResizeEdges(view, edges, m_cursor->x, m_cursor->y);
+      } else {
+        const wlr_box presented = workspace->presentedTiledBox(view);
+        const wlr_box visible = workspace->usableArea();
+        wlr_box reachable{};
+        if (wlr_box_intersection(&reachable, &presented, &visible)) {
+          resolvedEdges = layout.sanitizeResizeEdges(view, resizeEdgesForPoint(reachable, m_cursor->x, m_cursor->y));
+        }
+      }
       if (resolvedEdges == 0) {
         if (workspace->focusedView() == view) {
           workspace->ensureFocusedVisible();
@@ -512,7 +522,7 @@ namespace umbriel {
       if (view->maximizedToEdges()) {
         view->setMaximizedToEdges(false);
       }
-      const wlr_box usable = workspace->group()->output()->usableArea();
+      const wlr_box usable = workspace->tiledArea();
       std::unique_ptr<ResizeGrab> session = layout.beginResize(view, resolvedEdges, usable);
       if (session == nullptr) {
         refreshInteractiveCursor();
@@ -1804,21 +1814,26 @@ namespace umbriel {
     if (view->workspace() == nullptr) {
       return 0;
     }
-    const wlr_box box = view->workspace()->layout().targetBox(view);
+    Workspace* workspace = view->workspace();
+    const wlr_box box = workspace->presentedTiledBox(view);
     if (box.width <= 0 || box.height <= 0) {
       return 0;
     }
-    uint32_t edges = view->workspace()->layout().resizeEdgesAt(view, m_cursor->x, m_cursor->y);
+    wlr_box reachable = box;
+    if (workspace->group() != nullptr && workspace->group()->output() != nullptr) {
+      const wlr_box usable = workspace->usableArea();
+      if (!wlr_box_intersection(&reachable, &box, &usable)) {
+        return 0;
+      }
+    }
+    uint32_t edges =
+        workspace->layout().sanitizeResizeEdges(view, resizeEdgesForPoint(reachable, m_cursor->x, m_cursor->y));
     // Advertise an edge that extends past the output from the reachable
     // output boundary, since the pointer cannot approach the real edge.
-    wlr_box usable = box;
-    if (view->workspace()->group() != nullptr && view->workspace()->group()->output() != nullptr) {
-      usable = view->workspace()->group()->output()->usableArea();
-    }
-    const double left = std::max<double>(box.x, usable.x);
-    const double right = std::min<double>(box.x + box.width, usable.x + usable.width);
-    const double top = std::max<double>(box.y, usable.y);
-    const double bottom = std::min<double>(box.y + box.height, usable.y + usable.height);
+    const double left = reachable.x;
+    const double right = reachable.x + reachable.width;
+    const double top = reachable.y;
+    const double bottom = reachable.y + reachable.height;
     if ((edges & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) != 0) {
       const double dist = (edges & WLR_EDGE_LEFT) != 0 ? std::abs(m_cursor->x - left) : std::abs(m_cursor->x - right);
       if (dist > kHoverSlop) {
@@ -1932,7 +1947,7 @@ namespace umbriel {
       resetMode();
       return;
     }
-    const wlr_box usable = grab->workspace->group()->output()->usableArea();
+    const wlr_box usable = grab->workspace->tiledArea();
     grab->session->applyDelta(m_cursor->x - grab->startX, m_cursor->y - grab->startY, usable);
     wlr_xdg_toplevel_set_maximized(grab->view->toplevel(), false);
     grab->workspace->markArrange(false);

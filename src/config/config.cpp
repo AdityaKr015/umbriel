@@ -381,6 +381,14 @@ namespace umbriel {
       return parsed;
     }
 
+    template <typename Struts> void readLayoutStruts(Section& section, Struts& struts) {
+      constexpr int kStrutLimit = 65535;
+      section.integer("left", -kStrutLimit, kStrutLimit, struts.left)
+          .integer("right", -kStrutLimit, kStrutLimit, struts.right)
+          .integer("top", -kStrutLimit, kStrutLimit, struts.top)
+          .integer("bottom", -kStrutLimit, kStrutLimit, struts.bottom);
+    }
+
     void readWorkspaceLayoutOverrides(
         const toml::table& section, std::string_view context, WorkspaceLayoutOverrides& overrides
     ) {
@@ -392,6 +400,7 @@ namespace umbriel {
               overrides.mode = mode;
             }
             s.integer("gap", 0, 500, overrides.gap);
+            s.sub("struts", [&](Section& struts) { readLayoutStruts(struts, overrides.struts); });
             if (auto presets = readWidthPresets(s, layoutContext)) {
               overrides.widthPresets = std::move(*presets);
             }
@@ -924,6 +933,7 @@ namespace umbriel {
           loaded.layout.mode = *mode;
         }
         s.integer("gap", 0, 500, loaded.layout.gap);
+        s.sub("struts", [&](Section& struts) { readLayoutStruts(struts, loaded.layout.struts); });
         if (auto presets = readWidthPresets(s, "layout")) {
           loaded.layout.widthPresets = std::move(*presets);
         }

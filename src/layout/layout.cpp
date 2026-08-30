@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <ranges>
@@ -17,6 +18,26 @@ extern "C" {
 }
 
 namespace umbriel {
+
+  wlr_box applyLayoutStruts(const wlr_box& area, const LayoutStruts& struts) {
+    const auto coordinate = [](int value, int offset) {
+      return static_cast<int>(std::clamp(
+          static_cast<int64_t>(value) + offset, static_cast<int64_t>(std::numeric_limits<int>::min()),
+          static_cast<int64_t>(std::numeric_limits<int>::max())
+      ));
+    };
+    const auto extent = [](int value, int start, int end) {
+      return static_cast<int>(std::clamp(
+          static_cast<int64_t>(value) - start - end, int64_t{0}, static_cast<int64_t>(std::numeric_limits<int>::max())
+      ));
+    };
+    return {
+        .x = coordinate(area.x, struts.left),
+        .y = coordinate(area.y, struts.top),
+        .width = extent(area.width, struts.left, struts.right),
+        .height = extent(area.height, struts.top, struts.bottom),
+    };
+  }
 
   std::optional<std::vector<View*>> resolveLayoutMembers(size_t memberCount, std::span<const LayoutMember> members) {
     std::vector<View*> resolved(memberCount, nullptr);

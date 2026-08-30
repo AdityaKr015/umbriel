@@ -464,13 +464,26 @@ namespace umbriel {
   }
 
   int Workspace::scrollViewportExtent() const {
-    if (m_group == nullptr || m_group->output() == nullptr) {
-      return 1;
-    }
-    const wlr_box usable = m_group->output()->usableArea();
+    const wlr_box usable = tiledArea();
     const int extent = scrollingVertical() ? usable.height : usable.width;
     return std::max(1, extent - 2 * m_layoutConfig.edgePad);
   }
+
+  wlr_box Workspace::usableArea() const {
+    if (m_group == nullptr || m_group->output() == nullptr) {
+      return {};
+    }
+    Output* output = m_group->output();
+    wlr_box area = output->usableArea();
+    if (area.width <= 0 || area.height <= 0) {
+      area = output->layoutBox();
+    }
+    return area;
+  }
+
+  wlr_box Workspace::tiledArea() const { return applyLayoutStruts(usableArea(), m_layoutConfig.struts); }
+
+  wlr_box Workspace::presentedTiledBox(const View* view) const { return tiledTargetBox(view, usableArea()); }
 
   void Workspace::detachFromLayout(View* view) {
     ScrollingLayout* scrolling = scrollingLayout();
@@ -530,7 +543,7 @@ namespace umbriel {
       return;
     }
 
-    m_layout->arrange(usable);
+    m_layout->arrange(applyLayoutStruts(usable, m_layoutConfig.struts));
     // The map-time IPC event can fire before this arrange runs, leaving the previous window positions in the listing.
     // Re-emit now that the layout boxes are settled; the event coalescer caps this at one per frame.
     m_group->server()->scheduleIpcWindowsEvent();
@@ -718,18 +731,13 @@ namespace umbriel {
     }
     if (scrollingLayout() != nullptr) {
       const bool vertical = scrollingVertical();
-      const int usablePrimary = vertical ? usable.height : usable.width;
-      const int layoutPrimary = vertical ? target.height : target.width;
+      const wlr_box tiled = applyLayoutStruts(usable, m_layoutConfig.struts);
       if (vertical) {
         target.x = usable.x;
-        if (layoutPrimary < usablePrimary) {
-          target.y -= m_layoutConfig.edgePad;
-        }
+        target.y = usable.y + target.y - tiled.y;
       } else {
         target.y = usable.y;
-        if (layoutPrimary < usablePrimary) {
-          target.x -= m_layoutConfig.edgePad;
-        }
+        target.x = usable.x + target.x - tiled.x;
       }
     } else {
       target.x = usable.x;
@@ -1361,13 +1369,17 @@ namespace umbriel {
 
   void Workspace::applyLayoutConfig(ResolvedLayoutConfig layoutConfig) {
     const bool centerFocusedChanged = m_layoutConfig.scrolling.centerFocused != layoutConfig.scrolling.centerFocused;
+    const bool strutsChanged = m_layoutConfig.struts != layoutConfig.struts;
     m_layoutConfig = std::move(layoutConfig);
     if (m_layout != nullptr && m_layout->mode() == m_layoutConfig.mode) {
       m_layout->setConfig(&m_layoutConfig);
       m_layout->setConstraints(&viewLayoutConstraints);
-      if (centerFocusedChanged) {
-        if (ScrollingLayout* scrolling = scrollingLayout(); scrolling != nullptr && m_focusedView != nullptr) {
-          scrolling->reconcileFocusedColumn(scrolling->columnOf(m_focusedView), scrollViewportExtent());
+      if (ScrollingLayout* scrolling = scrollingLayout(); scrolling != nullptr) {
+        const int focusedColumn = m_focusedView != nullptr ? scrolling->columnOf(m_focusedView) : -1;
+        if ((centerFocusedChanged || strutsChanged) && focusedColumn >= 0) {
+          scrolling->reconcileFocusedColumn(focusedColumn, scrollViewportExtent());
+        } else if (centerFocusedChanged || strutsChanged) {
+          clampScrollToRange();
         }
       }
       markArrange(true);

@@ -56,6 +56,15 @@ namespace umbriel {
     [[nodiscard]] ScrollingLayout* scrollingLayout();
     [[nodiscard]] const ScrollingLayout* scrollingLayout() const;
     [[nodiscard]] bool scrollingVertical() const;
+    // Logical output area left after layer-shell exclusive zones.
+    [[nodiscard]] wlr_box usableArea() const;
+    // Layer-shell usable area with this workspace's configured struts applied.
+    // Normal tiled layout uses this box; floating, maximize-to-edges, and
+    // fullscreen deliberately use their broader areas.
+    [[nodiscard]] wlr_box tiledArea() const;
+    // Tiled view box used for presentation. Maximize-to-edges maps the
+    // scrolling strip position back into the unstrutted usable area.
+    [[nodiscard]] wlr_box presentedTiledBox(const View* view) const;
     // Primary extent the strip scrolls within, less edge padding on both sides.
     // At least 1, so callers can divide by it.
     [[nodiscard]] int scrollViewportExtent() const;

@@ -54,6 +54,18 @@ namespace umbriel {
       if (overrides.gap) {
         resolved.gap = *overrides.gap;
       }
+      if (overrides.struts.left) {
+        resolved.struts.left = *overrides.struts.left;
+      }
+      if (overrides.struts.right) {
+        resolved.struts.right = *overrides.struts.right;
+      }
+      if (overrides.struts.top) {
+        resolved.struts.top = *overrides.struts.top;
+      }
+      if (overrides.struts.bottom) {
+        resolved.struts.bottom = *overrides.struts.bottom;
+      }
       if (overrides.scrolling.defaultWidthFraction) {
         resolved.scrolling.defaultWidthFraction = overrides.scrolling.defaultWidthFraction;
       }
@@ -261,6 +273,7 @@ namespace umbriel {
     ResolvedLayoutConfig resolved;
     resolved.mode = config.layout.mode;
     resolved.gap = config.layout.gap;
+    resolved.struts = config.layout.struts;
     resolved.widthPresets = config.layout.widthPresets;
     resolved.scrolling.defaultWidthFraction = config.layout.scrolling.defaultWidthFraction;
     resolved.scrolling.centerUnderfullStrip = config.layout.scrolling.centerUnderfullStrip;

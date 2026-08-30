@@ -31,6 +31,26 @@ namespace umbriel {
     Right,
   };
 
+  struct LayoutStruts {
+    int left = 0;
+    int right = 0;
+    int top = 0;
+    int bottom = 0;
+    bool operator==(const LayoutStruts&) const = default;
+  };
+
+  struct LayoutStrutOverrides {
+    std::optional<int> left;
+    std::optional<int> right;
+    std::optional<int> top;
+    std::optional<int> bottom;
+    bool operator==(const LayoutStrutOverrides&) const = default;
+  };
+
+  // Apply the configured tiled-layout inset after layer-shell exclusive zones.
+  // Negative values deliberately expand the area beyond those bounds.
+  [[nodiscard]] wlr_box applyLayoutStruts(const wlr_box& area, const LayoutStruts& struts);
+
   using LayoutMemberId = uint32_t;
 
   struct LayoutMember {

@@ -567,6 +567,7 @@ unit_tests = [
   ['output-direction', ['tests/unit/output_direction.cpp'], []],
   ['output-frame-schedule', ['tests/unit/output_frame_schedule.cpp'], []],
   ['hdr-format', ['tests/unit/hdr_format.cpp'], []],
+  ['layout-struts', ['tests/unit/layout_struts.cpp'], []],
   ['scrolling-layout', ['tests/unit/scrolling_layout.cpp'], []],
   ['dwindle-layout', ['tests/unit/dwindle_layout.cpp'], []],
   ['master-layout', ['tests/unit/master_layout.cpp'], []],

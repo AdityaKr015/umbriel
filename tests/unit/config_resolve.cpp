@@ -12,6 +12,7 @@ using umbriel::LayerRule;
 using umbriel::LayoutMode;
 using umbriel::OutputIdentity;
 using umbriel::OutputRule;
+using umbriel::SecurityContextRule;
 using umbriel::VrrMode;
 using umbriel::WindowRule;
 using umbriel::WorkspaceConfig;
@@ -514,6 +515,42 @@ UMBRIEL_TEST(layerRulesMergeMatchingFieldsInOrder) {
   CHECK(!unmatched.blur);
   CHECK(!unmatched.ignoreAlpha);
   CHECK(!unmatched.optimized);
+}
+
+UMBRIEL_TEST(securityContextRulesGrantGlobalsByMetadata) {
+  Config config;
+
+  SecurityContextRule scoped;
+  scoped.sandboxEnginePattern = "^org\\.flatpak$";
+  scoped.sandboxEngineRegex = std::regex(scoped.sandboxEnginePattern);
+  scoped.appIdPattern = "^org\\.example\\.Bar$";
+  scoped.appIdRegex = std::regex(scoped.appIdPattern);
+  scoped.allowGlobals = {"zwlr_layer_shell_v1"};
+  config.securityContextRules.push_back(std::move(scoped));
+
+  SecurityContextRule wildcard;
+  wildcard.allowGlobals = {"ext_idle_notifier_v1"};
+  config.securityContextRules.push_back(std::move(wildcard));
+
+  SecurityContextRule partial;
+  partial.appIdPattern = "example";
+  partial.appIdRegex = std::regex(partial.appIdPattern);
+  partial.allowGlobals = {"zwlr_screencopy_manager_v1"};
+  config.securityContextRules.push_back(std::move(partial));
+
+  CHECK(umbriel::securityContextRuleAllowsGlobal(config, "org.flatpak", "org.example.Bar", "zwlr_layer_shell_v1"));
+  // Every specified match key must hold.
+  CHECK(!umbriel::securityContextRuleAllowsGlobal(config, "org.flatpak", "org.example.Other", "zwlr_layer_shell_v1"));
+  CHECK(!umbriel::securityContextRuleAllowsGlobal(config, "waypak", "org.example.Bar", "zwlr_layer_shell_v1"));
+  // Absent metadata never satisfies a pattern.
+  CHECK(!umbriel::securityContextRuleAllowsGlobal(config, nullptr, "org.example.Bar", "zwlr_layer_shell_v1"));
+  // A rule without match keys applies to every client, but only for its own globals.
+  CHECK(umbriel::securityContextRuleAllowsGlobal(config, nullptr, nullptr, "ext_idle_notifier_v1"));
+  // The whole value must match; a substring is not enough.
+  CHECK(
+      !umbriel::securityContextRuleAllowsGlobal(config, "org.flatpak", "org.example.Bar", "zwlr_screencopy_manager_v1")
+  );
+  CHECK(umbriel::securityContextRuleAllowsGlobal(config, nullptr, "example", "zwlr_screencopy_manager_v1"));
 }
 
 int main() { return RUN_TESTS(); }

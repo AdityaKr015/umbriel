@@ -10,6 +10,7 @@ using umbriel::Keybind;
 using umbriel::LayerRule;
 using umbriel::ModifierKey;
 using umbriel::OutputRule;
+using umbriel::SecurityContextRule;
 using umbriel::WindowRule;
 
 UMBRIEL_TEST(anIdenticalConfigChangesNothing) {
@@ -217,6 +218,11 @@ UMBRIEL_TEST(listSectionsAreCompared) {
     Config after;
     after.layerRules.push_back(LayerRule{});
     CHECK(ConfigChange::between(before, after).layerRules);
+  }
+  {
+    Config after;
+    after.securityContextRules.push_back(SecurityContextRule{});
+    CHECK(ConfigChange::between(before, after).securityContextRules);
   }
 }
 

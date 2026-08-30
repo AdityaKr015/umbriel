@@ -1790,6 +1790,85 @@ namespace umbriel {
       }
     }
 
+    void readSecurityContextRules(Section& root, Config& loaded) {
+      const toml::node* node = root.take("security_context_rule");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* rules = node->as_array();
+      if (rules == nullptr) {
+        warnAt(node->source(), "ignoring security_context_rule (expected [[security_context_rule]] array of tables)");
+        return;
+      }
+
+      for (const auto& entry : *rules) {
+        const auto* section = entry.as_table();
+        if (section == nullptr) {
+          warnAt(entry.source(), "ignoring security_context_rule entry (expected table)");
+          continue;
+        }
+        Section keys(*section, "security_context_rule", configStore().mutableDiagnostics());
+
+        SecurityContextRule rule;
+        bool valid = true;
+
+        if (const toml::node* matchNode = keys.take("match")) {
+          if (const auto* match = matchNode->as_table()) {
+            Section matchKeys(*match, "security_context_rule.match", configStore().mutableDiagnostics());
+            if (const toml::node* engineNode = matchKeys.take("sandbox_engine")) {
+              if (const auto value = engineNode->value<std::string>()) {
+                rule.sandboxEnginePattern = *value;
+                try {
+                  rule.sandboxEngineRegex = std::regex(rule.sandboxEnginePattern);
+                } catch (const std::regex_error& error) {
+                  warnAt(
+                      engineNode->source(), "invalid regex in security_context_rule.match.sandbox_engine: {}",
+                      error.what()
+                  );
+                  valid = false;
+                }
+              } else {
+                warnAt(engineNode->source(), "ignoring security_context_rule.match.sandbox_engine (expected string)");
+                valid = false;
+              }
+            }
+            if (const toml::node* appIdNode = matchKeys.take("app_id")) {
+              if (const auto value = appIdNode->value<std::string>()) {
+                rule.appIdPattern = *value;
+                try {
+                  rule.appIdRegex = std::regex(rule.appIdPattern);
+                } catch (const std::regex_error& error) {
+                  warnAt(appIdNode->source(), "invalid regex in security_context_rule.match.app_id: {}", error.what());
+                  valid = false;
+                }
+              } else {
+                warnAt(appIdNode->source(), "ignoring security_context_rule.match.app_id (expected string)");
+                valid = false;
+              }
+            }
+          } else {
+            warnAt(matchNode->source(), "ignoring security_context_rule.match (expected table)");
+            valid = false;
+          }
+        }
+
+        keys.strings("allow_globals", rule.allowGlobals);
+        // The filter refuses this global regardless; warning here tells the user why.
+        if (std::erase(rule.allowGlobals, "wp_security_context_manager_v1") > 0) {
+          warnAt(
+              entry.source(),
+              "ignoring wp_security_context_manager_v1 in security_context_rule.allow_globals (nested contexts stay "
+              "blocked)"
+          );
+        }
+
+        if (!valid) {
+          continue;
+        }
+        loaded.securityContextRules.push_back(std::move(rule));
+      }
+    }
+
     bool parseInto(Config& out) {
       ConfigStore& store = configStore();
       store.beginLoad();
@@ -1830,6 +1909,7 @@ namespace umbriel {
           readKeybinds(root, loaded);
           readWindowRules(root, loaded);
           readLayerRules(root, loaded);
+          readSecurityContextRules(root, loaded);
           readWorkspaces(root, loaded);
         }
 

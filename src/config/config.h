@@ -352,6 +352,23 @@ namespace umbriel {
     bool operator==(const ResolvedLayerRule&) const = default;
   };
 
+  // Grants extra globals to security-context clients whose metadata matches.
+  // Additive only: the base allowed set cannot be narrowed from configuration.
+  struct SecurityContextRule {
+    std::string sandboxEnginePattern;
+    std::string appIdPattern;
+    std::regex sandboxEngineRegex;
+    std::regex appIdRegex;
+    std::vector<std::string> allowGlobals;
+
+    // See WindowRule: the regexes are derived from the patterns.
+    [[nodiscard]] bool operator==(const SecurityContextRule& other) const {
+      return sandboxEnginePattern == other.sandboxEnginePattern
+          && appIdPattern == other.appIdPattern
+          && allowGlobals == other.allowGlobals;
+    }
+  };
+
   struct Config {
     struct Colors {
       std::array<float, 4> background{0.0784314F, 0.0784314F, 0.0980392F, 1.0F};
@@ -676,6 +693,7 @@ namespace umbriel {
     std::vector<OutputRule> outputs;
     std::vector<WindowRule> windowRules;
     std::vector<LayerRule> layerRules;
+    std::vector<SecurityContextRule> securityContextRules;
     std::vector<WorkspaceConfig> workspaceRules; // [[workspace]] layout rules
 
     bool operator==(const Config&) const = default;

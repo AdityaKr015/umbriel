@@ -82,6 +82,15 @@ namespace umbriel {
       std::println("{}", name.empty() ? "unnamed" : name);
     }
 
+    void printKeyboardLayouts(const nlohmann::json& ok) {
+      const size_t currentIndex = ok.value("current_index", size_t{0});
+      const auto& names = ok.at("names");
+      for (size_t index = 0; index < names.size(); ++index) {
+        const std::string name = names.at(index).get<std::string>();
+        std::println("{} {}", index == currentIndex ? "*" : " ", name.empty() ? "-" : name);
+      }
+    }
+
     void printLayers(const nlohmann::json& ok) {
       for (const auto& entry : ok) {
         const std::string layer = entry.value("layer", "");
@@ -599,7 +608,7 @@ namespace umbriel {
       {"layers", "", "list layer-shell surfaces", false, &IpcCommands::layers, &printLayers},
       {"color", "", "show color-management state", false, &IpcCommands::color, &printColor},
       {"tearing", "", "show tearing-control state", false, &IpcCommands::tearing, &printTearing},
-      {"keyboard-layouts", "", "list keyboard layouts", false, &IpcCommands::keyboardLayouts, nullptr},
+      {"keyboard-layouts", "", "list keyboard layouts", false, &IpcCommands::keyboardLayouts, &printKeyboardLayouts},
       {"output-create", "<name>", "create a headless output (headless sessions only)", true, &IpcCommands::outputCreate,
        &printOutputName},
       {"output-destroy", "<name>", "destroy an output (headless sessions only)", true, &IpcCommands::outputDestroy,

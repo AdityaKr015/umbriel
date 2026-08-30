@@ -580,6 +580,7 @@ unit_tests = [
   ['config-change', ['tests/unit/config_change.cpp'], []],
   ['config-load', ['tests/unit/config_load.cpp'], [umbriel_core_dep]],
   ['action-registry', ['tests/unit/action_registry.cpp'], [umbriel_core_dep]],
+  ['ipc-commands', ['tests/unit/ipc_commands.cpp'], [umbriel_core_dep]],
   ['config-resolve', ['tests/unit/config_resolve.cpp'], []],
 ]
 

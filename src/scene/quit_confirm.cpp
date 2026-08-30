@@ -1,6 +1,7 @@
 #include "scene/quit_confirm.h"
 
 #include "config/config.h"
+#include "scene/border_rect.h"
 #include "scene/color.h"
 #include "scene/text_buffer.h"
 #include "server/server.h"
@@ -13,7 +14,8 @@
 
 namespace {
 
-  constexpr int kPadding = 14;
+  constexpr int kPadding = 22;
+  constexpr int kBorderWidth = 2;
   constexpr int kDefaultMaxWidth = 800;
   constexpr int kAbsMaxWidth = 960;
   constexpr int kMargin = 24;
@@ -95,16 +97,23 @@ namespace umbriel {
 
     m_tree = wlr_scene_tree_create(m_parent);
 
-    // Shadow, then the rounded panel, then the text: same stacking as the
-    // cheatsheet panel, with the configured corner radius.
+    // Shadow, colored border, rounded panel, then text.
     const int cornerRadius = config().appearance.cornerRadius;
-    m_shadow.update(m_tree, rendered.logicalWidth, rendered.logicalHeight, 0, cornerRadius);
+    m_shadow.update(m_tree, rendered.logicalWidth, rendered.logicalHeight, kBorderWidth, cornerRadius);
+
+    float borderColor[4]{};
+    premultiplied(borderColor, colors.error, 1.0F);
+    wlr_scene_border* panelBorder = wlr_scene_border_create(m_tree, borderColor, borderColor);
+    applyBorderGeometry(
+        panelBorder, makeBorderRing(rendered.logicalWidth, rendered.logicalHeight, cornerRadius, kBorderWidth, 0),
+        kBorderWidth, 0
+    );
 
     float panelColor[4]{};
     premultiplied(panelColor, colors.background, 1.0F);
     wlr_scene_rect* panelRect =
         wlr_scene_rect_create(m_tree, rendered.logicalWidth, rendered.logicalHeight, panelColor);
-    wlr_scene_rect_set_corner_radius(panelRect, cornerRadius);
+    wlr_scene_rect_set_corner_radius(panelRect, nestedRadius(cornerRadius, kBorderWidth));
     (void)panelRect;
 
     wlr_scene_buffer* sceneBuf = wlr_scene_buffer_create(m_tree, rendered.buffer);

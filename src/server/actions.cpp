@@ -524,6 +524,17 @@ namespace umbriel {
       workspace->markArrange();
     }
 
+    bool actionLayoutScrollDrag(Server& /*server*/, const Keybind& bind, std::string* error) {
+      if (bind.mouseButton == 0) {
+        if (error != nullptr) {
+          *error = "layout-scroll-drag requires a mouse-button binding";
+        }
+        return false;
+      }
+      // Cursor owns the motion and release portion of this press-triggered action.
+      return true;
+    }
+
     template <int Direction> bool actionFocusAdjacent(Server& server, const Keybind& bind, std::string* /*error*/) {
       if (Overview* overview = server.overview(); overview != nullptr && overview->interactive()) {
         overview->focusAdjacent(Direction);
@@ -1348,6 +1359,7 @@ namespace umbriel {
         &actionWindowMoveToWorkspaceAdjacent<-1>,
         &actionConfigReload,
         &actionKeyboardLayoutNext,
+        &actionLayoutScrollDrag,
         &actionLayoutScroll<-1>,
         &actionLayoutScroll<1>,
         &actionLayoutScroll<-1>,

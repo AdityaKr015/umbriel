@@ -97,7 +97,7 @@ namespace umbriel {
     // up the real trees are hidden, so there is nothing to slide and switching is a discrete step rather than the
     // animated transition it is outside.
     bool selectRelativeWorkspace(int delta, Output* output);
-    [[nodiscard]] bool dragging() const { return m_dragCard != nullptr; }
+    [[nodiscard]] bool dragging() const { return m_dragCard != nullptr || m_middlePressed; }
 
   private:
     struct Card;
@@ -210,6 +210,7 @@ namespace umbriel {
     [[nodiscard]] WorkspaceGroup*
     workspaceGapAt(double lx, double ly, OutputState** outState, size_t* outIndex, wlr_box* outHintBox);
     [[nodiscard]] Workspace* preferredWorkspace() const;
+    void clearMiddlePress();
 
     void beginDrag();
     void updateDrag(double lx, double ly);
@@ -242,6 +243,13 @@ namespace umbriel {
     Workspace* m_pressWorkspace = nullptr;
     double m_pressX = 0;
     double m_pressY = 0;
+    Card* m_middlePressCard = nullptr;
+    Output* m_middleOutput = nullptr;
+    double m_middlePressX = 0;
+    double m_middlePressY = 0;
+    double m_middleAccumY = 0;
+    bool m_middlePressed = false;
+    bool m_middleDragging = false;
 
     Card* m_dragCard = nullptr;
     double m_dragOffsetX = 0;

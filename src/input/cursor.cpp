@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "core/log.h"
+#include "input/gestures.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
 #include "layout/drop_target.h"
@@ -590,6 +591,9 @@ namespace umbriel {
   void Cursor::resetMode() {
     m_server->hideInsertHint();
     View* view = grabbedView();
+    if (std::holds_alternative<ScrollDragGrab>(m_grab)) {
+      m_server->gestures()->endPointerScroll(true, 0);
+    }
     const bool restoreDragPresentation = std::holds_alternative<FloatingMoveGrab>(m_grab)
         || (std::get_if<TiledMoveGrab>(&m_grab) != nullptr && !std::get<TiledMoveGrab>(m_grab).pending);
     if (std::holds_alternative<FloatingResizeGrab>(m_grab) && view != nullptr) {
@@ -747,6 +751,18 @@ namespace umbriel {
         }
       }
       if (bound.has_value()) {
+        if (bound->action == KeybindAction::LayoutScrollDrag && m_server->gestures()->beginPointerScroll()) {
+          setActiveConstraint(nullptr);
+          m_grab = ScrollDragGrab{
+              .button = button,
+              .lastX = m_cursor->x,
+              .lastY = m_cursor->y,
+          };
+          m_moveButton = button;
+          setCompositorCursor("grabbing");
+          wlr_seat_pointer_clear_focus(m_server->seat()->wlr());
+          return;
+        }
         m_swallowedButtons.push_back(button);
         return;
       }
@@ -773,6 +789,20 @@ namespace umbriel {
         m_swallowedButtons.push_back(button);
       }
       return;
+    }
+
+    if (state == WL_POINTER_BUTTON_STATE_RELEASED) {
+      if (auto* grab = std::get_if<ScrollDragGrab>(&m_grab)) {
+        if (button == grab->button) {
+          m_server->gestures()->endPointerScroll(m_server->sessionLocked(), timeMsec);
+          resetMode();
+          // The grab cleared client focus on press and consumed every motion.
+          // Re-run hit testing so hover/focus is correct without requiring the
+          // user to jiggle the mouse after release.
+          processMotion(timeMsec, m_cursor->x, m_cursor->y);
+        }
+        return;
+      }
     }
 
     // Overview owns the pointer while it is up: cards are its own hit-test surface and the desktop underneath is inert.
@@ -1139,6 +1169,17 @@ namespace umbriel {
 
   void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY, bool allowFocusChange) {
     updateHotCorner();
+    if (auto* grab = std::get_if<ScrollDragGrab>(&m_grab)) {
+      if (m_server->sessionLocked()) {
+        m_server->gestures()->endPointerScroll(true, timeMsec);
+        resetMode();
+      } else {
+        m_server->gestures()->updatePointerScroll(m_cursor->x - grab->lastX, m_cursor->y - grab->lastY, timeMsec);
+        grab->lastX = m_cursor->x;
+        grab->lastY = m_cursor->y;
+      }
+      return;
+    }
     // Overview owns motion: cards follow a drag, panels keep passthrough, and
     // the inert desktop underneath never receives enter/motion or hover focus.
     if (Overview* overview = m_server->overview(); overview != nullptr

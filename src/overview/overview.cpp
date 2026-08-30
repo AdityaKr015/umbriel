@@ -30,6 +30,7 @@ namespace umbriel {
 
   namespace {
     constexpr Logger kLog("overview");
+    constexpr double kMiddleScrollStepPx = 105.0;
 
     // Gap between workspace thumbnails, as a fraction of the scaled row height.
     constexpr double kRowGapFraction = 0.1;
@@ -1119,6 +1120,7 @@ namespace umbriel {
     hideDropHint();
     m_pressCard = nullptr;
     m_pressWorkspace = nullptr;
+    clearMiddlePress();
     m_pendingFocus = focus;
     for (const auto& state : m_outputs) {
       WorkspaceGroup* group = state->output->workspaceGroup();
@@ -1214,6 +1216,7 @@ namespace umbriel {
   }
 
   void Overview::teardown() {
+    clearMiddlePress();
     if (m_dropHint != nullptr) {
       m_dropHint->hideImmediate();
     }
@@ -1320,6 +1323,9 @@ namespace umbriel {
     if (m_pressCard != nullptr && m_pressCard->view == view) {
       m_pressCard = nullptr;
     }
+    if (m_middlePressCard != nullptr && m_middlePressCard->view == view) {
+      m_middlePressCard = nullptr;
+    }
     if (m_drop.view == view) {
       m_drop.view = nullptr;
       m_drop.edge = 0;
@@ -1384,6 +1390,9 @@ namespace umbriel {
     if (target == nullptr) {
       if (m_pressCard == card) {
         m_pressCard = nullptr;
+      }
+      if (m_middlePressCard == card) {
+        m_middlePressCard = nullptr;
       }
       dropCard(view);
       if (source != nullptr) {
@@ -1523,6 +1532,9 @@ namespace umbriel {
     }
     if (m_pressCard != nullptr && m_pressCard->owner == it->get()) {
       m_pressCard = nullptr;
+    }
+    if (m_middleOutput == output) {
+      clearMiddlePress();
     }
     for (const auto& card : (*it)->cards) {
       destroyCard(card.get());
@@ -1680,6 +1692,17 @@ namespace umbriel {
     return output->workspaceGroup()->active();
   }
 
+  void Overview::clearMiddlePress() {
+    if (m_middleDragging) {
+      m_server->cursor()->overrideCursor(nullptr);
+    }
+    m_middlePressCard = nullptr;
+    m_middleOutput = nullptr;
+    m_middlePressed = false;
+    m_middleDragging = false;
+    m_middleAccumY = 0;
+  }
+
   // -: input
 
   bool Overview::handleButton(uint32_t button, bool pressed, double lx, double ly) {
@@ -1688,6 +1711,15 @@ namespace umbriel {
     }
 
     if (!pressed) {
+      if (button == BTN_MIDDLE) {
+        Card* card = m_middlePressCard;
+        const bool closeCard = m_middlePressed && !m_middleDragging;
+        clearMiddlePress();
+        if (closeCard && card != nullptr && card->view != nullptr && card->view->mapped()) {
+          wlr_xdg_toplevel_send_close(card->view->toplevel());
+        }
+        return true;
+      }
       if (button != BTN_LEFT) {
         return true;
       }
@@ -1709,9 +1741,15 @@ namespace umbriel {
 
     Card* card = cardAt(lx, ly);
     if (button == BTN_MIDDLE) {
-      if (card != nullptr && card->view != nullptr) {
-        wlr_xdg_toplevel_send_close(card->view->toplevel());
-      }
+      m_middlePressCard = card;
+      Workspace* workspace =
+          card != nullptr && card->view != nullptr ? card->view->workspace() : rowAt(lx, ly, nullptr, nullptr, false);
+      m_middleOutput = workspace != nullptr && workspace->group() != nullptr ? workspace->group()->output() : nullptr;
+      m_middlePressX = lx;
+      m_middlePressY = ly;
+      m_middleAccumY = 0;
+      m_middlePressed = true;
+      m_middleDragging = false;
       return true;
     }
     if (button != BTN_LEFT) {
@@ -1730,6 +1768,30 @@ namespace umbriel {
 
   void Overview::handleMotion(double lx, double ly) {
     if (!interactive()) {
+      return;
+    }
+    if (m_middlePressed) {
+      if (!m_middleDragging) {
+        const double dx = lx - m_middlePressX;
+        const double dy = ly - m_middlePressY;
+        if (dx * dx + dy * dy < kDragThreshold * kDragThreshold) {
+          return;
+        }
+        m_middleDragging = true;
+        m_middleAccumY = 0;
+        m_middlePressY = ly;
+        m_server->cursor()->overrideCursor("grabbing");
+      }
+      m_middleAccumY += ly - m_middlePressY;
+      m_middlePressY = ly;
+      while (m_middleAccumY <= -kMiddleScrollStepPx) {
+        m_middleAccumY += kMiddleScrollStepPx;
+        selectRelativeWorkspace(1, m_middleOutput);
+      }
+      while (m_middleAccumY >= kMiddleScrollStepPx) {
+        m_middleAccumY -= kMiddleScrollStepPx;
+        selectRelativeWorkspace(-1, m_middleOutput);
+      }
       return;
     }
     if (m_dragCard != nullptr) {

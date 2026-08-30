@@ -1,6 +1,6 @@
 # Appearance
 
-This page covers colors, window appearance, blur, and shadows.
+Configure colors, window appearance, blur, shadows, and other visual effects.
 
 ## Colors
 

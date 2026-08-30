@@ -1,6 +1,8 @@
 # Keybinds
 
-All keybinds live under `[keybinds]`. Chords are case-insensitive.
+Configure bindings under `[keybinds]` and use this reference to understand their
+syntax and behavior. See [Actions](actions.md) for the complete action
+reference.
 
 ```toml
 [keybinds]
@@ -9,20 +11,6 @@ All keybinds live under `[keybinds]`. Chords are case-insensitive.
 "Mod+I" = "overview-toggle"
 ```
 
-## Keyboard layouts
-
-Keybinds continue to match the effective symbol from the active keyboard
-layout. If the key's unmodified (level 0) symbol is printable non-ASCII,
-Umbriel also checks the same physical key in the keyboard's other configured
-layouts, in order, for a printable ASCII fallback. This keeps bindings such as
-`Mod+T` working after switching from `us` to a non-Latin layout while retaining
-active-layout symbol matching.
-
-Umbriel does not load an implicit reference layout. A keyboard configured with
-only a non-Latin layout, or whose other layouts have no printable ASCII symbol
-on that key, has no ASCII fallback. Add a suitable alternate to that keyboard's
-layout list (see [Input](input.md)), or bind the active layout's XKB keysym
-name.
 
 ## Modifiers
 
@@ -70,11 +58,6 @@ focus away from the detached window. Wheel-driven strip scrolling uses twice
 the configured step while dragging. The insertion hint and drop target follow
 the newly exposed columns without requiring additional pointer motion.
 
-## Actions
-
-The complete action reference is in [Actions](actions.md). This page covers
-how bindings are written and how they behave.
-
 ## Repeat
 
 Binds repeat while held, using `input.keyboard.repeat_rate` and
@@ -86,8 +69,6 @@ Binds repeat while held, using `input.keyboard.repeat_rate` and
 
 Scratchpad visibility and cycling actions never repeat, even if their binding
 does not set `repeat = false`.
-
-Binds with `allow_when_locked = true` continue repeating while the session is locked.
 
 ## Allow when locked
 
@@ -160,6 +141,21 @@ inside a submap, as a global emergency exit:
 ```toml
 "Escape" = "submap:reset"
 ```
+
+## Keyboard layouts
+
+Keybinds continue to match the effective symbol from the active keyboard
+layout. If the key's unmodified (level 0) symbol is printable non-ASCII,
+Umbriel also checks the same physical key in the keyboard's other configured
+layouts, in order, for a printable ASCII fallback. This keeps bindings such as
+`Mod+T` working after switching from `us` to a non-Latin layout while retaining
+active-layout symbol matching.
+
+Umbriel does not load an implicit reference layout. A keyboard configured with
+only a non-Latin layout, or whose other layouts have no printable ASCII symbol
+on that key, has no ASCII fallback. Add a suitable alternate to that keyboard's
+layout list (see [Input](input.md)), or bind the active layout's XKB keysym
+name.
 
 ## Example: Noctalia shell integration
 

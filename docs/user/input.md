@@ -1,6 +1,7 @@
 # Input
 
-This page covers compositor-wide input settings and per-device behavior.
+Configure keyboard, pointer, touchpad, tablet, cursor, and focus behavior in one
+place.
 
 ## Settings
 

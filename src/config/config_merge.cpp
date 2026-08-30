@@ -1,6 +1,7 @@
 #include "config/config_merge.h"
 
 #include "config/config_diag.h"
+#include "config/section.h"
 #include "core/log.h"
 
 #include <algorithm>
@@ -202,7 +203,10 @@ namespace umbriel::configmerge {
         emit(result, ConfigDiagnostic::Severity::Warning, &node->source(), "ignoring include (expected table)");
         return directive;
       }
-      const toml::node* filesNode = include->get("files");
+      // `include` is erased from the table before the config readers run, so the root section never sees it and never
+      // reports its unknown keys. This reader owns that report for the section's fixed vocabulary.
+      Section keys(*include, "include", result.diagnostics);
+      const toml::node* filesNode = keys.take("files");
       if (filesNode == nullptr) {
         return directive;
       }

@@ -908,6 +908,23 @@ UMBRIEL_TEST(missingIncludesRemainPendingUntilTheyLoad) {
   CHECK_EQ(store.config().colors.accentPrimary[0], 18.0F / 255.0F);
 }
 
+UMBRIEL_TEST(unknownIncludeKeysAreReported) {
+  // The merge erases `include` before the config readers run, so the merge is the only place that can report a typo in
+  // this section. Every file's own `include` table is checked, not just the root's.
+  const TempConfig file;
+  file.write("[include]\nfiles = [\"" + file.includeName() + "\"]\ndirs = [\"themes\"]\n");
+  file.writeInclude("[include]\npaths = []\n");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult loaded = store.reload();
+
+  CHECK(loaded.success);
+  CHECK(containsDiagnostic(store, "unknown key include.dirs"));
+  CHECK(containsDiagnostic(store, "unknown key include.paths"));
+  CHECK(!containsDiagnostic(store, "unknown key include.files"));
+}
+
 UMBRIEL_TEST(mainFileOverridesIncludedFiles) {
   // Noctalia's rendered theme lands in an include file; the user's root config must win on conflicts while still
   // picking up keys the include alone provides. This is what lets users override generated theme colors.

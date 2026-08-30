@@ -121,7 +121,7 @@ Use these pages for detailed topic references:
 
 - [Appearance](appearance.md): colors, borders, blur, and shadows.
 - [Animation](animation.md): transition timing, curves, and event-specific effects.
-- [Workspace Overview](workspace-overview.md): workspace overview and hot corners.
+- [Workspaces Overview](workspace-overview.md): an overview of all workspaces and hot corners.
 - [Layout](layout.md): scrolling, dwindle, and master layout behavior.
 - [Input](input.md): keyboard, pointer, tablet, cursor, and focus settings.
 - [Keybinds](keybinds.md): binding syntax, submaps, and binding behavior.
@@ -153,7 +153,7 @@ effects.
 
 ## Overview
 
-See [Workspace Overview](workspace-overview.md) for overview and hot corner settings.
+See [Workspaces Overview](workspace-overview.md) for overview and hot corner settings.
 
 ## Layout
 

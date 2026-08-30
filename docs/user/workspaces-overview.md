@@ -1,6 +1,6 @@
-# Workspace Overview
+# Workspaces Overview
 
-This page covers the workspace overview and hot corners.
+This page covers the overview of all workspaces and hot corners.
 
 ## Settings and behavior
 

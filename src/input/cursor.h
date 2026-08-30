@@ -66,8 +66,13 @@ namespace umbriel {
       uint32_t edges = 0;
       std::unique_ptr<ResizeGrab> session;
     };
-    using GrabState =
-        std::variant<PassthroughGrab, FloatingMoveGrab, TiledMoveGrab, FloatingResizeGrab, TiledResizeGrab>;
+    struct ScrollDragGrab {
+      uint32_t button = 0;
+      double lastX = 0;
+      double lastY = 0;
+    };
+    using GrabState = std::variant<
+        PassthroughGrab, FloatingMoveGrab, TiledMoveGrab, FloatingResizeGrab, TiledResizeGrab, ScrollDragGrab>;
 
     struct TabletToolState {
       Cursor* cursor = nullptr;

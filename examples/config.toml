@@ -329,6 +329,8 @@ follows_mouse = false
 "Mod+O" = "overview-toggle"
 # "Mod+Space" is taken above; pick a free chord for layout switching.
 # "Mod+Shift+K" = "keyboard-layout-next"
+# Drag a scrolling workspace directly along its configured axis.
+# "Mod+MouseMiddle" = "layout-scroll-drag"
 # Submaps can nest; entry binds should not repeat. Inspect the active layer with `umbriel submap`.
 # "Mod+R" = { action = "submap:resize", repeat = false }
 # Omit `submap` to add no post-action transition, or set it to "reset" to exit after the action.

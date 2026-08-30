@@ -9,6 +9,7 @@ skip_action() {
     session-quit) return 0 ;;  # opens the modal confirm dialog, and confirming it ends the instance mid-sweep; covered by 030_session_quit
     spawn)        return 0 ;;  # would start a process outside the container
     window-focus|window-focus-warp) return 0 ;;  # needs a live window id; covered by focused IPC checks
+    layout-scroll-drag) return 0 ;;  # requires a mouse press, motion, and release; covered by 315_scroll_drag
     # These require a second output; single-output rejection paths are covered by 610_output_actions.
     output-focus-*)             return 0 ;;
     window-focus-or-output-*)   return 0 ;;

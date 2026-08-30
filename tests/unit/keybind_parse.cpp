@@ -148,6 +148,12 @@ UMBRIEL_TEST(parsesMouseButtons) {
   CHECK_EQ(chord("Mod+MouseForward").mouseButton, uint32_t{BTN_EXTRA});
 }
 
+UMBRIEL_TEST(parsesLayoutScrollDragAction) {
+  Keybind bind;
+  CHECK(umbriel::parseAction("layout-scroll-drag", bind));
+  CHECK(bind.action == KeybindAction::LayoutScrollDrag);
+}
+
 UMBRIEL_TEST(rejectsBareWheelAndMouseBinds) {
   // An unmodified wheel or button bind would swallow all client input.
   Keybind bind;

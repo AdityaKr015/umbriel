@@ -171,6 +171,7 @@ namespace umbriel {
         {"dpms-on", "[<output>]", KeybindAction::DpmsOn, ActionArgKind::OptionalOutput},
         {"keyboard-layout-next", "", KeybindAction::KeyboardLayoutNext},
         {"layout-scroll-down", "", KeybindAction::LayoutScrollDown},
+        {"layout-scroll-drag", "", KeybindAction::LayoutScrollDrag},
         {"layout-scroll-left", "", KeybindAction::LayoutScrollLeft},
         {"layout-scroll-right", "", KeybindAction::LayoutScrollRight},
         {"layout-scroll-up", "", KeybindAction::LayoutScrollUp},

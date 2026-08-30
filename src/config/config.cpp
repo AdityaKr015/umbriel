@@ -26,6 +26,7 @@
 #include <format>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <string_view>
 #include <utility>
 
@@ -1698,6 +1699,19 @@ namespace umbriel {
             rule.defaultWorkspace = static_cast<int>(*value);
           }
         }
+
+        if (const toml::node* n = keys.take("default_scrolling_column")) {
+          const auto value = n->value<std::string>();
+          if (!value || value->empty()) {
+            warnAt(n->source(), "ignoring window_rule.default_scrolling_column (expected non-empty string)");
+          } else {
+            rule.defaultScrollingColumn = *value;
+          }
+        }
+        keys.integer(
+            "default_scrolling_column_order", std::numeric_limits<int>::min(), std::numeric_limits<int>::max(),
+            rule.defaultScrollingColumnOrder
+        );
 
         if (valid) {
           loaded.windowRules.push_back(std::move(rule));

@@ -418,6 +418,13 @@ default_size = [800, 600]
 # tearing = true                 # force a tearing request; false vetoes the client hint
 # hdr = "fullscreen"            # override the output HDR policy while focused
 
+# Keep tiled windows from several rules in one scrolling column. Lower orders
+# appear higher in horizontal scrolling and farther left in vertical scrolling.
+# [[window_rule]]
+# match.app_id = "^firefox$"
+# default_scrolling_column = "browsers"
+# default_scrolling_column_order = 10
+
 # [[window_rule]]
 # match.title = "^notificationtoasts_.+_desktop"
 # default_position = { x = 0, y = 0, anchor = "bottom_right" }

@@ -175,6 +175,12 @@ namespace umbriel {
       if (rule.defaultWorkspace) {
         resolved.defaultWorkspace = rule.defaultWorkspace;
       }
+      if (rule.defaultScrollingColumn) {
+        resolved.defaultScrollingColumn = rule.defaultScrollingColumn;
+      }
+      if (rule.defaultScrollingColumnOrder) {
+        resolved.defaultScrollingColumnOrder = rule.defaultScrollingColumnOrder;
+      }
       if (rule.defaultFullscreen) {
         resolved.defaultFullscreen = rule.defaultFullscreen;
       }

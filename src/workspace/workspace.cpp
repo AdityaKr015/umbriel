@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <iterator>
 #include <utility>
 #include "wlr.h"
 // clang-format on
@@ -47,6 +48,49 @@ namespace umbriel {
           .fullscreen = view != nullptr && view->layoutFullscreen(),
           .maximizedToEdges = view != nullptr && view->maximizedToEdges(),
       };
+    }
+
+    struct NamedScrollingColumnPlacement {
+      size_t column = 0;
+      int row = 0;
+    };
+
+    std::optional<NamedScrollingColumnPlacement> namedScrollingColumnPlacement(
+        const ScrollingLayout& layout, const View* joining, std::string_view name, std::optional<int> order
+    ) {
+      if (name.empty()) {
+        return std::nullopt;
+      }
+      const auto& columns = layout.columns();
+      for (size_t columnIndex = 0; columnIndex < columns.size(); ++columnIndex) {
+        const Column& column = columns[columnIndex];
+        const auto anchor = std::ranges::find_if(column.views, [&](const View* existing) {
+          return existing != joining
+              && existing->namedScrollingColumnName()
+              && *existing->namedScrollingColumnName() == name;
+        });
+        if (anchor == column.views.end()) {
+          continue;
+        }
+
+        const auto before = order
+            ? std::ranges::find_if(
+                  column.views,
+                  [&](const View* existing) {
+                    const std::optional<int> existingOrder = existing->namedScrollingColumnOrder();
+                    return existing != joining
+                        && existing->namedScrollingColumnName()
+                        && *existing->namedScrollingColumnName() == name
+                        && (!existingOrder || *existingOrder > *order);
+                  }
+              )
+            : column.views.end();
+        return NamedScrollingColumnPlacement{
+            .column = columnIndex,
+            .row = static_cast<int>(std::distance(column.views.begin(), before)),
+        };
+      }
+      return std::nullopt;
     }
   } // namespace
 
@@ -248,9 +292,19 @@ namespace umbriel {
     if (view == nullptr || !view->mapped() || !view->tiled() || m_layout->columnOf(view) >= 0) {
       return;
     }
-    const int index = layoutAttachIndex(view);
-    m_layout->insertView(view, index);
-    if (ScrollingLayout* scrolling = scrollingLayout(); scrolling != nullptr) {
+    ScrollingLayout* scrolling = scrollingLayout();
+    const std::optional<std::string>& name = view->namedScrollingColumnName();
+    const std::optional<NamedScrollingColumnPlacement> placement = scrolling != nullptr && name
+        ? namedScrollingColumnPlacement(*scrolling, view, *name, view->namedScrollingColumnOrder())
+        : std::nullopt;
+    view->m_ownsNamedScrollingColumnWidth = scrolling != nullptr && name.has_value() && !placement;
+    if (placement) {
+      scrolling->insertViewIntoColumn(view, static_cast<int>(placement->column), placement->row);
+    } else {
+      m_layout->insertView(view, layoutAttachIndex(view));
+    }
+
+    if (scrolling != nullptr && !placement) {
       const int column = scrolling->columnOf(view);
       const std::optional<double> configuredWidth =
           initialWidth ? initialWidth : m_layoutConfig.scrolling.defaultWidthFraction;
@@ -267,16 +321,24 @@ namespace umbriel {
     }
     markArrange(true);
   }
-  Layout::InitialSize Workspace::initialMaximizedSize(View* view, const wlr_box& usable) const {
+
+  std::unique_ptr<Layout> Workspace::previewLayout() const {
     LayoutCapture capture = m_layout->captureState();
     std::unique_ptr<Layout> preview = createLayout(m_layout->mode());
     preview->setConfig(&m_layoutConfig);
     preview->setConstraints(&viewLayoutConstraints);
     if (capture.snapshot == nullptr || !preview->restoreState(*capture.snapshot, capture.members)) {
-      kLog.error("failed to restore layout while resolving initial maximized size");
+      kLog.error("failed to restore layout preview");
+      return nullptr;
+    }
+    return preview;
+  }
+
+  Layout::InitialSize Workspace::initialMaximizedSize(View* view, const wlr_box& usable) const {
+    std::unique_ptr<Layout> preview = previewLayout();
+    if (preview == nullptr) {
       return m_layout->initialSize(usable, 1.0, m_focusedView);
     }
-
     preview->insertView(view, layoutAttachIndex(view));
     const int column = preview->columnOf(view);
     if (column >= 0 && !preview->isFullWidth(column)) {
@@ -285,6 +347,110 @@ namespace umbriel {
     preview->arrange(usable);
     const wlr_box target = preview->targetBox(view);
     return {.width = target.width, .height = target.height};
+  }
+
+  std::optional<Layout::InitialSize> Workspace::initialNamedScrollingColumnSize(
+      View* view, const wlr_box& usable, std::string_view group, std::optional<int> order, bool maximized
+  ) const {
+    const ScrollingLayout* scrolling = scrollingLayout();
+    if (view == nullptr || scrolling == nullptr) {
+      return std::nullopt;
+    }
+    const std::optional<NamedScrollingColumnPlacement> placement =
+        namedScrollingColumnPlacement(*scrolling, view, group, order);
+    if (!placement) {
+      return std::nullopt;
+    }
+
+    std::unique_ptr<Layout> basePreview = previewLayout();
+    auto* preview = dynamic_cast<ScrollingLayout*>(basePreview.get());
+    if (preview == nullptr) {
+      return std::nullopt;
+    }
+    if (placement->column >= preview->columns().size()) {
+      return std::nullopt;
+    }
+    const int column = static_cast<int>(placement->column);
+    preview->insertViewIntoColumn(view, column, placement->row);
+    if (maximized && !preview->isFullWidth(column)) {
+      preview->toggleFullWidth(column);
+    }
+    preview->arrange(usable);
+    const wlr_box target = preview->targetBox(view);
+    return Layout::InitialSize{.width = target.width, .height = target.height};
+  }
+
+  void Workspace::applyNamedScrollingColumnRule(
+      View* view, std::optional<double> initialWidth, NamedScrollingColumnChange change
+  ) {
+    ScrollingLayout* scrolling = scrollingLayout();
+    if (view == nullptr
+        || !view->mapped()
+        || !view->tiled()
+        || scrolling == nullptr
+        || !view->namedScrollingColumnName()) {
+      return;
+    }
+    const std::string& name = *view->namedScrollingColumnName();
+    const auto restoreMaximizedColumn = [&] {
+      const int column = scrolling->columnOf(view);
+      if (column >= 0
+          && view->toplevel()->scheduled.maximized
+          && !view->maximizedToEdges()
+          && !scrolling->isFullWidth(column)) {
+        scrolling->toggleFullWidth(column);
+      }
+    };
+    std::optional<NamedScrollingColumnPlacement> placement =
+        namedScrollingColumnPlacement(*scrolling, view, name, view->namedScrollingColumnOrder());
+    switch (change) {
+    case NamedScrollingColumnChange::Name:
+      view->m_ownsNamedScrollingColumnWidth = !placement;
+      break;
+    case NamedScrollingColumnChange::Order:
+      if (placement && static_cast<int>(placement->column) != scrolling->columnOf(view)) {
+        return;
+      }
+      break;
+    }
+    if (!placement) {
+      if (change == NamedScrollingColumnChange::Order) {
+        return;
+      }
+      const int previousColumn = scrolling->columnOf(view);
+      if (previousColumn < 0 || scrolling->columns()[static_cast<size_t>(previousColumn)].views.size() == 1) {
+        return;
+      }
+
+      // A late identity change can move a member from an established group to
+      // a new one. Start that group in its own adjacent column.
+      detachFromLayout(view);
+      scrolling->insertView(view, previousColumn + 1);
+      if (initialWidth) {
+        scrolling->setWidthFraction(scrolling->columnOf(view), *initialWidth);
+      }
+      restoreMaximizedColumn();
+      clampScrollToRange();
+      ensureFocusedVisible();
+      markArrange(true);
+      return;
+    }
+
+    const int previousColumn = scrolling->columnOf(view);
+    detachFromLayout(view);
+    placement = namedScrollingColumnPlacement(*scrolling, view, name, view->namedScrollingColumnOrder());
+    if (!placement) {
+      // The earlier lookup found another member. Preserve a valid layout if a
+      // future detach path ever removes more than the joining view.
+      scrolling->insertView(view, std::clamp(previousColumn, 0, static_cast<int>(scrolling->columns().size())));
+      kLog.error("named scrolling column '{}' disappeared while moving a view", name);
+    } else {
+      scrolling->insertViewIntoColumn(view, static_cast<int>(placement->column), placement->row);
+    }
+    restoreMaximizedColumn();
+    clampScrollToRange();
+    ensureFocusedVisible();
+    markArrange(true);
   }
 
   void Workspace::layoutDetach(View* view, bool animate) {

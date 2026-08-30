@@ -1582,6 +1582,8 @@ namespace umbriel {
             .workspaceName = workspace->name(),
             .layoutSnapshot = nullptr,
             .layoutMember = 0,
+            .ownsNamedScrollingColumnWidth = view->m_ownsNamedScrollingColumnWidth,
+            .pendingNamedScrollingColumnWidth = std::nullopt,
             .layoutModeOverride = workspace->layoutModeOverride(),
             .floatingOutputPosition = std::nullopt,
             .configGeneration = configStore().generation(),
@@ -1769,6 +1771,17 @@ namespace umbriel {
         first = last;
         continue;
       }
+      const auto applyPendingNamedScrollingColumnWidth = [workspace](View* view, const View::DisplacedHome& home) {
+        if (!home.pendingNamedScrollingColumnWidth || !view->namedScrollingColumnName()) {
+          return;
+        }
+        ScrollingLayout* scrolling = workspace->scrollingLayout();
+        const int column = scrolling != nullptr ? scrolling->columnOf(view) : -1;
+        if (column >= 0) {
+          scrolling->setWidthFraction(column, *home.pendingNamedScrollingColumnWidth);
+          workspace->markArrange(false);
+        }
+      };
 
       struct SnapshotCandidate {
         std::shared_ptr<const LayoutSnapshot> snapshot;
@@ -1829,7 +1842,9 @@ namespace umbriel {
       std::vector<View*> exactViews;
       if (exact != nullptr) {
         for (View* view : exact->views) {
+          const bool ownsNamedScrollingColumnWidth = view->displacedHome()->ownsNamedScrollingColumnWidth;
           view->setWorkspace(workspace, false);
+          view->m_ownsNamedScrollingColumnWidth = ownsNamedScrollingColumnWidth;
           if (view->workspace() == workspace && view->mapped() && view->tiled()) {
             exactViews.push_back(view);
           }
@@ -1879,6 +1894,9 @@ namespace umbriel {
           }
           workspace->markArrange(false);
         }
+        for (View* view : exactViews) {
+          applyPendingNamedScrollingColumnWidth(view, *view->displacedHome());
+        }
         restored += exactViews.size();
       }
 
@@ -1920,6 +1938,7 @@ namespace umbriel {
         if (moved) {
           view->setWorkspace(workspace);
         }
+        applyPendingNamedScrollingColumnWidth(view, home);
         if (floating && home.floatingOutputPosition && target != nullptr) {
           const wlr_box outputBox = target->layoutBox();
           if (outputBox.width > 0 && outputBox.height > 0) {

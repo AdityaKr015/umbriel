@@ -144,7 +144,7 @@ namespace umbriel {
     return true;
   }
 
-  void ScratchpadManager::retargetBackdrop(Output* output, bool visible) {
+  void ScratchpadManager::retargetBackdrop(Output* output, bool visible, bool animateTransition) {
     if (output == nullptr) {
       return;
     }
@@ -153,7 +153,10 @@ namespace umbriel {
     auto fadeIt = m_backdropFades.try_emplace(output, 0.0).first;
     AnimatedValue& backdropFade = fadeIt->second;
     const double fadeTarget = visible ? 1.0 : 0.0;
-    if (animation.enabled && scratchpad.enabled && (backdropFade.animating() || backdropFade.current() != fadeTarget)) {
+    if (animateTransition
+        && animation.enabled
+        && scratchpad.enabled
+        && (backdropFade.animating() || backdropFade.current() != fadeTarget)) {
       backdropFade.retarget(fadeTarget, scratchpad.durationMs, scratchpad.curve);
     } else {
       backdropFade.snap(fadeTarget);
@@ -161,7 +164,7 @@ namespace umbriel {
     updateDimAndBlur(output);
   }
 
-  void ScratchpadManager::setVisible(Output* output, bool visible) {
+  void ScratchpadManager::setVisible(Output* output, bool visible, bool animateTransition) {
     if (output == nullptr) {
       return;
     }
@@ -178,7 +181,8 @@ namespace umbriel {
     }
     const auto& animation = config().animation;
     const auto& scratchpad = animation.scratchpad;
-    retargetBackdrop(output, visible);
+    const bool animate = animateTransition && animation.enabled && scratchpad.enabled;
+    retargetBackdrop(output, visible, animateTransition);
 
     for (const Entry& entry : m_entries) {
       if (entry.output != output || entry.view == nullptr) {
@@ -210,14 +214,14 @@ namespace umbriel {
             view->snapPosition(newX, newY);
           }
         }
-        if (animation.enabled && scratchpad.enabled) {
+        if (animate) {
           view->animateFadeTo(1.0F, scratchpad.durationMs, scratchpad.curve);
         } else {
-          view->setFadeAlpha(1.0F);
+          view->cancelFadeAnimation();
         }
       } else {
         view->setOnActiveWorkspace(false);
-        if (animation.enabled && scratchpad.enabled) {
+        if (animate) {
           // Keep the render tree alive until tickAnimations observes the completed fade. The inactive-workspace flag
           // already removes this view from focus and action selection while it is still visible.
           view->setNodeEnabled(true);
@@ -226,6 +230,8 @@ namespace umbriel {
             m_hidingViews.push_back(view);
           }
         } else {
+          std::erase(m_hidingViews, view);
+          view->cancelFadeAnimation();
           view->setFadeAlpha(0.0F);
           view->setNodeEnabled(false);
         }
@@ -356,7 +362,7 @@ namespace umbriel {
   void ScratchpadManager::hideAll() {
     const std::vector<Output*> visibleOutputs = m_visibleOutputs;
     for (Output* output : visibleOutputs) {
-      setVisible(output, false);
+      setVisible(output, false, false);
     }
   }
 

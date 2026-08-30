@@ -30,7 +30,7 @@ namespace umbriel {
     wl_event_source* m_fdSource = nullptr;
     wl_event_source* m_timer = nullptr;
     std::function<void()> m_onChange;
-    std::unordered_map<int, std::filesystem::path> m_dirWatches;
+    std::unordered_map<int, std::set<std::filesystem::path>> m_dirWatches;
     std::set<std::filesystem::path> m_files;
   };
 

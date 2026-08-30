@@ -58,8 +58,8 @@ namespace umbriel {
       return;
     }
 
-    for (const auto& [descriptor, directory] : m_dirWatches) {
-      (void)directory;
+    for (const auto& [descriptor, directories] : m_dirWatches) {
+      (void)directories;
       inotify_rm_watch(m_fd, descriptor);
     }
     m_dirWatches.clear();
@@ -95,7 +95,10 @@ namespace umbriel {
         kLog.debug("config: unable to watch directory {}", directory.string());
         continue;
       }
-      m_dirWatches.emplace(descriptor, directory);
+      // inotify identifies the watched inode, not the pathname. A symlinked
+      // directory and its canonical target therefore share one descriptor,
+      // while config paths can legitimately use either spelling.
+      m_dirWatches[descriptor].insert(directory);
     }
   }
 
@@ -120,11 +123,14 @@ namespace umbriel {
       while (offset < static_cast<size_t>(size)) {
         const auto* event = reinterpret_cast<const inotify_event*>(buffer + offset);
         if (event->len > 0) {
-          const auto directory = self->m_dirWatches.find(event->wd);
-          if (directory != self->m_dirWatches.end()) {
-            const std::filesystem::path path = (directory->second / event->name).lexically_normal();
-            if (self->m_files.contains(path)) {
-              changed = true;
+          const auto directories = self->m_dirWatches.find(event->wd);
+          if (directories != self->m_dirWatches.end()) {
+            for (const std::filesystem::path& directory : directories->second) {
+              const std::filesystem::path path = (directory / event->name).lexically_normal();
+              if (self->m_files.contains(path)) {
+                changed = true;
+                break;
+              }
             }
           }
         }

@@ -185,21 +185,7 @@ Umbriel first checks `$XDG_CONFIG_HOME/umbriel/config.toml`, then `$XDG_CONFIG_D
 `[include] files = ["theme.toml", "keybinds.toml"]`; later files and the main file override earlier values.
 
 See [`examples/config.toml`](examples/config.toml) for the packaged starting configuration and
-[`docs/user/`](docs/user/) for the full reference:
-
-- [Configuration](docs/user/configuration.md): loading, includes, and global settings
-- [Appearance](docs/user/appearance.md): colors, borders, blur, and shadows
-- [Workspace Overview](docs/user/workspace-overview.md): workspace overview and hot corners
-- [Layout](docs/user/layout.md): scrolling, dwindle, and master layout behavior
-- [Input](docs/user/input.md): keyboard, pointer, tablet, cursor, and focus settings
-- [Keybinds](docs/user/keybinds.md): binding syntax, submaps, and binding behavior
-- [Actions](docs/user/actions.md): the complete keybind action reference
-- [Scratchpads](docs/user/scratchpad.md): setup, workflow, and multi-output behavior
-- [Sandboxed Clients](docs/user/security.md): security-context filtering and its boundary
-- [Window and Layer Rules](docs/user/rules.md): matching, effects, and blur
-- [Outputs](docs/user/outputs.md): monitor configuration and output movement
-- [Workspaces](docs/user/workspaces.md): workspace models and workspace rules
-- [Maintainer design notes](docs/design/README.md): reloads, workspaces, and overview rendering
+[`our online documentation`](https://docs.noctalia.dev/umbriel/) for the full reference.
 
 ### Nix (home-manager / NixOS)
 

@@ -4,7 +4,7 @@
 # keep their hand-written frontmatter (title, description); only the body is
 # refreshed from the source .md. New files get a title derived from their first
 # H1. Stale .mdx files without a source document are removed after a successful
-# sync. A leading H1 matching the frontmatter title is dropped from the body.
+# sync. A leading H1 is dropped from the body.
 # Source docs use relative .md links so they render correctly on GitHub. The docs site serves pages at
 # /umbriel/<route>/, so links are rewritten here: sibling docs become site URLs, and the packaged config example is copied as a static asset. A small
 # explicit map handles source filenames whose established site route differs.
@@ -86,7 +86,7 @@ title: $title
             NR == 1 && $0 == "---" { fm = 1; next }
             fm == 1 && $0 == "---" { fm = 0; next }
             fm == 1 { next }
-            seen == 0 && $0 == ("# " title) { seen = 1; dropped = 1; next }
+            seen == 0 && /^# / { seen = 1; dropped = 1; next }
             dropped == 1 && /^$/ { dropped = 0; seen = 1; next }
             { seen = 1; print }
         ' "$md" | sed "${link_exprs[@]}"

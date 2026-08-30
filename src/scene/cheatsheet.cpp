@@ -19,6 +19,7 @@
 namespace {
 
   using umbriel::balancedColumnHeight;
+  using umbriel::cheatsheetChordColumns;
   using umbriel::CheatsheetRow;
   using umbriel::escapeMarkup;
   using umbriel::Group;
@@ -96,7 +97,8 @@ namespace {
       const CheatsheetPalette& palette
   ) {
     const bool isDitto = label == "\xe2\x80\xb3";
-    const size_t extraPad = maxChordLen > chord.size() ? maxChordLen - chord.size() : 0;
+    const size_t chordColumns = cheatsheetChordColumns(chord);
+    const size_t extraPad = maxChordLen > chordColumns ? maxChordLen - chordColumns : 0;
     return {
         .isHeader = false,
         .isDitto = isDitto,
@@ -207,7 +209,7 @@ namespace {
       // Find max chord width in this group (character count, for padding).
       size_t maxChordLen = 0;
       for (const auto* row : groupRows) {
-        maxChordLen = std::max(maxChordLen, row->chord.size());
+        maxChordLen = std::max(maxChordLen, cheatsheetChordColumns(row->chord));
       }
 
       if (grp == Group::Apps) {
@@ -237,7 +239,7 @@ namespace {
 
       size_t maxChordLen = 0;
       for (const auto* row : groupRows) {
-        maxChordLen = std::max(maxChordLen, row->chord.size());
+        maxChordLen = std::max(maxChordLen, cheatsheetChordColumns(row->chord));
       }
 
       for (const auto* row : groupRows) {

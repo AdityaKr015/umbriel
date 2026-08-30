@@ -67,6 +67,11 @@ namespace {
 
 UMBRIEL_TEST(anEmptyBindListProducesNoRows) { CHECK(buildCheatsheetRows({}).empty()); }
 
+UMBRIEL_TEST(utf8ArrowOccupiesOneCheatsheetColumn) {
+  CHECK_EQ(umbriel::cheatsheetChordColumns("Mod+\xe2\x86\x93"), size_t{5});
+  CHECK_EQ(umbriel::cheatsheetChordColumns("Mod+WheelDown"), size_t{13});
+}
+
 UMBRIEL_TEST(bindsWithNoActionAreSkipped) {
   const std::vector<Keybind> binds = {Keybind{}, bind(KeybindAction::WindowClose, XKB_KEY_q)};
   const auto rows = buildCheatsheetRows(binds);

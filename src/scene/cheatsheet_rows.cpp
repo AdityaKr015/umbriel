@@ -412,6 +412,16 @@ namespace {
 
 namespace umbriel {
 
+  size_t cheatsheetChordColumns(std::string_view chord) {
+    size_t columns = 0;
+    for (const char byte : chord) {
+      if ((static_cast<unsigned char>(byte) & 0xC0U) != 0x80U) {
+        ++columns;
+      }
+    }
+    return columns;
+  }
+
   int columnsNeededFor(std::span<const int> blockSizes, int limit) {
     int columns = 1;
     int used = 0;

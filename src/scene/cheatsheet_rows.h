@@ -9,6 +9,7 @@
 
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace umbriel {
@@ -27,6 +28,10 @@ namespace umbriel {
   // optimum, not a heuristic. The lower bound is the largest single block, since no column can be shorter than a group
   // it has to hold whole.
   [[nodiscard]] int balancedColumnHeight(std::span<const int> blockSizes, int numCols);
+
+  // Display columns occupied by a generated chord in the cheatsheet's
+  // monospace font.
+  [[nodiscard]] size_t cheatsheetChordColumns(std::string_view chord);
 
   struct CheatsheetRow {
     std::string chord;  // display chord(s)

@@ -18,6 +18,7 @@ namespace umbriel {
     bool workspaces = false;
     bool general = false;
     bool environment = false;
+    bool events = false;
     bool input = false;
     bool keybinds = false;
     bool outputs = false;
@@ -35,6 +36,7 @@ namespace umbriel {
           || workspaces
           || general
           || environment
+          || events
           || input
           || keybinds
           || outputs

@@ -1026,6 +1026,12 @@ namespace umbriel {
       });
     }
 
+    void readEvents(Section& root, Config& loaded) {
+      root.sub("events", [&](Section& s) {
+        s.text("lid_close", loaded.events.lidClose).text("lid_open", loaded.events.lidOpen);
+      });
+    }
+
     bool validateKeyboardInput(
         const Config::Input::Keyboard& keyboard, const toml::source_region& source, std::string_view context
     ) {
@@ -1816,6 +1822,7 @@ namespace umbriel {
           readLayout(root, loaded);
           readGeneral(root, loaded);
           readEnvironment(root, loaded);
+          readEvents(root, loaded);
           readWorkspaceSettings(root, loaded);
           readInput(root, loaded);
           readOutputs(root, loaded);

@@ -596,6 +596,9 @@ namespace umbriel {
     case WLR_INPUT_DEVICE_TABLET_PAD:
       self->addTabletPad(device);
       break;
+    case WLR_INPUT_DEVICE_SWITCH:
+      self->addSwitch(device);
+      break;
     default:
       break;
     }
@@ -1221,6 +1224,50 @@ namespace umbriel {
       return entry.get() == watch;
     });
     server->updateSeatCapabilities();
+  }
+
+  void Server::addSwitch(wlr_input_device* device) {
+    auto entry = std::make_unique<SwitchDevice>();
+    entry->server = this;
+    entry->device = device;
+    entry->destroy.notify = onSwitchDestroy;
+    wl_signal_add(&device->events.destroy, &entry->destroy);
+    entry->toggle.notify = onSwitchToggle;
+    wl_signal_add(&wlr_switch_from_input_device(device)->events.toggle, &entry->toggle);
+    m_switchDevices.push_back(std::move(entry));
+    kLog.info("input: added switch device '{}'", deviceName(device));
+  }
+
+  void Server::onSwitchDestroy(wl_listener* listener, void* /*data*/) {
+    SwitchDevice* watch;
+    watch = wl_container_of(listener, watch, destroy);
+    Server* server = watch->server;
+    wl_list_remove(&watch->destroy.link);
+    wl_list_remove(&watch->toggle.link);
+    std::erase_if(server->m_switchDevices, [watch](const std::unique_ptr<SwitchDevice>& entry) {
+      return entry.get() == watch;
+    });
+  }
+
+  void Server::onSwitchToggle(wl_listener* listener, void* data) {
+    SwitchDevice* watch;
+    watch = wl_container_of(listener, watch, toggle);
+    const auto* event = static_cast<wlr_switch_toggle_event*>(data);
+    if (event->switch_type != WLR_SWITCH_TYPE_LID) {
+      return;
+    }
+    Server* server = watch->server;
+    if (event->switch_state == WLR_SWITCH_STATE_ON) {
+      kLog.info("lid closed");
+      if (!config().events.lidClose.empty()) {
+        server->spawn(config().events.lidClose.c_str(), "events.lid_close");
+      }
+    } else {
+      kLog.info("lid opened");
+      if (!config().events.lidOpen.empty()) {
+        server->spawn(config().events.lidOpen.c_str(), "events.lid_open");
+      }
+    }
   }
 
   void Server::addTablet(wlr_input_device* device) {

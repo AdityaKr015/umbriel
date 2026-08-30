@@ -28,6 +28,11 @@ honor_restored_maximize = false # let apps restore their saved maximized state
 # GTK_THEME = "Adwaita:dark"
 # QT_QPA_PLATFORMTHEME = "qt5ct"
 
+# Defines commands that are executed when the laptop lid is closed or opened.
+# [events]
+# lid_close = "notify-send 'The laptop lid is closed!'"
+# lid_open = "notify-send 'The laptop lid is open!'"
+
 [workspaces]
 back_and_forth = false
 empty_above = false

@@ -167,6 +167,7 @@ namespace umbriel {
         .workspaces = true,
         .general = true,
         .environment = true,
+        .events = true,
         .input = true,
         .keybinds = true,
         .outputs = true,
@@ -187,6 +188,7 @@ namespace umbriel {
         .workspaces = before.workspaces != after.workspaces,
         .general = before.general != after.general,
         .environment = before.environment != after.environment,
+        .events = before.events != after.events,
         .input = before.input != after.input,
         .keybinds = before.keybinds != after.keybinds,
         .outputs = before.outputs != after.outputs,
@@ -216,6 +218,7 @@ namespace umbriel {
     add(workspaces, "workspaces");
     add(general, "general");
     add(environment, "environment");
+    add(events, "events");
     add(input, "input");
     add(keybinds, "keybinds");
     add(outputs, "outputs");

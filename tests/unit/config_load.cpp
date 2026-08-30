@@ -1402,6 +1402,24 @@ WAYLAND_DISPLAY = "wrong"
   CHECK(!containsDiagnostic(store, "unknown key environment._PRIVATE"));
 }
 
+UMBRIEL_TEST(eventsLoadCanonicalLidCommands) {
+  const TempConfig file;
+  file.write(R"(
+[events]
+lid_close = "systemctl suspend"
+lid_open = "notify-send awake"
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK_EQ(store.config().events.lidClose, std::string{"systemctl suspend"});
+  CHECK_EQ(store.config().events.lidOpen, std::string{"notify-send awake"});
+  CHECK(store.diagnostics().empty());
+}
+
 UMBRIEL_TEST(packagedAnimationDefaultsMatchCompiledDefaults) {
   std::filesystem::path root = std::filesystem::current_path();
   while (!std::filesystem::exists(root / "examples/config.toml")) {

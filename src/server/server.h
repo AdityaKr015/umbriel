@@ -369,6 +369,8 @@ namespace umbriel {
     static void onTabletPadRing(wl_listener* listener, void* data);
     static void onTabletPadStrip(wl_listener* listener, void* data);
     static void onPadKeyboardFocusChange(wl_listener* listener, void* data);
+    static void onSwitchDestroy(wl_listener* listener, void* data);
+    static void onSwitchToggle(wl_listener* listener, void* data);
     static void onOutputManagerApply(wl_listener* listener, void* data);
     static void onOutputManagerTest(wl_listener* listener, void* data);
     static void onOutputLayoutChange(wl_listener* listener, void* data);
@@ -409,6 +411,13 @@ namespace umbriel {
     };
     void addTablet(wlr_input_device* device);
     void addTabletPad(wlr_input_device* device);
+    struct SwitchDevice {
+      Server* server = nullptr;
+      wlr_input_device* device = nullptr;
+      wl_listener destroy{};
+      wl_listener toggle{};
+    };
+    void addSwitch(wlr_input_device* device);
     void applyTabletConfig(TabletDevice& tablet);
     void applyTabletPadConfig(TabletPadDevice& pad);
     void pairTabletPads();
@@ -617,6 +626,7 @@ namespace umbriel {
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;
     std::vector<std::unique_ptr<TabletDevice>> m_tabletDevices;
     std::vector<std::unique_ptr<TabletPadDevice>> m_tabletPads;
+    std::vector<std::unique_ptr<SwitchDevice>> m_switchDevices;
     std::vector<std::unique_ptr<VirtualPointerDevice>> m_virtualPointers;
     Dirty m_dirty = Dirty::None;
     ViewRegistry m_registry;

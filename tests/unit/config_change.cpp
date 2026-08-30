@@ -27,6 +27,7 @@ UMBRIEL_TEST(aFirstLoadReportsEverything) {
   CHECK(change.appearance);
   CHECK(change.animation);
   CHECK(change.colors);
+  CHECK(change.events);
   CHECK(change.input);
   CHECK(change.outputs);
 }
@@ -112,6 +113,15 @@ UMBRIEL_TEST(eachSectionIsReportedOnItsOwn) {
     const ConfigChange change = ConfigChange::between(before, after);
     CHECK(change.general);
     CHECK(!change.input);
+  }
+  {
+    Config after;
+    after.events.lidClose = "systemctl suspend";
+    const ConfigChange change = ConfigChange::between(before, after);
+    CHECK(change.events);
+    CHECK(!change.general);
+    CHECK(!change.input);
+    CHECK_EQ(change.summary(), std::string("events"));
   }
   {
     Config after;

@@ -1,7 +1,5 @@
 # Window and Layer Rules
 
-## Window Rules
-
 Window rules can match `app_id`, title, and a client-defined XDG toplevel tag
 using ECMAScript regular expressions. They can also match a standardized
 content type or focus state. Every matching rule contributes its settings. If
@@ -15,7 +13,7 @@ match.title = "^Library$"
 default_floating = true
 ```
 
-### Matching
+## Matching
 
 | Selector | Type | Description |
 |----------|------|-------------|
@@ -48,7 +46,7 @@ games that publish the hint on a child surface. `none` includes windows that do
 not publish a content hint. Client changes refresh settings from the dynamic
 table below, but never replay the opening settings.
 
-### Settings applied when a window opens
+## Settings applied when a window opens
 
 These settings are applied once when the window opens. Some applications set
 their title shortly afterward, so Umbriel checks the rules one more time when
@@ -58,19 +56,30 @@ opening settings do not overwrite user changes made in the meantime.
 | Key | Type | Description |
 |-----|------|-------------|
 | `default_output` | string | Open on a specific output (e.g. `"DP-1"`). |
-| `default_floating` | bool | Force floating (`true`) or force tiling (`false`). |
-| `default_size` | `[w, h]` | Initial size in pixels, clamped to the client's min/max hints. Floats use both, then own their size and honor client resizes; tiled windows ignore height. Takes precedence over `default_width`/`default_height` when set. |
-| `default_position` | table | Initial position for floating windows: `{ x = int, y = int, anchor = string }`. Ignored for tiled windows. |
-| `default_width` | float | For floating windows, the initial width as a fraction (0.1-1.0) of the usable area. This includes windows that float without `default_floating`, such as dialogs that declare a parent. For tiled windows, scrolling only: lane scroll-axis extent fraction (0.1-1.0), which is height on a vertical workspace. Gap-aware: fractions that sum to 1 tile exactly. Overrides `layout.scrolling.default_width_fraction`. Dragging the lane within or between scrolling workspaces retains its current fraction. Ignored in dwindle and master. |
-| `default_height` | float | Floating windows only, on the same terms as `default_width`. Initial height as a fraction (0.1-1.0) of the usable area. Ignored for tiled windows. |
 | `default_workspace` | int | Place on workspace N from 1 to 64. On dynamic outputs, values beyond the current count clamp to the last workspace. |
-| `default_scrolling_column` | string | Scrolling only. Place windows with the same non-empty name in one column. Floating windows and other layout modes ignore it. |
-| `default_scrolling_column_order` | int | Position within `default_scrolling_column`, independent of launch timing. Lower values open higher in horizontal scrolling and farther left in vertical scrolling. Windows without an order follow ordered windows. |
 | `default_fullscreen` | bool | Open in fullscreen. |
+| `default_floating` | bool | Force floating (`true`) or force tiling (`false`). |
+| `default_maximize` | bool | Open maximized. Parented transient dialogs keep their natural size. |
 | `default_maximize_to_edges` | bool | Explicitly open maximized to edges. The initial configure fills the usable area without gaps or borders, so the window does not open at its normal size first. Layer-shell exclusive zones stay visible. Takes precedence over `default_maximize`; when combined with `default_fullscreen` the window opens fullscreen and returns to maximized to edges once fullscreen is cleared. |
-| `default_maximize` | bool | Explicitly open maximized. Parented transient dialogs keep their natural size. The initial configure uses the layout's final full-width target, so the window does not open at its normal size first. Umbriel ignores client maximization requested before the first buffer maps unless `general.honor_restored_maximize` is enabled, but always honors requests sent after mapping. Tiled windows expand their column to full width without changing the layout; floating windows fill the usable area. |
 | `default_focused` | bool | Take focus when opening, switching to the window's workspace when needed. Defaults to `true`; set to `false` to preserve the existing focus and workspace. |
 | `default_pinned` | bool | Open pinned above regular windows and keep the window visible across workspace changes. Pinning makes a tiled window floating. |
+| `default_size` | `[w,h]` | Initial size in pixels, clamped to the client's min/max hints. Floats use both, then own their size and honor client resizes; tiled windows ignore height. Takes precedence over `default_width`/`default_height` when set. |
+| `default_width` | float | Initial extent as a fraction (0.1-1.0): usable-area width for floating windows, or scrolling-axis extent for tiled windows in the scrolling layout. Overrides `layout.scrolling.default_width_fraction`; ignored by tiled windows in dwindle and master. |
+| `default_height` | float | Floating windows only, on the same terms as `default_width`. Initial height as a fraction (0.1-1.0) of the usable area. Ignored for tiled windows. |
+| `default_position` | table | Floating windows only, initial position: `{ x = int, y = int, anchor = string }`. Ignored for tiled windows. |
+| `default_scrolling_column` | string | Scrolling windows only. Place windows with the same non-empty name in one column. Floating windows and other layout modes ignore it. |
+| `default_scrolling_column_order` | int | Scrolling windows only. Position within `default_scrolling_column`, independent of launch timing. Lower values open higher in horizontal scrolling and farther left in vertical scrolling. Windows without an order follow ordered windows. |
+
+For tiled windows, `default_maximize` expands the column to full width without
+changing the layout; for floating windows, it fills the usable area. Client
+maximize requests made before the window maps are honored only when
+`general.honor_restored_maximize` is enabled. Requests after mapping are always
+honored.
+
+Scrolling extents are gap-aware, so lanes whose fractions sum to `1` exactly
+fill the viewport. A vertical scrolling workspace applies the fraction to lane
+height. Moving the lane within or between scrolling workspaces retains its
+current fraction.
 
 If neither `default_width` nor a matching
 `layout.scrolling.default_width_fraction` is set, a scrolling window chooses
@@ -83,30 +92,7 @@ was launched from another output. If several fixed outputs contain that
 position, Umbriel keeps the launch output. An explicit `default_output` always
 scopes the workspace lookup to that output.
 
-#### Named scrolling columns
-
-Assign the same `default_scrolling_column` to applications that should share a
-scrolling column. The first matching window opens a column. Later matches on the
-same workspace join it.
-
-```toml
-[[window_rule]]
-match.app_id = "^firefox$"
-default_scrolling_column = "browsers"
-default_scrolling_column_order = 10
-
-[[window_rule]]
-match.app_id = "^chromium$"
-default_scrolling_column = "browsers"
-default_scrolling_column_order = 20
-```
-
-The name is local to a workspace. If a named scrolling column has been split manually,
-new windows join the first column containing that name. The first window also
-sets the column width. `default_scrolling_column_order` has no effect without
-`default_scrolling_column`.
-
-#### Floating position
+## Floating position
 
 `default_position` only affects floating windows. Coordinates are logical pixels
 within the output's usable area, so panels and other exclusive zones are taken
@@ -147,7 +133,7 @@ anchors measure `y` upward from the bottom edge. The single-edge anchors center
 the window on the other axis. Umbriel keeps part of the window visible if an
 offset would otherwise place it completely off-screen.
 
-#### Floating size
+## Floating size
 
 `default_size` sizes a float in pixels. `default_width` and `default_height`
 size it as fractions of the output's usable area instead, so one rule suits any
@@ -171,7 +157,30 @@ takes the fraction too. Dialogs usually share their application's `app_id`, so a
 `default_width` written for scrolling lane widths also sizes that application's
 dialogs. Match on `title` or `xdg_tag` to keep a rule off them.
 
-### Settings updated while a window is open
+## Named scrolling columns
+
+Assign the same `default_scrolling_column` to applications that should share a
+scrolling column. The first matching window opens a column. Later matches on the
+same workspace join it.
+
+```toml
+[[window_rule]]
+match.app_id = "^firefox$"
+default_scrolling_column = "browsers"
+default_scrolling_column_order = 10
+
+[[window_rule]]
+match.app_id = "^chromium$"
+default_scrolling_column = "browsers"
+default_scrolling_column_order = 20
+```
+
+The name is local to a workspace. If a named scrolling column has been split manually,
+new windows join the first column containing that name. The first window also
+sets the column width. `default_scrolling_column_order` has no effect without
+`default_scrolling_column`.
+
+## Settings updated while a window is open
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -185,7 +194,7 @@ dialogs. Match on `title` or `xdg_tag` to keep a rule off them.
 | `tearing` | bool | Override the client's tearing hint. Omit it to follow the hint, set `true` to request asynchronous presentation, or set `false` to veto it. The output must still opt in with `tearing = true`, and the window must be fullscreen. |
 | `hdr` | string | Override the focused window's output HDR policy: `"off"`, `"on"`, `"auto"`, or `"fullscreen"`. Without this key, the output's configured `hdr` policy applies. This does not assign HDR metadata to the surface. |
 
-### Examples
+## Examples
 
 ```toml
 # Enable blur for every window
@@ -285,40 +294,3 @@ opacity = 0.85
 match.is_focused = true
 opacity = 1.0
 ```
-
----
-
-## Layer Rules
-
-Layer rules match layer-shell surfaces such as bars, launchers, and
-notifications. The `match.namespace` selector uses an ECMAScript regular
-expression. Run `umbriel layers` to list the namespaces currently in use.
-
-```toml
-[[layer_rule]]
-match.namespace = "^noctalia-(bar-[^\"]+|notification|dock|panel|attached-panel|osd|desktop-widget-[^\"]*)$"
-blur = true
-blur_ignore_alpha = 0.5
-blur_popups = true
-```
-
-### Matching
-
-| Selector | Type | Description |
-|----------|------|-------------|
-| `match.namespace` | regex | Match the layer surface namespace. |
-
-Regular expressions match any part of a namespace. Use `^` and `$` to match
-the entire namespace.
-
-### Effects
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `blur` | bool | Enable/disable blur for the layer surface. |
-| `blur_popups` | bool | Enable/disable blur for descendant XDG popups. |
-| `blur_ignore_alpha` | float | Skip blur where surface alpha is below this threshold (0.0-1.0). `0.0` blurs the entire rectangle; higher values leave transparent regions unblurred. |
-| `blur_optimized` | bool | Override `appearance.blur.optimized`. |
-
-Layer-shell blur is off by default. As with window rules, every matching rule
-contributes its settings, and later values take precedence.

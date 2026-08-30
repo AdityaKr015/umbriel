@@ -534,6 +534,9 @@ namespace umbriel {
   }
 
   Overview::Card* Overview::createCard(OutputState& state, View* view, size_t row) {
+    if (view == nullptr || !view->mapped() || view->pinned()) {
+      return nullptr;
+    }
     wlr_surface* surface = view->toplevel()->base->surface;
     if (surface == nullptr) {
       return nullptr;
@@ -948,7 +951,7 @@ namespace umbriel {
       // layer split so overlapping cards stack the way the real windows do.
       for (int pass = 0; pass < 3; ++pass) {
         for (View* view : workspace->allViews()) {
-          if (view == nullptr || !view->mapped()) {
+          if (view == nullptr || !view->mapped() || view->pinned()) {
             continue;
           }
           const bool fullscreen = view->toplevel()->current.fullscreen;
@@ -1058,6 +1061,8 @@ namespace umbriel {
 
     wlr_scene_node_set_enabled(&m_server->xdgTree()->node, false);
     wlr_scene_node_set_enabled(&m_server->fullscreenTree()->node, false);
+    wlr_scene_node_set_enabled(&m_server->pinnedShadowTree()->node, false);
+    wlr_scene_node_set_enabled(&m_server->pinnedTree()->node, false);
     wlr_scene_node_set_enabled(&m_tree->node, true);
 
     m_server->clearKeyboardFocus();
@@ -1252,6 +1257,8 @@ namespace umbriel {
     }
     wlr_scene_node_set_enabled(&m_server->xdgTree()->node, true);
     wlr_scene_node_set_enabled(&m_server->fullscreenTree()->node, true);
+    wlr_scene_node_set_enabled(&m_server->pinnedShadowTree()->node, true);
+    wlr_scene_node_set_enabled(&m_server->pinnedTree()->node, true);
 
     m_active = false;
     m_closing = false;
@@ -1304,7 +1311,7 @@ namespace umbriel {
   // -: hooks
 
   void Overview::onViewMapped(View* view) {
-    if (!m_active || view == nullptr || !view->mapped()) {
+    if (!m_active || view == nullptr || !view->mapped() || view->pinned()) {
       return;
     }
     Workspace* workspace = view->workspace();
@@ -1314,6 +1321,50 @@ namespace umbriel {
     }
     if (createCard(*state, view, workspace->index()) == nullptr) {
       return;
+    }
+    assignShortcuts();
+  }
+
+  void Overview::onViewPinnedChanged(View* view) {
+    if (!m_active || view == nullptr || !view->mapped()) {
+      return;
+    }
+    Card* card = findCard(view);
+    OutputState* state = card != nullptr ? card->owner : stateForWorkspace(view->workspace());
+    if (view->pinned()) {
+      if (card == nullptr) {
+        return;
+      }
+      if (m_pressCard == card) {
+        m_pressCard = nullptr;
+      }
+      if (m_middlePressCard == card) {
+        clearMiddlePress();
+      }
+      if (m_drop.view == view) {
+        m_drop.view = nullptr;
+        m_drop.edge = 0;
+        hideDropHint();
+      }
+      if (m_dragCard == card) {
+        hideDropHint();
+        m_dragCard = nullptr;
+        m_dragSourceWorkspace = nullptr;
+        m_dragSourceWidth.reset();
+        m_drop = {};
+        m_dropWorkspaceGroup = nullptr;
+        m_server->cursor()->overrideCursor(nullptr);
+      }
+      std::erase_if(m_shortcutAssignments, [view](const ShortcutAssignment& assignment) {
+        return assignment.view == view;
+      });
+      dropCard(view);
+    } else if (card == nullptr && state != nullptr && view->workspace() != nullptr) {
+      createCard(*state, view, view->workspace()->index());
+    }
+    if (state != nullptr) {
+      layoutOutput(*state);
+      wlr_output_schedule_frame(state->output->wlr());
     }
     assignShortcuts();
   }
@@ -1378,6 +1429,10 @@ namespace umbriel {
 
   void Overview::onViewWorkspaceChanged(View* view) {
     if (!m_active || view == nullptr || !view->mapped()) {
+      return;
+    }
+    if (view->pinned()) {
+      onViewPinnedChanged(view);
       return;
     }
 

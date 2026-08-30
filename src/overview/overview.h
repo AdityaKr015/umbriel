@@ -73,6 +73,7 @@ namespace umbriel {
 
     void onViewMapped(View* view);
     void onViewUnmapped(View* view);
+    void onViewPinnedChanged(View* view);
     void onViewWorkspaceChanged(View* view);
     void onWorkspaceActivated(WorkspaceGroup* group);
     void onWorkspaceArranged(Workspace* workspace);

@@ -146,6 +146,7 @@ color = "#0000007F"
 
 [overview]
 zoom = 0.5                     # 0.1-0.75
+# Pinned windows stay hidden until overview closes; visible scratchpads are dismissed.
 # background_blur = true        # blur the wallpaper while the overview is open
 # background_tint = "#10101430"
 # workspace_background = "#00000044" # set alpha to FF for an opaque background

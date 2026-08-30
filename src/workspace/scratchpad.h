@@ -31,6 +31,7 @@ namespace umbriel {
     [[nodiscard]] bool contains(const View* view) const;
     [[nodiscard]] bool moveToScratchpad(View* view, Output* output);
     bool toggle(Output* output);
+    void hideAll();
     bool restoreFocused(Output* output);
     bool focusNext(Output* output);
     [[nodiscard]] View* focused(Output* output) const;

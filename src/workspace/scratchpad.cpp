@@ -353,6 +353,13 @@ namespace umbriel {
     return true;
   }
 
+  void ScratchpadManager::hideAll() {
+    const std::vector<Output*> visibleOutputs = m_visibleOutputs;
+    for (Output* output : visibleOutputs) {
+      setVisible(output, false);
+    }
+  }
+
   View* ScratchpadManager::focused(Output* output) const {
     if (std::ranges::find(m_visibleOutputs, output) == m_visibleOutputs.end()) {
       return nullptr;

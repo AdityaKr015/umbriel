@@ -24,6 +24,7 @@
 #include <xkbcommon/xkbcommon.h>
 #include "wlr.h"
 // clang-format on
+#include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
 
 namespace umbriel {
@@ -1029,6 +1030,10 @@ namespace umbriel {
       return false;
     }
 
+    if (ScratchpadManager* scratchpad = m_server->scratchpadManager()) {
+      scratchpad->hideAll();
+    }
+
     m_active = true;
     m_closing = false;
     m_progress = 0.0;
@@ -1069,6 +1074,9 @@ namespace umbriel {
 
   void Overview::open() {
     if (m_active) {
+      if (ScratchpadManager* scratchpad = m_server->scratchpadManager()) {
+        scratchpad->hideAll();
+      }
       m_closing = false;
       m_pendingFocus = nullptr;
       if (m_progress < 1.0 || m_targetProgress < 1.0) {

@@ -1,5 +1,7 @@
 #include "config/change.h"
 
+#include "output/identity.h"
+
 #include <algorithm>
 #include <string_view>
 
@@ -7,9 +9,19 @@ namespace umbriel {
   namespace {
 
     const OutputRule* findOutputRule(const Config& config, const std::string& name) {
-      const auto rule =
-          std::ranges::find_if(config.outputs, [&](const OutputRule& candidate) { return candidate.name == name; });
+      const auto rule = std::ranges::find_if(config.outputs, [&](const OutputRule& candidate) {
+        return outputNamesEqual(candidate.name, name);
+      });
       return rule != config.outputs.end() ? &*rule : nullptr;
+    }
+
+    bool outputRuleNamesChanged(const Config& before, const Config& after) {
+      if (before.outputs.size() != after.outputs.size()) {
+        return true;
+      }
+      return std::ranges::any_of(before.outputs, [&](const OutputRule& rule) {
+        return findOutputRule(after, rule.name) == nullptr;
+      });
     }
 
     template <typename Equal> bool outputProjectionChanged(const Config& before, const Config& after, Equal equal) {
@@ -93,11 +105,18 @@ namespace umbriel {
   } // namespace
 
   ConfigEffects ConfigEffects::between(const Config& before, const Config& after) {
-    const bool outputState = outputProjectionChanged(before, after, sameOutputState);
-    const bool tearingPolicy =
-        outputProjectionChanged(before, after, sameOutputTearingPolicy) || !sameWindowTearingPolicy(before, after);
-    const bool directScanoutPolicy = outputProjectionChanged(before, after, sameOutputDirectScanoutPolicy);
-    const bool workspaceInventory = outputProjectionChanged(before, after, sameWorkspaceInventory);
+    // A new descriptor rule can override an existing connector rule for a live
+    // output. Without runtime identities here, a name-set change must
+    // conservatively refresh every output projection.
+    const bool outputNamesChanged = outputRuleNamesChanged(before, after);
+    const bool outputState = outputNamesChanged || outputProjectionChanged(before, after, sameOutputState);
+    const bool tearingPolicy = outputNamesChanged
+        || outputProjectionChanged(before, after, sameOutputTearingPolicy)
+        || !sameWindowTearingPolicy(before, after);
+    const bool directScanoutPolicy =
+        outputNamesChanged || outputProjectionChanged(before, after, sameOutputDirectScanoutPolicy);
+    const bool workspaceInventory =
+        outputNamesChanged || outputProjectionChanged(before, after, sameWorkspaceInventory);
     const bool sceneBlur = before.appearance.blur != after.appearance.blur;
     const bool focusDim = before.animation.enabled != after.animation.enabled
         || before.animation.dimUnfocused != after.animation.dimUnfocused;

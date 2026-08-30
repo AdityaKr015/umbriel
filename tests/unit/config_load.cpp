@@ -553,6 +553,23 @@ UMBRIEL_TEST(middleClickPasteLoadsAndDefaultsEnabled) {
   CHECK(store.config().input.middleClickPaste);
 }
 
+UMBRIEL_TEST(outputNamesDifferingOnlyByCaseAreRejectedAsDuplicates) {
+  const TempConfig file;
+  file.write(R"(
+[output.DP-1]
+scale = 1.5
+
+[output.dp-1]
+scale = 2.0
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK(containsDiagnostic(store, "duplicate output section"));
+}
+
 UMBRIEL_TEST(outputVrrPolicyLoadsAndDefaultsDisabled) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

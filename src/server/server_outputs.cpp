@@ -2,6 +2,7 @@
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
+#include "output/identity.h"
 #include "output/output.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -125,7 +126,7 @@ namespace umbriel {
     for (const auto& entry : m_outputs) {
       // Disabled outputs are off the desktop: rules and keybinds must not be
       // able to address them, or windows and focus would land on a blank screen.
-      if (entry->wlr()->enabled && entry->wlr()->name != nullptr && name == entry->wlr()->name) {
+      if (entry->wlr()->enabled && outputNameMatch(entry->identity(), name) != OutputNameMatch::None) {
         return entry.get();
       }
     }

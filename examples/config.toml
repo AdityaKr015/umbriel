@@ -214,6 +214,9 @@ new_on_top = true             # place new windows at the top of the stack
 
 # Outputs (see docs/user/outputs.md) ----------------------------------------
 
+# Named by connector, or by the `Config name` printed by `umbriel outputs`.
+# The monitor form follows the display between machines and ports:
+# [output."Some Make Some Model ABC123"]
 # [output."DP-1"]
 # mode = "2560x1440@144"
 # position = [0, 0]             # logical top-left; omit for automatic placement

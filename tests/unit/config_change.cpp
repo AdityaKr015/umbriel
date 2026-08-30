@@ -411,6 +411,32 @@ UMBRIEL_TEST(outputStateAndWorkspaceInventoryAreIndependent) {
   CHECK(reenableEffects.outputState);
   CHECK(!reenableEffects.workspaceInventory);
 }
+UMBRIEL_TEST(outputRuleNameSetChangesRefreshIdentityDependentEffects) {
+  Config before;
+  OutputRule connector;
+  connector.name = "HDMI-A-1";
+  before.outputs.push_back(connector);
+
+  Config descriptorAdded = before;
+  OutputRule descriptor;
+  descriptor.name = "Microstep MSI G2712F CD6T084401192";
+  descriptorAdded.outputs.push_back(descriptor);
+  const ConfigEffects added = ConfigEffects::between(before, descriptorAdded);
+  CHECK(added.outputState);
+  CHECK(added.tearingPolicy);
+  CHECK(added.directScanoutPolicy);
+  CHECK(added.workspaceInventory);
+  CHECK(added.workspaceLayout);
+
+  Config caseOnly = before;
+  caseOnly.outputs[0].name = "hdmi-a-1";
+  const ConfigEffects caseEffects = ConfigEffects::between(before, caseOnly);
+  CHECK(!caseEffects.outputState);
+  CHECK(!caseEffects.tearingPolicy);
+  CHECK(!caseEffects.directScanoutPolicy);
+  CHECK(!caseEffects.workspaceInventory);
+  CHECK(!caseEffects.workspaceLayout);
+}
 
 UMBRIEL_TEST(tearingPolicyDoesNotReapplyOutputStateOrInvalidateOverview) {
   Config before;
@@ -488,11 +514,11 @@ UMBRIEL_TEST(directScanoutPolicyForcesOnlyItsRuntimeEffect) {
   CHECK(enableEffects.directScanoutPolicy);
   CHECK(!enableEffects.outputState);
 
-  Config unrelatedOutput = before;
+  Config additionalOutput = before;
   OutputRule second;
   second.name = "DP-1";
-  unrelatedOutput.outputs.push_back(second);
-  CHECK(!ConfigEffects::between(before, unrelatedOutput).directScanoutPolicy);
+  additionalOutput.outputs.push_back(second);
+  CHECK(ConfigEffects::between(before, additionalOutput).directScanoutPolicy);
 
   Config onlyDisabled;
   onlyDisabled.outputs.push_back(disabled.outputs[0]);
@@ -500,7 +526,7 @@ UMBRIEL_TEST(directScanoutPolicyForcesOnlyItsRuntimeEffect) {
 
   Config onlyDefault;
   onlyDefault.outputs.push_back(before.outputs[0]);
-  CHECK(!ConfigEffects::between(onlyDefault, Config{}).directScanoutPolicy);
+  CHECK(ConfigEffects::between(onlyDefault, Config{}).directScanoutPolicy);
 }
 
 UMBRIEL_TEST(vrrPolicyTracksFullscreenOnlyWhenRequested) {

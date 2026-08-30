@@ -5,6 +5,7 @@
 #include "input/seat.h"
 #include "layout/scrolling.h"
 #include "output/direction.h"
+#include "output/identity.h"
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/cheatsheet.h"
@@ -361,7 +362,7 @@ namespace umbriel {
       bool changed = false;
       for (const auto& output : server.outputs()) {
         const char* name = output->wlr()->name;
-        if (!requested.empty() && (name == nullptr || requested != name)) {
+        if (!requested.empty() && outputNameMatch(output->identity(), requested) == OutputNameMatch::None) {
           continue;
         }
         found = true;

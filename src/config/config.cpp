@@ -8,6 +8,7 @@
 #include "config/store.h"
 #include "config/value_parse.h"
 #include "core/log.h"
+#include "output/identity.h"
 #include "umbriel_build_config.h"
 
 // clang-format off
@@ -1236,9 +1237,11 @@ namespace umbriel {
         }
         Section keys(*section, "output." + name, configStore().mutableDiagnostics());
 
-        if (std::ranges::any_of(loaded.outputs, [&](const OutputRule& rule) { return rule.name == name; })) {
+        if (std::ranges::any_of(loaded.outputs, [&](const OutputRule& rule) {
+              return outputNamesEqual(rule.name, name);
+            })) {
           warnAt(key.source(), "duplicate output section '{}'", name);
-          std::erase_if(loaded.outputs, [&](const OutputRule& rule) { return rule.name == name; });
+          std::erase_if(loaded.outputs, [&](const OutputRule& rule) { return outputNamesEqual(rule.name, name); });
         }
         OutputRule rule;
         rule.name = name;

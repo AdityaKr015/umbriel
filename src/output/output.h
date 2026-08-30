@@ -28,6 +28,7 @@ namespace umbriel {
   class Server;
   class View;
   class WorkspaceGroup;
+  struct OutputIdentity;
 
   class Output {
   public:
@@ -40,6 +41,7 @@ namespace umbriel {
     Output& operator=(const Output&) = delete;
 
     [[nodiscard]] wlr_output* wlr() const { return m_output; }
+    [[nodiscard]] OutputIdentity identity() const;
     [[nodiscard]] wlr_scene_output* sceneOutput() const { return m_sceneOutput; }
     [[nodiscard]] wlr_scene_tree* layerTree(uint32_t layer) const;
     [[nodiscard]] wlr_scene_tree* popupTree() const { return m_popupTree; }

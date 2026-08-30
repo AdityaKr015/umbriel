@@ -12,6 +12,28 @@ namespace umbriel {
 
   namespace {
 
+    const OutputRule* matchingOutputRule(const Config& config, const OutputIdentity& identity) {
+      const OutputRule* connectorRule = nullptr;
+      for (const OutputRule& rule : config.outputs) {
+        switch (outputNameMatch(identity, rule.name)) {
+        case OutputNameMatch::Descriptor:
+          return &rule;
+        case OutputNameMatch::Connector:
+          connectorRule = &rule;
+          break;
+        case OutputNameMatch::None:
+          break;
+        }
+      }
+      return connectorRule;
+    }
+
+    std::optional<std::vector<std::string>>
+    workspaceNamesForIdentity(const Config& config, const OutputIdentity& identity) {
+      const OutputRule* rule = matchingOutputRule(config, identity);
+      return rule != nullptr && rule->workspaces ? rule->workspaces : std::nullopt;
+    }
+
     std::optional<std::vector<std::string>> workspaceNamesForOutput(const Config& config, std::string_view outputName) {
       const auto rule = std::ranges::find_if(config.outputs, [&](const OutputRule& candidate) {
         return candidate.name == outputName;
@@ -115,6 +137,9 @@ namespace umbriel {
       owner = &output;
     }
     return owner;
+  }
+  const OutputRule* findOutputRule(const Config& config, const OutputIdentity& identity) {
+    return matchingOutputRule(config, identity);
   }
 
   bool workspaceRuleTargetExists(const Config& config, const WorkspaceConfig& rule) {
@@ -291,28 +316,26 @@ namespace umbriel {
   }
 
   ResolvedLayoutConfig
-  resolveWorkspaceLayout(const Config& config, const char* outputName, std::string_view name, size_t index) {
-    const std::string_view outName = outputName != nullptr ? outputName : "";
+  resolveWorkspaceLayout(const Config& config, const OutputIdentity& identity, std::string_view name, size_t index) {
     ResolvedLayoutConfig resolved = resolveGlobalLayout(config);
-    const auto applyMatchingRules = [&](std::string_view output) {
+    const auto applyMatchingRules = [&](bool outputScoped) {
       for (const auto& rule : config.workspaceRules) {
-        if (rule.output == output
+        const bool outputMatches = outputScoped
+            ? !rule.output.empty() && outputNameMatch(identity, rule.output) != OutputNameMatch::None
+            : rule.output.empty();
+        if (outputMatches
             && ((rule.index && static_cast<size_t>(*rule.index - 1) == index) || (!rule.index && rule.name == name))) {
           applyWorkspaceLayoutOverrides(config, resolved, rule.layout);
         }
       }
     };
-
-    applyMatchingRules("");
-    if (!outName.empty()) {
-      applyMatchingRules(outName);
-    }
+    applyMatchingRules(false);
+    applyMatchingRules(true);
     return resolved;
   }
 
-  ResolvedWorkspaceSet resolveWorkspacesForOutput(const Config& config, const char* outputName) {
-    const std::string_view outName = outputName != nullptr ? outputName : "";
-    const auto names = workspaceNamesForOutput(config, outName);
+  ResolvedWorkspaceSet resolveWorkspacesForOutput(const Config& config, const OutputIdentity& identity) {
+    const auto names = workspaceNamesForIdentity(config, identity);
     ResolvedWorkspaceSet result;
     if (!names) {
       result.dynamic = true;
@@ -320,7 +343,7 @@ namespace umbriel {
       result.workspaces.reserve(count);
       for (size_t index = 0; index < count; ++index) {
         const std::string name = std::to_string(index + 1);
-        result.workspaces.push_back({name, resolveWorkspaceLayout(config, outputName, name, index)});
+        result.workspaces.push_back({name, resolveWorkspaceLayout(config, identity, name, index)});
       }
       return result;
     }
@@ -328,7 +351,7 @@ namespace umbriel {
     result.workspaces.reserve(names->size());
     for (size_t index = 0; index < names->size(); ++index) {
       const auto& name = (*names)[index];
-      result.workspaces.push_back({name, resolveWorkspaceLayout(config, outputName, name, index)});
+      result.workspaces.push_back({name, resolveWorkspaceLayout(config, identity, name, index)});
     }
     return result;
   }

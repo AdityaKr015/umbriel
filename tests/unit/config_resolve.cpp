@@ -10,10 +10,19 @@ using umbriel::Config;
 using umbriel::ContentType;
 using umbriel::LayerRule;
 using umbriel::LayoutMode;
+using umbriel::OutputIdentity;
 using umbriel::OutputRule;
 using umbriel::VrrMode;
 using umbriel::WindowRule;
 using umbriel::WorkspaceConfig;
+
+namespace {
+  constexpr OutputIdentity identity(
+      std::string_view connector, std::string_view make = {}, std::string_view model = {}, std::string_view serial = {}
+  ) {
+    return {.connector = connector, .make = make, .model = model, .serial = serial};
+  }
+} // namespace
 
 UMBRIEL_TEST(globalLayoutUsesTheCallerOwnedConfig) {
   Config first;
@@ -79,7 +88,7 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   dpTwo.layout.gap = 30;
   config.workspaceRules.push_back(std::move(dpTwo));
 
-  const auto onDpOne = umbriel::resolveWorkspaceLayout(config, "DP-1", "dev", 0);
+  const auto onDpOne = umbriel::resolveWorkspaceLayout(config, identity("DP-1"), "dev", 0);
   CHECK(onDpOne.mode == LayoutMode::Dwindle);
   CHECK_EQ(onDpOne.gap, 20);
   CHECK_EQ(onDpOne.totalGap, 24);
@@ -95,7 +104,7 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   CHECK(!onDpOne.master.newOnTop);
   CHECK(onDpOne.dwindle.preserveSplit);
 
-  const auto onDpTwo = umbriel::resolveWorkspaceLayout(config, "DP-2", "dev", 0);
+  const auto onDpTwo = umbriel::resolveWorkspaceLayout(config, identity("DP-2"), "dev", 0);
   CHECK(onDpTwo.mode == LayoutMode::Scrolling);
   CHECK_EQ(onDpTwo.gap, 30);
   CHECK_EQ(onDpTwo.struts.left, 10);
@@ -109,7 +118,7 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   CHECK(onDpTwo.master.newOnTop);
   CHECK(!onDpTwo.dwindle.preserveSplit);
 
-  const auto elsewhere = umbriel::resolveWorkspaceLayout(config, "HDMI-A-1", "dev", 0);
+  const auto elsewhere = umbriel::resolveWorkspaceLayout(config, identity("HDMI-A-1"), "dev", 0);
   CHECK_EQ(elsewhere.gap, 12);
   CHECK_EQ(elsewhere.struts.left, 10);
   CHECK_EQ(elsewhere.struts.right, 2);
@@ -122,6 +131,27 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   CHECK(elsewhere.master.newOnTop);
   CHECK(!elsewhere.dwindle.preserveSplit);
 }
+UMBRIEL_TEST(outputSpecificWorkspaceRulesBeatLaterGlobalRules) {
+  Config config;
+
+  WorkspaceConfig specific;
+  specific.name = "dev";
+  specific.output = "microstep msi g2712f cd6t084401192";
+  specific.layout.gap = 20;
+  config.workspaceRules.push_back(std::move(specific));
+
+  WorkspaceConfig global;
+  global.name = "dev";
+  global.layout.gap = 12;
+  config.workspaceRules.push_back(std::move(global));
+
+  constexpr OutputIdentity monitor = identity("HDMI-A-1", "Microstep", "MSI G2712F", "CD6T084401192");
+  const auto onMonitor = umbriel::resolveWorkspaceLayout(config, monitor, "dev", 0);
+  CHECK_EQ(onMonitor.gap, 20);
+
+  const auto elsewhere = umbriel::resolveWorkspaceLayout(config, identity("DP-1"), "dev", 0);
+  CHECK_EQ(elsewhere.gap, 12);
+}
 
 UMBRIEL_TEST(omittedScrollingDefaultWidthRemainsUnset) {
   Config config;
@@ -129,7 +159,7 @@ UMBRIEL_TEST(omittedScrollingDefaultWidthRemainsUnset) {
   const auto global = umbriel::resolveGlobalLayout(config);
   CHECK(!global.scrolling.defaultWidthFraction.has_value());
 
-  const auto workspace = umbriel::resolveWorkspaceLayout(config, "DP-1", "dev", 0);
+  const auto workspace = umbriel::resolveWorkspaceLayout(config, identity("DP-1"), "dev", 0);
   CHECK(!workspace.scrolling.defaultWidthFraction.has_value());
 }
 
@@ -146,25 +176,73 @@ UMBRIEL_TEST(workspaceInventoryResolvesStaticAndDynamicOutputs) {
   web.layout.gap = 24;
   config.workspaceRules.push_back(std::move(web));
 
-  const auto staticSet = umbriel::resolveWorkspacesForOutput(config, "DP-1");
+  const auto staticSet = umbriel::resolveWorkspacesForOutput(config, identity("DP-1"));
   CHECK(!staticSet.dynamic);
   CHECK_EQ(staticSet.workspaces.size(), size_t{2});
   CHECK_EQ(staticSet.workspaces[0].name, std::string{"main"});
   CHECK_EQ(staticSet.workspaces[1].name, std::string{"web"});
   CHECK_EQ(staticSet.workspaces[1].layout.gap, 24);
 
-  const auto dynamicSet = umbriel::resolveWorkspacesForOutput(config, "DP-2");
+  const auto dynamicSet = umbriel::resolveWorkspacesForOutput(config, identity("DP-2"));
   CHECK(dynamicSet.dynamic);
   CHECK_EQ(dynamicSet.workspaces.size(), size_t{1});
   CHECK_EQ(dynamicSet.workspaces[0].name, std::string{"1"});
 
   config.workspaces.emptyAbove = true;
-  const auto dynamicSetWithEmptyAbove = umbriel::resolveWorkspacesForOutput(config, "DP-2");
+  const auto dynamicSetWithEmptyAbove = umbriel::resolveWorkspacesForOutput(config, identity("DP-2"));
   CHECK(dynamicSetWithEmptyAbove.dynamic);
   CHECK_EQ(dynamicSetWithEmptyAbove.workspaces.size(), size_t{2});
   if (dynamicSetWithEmptyAbove.workspaces.size() == 2) {
     CHECK_EQ(dynamicSetWithEmptyAbove.workspaces[0].name, std::string{"1"});
     CHECK_EQ(dynamicSetWithEmptyAbove.workspaces[1].name, std::string{"2"});
+  }
+}
+UMBRIEL_TEST(workspaceRulesMatchConnectorAndDescriptorWithoutOutputSection) {
+  Config config;
+
+  WorkspaceConfig connector;
+  connector.index = 1;
+  connector.output = "hdmi-a-1";
+  connector.layout.gap = 18;
+  config.workspaceRules.push_back(std::move(connector));
+
+  WorkspaceConfig descriptor;
+  descriptor.index = 1;
+  descriptor.output = "microstep msi g2712f cd6t084401192";
+  descriptor.layout.mode = LayoutMode::Dwindle;
+  config.workspaceRules.push_back(std::move(descriptor));
+
+  constexpr OutputIdentity monitor = identity("HDMI-A-1", "Microstep", "MSI G2712F", "CD6T084401192");
+  const auto resolved = umbriel::resolveWorkspaceLayout(config, monitor, "1", 0);
+  CHECK_EQ(resolved.gap, 18);
+  CHECK(resolved.mode == LayoutMode::Dwindle);
+}
+
+UMBRIEL_TEST(descriptorOutputRuleOverridesConnectorFallback) {
+  Config config;
+
+  OutputRule connector;
+  connector.name = "HDMI-A-1";
+  connector.workspaces = std::vector<std::string>{"fallback"};
+  config.outputs.push_back(std::move(connector));
+
+  OutputRule descriptor;
+  descriptor.name = "Microstep MSI G2712F CD6T084401192";
+  descriptor.workspaces = std::vector<std::string>{"specific"};
+  config.outputs.push_back(std::move(descriptor));
+
+  constexpr OutputIdentity monitor = identity("HDMI-A-1", "Microstep", "MSI G2712F", "CD6T084401192");
+  const OutputRule* selected = umbriel::findOutputRule(config, monitor);
+  CHECK(selected != nullptr);
+  if (selected != nullptr) {
+    CHECK_EQ(selected->name, std::string{"Microstep MSI G2712F CD6T084401192"});
+  }
+
+  const auto resolved = umbriel::resolveWorkspacesForOutput(config, monitor);
+  CHECK(!resolved.dynamic);
+  CHECK_EQ(resolved.workspaces.size(), size_t{1});
+  if (resolved.workspaces.size() == 1) {
+    CHECK_EQ(resolved.workspaces[0].name, std::string{"specific"});
   }
 }
 

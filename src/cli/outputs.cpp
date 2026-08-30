@@ -1,5 +1,6 @@
 #include "cli/outputs.h"
 
+#include "output/identity.h"
 #include "wlr-output-management-unstable-v1-client-protocol.h"
 
 #include <cstdint>
@@ -232,7 +233,14 @@ namespace umbriel {
     void printHead(const HeadInfo& head) {
       std::println("{} \"{}\"", head.name, head.description);
       std::println("  Enabled: {}", head.enabled ? "yes" : "no");
+      const OutputIdentity identity{
+          .connector = head.name,
+          .make = head.make,
+          .model = head.model,
+          .serial = head.serial,
+      };
       if (!head.make.empty() || !head.model.empty() || !head.serial.empty()) {
+        std::println("  Config name: \"{}\"", outputDescriptor(identity));
         std::print("  ");
         bool first = true;
         if (!head.make.empty()) {

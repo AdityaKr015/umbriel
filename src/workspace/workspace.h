@@ -252,6 +252,7 @@ namespace umbriel {
 
   private:
     std::unique_ptr<Workspace> createConfiguredWorkspace(ResolvedWorkspace workspace, size_t index);
+    std::string nextWorkspaceId();
     Workspace* appendDynamicWorkspace();
     Workspace* prependDynamicWorkspace();
     void refreshDynamicWorkspaceMetadata();

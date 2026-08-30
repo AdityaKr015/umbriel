@@ -1,6 +1,6 @@
 # Workspaces Overview
 
-Configure the workspace overview, including its navigation, shortcuts, and
+Configure the workspaces overview, including its navigation, shortcuts, and
 appearance.
 
 ## Settings and behavior

@@ -1,4 +1,4 @@
-# Window and Layer Rules
+# Window Rules
 
 Window rules can match `app_id`, title, and a client-defined XDG toplevel tag
 using ECMAScript regular expressions. They can also match a standardized

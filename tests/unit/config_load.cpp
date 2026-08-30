@@ -201,6 +201,11 @@ preserve_split = false
   CHECK(containsDiagnostic(store, "unknown key general.prefer_no_csd"));
 }
 
+UMBRIEL_TEST(backgroundDefaultsOpaque) {
+  const umbriel::Config config;
+  CHECK_EQ(config.colors.background[3], 1.0F);
+}
+
 UMBRIEL_TEST(dwindlePreserveSplitDefaultsToFalse) {
   const TempConfig file;
   file.write("[layout]\n");

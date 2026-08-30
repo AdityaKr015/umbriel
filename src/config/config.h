@@ -346,7 +346,7 @@ namespace umbriel {
 
   struct Config {
     struct Colors {
-      std::array<float, 4> background{0.0784314F, 0.0784314F, 0.0980392F, 0.9411765F};
+      std::array<float, 4> background{0.0784314F, 0.0784314F, 0.0980392F, 1.0F};
       std::array<float, 4> textPrimary{0.9098039F, 0.9098039F, 0.9176471F, 1.0F};
       std::array<float, 4> textMuted{0.5411765F, 0.5411765F, 0.5725490F, 1.0F};
       std::array<float, 4> accentPrimary{0.4784314F, 0.6392157F, 1.0F, 1.0F};

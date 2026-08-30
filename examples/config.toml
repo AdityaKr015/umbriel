@@ -35,7 +35,7 @@ empty_above = false
 # Colors ---------------------------------------------------------------------
 
 [colors]
-# background = "#141419F0"
+# background = "#141419FF"
 # text_primary = "#E8E8EAFF"
 # text_muted = "#8A8A92FF"
 # accent_primary = "#7AA3FFFF"

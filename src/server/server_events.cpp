@@ -741,7 +741,7 @@ namespace umbriel {
     wlr_xdg_activation_token_v1* token = event->token;
     const char* tokenName = token != nullptr ? wlr_xdg_activation_token_v1_get_name(token) : nullptr;
     const auto* watch = token != nullptr ? static_cast<ActivationTokenWatch*>(token->data) : nullptr;
-    const bool trusted = watch != nullptr && watch->compositorIssued;
+    const bool trusted = watch != nullptr && (watch->compositorIssued || watch->inputBacked);
     const auto age = watch != nullptr
         ? std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - watch->createdAt)
               .count()
@@ -791,9 +791,10 @@ namespace umbriel {
         const bool focusOnActivate = rulePolicy.value_or(trusted || config().general.focusOnActivate);
         const bool alreadyFocused = entry->activated();
         kLog.debug(
-            "xdg-activation policy target_app_id='{}' trusted={} mapped={} focus_on_activate={} "
-            "already_focused={} action={}",
-            entry->toplevel()->app_id != nullptr ? entry->toplevel()->app_id : "", trusted, entry->mapped(),
+            "xdg-activation policy target_app_id='{}' trusted={} compositor_issued={} input_backed={} mapped={} "
+            "focus_on_activate={} already_focused={} action={}",
+            entry->toplevel()->app_id != nullptr ? entry->toplevel()->app_id : "", trusted,
+            watch != nullptr && watch->compositorIssued, watch != nullptr && watch->inputBacked, entry->mapped(),
             focusOnActivate, alreadyFocused,
             alreadyFocused ? "none" : (entry->mapped() ? (focusOnActivate ? "focus" : "urgent") : "defer")
         );
@@ -844,6 +845,7 @@ namespace umbriel {
     auto* watch = new ActivationTokenWatch{
         .createdAt = std::chrono::steady_clock::now(),
         .compositorIssued = compositorIssued,
+        .inputBacked = !compositorIssued && token->seat != nullptr && token->surface != nullptr,
     };
     watch->destroy.notify = onActivationTokenDestroy;
     wl_signal_add(&token->events.destroy, &watch->destroy);

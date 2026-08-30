@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# An ordinary client-issued activation remains unsolicited when the global policy is disabled. It may mark a hidden
-# target urgent after remap, but it must not reveal the target workspace or steal seat focus.
+# An untrusted activation must not suppress the focus an ordinary remap receives. It still cannot override an explicit
+# no-focus rule, so applications cannot gain focus merely by attaching a serialless activation request.
 set -euo pipefail
 
 readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
@@ -40,7 +40,7 @@ printf c >&"$control_fd"
 for _ in $(seq 60); do
   windows=$("$UMBRIEL" windows --json)
   target=$(jq -c '.[] | select(.app_id == "client-activation-target")' <<< "$windows")
-  [[ $(grep -c '^mapped$' "$CLIENT_LOG") -eq 2 && $(jq -r '.urgent' <<< "$target") == true ]] && break
+  [[ $(grep -c '^mapped$' "$CLIENT_LOG") -eq 2 && $(jq -r '.active' <<< "$target") == true ]] && break
   sleep 0.1
 done
 
@@ -49,13 +49,52 @@ if ! grep -q '^activation-requested$' "$CLIENT_LOG" || ! grep -q '^activation-se
   echo "ordinary client activation did not precede remap: $(< "$CLIENT_LOG")"
   exit 1
 fi
-if [[ $(jq -r '.active' <<< "$target") != false || $(jq -r '.urgent' <<< "$target") != true ]]; then
-  echo "ordinary client activation stole focus or failed to mark urgent: $windows"
+if [[ $(jq -r '.active' <<< "$target") != true || $(jq -r '.urgent' <<< "$target") != false ]]; then
+  echo "untrusted activation suppressed ordinary remap focus: $windows"
   exit 1
 fi
-if [[ $("$UMBRIEL" workspaces --json | jq -r '.[] | select(.active) | .name') != 2 ]]; then
-  echo "ordinary client activation changed workspace: $("$UMBRIEL" workspaces --json)"
+if [[ $("$UMBRIEL" workspaces --json | jq -r '.[] | select(.active) | .name') != 1 ]]; then
+  echo "ordinary remap did not reveal its workspace: $("$UMBRIEL" workspaces --json)"
   exit 1
 fi
 
-echo "ordinary client activation remaps urgent without stealing focus"
+"$UMBRIEL" msg "window-close:$target_id" > /dev/null
+for _ in $(seq 60); do
+  [[ $(grep -c '^unmapped$' "$CLIENT_LOG") -eq 2 ]] && break
+  sleep 0.1
+done
+if [[ $(grep -c '^unmapped$' "$CLIENT_LOG") -ne 2 ]]; then
+  echo "client activation target did not unmap again: $(< "$CLIENT_LOG")"
+  exit 1
+fi
+
+cat >> "$UMBRIEL_CONFIG" <<'EOF'
+
+[[window_rule]]
+match.app_id = "^client-activation-target$"
+default_focused = false
+EOF
+"$UMBRIEL" msg config-reload > /dev/null
+"$UMBRIEL" msg workspace-switch:2 > /dev/null
+printf c >&"$control_fd"
+for _ in $(seq 60); do
+  windows=$("$UMBRIEL" windows --json)
+  target=$(jq -c '.[] | select(.app_id == "client-activation-target")' <<< "$windows")
+  [[ $(grep -c '^mapped$' "$CLIENT_LOG") -eq 3 && $(jq -r '.urgent' <<< "$target") == true ]] && break
+  sleep 0.1
+done
+
+if [[ $(grep -c '^activation-sent$' "$CLIENT_LOG") -ne 2 || $(grep -c '^mapped$' "$CLIENT_LOG") -ne 3 ]]; then
+  echo "second ordinary client activation did not precede remap: $(< "$CLIENT_LOG")"
+  exit 1
+fi
+if [[ $(jq -r '.active' <<< "$target") != false || $(jq -r '.urgent' <<< "$target") != true ]]; then
+  echo "untrusted activation overrode default_focused false: $windows"
+  exit 1
+fi
+if [[ $("$UMBRIEL" workspaces --json | jq -r '.[] | select(.active) | .name') != 2 ]]; then
+  echo "rule-vetoed client activation changed workspace: $("$UMBRIEL" workspaces --json)"
+  exit 1
+fi
+
+echo "untrusted activation preserves ordinary remap focus and obeys explicit no-focus rules"

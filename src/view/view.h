@@ -104,7 +104,7 @@ namespace umbriel {
     void setUrgent(bool urgent);
     // Activation can arrive after the XDG role exists but before its first buffer. Preserve its provenance until map,
     // when the window's final metadata is available for rule matching.
-    void deferActivation(bool compositorIssued);
+    void deferActivation(bool trusted);
     // Focus ring only. Public alongside setForeignActivated because both are
     // activation chrome the focus manager drives from outside.
     void setBorderFocused(bool focused);
@@ -443,10 +443,9 @@ namespace umbriel {
     bool m_scratchpadBorder = false;
     bool m_urgent = false;
     bool m_activated = false;
-    // nullopt means no pre-map request, false means mark urgent, true means focus after map.
-    // False represents an ordinary client token, true a compositor-issued launch token. A trusted request wins if
-    // both arrive before map. Window-rule policy is deliberately resolved only after the window maps.
-    std::optional<bool> m_deferredActivationCompositorIssued;
+    // nullopt means no pre-map request, false means untrusted, true means trusted. A trusted request wins if both
+    // arrive before map. Window-rule policy is deliberately resolved only after the window maps.
+    std::optional<bool> m_deferredActivationTrusted;
     AnimatedValue m_posX;
     AnimatedValue m_posY;
     AnimatedValue m_fade;

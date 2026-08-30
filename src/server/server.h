@@ -450,6 +450,7 @@ namespace umbriel {
     struct ActivationTokenWatch {
       std::chrono::steady_clock::time_point createdAt;
       bool compositorIssued = false;
+      bool inputBacked = false;
       wl_listener destroy{};
     };
 

@@ -6,7 +6,8 @@
 // height]]. The optional dimensions let pointer checks expose a surface that fills its assigned tile. With
 // REMAP_ON_STDIN set, reading any byte performs a fresh initial commit and maps the same toplevel again.
 // With ACTIVATION_TOKEN_FILE set, an `a` command reads and uses that token. A `c` command requests an ordinary client
-// token instead. When the surface is hidden, either command queues activation before the remap commit.
+// token instead. An `i` command requests a token from the latest focused key press and writes it to that file. When the
+// surface is hidden, `a` or `c` queues activation before the remap commit.
 // CONTENT_TYPE sets a surface hint before its initial commit. CONTENT_TYPE_ON_SUBSURFACE places it on a rendering
 // child, matching current Proton behavior. XDG_TAG sets a toplevel tag before the initial commit.
 // CONTENT_TYPE_AFTER_MAP, XDG_TAG_AFTER_MAP, and TITLE_AFTER_MAP update their metadata on stdin.
@@ -92,6 +93,7 @@ namespace {
     bool redrawOnClose = false;
     bool redrawOnceOnClose = false;
     bool keyboardFocused = false;
+    uint32_t inputSerial = 0;
     bool requestMaximized = false;
     bool requestMaximizedAfterConfigure = false;
     bool maximizeRequested = false;
@@ -118,6 +120,7 @@ namespace {
     const char* title = "unmap-client";
     const char* appId = nullptr;
     const char* remapAppId = nullptr;
+    const char* activationTokenFile = nullptr;
   };
 
   struct AuxiliaryToplevel {
@@ -197,9 +200,12 @@ namespace {
     }
   }
 
-  void keyboardKey(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t keyState) {
+  void keyboardKey(void* data, wl_keyboard*, uint32_t serial, uint32_t, uint32_t key, uint32_t keyState) {
     auto& state = *static_cast<State*>(data);
     if (state.keyboardFocused) {
+      if (keyState == WL_KEYBOARD_KEY_STATE_PRESSED) {
+        state.inputSerial = serial;
+      }
       std::println("key {} {}", key, keyState);
       std::fflush(stdout);
     }
@@ -557,6 +563,50 @@ namespace {
     return true;
   }
 
+  void inputActivationTokenDone(void* data, xdg_activation_token_v1* activationToken, const char* token) {
+    auto& state = *static_cast<State*>(data);
+    FILE* file = std::fopen(state.activationTokenFile, "w");
+    if (file == nullptr || std::fprintf(file, "%s\n", token) < 0) {
+      std::println(stderr, "unmap-client: cannot write input activation token");
+    } else {
+      std::println("input-activation-token-written");
+      std::fflush(stdout);
+    }
+    if (file != nullptr) {
+      std::fclose(file);
+    }
+    xdg_activation_token_v1_destroy(activationToken);
+  }
+
+  constexpr xdg_activation_token_v1_listener kInputActivationTokenListener = {
+      .done = inputActivationTokenDone,
+  };
+
+  bool issueInputActivationToken(State& state) {
+    if (state.activation == nullptr
+        || state.seat == nullptr
+        || state.activationTokenFile == nullptr
+        || !state.mapped
+        || !state.keyboardFocused
+        || state.inputSerial == 0) {
+      std::println(stderr, "unmap-client: input activation token needs a focused key press and output file");
+      return false;
+    }
+    xdg_activation_token_v1* token = xdg_activation_v1_get_activation_token(state.activation);
+    if (token == nullptr) {
+      std::println(stderr, "unmap-client: failed to create input activation token");
+      return false;
+    }
+    xdg_activation_token_v1_add_listener(token, &kInputActivationTokenListener, &state);
+    xdg_activation_token_v1_set_serial(token, state.inputSerial, state.seat);
+    xdg_activation_token_v1_set_surface(token, state.surface);
+    xdg_activation_token_v1_commit(token);
+    state.inputSerial = 0;
+    std::println("input-activation-token-requested");
+    std::fflush(stdout);
+    return true;
+  }
+
   void destroyAuxiliaryToplevel(AuxiliaryToplevel& window) {
     if (window.toplevel != nullptr) {
       xdg_toplevel_destroy(window.toplevel);
@@ -586,7 +636,7 @@ int main(int argc, char** argv) {
     state.remapAppId = state.appId;
   }
   const bool remapOnStdin = std::getenv("REMAP_ON_STDIN") != nullptr;
-  const char* activationTokenFile = std::getenv("ACTIVATION_TOKEN_FILE");
+  state.activationTokenFile = std::getenv("ACTIVATION_TOKEN_FILE");
   const char* initialContentType = std::getenv("CONTENT_TYPE");
   const char* updatedContentType = std::getenv("CONTENT_TYPE_AFTER_MAP");
   const char* initialXdgTag = std::getenv("XDG_TAG");
@@ -642,7 +692,7 @@ int main(int argc, char** argv) {
     std::println(stderr, "unmap-client: compositor is missing a required Wayland global");
     return EXIT_FAILURE;
   }
-  if (activationTokenFile != nullptr && state.activation == nullptr) {
+  if (state.activationTokenFile != nullptr && state.activation == nullptr) {
     std::println(stderr, "unmap-client: compositor is missing xdg_activation_v1");
     return EXIT_FAILURE;
   }
@@ -804,7 +854,7 @@ int main(int argc, char** argv) {
         char command = 0;
         if (read(STDIN_FILENO, &command, 1) > 0) {
           if (command == 'a') {
-            if (!activateFromFile(state, activationTokenFile)) {
+            if (!activateFromFile(state, state.activationTokenFile)) {
               return EXIT_FAILURE;
             }
             if (!state.mapped && remapOnStdin) {
@@ -812,6 +862,10 @@ int main(int argc, char** argv) {
             }
           } else if (command == 'c') {
             if (!activateWithClientToken(state)) {
+              return EXIT_FAILURE;
+            }
+          } else if (command == 'i') {
+            if (!issueInputActivationToken(state)) {
               return EXIT_FAILURE;
             }
           } else if (state.mapped && updateOnStdin && !state.metadataUpdated) {

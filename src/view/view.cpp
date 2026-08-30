@@ -1722,10 +1722,11 @@ namespace umbriel {
 
     updateForeignIdentity();
     updateForeignState();
-    const std::optional<bool> deferredActivation = std::exchange(m_deferredActivationCompositorIssued, std::nullopt);
+    const std::optional<bool> deferredActivation = std::exchange(m_deferredActivationTrusted, std::nullopt);
     const bool activateOnMap = deferredActivation.has_value()
         && rule.focusOnActivate.value_or(*deferredActivation || config().general.focusOnActivate);
-    const bool focusOnMap = deferredActivation.has_value() ? activateOnMap : rule.defaultFocused.value_or(true);
+    const bool focusOnMap =
+        activateOnMap || (!deferredActivation.value_or(false) && rule.defaultFocused.value_or(true));
     if (!m_server->sessionLocked() && focusOnMap) {
       m_server->focusView(this, activateOnMap ? FocusReason::XdgActivation : FocusReason::Startup);
     } else if (deferredActivation.has_value()) {
@@ -1891,11 +1892,11 @@ namespace umbriel {
     }
   }
 
-  void View::deferActivation(bool compositorIssued) {
-    // A compositor-issued launch request wins if clients race multiple tokens during role creation. An ordinary
-    // client request must not downgrade it before the first buffer arrives.
-    if (compositorIssued || !m_deferredActivationCompositorIssued.has_value()) {
-      m_deferredActivationCompositorIssued = compositorIssued;
+  void View::deferActivation(bool trusted) {
+    // A trusted launch request wins if clients race multiple tokens during role creation. An untrusted request must
+    // not downgrade it before the first buffer arrives.
+    if (trusted || !m_deferredActivationTrusted.has_value()) {
+      m_deferredActivationTrusted = trusted;
     }
   }
 

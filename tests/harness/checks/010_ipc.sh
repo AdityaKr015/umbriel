@@ -455,3 +455,4 @@ PY
 # An "ok" reply only says the request was accepted. The window must actually
 # leave the list, which is the close path itself, not tidying up after it.
 wait_for_windows 0
+echo "IPC commands return documented JSON, human-readable listings, events, and clean window lifecycle replies"

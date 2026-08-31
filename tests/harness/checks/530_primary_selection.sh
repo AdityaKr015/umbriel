@@ -24,3 +24,4 @@ query_global absent
 sed -i 's/middle_click_paste = false/middle_click_paste = true/' "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 query_global present
+echo "primary-selection visibility follows middle_click_paste across config reloads"

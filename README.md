@@ -121,11 +121,11 @@ just check 310 -v         # keep the full output of passing checks
 ```
 
 Each check gets its own contained headless compositor, so a failure stays local
-and checks run in any order. A run reports one line per check with its duration;
-passing checks are summarized to a single dimmed line while failing ones print
-their whole output. A failing check keeps its runtime directory (compositor log,
-config, per-client logs) and prints the path. `just verify <mode> [fragment ...]`
-selects another build.
+and checks run in any order. Every passing check emits a concise completion
+message, summarized to a single dimmed line unless `-v` is enabled; failing
+checks print their whole output. A failing check keeps its runtime directory
+(compositor log, config, per-client logs) and prints the path. `just verify
+<mode> [fragment ...]` selects another build.
 
 ## Running
 

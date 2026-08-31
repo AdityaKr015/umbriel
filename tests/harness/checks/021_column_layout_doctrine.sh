@@ -85,3 +85,4 @@ if [[ $swapped != true ]]; then
   "$UMBRIEL" windows --json
   exit 1
 fi
+echo "column actions stay available across layouts, with scrolling-only rejection reported"

@@ -1178,9 +1178,11 @@ namespace umbriel {
     // box by setSurfaceTreeClip, actually reaches a content-box corner, so an interior subsurface (embedded video)
     // stays square. Popups are excluded: their surface is its own root.
     const int radius = surfaceRadius();
-    // A tiled view's committed geometry lags the layout, so the presented size is the box the corners must match; a
-    // float has no such lag. Same rule as updateShadow().
+    // A tiled target and an active resize animation can both lead committed
+    // geometry, so use the presented size for corner membership in either case.
     const wlr_box& geometry = m_toplevel->base->geometry;
+    const bool usePresentedSize =
+        (m_tiled || sizeAnimating()) && m_presentation.width() > 0 && m_presentation.height() > 0;
     struct Ctx {
       View* view;
       int radius;
@@ -1191,8 +1193,8 @@ namespace umbriel {
     } ctx{
         this,
         radius,
-        m_tiled && m_presentation.width() > 0 ? m_presentation.width() : geometry.width,
-        m_tiled && m_presentation.height() > 0 ? m_presentation.height() : geometry.height,
+        usePresentedSize ? m_presentation.width() : geometry.width,
+        usePresentedSize ? m_presentation.height() : geometry.height,
         m_sceneTree->node.x,
         m_sceneTree->node.y,
     };
@@ -1251,12 +1253,14 @@ namespace umbriel {
       m_decoration.hideShadow();
       return;
     }
-    // A tiled view's committed geometry lags the layout, so the presented size is
-    // the one the shadow must match; a float has no such lag.
+    // Tiled targets and active resize animations can lead committed geometry,
+    // so their shadows must follow the presented size.
     const wlr_box& geometry = m_toplevel->base->geometry;
+    const bool usePresentedSize =
+        (m_tiled || sizeAnimating()) && m_presentation.width() > 0 && m_presentation.height() > 0;
     updateShadow(
-        m_tiled && m_presentation.width() > 0 ? m_presentation.width() : geometry.width,
-        m_tiled && m_presentation.height() > 0 ? m_presentation.height() : geometry.height
+        usePresentedSize ? m_presentation.width() : geometry.width,
+        usePresentedSize ? m_presentation.height() : geometry.height
     );
   }
 
@@ -2196,7 +2200,7 @@ namespace umbriel {
     m_server->cursor()->beginResize(this, event->edges);
   }
 
-  void View::setMaximized(bool maximized) {
+  void View::setMaximized(bool maximized, bool animate) {
     if (m_tiled && m_workspace != nullptr) {
       if (m_maximizedToEdges) {
         setMaximizedToEdges(false);
@@ -2214,6 +2218,12 @@ namespace umbriel {
       return;
     }
 
+    // Detached scratchpad views have no presentation owner to apply a resize
+    // animation, so keep their position and size transition in lockstep.
+    const bool animateFloating = animate && m_workspace != nullptr;
+    if (!animateFloating) {
+      cancelSizeAnimation();
+    }
     const bool wasMaximized = m_toplevel->scheduled.maximized;
     if (maximized && !wasMaximized) {
       // Capture where the float is heading, not where it currently sits.
@@ -2234,17 +2244,27 @@ namespace umbriel {
       const wlr_box usable = floatingUsableArea();
       if (usable.width > 0 && usable.height > 0) {
         wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
-        // setPosition, not a raw scene move: the animated position keeps its own
-        // target, and a stale one snaps the window back off the usable origin.
-        setPosition(usable.x, usable.y);
+        if (animateFloating) {
+          beginResizeAnimation(usable.width, usable.height);
+          animateTo(usable.x, usable.y);
+        } else {
+          setPosition(usable.x, usable.y);
+        }
       }
     } else if (!maximized && wasMaximized && m_hasMaximizeRestoreBox) {
       requestFloatingSize(m_maximizeRestoreBox.width, m_maximizeRestoreBox.height);
-      setPosition(m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
+      if (animateFloating) {
+        beginResizeAnimation(m_maximizeRestoreBox.width, m_maximizeRestoreBox.height);
+        animateTo(m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
+      } else {
+        setPosition(m_maximizeRestoreBox.x, m_maximizeRestoreBox.y);
+      }
       m_hasMaximizeRestoreBox = false;
     }
     wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
-    syncFloatingSurfaceClip();
+    if (!sizeAnimating()) {
+      syncFloatingSurfaceClip();
+    }
     updateForeignState();
   }
 
@@ -2275,7 +2295,7 @@ namespace umbriel {
     setMaximized(m_toplevel->requested.maximized);
   }
 
-  void View::setMaximizedToEdges(bool maximized) {
+  void View::setMaximizedToEdges(bool maximized, bool animate) {
     if (!maximized) {
       m_restoreMaximizedToEdges = false;
     }
@@ -2287,7 +2307,9 @@ namespace umbriel {
       m_pendingUnfullscreenSize = false;
       m_unfullscreenGraceStartMsec = 0;
     }
-    cancelSizeAnimation();
+    if (m_tiled || !animate) {
+      cancelSizeAnimation();
+    }
 
     m_maximizedToEdges = maximized;
     bool columnFullWidth = false;
@@ -2298,12 +2320,12 @@ namespace umbriel {
     if (m_tiled) {
       wlr_xdg_toplevel_set_maximized(m_toplevel, maximized || columnFullWidth);
     } else {
-      setMaximized(maximized);
+      setMaximized(maximized, animate);
     }
     showDecorations(!maximized && !m_toplevel->scheduled.fullscreen);
     if (m_workspace != nullptr) {
       m_workspace->snapVisible(this);
-      m_workspace->markArrange(true);
+      m_workspace->markArrange(animate);
     }
     updateForeignState();
   }
@@ -2490,7 +2512,7 @@ namespace umbriel {
       return;
     }
     if (m_maximizedToEdges) {
-      setMaximizedToEdges(false);
+      setMaximizedToEdges(false, false);
     }
     const bool unpinning = !floating && m_pinned;
     if (unpinning) {
@@ -2660,7 +2682,7 @@ namespace umbriel {
         m_workspace != nullptr && m_workspace->active()
     );
     if (fullscreen && m_maximizedToEdges) {
-      setMaximizedToEdges(false);
+      setMaximizedToEdges(false, false);
       m_restoreMaximizedToEdges = true;
     }
     if (fullscreen && !m_tiled && !m_toplevel->current.fullscreen) {

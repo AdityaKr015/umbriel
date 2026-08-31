@@ -104,7 +104,7 @@ namespace umbriel {
       view->togglePinned(); // unpins and returns to floating/tiled state
     }
     if (view->maximizedToEdges()) {
-      view->setMaximizedToEdges(false);
+      view->setMaximizedToEdges(false, false);
     }
     view->setFloating(true);
     view->cancelPositionAnimation();

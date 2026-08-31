@@ -193,7 +193,7 @@ namespace umbriel {
     // Compositor-driven fullscreen toggle (keybind); client requests use handleRequestFullscreen.
     void toggleFullscreen();
     void applyDeferredUnfullscreen();
-    void setMaximizedToEdges(bool maximized);
+    void setMaximizedToEdges(bool maximized, bool animate = true);
     void toggleMaximizedToEdges();
     // Compositor-driven maximize toggle (keybind). A floating window fills its
     // output's usable area and restores to the box it had before; tiled windows
@@ -271,7 +271,7 @@ namespace umbriel {
     void handleRequestMove();
     void handleRequestResize(void* data);
     void handleRequestMaximize();
-    void setMaximized(bool maximized);
+    void setMaximized(bool maximized, bool animate = true);
     void handleRequestFullscreen();
     void setFullscreen(bool fullscreen);
     void handleSetTitle();

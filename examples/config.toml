@@ -69,7 +69,7 @@ curve = "easeout"
 style = "fade"                 # fade, slide
 
 [animation.windows_move]
-enabled = true
+enabled = true                     # window move, resize, and floating maximize transitions
 duration_ms = 250
 curve = "snappy"
 

@@ -521,7 +521,7 @@ namespace umbriel {
       }
       setActiveConstraint(nullptr);
       if (view->maximizedToEdges()) {
-        view->setMaximizedToEdges(false);
+        view->setMaximizedToEdges(false, false);
       }
       const wlr_box usable = workspace->tiledArea();
       std::unique_ptr<ResizeGrab> session = layout.beginResize(view, resolvedEdges, usable);
@@ -549,7 +549,7 @@ namespace umbriel {
     }
     setActiveConstraint(nullptr);
     if (view->maximizedToEdges()) {
-      view->setMaximizedToEdges(false);
+      view->setMaximizedToEdges(false, false);
     }
 
     const wlr_box& geometry = view->toplevel()->base->geometry;
@@ -1748,13 +1748,15 @@ namespace umbriel {
     if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
         scratchpad != nullptr && scratchpad->contains(view)) {
       scratchpad->finishMove(view, output);
-      view->setPosition(x, y);
     } else if (output != nullptr && output->workspaceGroup() != nullptr) {
       if (Workspace* target = output->workspaceGroup()->active(); view->workspace() != target) {
         view->moveToWorkspace(target);
-        view->setPosition(x, y);
       }
     }
+    // Drag presentation moves only the scene node. Commit its final position
+    // after any workspace transfer so later restores use the dropped origin.
+    view->setPosition(x, y);
+    view->rememberFloatingPosition();
 
     resetMode();
     m_server->focusView(view, FocusReason::DragDrop);

@@ -16,11 +16,10 @@ namespace umbriel {
       bool focused
   );
   [[nodiscard]] ResolvedLayerRule resolveLayerRules(const Config& config, const char* layerNamespace);
-  // Whether any [[security_context_rule]] matching the client's metadata grants
-  // this global on top of the base allowed set.
-  [[nodiscard]] bool securityContextRuleAllowsGlobal(
-      const Config& config, const char* sandboxEngine, const char* appId, std::string_view interface
-  );
+  // The globals every [[security_context_rule]] matching the client's metadata
+  // grants on top of the base allowed set.
+  [[nodiscard]] std::vector<std::string>
+  securityContextRuleGlobals(const Config& config, const char* sandboxEngine, const char* appId);
   [[nodiscard]] bool anyWindowRuleHasTitlePattern(const Config& config);
   // Return the sole fixed-output inventory containing this zero-based workspace
   // position. Null means no fixed owner or an ambiguous owner.

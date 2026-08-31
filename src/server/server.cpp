@@ -33,11 +33,13 @@
 #include <array>
 #include <csignal>
 #include <cstdlib>
+#include <optional>
 #include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unistd.h>
+#include <vector>
 
 namespace umbriel {
 
@@ -87,6 +89,8 @@ namespace umbriel {
       wl_listener destroy{};
       bool advertiseDecorationManagers = true;
       bool advertisePrimarySelection = true;
+      // Resolved on first use: security-context metadata is attached after the client-created signal.
+      std::optional<std::vector<std::string>> securityContextGlobals;
     };
 
     void onClientGlobalPolicyDestroy(wl_listener* listener, void* /*data*/) {
@@ -127,19 +131,26 @@ namespace umbriel {
         return true;
       }
       const std::string_view interfaceName(interface->name);
+      // A global filter is consulted both when a global is advertised and when
+      // it is bound, so each client's decisions must remain stable for its
+      // entire connection.
+      ClientGlobalPolicy* policy = clientGlobalPolicy(client);
       if (const wlr_security_context_v1_state* context = server->clientSecurityContext(client);
           context != nullptr && !isAllowedSecurityContextGlobal(interfaceName)) {
         // Nested contexts stay blocked unconditionally: per-app grants are only
         // trustworthy while labels originate from unrestricted clients.
-        if (interfaceName == "wp_security_context_manager_v1"
-            || !securityContextRuleAllowsGlobal(config(), context->sandbox_engine, context->app_id, interfaceName)) {
+        if (interfaceName == "wp_security_context_manager_v1") {
+          return false;
+        }
+        if (!policy->securityContextGlobals) {
+          policy->securityContextGlobals =
+              securityContextRuleGlobals(config(), context->sandbox_engine, context->app_id);
+        }
+        if (std::ranges::find(*policy->securityContextGlobals, interfaceName)
+            == policy->securityContextGlobals->end()) {
           return false;
         }
       }
-      // A global filter is consulted both when a global is advertised and when
-      // it is bound, so each client's decisions must remain stable for its
-      // entire connection.
-      const ClientGlobalPolicy* policy = clientGlobalPolicy(client);
       if (interfaceName == "zwp_primary_selection_device_manager_v1") {
         return policy->advertisePrimarySelection;
       }

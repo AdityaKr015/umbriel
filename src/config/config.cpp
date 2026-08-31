@@ -1790,6 +1790,8 @@ namespace umbriel {
       }
     }
 
+    // Any mistake rejects the whole entry: a rule missing its selector would
+    // apply to every restricted client.
     void readSecurityContextRules(Section& root, Config& loaded) {
       const toml::node* node = root.take("security_context_rule");
       if (node == nullptr) {
@@ -1812,39 +1814,34 @@ namespace umbriel {
         SecurityContextRule rule;
         bool valid = true;
 
+        const auto readPattern = [&](Section& match, std::string_view key, std::string& pattern, std::regex& regex) {
+          const toml::node* patternNode = match.take(key);
+          if (patternNode == nullptr) {
+            return;
+          }
+          const auto value = patternNode->value<std::string>();
+          if (!value || value->empty()) {
+            warnAt(patternNode->source(), "ignoring security_context_rule (match.{} must be a non-empty string)", key);
+            valid = false;
+            return;
+          }
+          pattern = *value;
+          try {
+            regex = std::regex(pattern);
+          } catch (const std::regex_error& error) {
+            warnAt(patternNode->source(), "invalid regex in security_context_rule.match.{}: {}", key, error.what());
+            valid = false;
+          }
+        };
+
         if (const toml::node* matchNode = keys.take("match")) {
           if (const auto* match = matchNode->as_table()) {
             Section matchKeys(*match, "security_context_rule.match", configStore().mutableDiagnostics());
-            if (const toml::node* engineNode = matchKeys.take("sandbox_engine")) {
-              if (const auto value = engineNode->value<std::string>()) {
-                rule.sandboxEnginePattern = *value;
-                try {
-                  rule.sandboxEngineRegex = std::regex(rule.sandboxEnginePattern);
-                } catch (const std::regex_error& error) {
-                  warnAt(
-                      engineNode->source(), "invalid regex in security_context_rule.match.sandbox_engine: {}",
-                      error.what()
-                  );
-                  valid = false;
-                }
-              } else {
-                warnAt(engineNode->source(), "ignoring security_context_rule.match.sandbox_engine (expected string)");
-                valid = false;
-              }
-            }
-            if (const toml::node* appIdNode = matchKeys.take("app_id")) {
-              if (const auto value = appIdNode->value<std::string>()) {
-                rule.appIdPattern = *value;
-                try {
-                  rule.appIdRegex = std::regex(rule.appIdPattern);
-                } catch (const std::regex_error& error) {
-                  warnAt(appIdNode->source(), "invalid regex in security_context_rule.match.app_id: {}", error.what());
-                  valid = false;
-                }
-              } else {
-                warnAt(appIdNode->source(), "ignoring security_context_rule.match.app_id (expected string)");
-                valid = false;
-              }
+            readPattern(matchKeys, "sandbox_engine", rule.sandboxEnginePattern, rule.sandboxEngineRegex);
+            readPattern(matchKeys, "app_id", rule.appIdPattern, rule.appIdRegex);
+            if (!matchKeys.allKeysKnown()) {
+              warnAt(matchNode->source(), "ignoring security_context_rule (unknown key in match)");
+              valid = false;
             }
           } else {
             warnAt(matchNode->source(), "ignoring security_context_rule.match (expected table)");
@@ -1860,6 +1857,14 @@ namespace umbriel {
               "ignoring wp_security_context_manager_v1 in security_context_rule.allow_globals (nested contexts stay "
               "blocked)"
           );
+        }
+        if (rule.allowGlobals.empty()) {
+          warnAt(entry.source(), "ignoring security_context_rule (allow_globals is empty)");
+          valid = false;
+        }
+        if (!keys.allKeysKnown()) {
+          warnAt(entry.source(), "ignoring security_context_rule (unknown key)");
+          valid = false;
         }
 
         if (!valid) {

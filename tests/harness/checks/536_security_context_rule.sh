@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # A [[security_context_rule]] grants extra globals to security-context clients whose metadata matches, on top of the
-# fixed base allowlist. Grants do not leak between rules, an unmatched app keeps the base set, and the security-context
-# manager itself stays blocked even when a rule lists it.
+# fixed base allowlist. Grants do not leak between rules, an unmatched app keeps the base set, the security-context
+# manager itself stays blocked even when a rule lists it, and a reload leaves connected clients as they were.
 set -euo pipefail
 
 readonly GLOBAL_CLIENT="${UMBRIEL_GLOBAL_CLIENT:-./build-debug/global-client}"
 readonly SECURITY_CONTEXT_CLIENT="${UMBRIEL_SECURITY_CONTEXT_CLIENT:-./build-debug/security-context-client}"
+readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/security-context-rule-client.log"
+readonly CONTROL_FIFO="$UMBRIEL_RUNTIME_DIR/security-context-rule-control"
 
 if [[ ! -x $GLOBAL_CLIENT || ! -x $SECURITY_CONTEXT_CLIENT ]]; then
   echo "required harness clients are not built"
@@ -15,6 +17,26 @@ fi
 # Baseline: without rules the globals granted below are hidden.
 "$SECURITY_CONTEXT_CLIENT" "$GLOBAL_CLIENT" zwlr_layer_shell_v1 absent
 "$SECURITY_CONTEXT_CLIENT" "$GLOBAL_CLIENT" ext_data_control_manager_v1 absent
+
+# A client connected before the reload keeps the registry it was given, even when it reads the registry again.
+mkfifo "$CONTROL_FIFO"
+exec {control_fd}<>"$CONTROL_FIFO"
+"$SECURITY_CONTEXT_CLIENT" "$GLOBAL_CLIENT" recheck zwlr_layer_shell_v1 absent <&"$control_fd" > "$CLIENT_LOG" 2>&1 &
+client_pid=$!
+
+for _ in $(seq 100); do
+  grep -q '^ready$' "$CLIENT_LOG" && break
+  if ! kill -0 "$client_pid" 2>/dev/null; then
+    wait "$client_pid" 2>/dev/null || true
+    echo "persistent restricted client exited before its recheck: $(< "$CLIENT_LOG")"
+    exit 1
+  fi
+  sleep 0.02
+done
+if ! grep -q '^ready$' "$CLIENT_LOG"; then
+  echo "persistent restricted client did not become ready: $(< "$CLIENT_LOG")"
+  exit 1
+fi
 
 cat >> "$UMBRIEL_CONFIG" << 'EOF'
 
@@ -36,6 +58,12 @@ EOF
 if ! tail -n 20 "$UMBRIEL_LOG" | grep -q "config reloaded (sections: security context rules; effects: none)"; then
   echo "reload did not report the security context rules section:"
   tail -n 5 "$UMBRIEL_LOG" | sed "s/^/    /"
+  exit 1
+fi
+
+printf '\n' >&"$control_fd"
+if ! wait "$client_pid"; then
+  echo "a connected client saw its grants change after the reload: $(< "$CLIENT_LOG")"
   exit 1
 fi
 

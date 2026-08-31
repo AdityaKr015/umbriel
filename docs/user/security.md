@@ -62,13 +62,16 @@ selector on that field. Unlike window and layer rules, a pattern must match
 the entire value: a substring match would let an application choose an ID that
 embeds another rule's pattern.
 
+A rule with a mistake is dropped. An unknown key, an empty or non-string
+selector, or an empty `allow_globals` rejects the entry with a warning.
+
 Rules are additive only. They cannot remove protocols from the base set, and
 `wp_security_context_manager_v1` remains blocked even when listed, so a
 granted client can never create a nested context and label itself into another
-application's rules. The registry is filtered when a client connects and again
-at every bind. A new rule therefore applies to applications launched after the
-reload, while revoking a grant also affects running applications: a client
-that later binds the revoked global is disconnected with a protocol error.
+application's rules. A client's grants are decided when it first reads the
+registry and stay fixed for that connection. A reload therefore affects
+applications launched afterwards; a running application keeps its grants until
+it is restarted.
 
 ## Security boundary
 

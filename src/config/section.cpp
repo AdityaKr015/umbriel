@@ -82,6 +82,12 @@ namespace umbriel {
     return *this;
   }
 
+  bool Section::allKeysKnown() const {
+    return std::ranges::all_of(m_table, [this](const auto& item) {
+      return std::ranges::find(m_seen, item.first.str()) != m_seen.end();
+    });
+  }
+
   Section& Section::integer(std::string_view key, int minimum, int maximum, std::optional<int>& target) {
     const toml::node* node = claim(key);
     if (node == nullptr) {

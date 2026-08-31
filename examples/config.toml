@@ -466,3 +466,11 @@ match.namespace="^noctalia-(bar-[^\"]+|notification|dock|panel|attached-panel|os
 blur = true
 blur_ignore_alpha = 0.5
 blur_optimized = false
+
+# Security context rules (see docs/user/security.md) ----------------------
+
+# Grant a sandboxed clipboard manager the data-control protocol
+# [[security_context_rule]]
+# match.sandbox_engine = 'org\.flatpak'
+# match.app_id = 'org\.example\.ClipboardManager'
+# allow_globals = ["ext_data_control_manager_v1"]

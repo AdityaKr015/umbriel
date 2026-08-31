@@ -206,6 +206,19 @@ xdg_shell_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+xdg_decoration_client_h = custom_target(
+  'xdg-decoration-unstable-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/xdg-decoration/xdg-decoration-unstable-v1.xml',
+  output: 'xdg-decoration-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+xdg_decoration_client_c = custom_target(
+  'xdg-decoration-unstable-v1-client-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/xdg-decoration/xdg-decoration-unstable-v1.xml',
+  output: 'xdg-decoration-unstable-v1-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 xdg_activation_client_h = custom_target(
   'xdg-activation-v1-client-protocol.h',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/xdg-activation/xdg-activation-v1.xml',
@@ -635,7 +648,13 @@ layer_client = executable(
 # connected client.
 global_client = executable(
   'global-client',
-  'tests/harness/clients/global_client.cpp',
+  [
+    'tests/harness/clients/global_client.cpp',
+    xdg_shell_client_h,
+    xdg_shell_client_c,
+    xdg_decoration_client_h,
+    xdg_decoration_client_c,
+  ],
   dependencies: [wayland_client_dep],
 )
 

@@ -599,6 +599,7 @@ namespace umbriel {
     // handler, so shutdown runs ordinary code instead of async-signal-safe code.
     wl_event_source* m_signalSources[2]{};
 
+    wl_listener m_clientCreated{};
     wl_listener m_newOutput{};
     wl_listener m_newInput{};
     wl_listener m_newXdgToplevel{};

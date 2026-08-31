@@ -78,11 +78,11 @@ namespace umbriel {
     }
 
     wlr_xdg_toplevel_decoration_v1_mode resolvedDecorationMode(wlr_xdg_toplevel_decoration_v1* decoration) {
-      // Honor an explicit client request; otherwise prefer SSD when configured.
+      // Only clients whose connection prefers SSD can see the manager. Honor
+      // an explicit request, otherwise keep the server-side preference.
       wlr_xdg_toplevel_decoration_v1_mode mode = decoration->requested_mode;
       if (mode == WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_NONE) {
-        mode = config().appearance.preferNoCsd ? WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
-                                               : WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE;
+        mode = WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;
       }
       return mode;
     }
@@ -135,15 +135,6 @@ namespace umbriel {
       }
       watch->surfaceCommit.notify = onDecorationSurfaceCommit;
       wl_signal_add(&surface->surface->events.commit, &watch->surfaceCommit);
-    }
-
-    void applyKdeDecorationDefault(wlr_server_decoration_manager* manager) {
-      if (manager == nullptr) {
-        return;
-      }
-      const uint32_t mode = config().appearance.preferNoCsd ? WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
-                                                            : WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT;
-      wlr_server_decoration_manager_set_default_mode(manager, mode);
     }
 
     void onDecorationRequestMode(wl_listener* listener, void* /*data*/) {
@@ -450,15 +441,6 @@ namespace umbriel {
       for (const auto& view : m_registry.all()) {
         if (view->mapped()) {
           view->refreshConfigChrome();
-        }
-      }
-      applyKdeDecorationDefault(m_serverDecorationManager);
-      if (m_xdgDecorationManager != nullptr) {
-        wlr_xdg_toplevel_decoration_v1* decoration = nullptr;
-        wl_list_for_each(decoration, &m_xdgDecorationManager->decorations, link) {
-          if (auto* watch = static_cast<XdgDecorationWatch*>(decoration->data)) {
-            applyXdgDecorationMode(watch);
-          }
         }
       }
       // The view refresh cleared every focus ring; put the active one back.

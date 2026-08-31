@@ -112,7 +112,7 @@ curve = "easeout"
 # Appearance -----------------------------------------------------------------
 
 [appearance]
-prefer_no_csd = true
+prefer_no_csd = true           # false lets newly started apps draw their own decorations
 border_width = 2               # 0-100
 outer_border_width = 0         # 0-100
 corner_radius = 10             # 0-100, radius of the final decorated outer edge

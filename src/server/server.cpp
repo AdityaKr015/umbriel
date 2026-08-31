@@ -81,6 +81,43 @@ namespace umbriel {
       return std::ranges::find(kAllowedSecurityContextGlobals, interface) != kAllowedSecurityContextGlobals.end();
     }
 
+    struct ClientGlobalPolicy {
+      wl_listener destroy{};
+      bool advertiseDecorationManagers = true;
+      bool advertisePrimarySelection = true;
+    };
+
+    void onClientGlobalPolicyDestroy(wl_listener* listener, void* /*data*/) {
+      ClientGlobalPolicy* policy;
+      policy = wl_container_of(listener, policy, destroy);
+      wl_list_remove(&policy->destroy.link);
+      delete policy;
+    }
+
+    ClientGlobalPolicy* attachClientGlobalPolicy(wl_client* client) {
+      auto* policy = new ClientGlobalPolicy{};
+      policy->advertiseDecorationManagers = config().appearance.preferNoCsd;
+      policy->advertisePrimarySelection = config().input.middleClickPaste;
+      policy->destroy.notify = onClientGlobalPolicyDestroy;
+      wl_client_add_destroy_listener(client, &policy->destroy);
+      return policy;
+    }
+
+    ClientGlobalPolicy* clientGlobalPolicy(const wl_client* client) {
+      wl_listener* listener =
+          wl_client_get_destroy_listener(const_cast<wl_client*>(client), onClientGlobalPolicyDestroy);
+      if (listener == nullptr) {
+        return attachClientGlobalPolicy(const_cast<wl_client*>(client));
+      }
+      ClientGlobalPolicy* policy;
+      policy = wl_container_of(listener, policy, destroy);
+      return policy;
+    }
+
+    void onClientCreated(wl_listener* /*listener*/, void* data) {
+      attachClientGlobalPolicy(static_cast<wl_client*>(data));
+    }
+
     bool filterGlobal(const wl_client* client, const wl_global* global, void* data) {
       auto* server = static_cast<Server*>(data);
       const wl_interface* interface = wl_global_get_interface(global);
@@ -91,8 +128,15 @@ namespace umbriel {
       if (server->clientHasSecurityContext(client) && !isAllowedSecurityContextGlobal(interfaceName)) {
         return false;
       }
+      // A global filter is consulted both when a global is advertised and when
+      // it is bound, so each client's decisions must remain stable for its
+      // entire connection.
+      const ClientGlobalPolicy* policy = clientGlobalPolicy(client);
       if (interfaceName == "zwp_primary_selection_device_manager_v1") {
-        return config().input.middleClickPaste;
+        return policy->advertisePrimarySelection;
+      }
+      if (interfaceName == "zxdg_decoration_manager_v1" || interfaceName == "org_kde_kwin_server_decoration_manager") {
+        return policy->advertiseDecorationManagers;
       }
       if (interfaceName == "wp_color_manager_v1") {
         const bool wine = WineColorManager::clientNeedsCompatibility(client);
@@ -196,6 +240,8 @@ namespace umbriel {
       throw std::runtime_error("failed to create wl_display");
     }
     wl_display_set_default_max_buffer_size(m_display, kWaylandClientBufferSize);
+    m_clientCreated.notify = onClientCreated;
+    wl_display_add_client_created_listener(m_display, &m_clientCreated);
 
     m_backend = wlr_backend_autocreate(wl_display_get_event_loop(m_display), &m_session);
     if (m_backend == nullptr) {
@@ -372,9 +418,7 @@ namespace umbriel {
 
     m_serverDecorationManager = wlr_server_decoration_manager_create(m_display);
     wlr_server_decoration_manager_set_default_mode(
-        m_serverDecorationManager,
-        config().appearance.preferNoCsd ? WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
-                                        : WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT
+        m_serverDecorationManager, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
     );
 
     m_layerShell = wlr_layer_shell_v1_create(m_display, 4);
@@ -454,6 +498,7 @@ namespace umbriel {
 
   Server::~Server() {
     m_stopping = true;
+    wl_list_remove(&m_clientCreated.link);
     wl_list_remove(&m_newOutput.link);
     wl_list_remove(&m_newInput.link);
     wl_list_remove(&m_newXdgToplevel.link);

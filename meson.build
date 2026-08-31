@@ -600,6 +600,14 @@ unit_tests = [
   ['action-registry', ['tests/unit/action_registry.cpp'], [umbriel_core_dep]],
   ['ipc-commands', ['tests/unit/ipc_commands.cpp'], [umbriel_core_dep]],
   ['config-resolve', ['tests/unit/config_resolve.cpp'], []],
+  # Reads docs/user/actions.md from the source tree: the doc's tables are generated from the same spec strings the CLI
+  # prints, so the compiled table and the page cannot drift apart unnoticed.
+  [
+    'docs-actions',
+    ['tests/unit/docs_actions.cpp'],
+    [],
+    ['-DUMBRIEL_DOCS_ACTIONS_MD="' + meson.current_source_dir() / 'docs/user/actions.md' + '"'],
+  ],
 ]
 
 # Harness helper, not a unit test: drives virtual pointer and modifier input against a running compositor. The headless backend has no input devices, so protocol
@@ -779,11 +787,14 @@ alias_target(
 
 unit_test_targets = []
 foreach unit_test : unit_tests
+  # Optional fourth element: compile args for tests that need a path or flag baked in.
+  unit_test_args = unit_test.length() > 3 ? unit_test[3] : []
   test_exe = executable(
     unit_test[0] + '-test',
     unit_test[1],
     include_directories: include_directories('tests/unit'),
     dependencies: [umbriel_pure_dep] + unit_test[2],
+    cpp_args: unit_test_args,
   )
   unit_test_targets += test_exe
   test(unit_test[0], test_exe)

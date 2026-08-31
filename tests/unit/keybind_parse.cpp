@@ -403,10 +403,11 @@ UMBRIEL_TEST(parsesArgumentFreeNewActions) {
   CHECK(bind.action == KeybindAction::WindowSwapNext);
   CHECK(parseAction("window-swap-previous", bind));
   CHECK(bind.action == KeybindAction::WindowSwapPrevious);
-  CHECK(parseAction("master-count-increase", bind));
-  CHECK(bind.action == KeybindAction::MasterCountIncrease);
-  CHECK(parseAction("master-count-decrease", bind));
-  CHECK(bind.action == KeybindAction::MasterCountDecrease);
+  CHECK(parseAction("layout-master-count-increase", bind));
+  CHECK(bind.action == KeybindAction::LayoutMasterCountIncrease);
+  CHECK(parseAction("layout-master-count-decrease", bind));
+  CHECK(bind.action == KeybindAction::LayoutMasterCountDecrease);
+  CHECK(!parseAction("master-count-increase", bind)); // clean cutover: the old name is simply unknown
 
   CHECK(parseAction("window-focus-last", bind));
   CHECK(bind.action == KeybindAction::WindowFocusLast);
@@ -682,6 +683,19 @@ UMBRIEL_TEST(parameterizedSpecsDeclareAParam) {
     } else {
       CHECK(!spec.param.empty());
     }
+  }
+}
+
+UMBRIEL_TEST(everySpecHasAOneLineSummary) {
+  // `umbriel msg --help` and docs/user/actions.md print these verbatim in a table cell, so a missing, multi-line, or
+  // sentence-shaped summary shows up as broken output rather than a prose choice.
+  for (const auto& spec : umbriel::actionSpecs()) {
+    CHECK(!spec.summary.empty());
+    CHECK(spec.summary.size() <= 60);
+    CHECK(!spec.summary.ends_with('.'));
+    CHECK(spec.summary.find('\n') == std::string_view::npos);
+    CHECK(spec.summary.find('|') == std::string_view::npos); // would break the markdown table cell
+    CHECK(!spec.summary.empty() && std::isupper(static_cast<unsigned char>(spec.summary.front())) != 0);
   }
 }
 

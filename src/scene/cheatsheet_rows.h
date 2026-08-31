@@ -54,6 +54,7 @@ namespace umbriel {
     Focus,
     MoveSize,
     Windows,
+    Scratchpad,
     Workspaces,
     Overview,
     System,
@@ -64,6 +65,10 @@ namespace umbriel {
   // time and the entity would show up on screen, which is what "Move &amp; size" used to do.
   [[nodiscard]] const char* groupTitle(Group group);
   [[nodiscard]] Group groupForAction(KeybindAction action);
+
+  // Display order of the non-submap groups, shared by the cheatsheet overlay and `umbriel msg --help` so the two never
+  // present the same actions in a different shape. Submap groups follow in first-seen order and are not listed here.
+  [[nodiscard]] std::span<const Group> fixedGroupOrder();
 
   // One row per chord. Binds sharing an action collapse into a group whose first
   // row carries the label and whose others carry a ditto mark.

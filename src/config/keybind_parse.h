@@ -123,8 +123,8 @@ namespace umbriel {
     WindowFocusPrevious,
     WindowSwapNext,
     WindowSwapPrevious,
-    MasterCountIncrease,
-    MasterCountDecrease,
+    LayoutMasterCountIncrease,
+    LayoutMasterCountDecrease,
     WindowSetHeight,
     WindowModifyHeight,
     WindowCycleHeight,
@@ -238,6 +238,9 @@ namespace umbriel {
   struct ActionSpec {
     std::string_view name;  // e.g. "spawn", "workspace-switch", "window-close"
     std::string_view param; // "" for simple, "<cmd>" / "<workspace>[/<output>]" for parameterized
+    // One line, no trailing period. `umbriel msg --help` and docs/user/actions.md render it verbatim, and a unit test
+    // fails when the doc table and this table disagree.
+    std::string_view summary;
     KeybindAction action;
     ActionArgKind argKind = ActionArgKind::None;
   };

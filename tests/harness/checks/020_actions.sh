@@ -55,7 +55,7 @@ while read -r spec; do
     echo "rejected: $action -> $out"
     failures=$((failures + 1))
   fi
-done < <("$UMBRIEL" msg --help | sed -n 's/^  //p')
+done < <("$UMBRIEL" msg --help | awk '/^  [a-z]/ {print $1}')
 
 if [[ $count -eq 0 ]]; then
   echo "no actions were exercised"

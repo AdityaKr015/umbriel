@@ -4,6 +4,7 @@
 #include "config/config_diag.h"
 #include "core/fdlimit.h"
 #include "core/log.h"
+#include "scene/cheatsheet_rows.h"
 #include "server/ipc.h"
 #include "server/ipc_commands.h"
 #include "server/server.h"
@@ -15,6 +16,7 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <format>
 #include <print>
 #include <string>
 #include <string_view>
@@ -207,19 +209,33 @@ int main(int argc, char** argv) {
         std::println("");
         std::println("Send an action to the running compositor.");
         std::println("Use `msg spawn <cmd...>` as shorthand for `msg spawn:<cmd...>`.");
-        std::println("");
-        std::println("Available actions:");
-        std::vector<const umbriel::ActionSpec*> sortedActions;
-        sortedActions.reserve(umbriel::actionSpecs().size());
-        for (const auto& actionSpec : umbriel::actionSpecs()) {
-          sortedActions.push_back(&actionSpec);
-        }
-        std::ranges::sort(sortedActions, {}, [](const auto* actionSpec) { return actionSpec->name; });
-        for (const auto* actionSpec : sortedActions) {
-          if (actionSpec->param.empty()) {
-            std::println("  {}", actionSpec->name);
-          } else {
-            std::println("  {}:{}", actionSpec->name, actionSpec->param);
+        std::println("Available actions, grouped as the cheatsheet groups them:");
+        for (const umbriel::Group group : umbriel::fixedGroupOrder()) {
+          std::vector<std::string> names;
+          std::vector<std::string_view> summaries;
+          for (const auto& actionSpec : umbriel::actionSpecs()) {
+            if (umbriel::groupForAction(actionSpec.action) != group) {
+              continue;
+            }
+            names.emplace_back(
+                actionSpec.param.empty() ? std::string(actionSpec.name)
+                                         : std::format("{}:{}", actionSpec.name, actionSpec.param)
+            );
+            summaries.push_back(actionSpec.summary);
+          }
+          if (names.empty()) {
+            continue;
+          }
+          // Pad per group: a single global column would push every summary past the width of the widest name in the
+          // table, which only one group actually needs.
+          size_t width = 0;
+          for (const auto& name : names) {
+            width = std::max(width, name.size());
+          }
+          std::println("");
+          std::println("{}", umbriel::groupTitle(group));
+          for (size_t i = 0; i < names.size(); ++i) {
+            std::println("  {:<{}}  {}", names[i], width, summaries[i]);
           }
         }
         return EXIT_SUCCESS;

@@ -77,15 +77,15 @@ wait_for_query \
   'any(.[]; .title == "harness-master-a" and .focused == true)' \
   "focus-left did not cross from stack to master"
 
-"$UMBRIEL" msg master-count-decrease > /dev/null
+"$UMBRIEL" msg layout-master-count-decrease > /dev/null
 wait_for_query \
   'any(.[]; .title == "harness-master-a" and .x == 10 and .y == 10 and .w == 686 and .h == 700) and any(.[]; .title == "harness-master-c" and .x == 708 and .y == 10 and .w == 562 and .h == 344) and any(.[]; .title == "harness-master-b" and .x == 708 and .y == 366 and .w == 562 and .h == 344)' \
-  "master-count-decrease did not demote the last master window to the stack top"
+  "layout-master-count-decrease did not demote the last master window to the stack top"
 
-"$UMBRIEL" msg master-count-increase > /dev/null
+"$UMBRIEL" msg layout-master-count-increase > /dev/null
 wait_for_query \
   'any(.[]; .title == "harness-master-a" and .x == 10 and .y == 10 and .w == 686 and .h == 344) and any(.[]; .title == "harness-master-c" and .x == 10 and .y == 366 and .w == 686 and .h == 344) and any(.[]; .title == "harness-master-b" and .x == 708 and .y == 10 and .w == 562 and .h == 700)' \
-  "master-count-increase did not promote the stack top to the master bottom"
+  "layout-master-count-increase did not promote the stack top to the master bottom"
 
 "$UMBRIEL" msg window-focus-next > /dev/null
 wait_for_query \

@@ -276,6 +276,31 @@ UMBRIEL_TEST(everyActionMapsToAGroupWithATitle) {
   }
 }
 
+UMBRIEL_TEST(everyActionsGroupIsInTheFixedDisplayOrder) {
+  // The overlay, `umbriel msg --help`, and the action reference all walk fixedGroupOrder(). A group that exists but is
+  // not listed there drops every action it owns from all three at once.
+  const auto order = umbriel::fixedGroupOrder();
+  for (const auto& spec : umbriel::actionSpecs()) {
+    const umbriel::Group group = umbriel::groupForAction(spec.action);
+    CHECK(std::ranges::find(order, group) != order.end());
+  }
+}
+
+UMBRIEL_TEST(scratchpadActionsHaveTheirOwnGroup) {
+  CHECK(umbriel::groupForAction(KeybindAction::WindowMoveToScratchpad) == umbriel::Group::Scratchpad);
+  CHECK(umbriel::groupForAction(KeybindAction::ScratchpadToggle) == umbriel::Group::Scratchpad);
+  CHECK(umbriel::groupForAction(KeybindAction::WindowToggleScratchpad) == umbriel::Group::Scratchpad);
+  CHECK(umbriel::groupForAction(KeybindAction::WindowRestoreFromScratchpad) == umbriel::Group::Scratchpad);
+  CHECK(umbriel::groupForAction(KeybindAction::ScratchpadFocusNext) == umbriel::Group::Scratchpad);
+}
+
+UMBRIEL_TEST(scrollAndPinActionsGroupWithTheirPeers) {
+  CHECK(umbriel::groupForAction(KeybindAction::LayoutScrollUp) == umbriel::Group::MoveSize);
+  CHECK(umbriel::groupForAction(KeybindAction::LayoutScrollDown) == umbriel::Group::MoveSize);
+  CHECK(umbriel::groupForAction(KeybindAction::LayoutScrollDrag) == umbriel::Group::MoveSize);
+  CHECK(umbriel::groupForAction(KeybindAction::TogglePinned) == umbriel::Group::Windows);
+}
+
 // column packing: Groups are indivisible, so the panel is as tall as the tallest column and the only lever is where the
 // breaks fall. These pin that the split is the best one available rather than a plausible one.
 

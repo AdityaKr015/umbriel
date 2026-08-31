@@ -23,6 +23,7 @@ namespace {
   using umbriel::cheatsheetChordColumns;
   using umbriel::CheatsheetRow;
   using umbriel::escapeMarkup;
+  using umbriel::fixedGroupOrder;
   using umbriel::Group;
   using umbriel::groupForAction;
   using umbriel::groupTitle;
@@ -63,11 +64,6 @@ namespace {
   // reached once every column count has been tried and the panel still does not fit. 9 is the floor because below it
   // the chord pills stop being readable at arm's length, which is the whole job.
   constexpr int kFontSizes[] = {11, 10, 9};
-
-  // Fixed groups in display order; submaps follow in first-seen order.
-  constexpr Group kFixedGroups[] = {
-      Group::Apps, Group::Focus, Group::MoveSize, Group::Windows, Group::Workspaces, Group::Overview, Group::System,
-  };
 
   // A display line is either a group header or a bind row.
   struct DisplayLine {
@@ -193,7 +189,7 @@ namespace {
     std::vector<DisplayLine> lines;
     int groupId = 0;
 
-    for (Group grp : kFixedGroups) {
+    for (Group grp : fixedGroupOrder()) {
       std::vector<const CheatsheetRow*> groupRows;
       for (const auto& row : rows) {
         if (!row.submap.empty())

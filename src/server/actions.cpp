@@ -854,14 +854,14 @@ namespace umbriel {
       return true;
     }
 
-    bool actionMasterCountIncrease(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+    bool actionLayoutMasterCountIncrease(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       if (Workspace* workspace = activeWorkspace(server)) {
         workspace->increaseMasterCount();
       }
       return true;
     }
 
-    bool actionMasterCountDecrease(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+    bool actionLayoutMasterCountDecrease(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       if (Workspace* workspace = activeWorkspace(server)) {
         workspace->decreaseMasterCount();
       }
@@ -1411,8 +1411,8 @@ namespace umbriel {
         &actionFocusCycle<-1>,
         &actionSwapCycle<1>,
         &actionSwapCycle<-1>,
-        &actionMasterCountIncrease,
-        &actionMasterCountDecrease,
+        &actionLayoutMasterCountIncrease,
+        &actionLayoutMasterCountDecrease,
         &actionSetHeight,
         &actionModifyHeight,
         &actionCycleHeight<1>,

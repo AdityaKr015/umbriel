@@ -261,6 +261,8 @@ namespace {
       return "Move & size";
     case Group::Windows:
       return "Windows";
+    case Group::Scratchpad:
+      return "Scratchpad";
     case Group::Workspaces:
       return "Workspaces";
     case Group::Overview:
@@ -325,6 +327,9 @@ namespace {
     case A::WindowCenter:
     case A::LayoutScrollLeft:
     case A::LayoutScrollRight:
+    case A::LayoutScrollUp:
+    case A::LayoutScrollDown:
+    case A::LayoutScrollDrag:
     case A::WindowMoveToOutputLeft:
     case A::WindowMoveToOutputRight:
     case A::WindowMoveToOutputUp:
@@ -335,15 +340,22 @@ namespace {
     case A::ColumnMoveToOutputDown:
     case A::WindowSwapNext:
     case A::WindowSwapPrevious:
-    case A::MasterCountIncrease:
-    case A::MasterCountDecrease:
+    case A::LayoutMasterCountIncrease:
+    case A::LayoutMasterCountDecrease:
       return Group::MoveSize;
     case A::WindowClose:
     case A::ToggleFloating:
     case A::ToggleMaximize:
     case A::ToggleMaximizeToEdges:
     case A::ToggleFullscreen:
+    case A::TogglePinned:
       return Group::Windows;
+    case A::WindowMoveToScratchpad:
+    case A::WindowRestoreFromScratchpad:
+    case A::WindowToggleScratchpad:
+    case A::ScratchpadToggle:
+    case A::ScratchpadFocusNext:
+      return Group::Scratchpad;
     case A::WorkspaceSwitch:
     case A::ColumnMoveToWorkspace:
     case A::ColumnMoveToWorkspaceNext:
@@ -378,6 +390,7 @@ namespace {
     case A::CheatsheetToggle:
     case A::CheatsheetOpen:
     case A::CheatsheetClose:
+    case A::KeyboardLayoutNext:
       return Group::System;
     default:
       return Group::System;
@@ -457,6 +470,14 @@ namespace umbriel {
   const char* groupTitle(Group group) { return groupTitleImpl(group); }
 
   Group groupForAction(KeybindAction action) { return groupForActionImpl(action); }
+
+  std::span<const Group> fixedGroupOrder() {
+    static constexpr Group kFixedGroups[] = {
+        Group::Apps,       Group::Focus,      Group::MoveSize, Group::Windows,
+        Group::Scratchpad, Group::Workspaces, Group::Overview, Group::System,
+    };
+    return kFixedGroups;
+  }
 
   std::vector<CheatsheetRow> buildCheatsheetRows(std::span<const Keybind> keybinds) {
 

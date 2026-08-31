@@ -290,6 +290,33 @@ namespace umbriel {
     return resolved;
   }
 
+  std::vector<std::string>
+  securityContextRuleGlobals(const Config& config, const char* sandboxEngine, const char* appId) {
+    const std::string_view engineView = sandboxEngine != nullptr ? sandboxEngine : "";
+    const std::string_view appIdView = appId != nullptr ? appId : "";
+    std::vector<std::string> globals;
+    for (const auto& rule : config.securityContextRules) {
+      // Unlike window rules, the whole value must match: a substring grant
+      // would let an application choose an ID embedding someone else's pattern.
+      if (!rule.sandboxEnginePattern.empty()) {
+        if (engineView.empty() || !std::regex_match(engineView.begin(), engineView.end(), rule.sandboxEngineRegex)) {
+          continue;
+        }
+      }
+      if (!rule.appIdPattern.empty()) {
+        if (appIdView.empty() || !std::regex_match(appIdView.begin(), appIdView.end(), rule.appIdRegex)) {
+          continue;
+        }
+      }
+      for (const std::string& global : rule.allowGlobals) {
+        if (std::ranges::find(globals, global) == globals.end()) {
+          globals.push_back(global);
+        }
+      }
+    }
+    return globals;
+  }
+
   bool anyWindowRuleHasTitlePattern(const Config& config) {
     return std::ranges::any_of(config.windowRules, [](const WindowRule& rule) { return !rule.titlePattern.empty(); });
   }

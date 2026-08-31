@@ -706,6 +706,71 @@ UMBRIEL_TEST(windowOutputPoliciesLoadAndRejectInvalidValues) {
   CHECK(containsDiagnostic(store, "ignoring window_rule.hdr"));
 }
 
+UMBRIEL_TEST(securityContextRulesLoadAndKeepTheManagerBlocked) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write(
+      "[[security_context_rule]]\n"
+      "match.sandbox_engine = '^org\\.flatpak$'\n"
+      "match.app_id = '^org\\.example\\.Bar$'\n"
+      "allow_globals = [\"zwlr_layer_shell_v1\"]\n"
+  );
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().securityContextRules.size(), size_t{1});
+  CHECK(store.config().securityContextRules[0].sandboxEnginePattern == "^org\\.flatpak$");
+  CHECK(store.config().securityContextRules[0].appIdPattern == "^org\\.example\\.Bar$");
+  CHECK_EQ(store.config().securityContextRules[0].allowGlobals.size(), size_t{1});
+
+  file.write("[[security_context_rule]]\nmatch.app_id = '['\nallow_globals = [\"zwlr_layer_shell_v1\"]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().securityContextRules.empty());
+  CHECK(containsDiagnostic(store, "invalid regex in security_context_rule.match.app_id"));
+
+  // Listing the manager is stripped with a warning; the rest of the rule loads.
+  file.write(
+      "[[security_context_rule]]\nallow_globals = [\"wp_security_context_manager_v1\", \"zwlr_layer_shell_v1\"]\n"
+  );
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().securityContextRules.size(), size_t{1});
+  CHECK_EQ(store.config().securityContextRules[0].allowGlobals.size(), size_t{1});
+  CHECK(store.config().securityContextRules[0].allowGlobals[0] == "zwlr_layer_shell_v1");
+  CHECK(containsDiagnostic(store, "ignoring wp_security_context_manager_v1 in security_context_rule.allow_globals"));
+
+  // A mistake rejects the rule rather than widening it to every restricted client.
+  file.write("[[security_context_rule]]\nmatch.ap_id = 'org.example.Bar'\nallow_globals = [\"zwlr_layer_shell_v1\"]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().securityContextRules.empty());
+  CHECK(containsDiagnostic(store, "ignoring security_context_rule (unknown key in match)"));
+
+  file.write("[[security_context_rule]]\nmatch.app_id = 'org.example.Bar'\nallow_glbals = [\"zwlr_layer_shell_v1\"]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().securityContextRules.empty());
+  CHECK(containsDiagnostic(store, "ignoring security_context_rule (unknown key)"));
+
+  file.write("[[security_context_rule]]\nmatch.app_id = ''\nallow_globals = [\"zwlr_layer_shell_v1\"]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().securityContextRules.empty());
+  CHECK(containsDiagnostic(store, "match.app_id must be a non-empty string"));
+
+  file.write("[[security_context_rule]]\nmatch.sandbox_engine = 5\nallow_globals = [\"zwlr_layer_shell_v1\"]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().securityContextRules.empty());
+  CHECK(containsDiagnostic(store, "match.sandbox_engine must be a non-empty string"));
+
+  file.write("[[security_context_rule]]\nmatch.app_id = 'org.example.Bar'\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().securityContextRules.empty());
+  CHECK(containsDiagnostic(store, "ignoring security_context_rule (allow_globals is empty)"));
+
+  // Only the manager listed leaves nothing to grant.
+  file.write("[[security_context_rule]]\nallow_globals = [\"wp_security_context_manager_v1\"]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().securityContextRules.empty());
+  CHECK(containsDiagnostic(store, "ignoring security_context_rule (allow_globals is empty)"));
+}
+
 UMBRIEL_TEST(windowContentTypeMatcherLoadsFixedVocabulary) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

@@ -48,6 +48,7 @@ struct wlr_scene_output_layout;
 struct wlr_scene_rect;
 struct wlr_scene_tree;
 struct wlr_security_context_manager_v1;
+struct wlr_security_context_v1_state;
 struct wlr_session;
 struct wlr_session_lock_manager_v1;
 struct wlr_session_lock_v1;
@@ -134,7 +135,9 @@ namespace umbriel {
     [[nodiscard]] wlr_allocator* allocator() const { return m_allocator; }
     [[nodiscard]] wlr_scene* scene() const { return m_scene; }
     [[nodiscard]] ContentType surfaceContentType(wlr_surface* surface) const;
-    [[nodiscard]] bool clientHasSecurityContext(const wl_client* client) const;
+    // The security-context metadata for a restricted client, or null for a
+    // client on the ordinary socket.
+    [[nodiscard]] const wlr_security_context_v1_state* clientSecurityContext(const wl_client* client) const;
     [[nodiscard]] wlr_color_manager_v1* colorManager() const { return m_colorManager; }
     [[nodiscard]] wlr_export_dmabuf_manager_v1* exportDmabufManager() const { return m_exportDmabufManager; }
     [[nodiscard]] wlr_tearing_control_manager_v1* tearingControlManager() const { return m_tearingControlManager; }

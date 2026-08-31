@@ -1790,6 +1790,90 @@ namespace umbriel {
       }
     }
 
+    // Any mistake rejects the whole entry: a rule missing its selector would
+    // apply to every restricted client.
+    void readSecurityContextRules(Section& root, Config& loaded) {
+      const toml::node* node = root.take("security_context_rule");
+      if (node == nullptr) {
+        return;
+      }
+      const auto* rules = node->as_array();
+      if (rules == nullptr) {
+        warnAt(node->source(), "ignoring security_context_rule (expected [[security_context_rule]] array of tables)");
+        return;
+      }
+
+      for (const auto& entry : *rules) {
+        const auto* section = entry.as_table();
+        if (section == nullptr) {
+          warnAt(entry.source(), "ignoring security_context_rule entry (expected table)");
+          continue;
+        }
+        Section keys(*section, "security_context_rule", configStore().mutableDiagnostics());
+
+        SecurityContextRule rule;
+        bool valid = true;
+
+        const auto readPattern = [&](Section& match, std::string_view key, std::string& pattern, std::regex& regex) {
+          const toml::node* patternNode = match.take(key);
+          if (patternNode == nullptr) {
+            return;
+          }
+          const auto value = patternNode->value<std::string>();
+          if (!value || value->empty()) {
+            warnAt(patternNode->source(), "ignoring security_context_rule (match.{} must be a non-empty string)", key);
+            valid = false;
+            return;
+          }
+          pattern = *value;
+          try {
+            regex = std::regex(pattern);
+          } catch (const std::regex_error& error) {
+            warnAt(patternNode->source(), "invalid regex in security_context_rule.match.{}: {}", key, error.what());
+            valid = false;
+          }
+        };
+
+        if (const toml::node* matchNode = keys.take("match")) {
+          if (const auto* match = matchNode->as_table()) {
+            Section matchKeys(*match, "security_context_rule.match", configStore().mutableDiagnostics());
+            readPattern(matchKeys, "sandbox_engine", rule.sandboxEnginePattern, rule.sandboxEngineRegex);
+            readPattern(matchKeys, "app_id", rule.appIdPattern, rule.appIdRegex);
+            if (!matchKeys.allKeysKnown()) {
+              warnAt(matchNode->source(), "ignoring security_context_rule (unknown key in match)");
+              valid = false;
+            }
+          } else {
+            warnAt(matchNode->source(), "ignoring security_context_rule.match (expected table)");
+            valid = false;
+          }
+        }
+
+        keys.strings("allow_globals", rule.allowGlobals);
+        // The filter refuses this global regardless; warning here tells the user why.
+        if (std::erase(rule.allowGlobals, "wp_security_context_manager_v1") > 0) {
+          warnAt(
+              entry.source(),
+              "ignoring wp_security_context_manager_v1 in security_context_rule.allow_globals (nested contexts stay "
+              "blocked)"
+          );
+        }
+        if (rule.allowGlobals.empty()) {
+          warnAt(entry.source(), "ignoring security_context_rule (allow_globals is empty)");
+          valid = false;
+        }
+        if (!keys.allKeysKnown()) {
+          warnAt(entry.source(), "ignoring security_context_rule (unknown key)");
+          valid = false;
+        }
+
+        if (!valid) {
+          continue;
+        }
+        loaded.securityContextRules.push_back(std::move(rule));
+      }
+    }
+
     bool parseInto(Config& out) {
       ConfigStore& store = configStore();
       store.beginLoad();
@@ -1830,6 +1914,7 @@ namespace umbriel {
           readKeybinds(root, loaded);
           readWindowRules(root, loaded);
           readLayerRules(root, loaded);
+          readSecurityContextRules(root, loaded);
           readWorkspaces(root, loaded);
         }
 

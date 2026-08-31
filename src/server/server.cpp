@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "config/config_diag.h"
 #include "config/config_watcher.h"
+#include "config/resolve.h"
 #include "core/fdlimit.h"
 #include "core/log.h"
 #include "core/process.h"
@@ -32,11 +33,13 @@
 #include <array>
 #include <csignal>
 #include <cstdlib>
+#include <optional>
 #include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unistd.h>
+#include <vector>
 
 namespace umbriel {
 
@@ -46,6 +49,7 @@ namespace umbriel {
     constexpr size_t kWaylandClientBufferSize = 1024 * 1024;
     // Security-context clients only receive reviewed, ordinary application
     // protocols. New globals stay unavailable until they are classified here.
+    // [[security_context_rule]] widens the set for matching clients.
     constexpr std::array<std::string_view, 28> kAllowedSecurityContextGlobals{
         "wl_shm",
         "wl_drm",
@@ -85,6 +89,8 @@ namespace umbriel {
       wl_listener destroy{};
       bool advertiseDecorationManagers = true;
       bool advertisePrimarySelection = true;
+      // Resolved on first use: security-context metadata is attached after the client-created signal.
+      std::optional<std::vector<std::string>> securityContextGlobals;
     };
 
     void onClientGlobalPolicyDestroy(wl_listener* listener, void* /*data*/) {
@@ -125,13 +131,26 @@ namespace umbriel {
         return true;
       }
       const std::string_view interfaceName(interface->name);
-      if (server->clientHasSecurityContext(client) && !isAllowedSecurityContextGlobal(interfaceName)) {
-        return false;
-      }
       // A global filter is consulted both when a global is advertised and when
       // it is bound, so each client's decisions must remain stable for its
       // entire connection.
-      const ClientGlobalPolicy* policy = clientGlobalPolicy(client);
+      ClientGlobalPolicy* policy = clientGlobalPolicy(client);
+      if (const wlr_security_context_v1_state* context = server->clientSecurityContext(client);
+          context != nullptr && !isAllowedSecurityContextGlobal(interfaceName)) {
+        // Nested contexts stay blocked unconditionally: per-app grants are only
+        // trustworthy while labels originate from unrestricted clients.
+        if (interfaceName == "wp_security_context_manager_v1") {
+          return false;
+        }
+        if (!policy->securityContextGlobals) {
+          policy->securityContextGlobals =
+              securityContextRuleGlobals(config(), context->sandbox_engine, context->app_id);
+        }
+        if (std::ranges::find(*policy->securityContextGlobals, interfaceName)
+            == policy->securityContextGlobals->end()) {
+          return false;
+        }
+      }
       if (interfaceName == "zwp_primary_selection_device_manager_v1") {
         return policy->advertisePrimarySelection;
       }
@@ -196,9 +215,11 @@ namespace umbriel {
 
   } // namespace
 
-  bool Server::clientHasSecurityContext(const wl_client* client) const {
-    return m_securityContextManager != nullptr
-        && wlr_security_context_manager_v1_lookup_client(m_securityContextManager, client) != nullptr;
+  const wlr_security_context_v1_state* Server::clientSecurityContext(const wl_client* client) const {
+    if (m_securityContextManager == nullptr) {
+      return nullptr;
+    }
+    return wlr_security_context_manager_v1_lookup_client(m_securityContextManager, client);
   }
 
   ContentType Server::surfaceContentType(wlr_surface* surface) const {

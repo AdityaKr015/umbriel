@@ -114,10 +114,16 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  // Overridable so checks can exercise per-app security_context_rule matching.
+  const char* appId = std::getenv("SECURITY_CONTEXT_APP_ID");
+  if (appId == nullptr || *appId == '\0') {
+    appId = "org.umbriel.SecurityContextTest";
+  }
+
   wp_security_context_v1* context =
       wp_security_context_manager_v1_create_listener(state.manager, listenFd, closePipe[0]);
   wp_security_context_v1_set_sandbox_engine(context, "org.umbriel.harness");
-  wp_security_context_v1_set_app_id(context, "org.umbriel.SecurityContextTest");
+  wp_security_context_v1_set_app_id(context, appId);
   wp_security_context_v1_set_instance_id(context, socketName.c_str());
   wp_security_context_v1_commit(context);
   close(listenFd);

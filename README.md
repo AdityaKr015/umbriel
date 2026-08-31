@@ -47,7 +47,8 @@ To understand the values and philosophy guiding the project, read our [ethos](ht
 - An animated overview, directional focus, configurable keybinds, submaps, and activation policy
 - Blur, shadows, rounded corners, double borders, opacity, and animated position, size, and fade transitions
 - Keyboard, pointer, touch, touchpad gestures, XKB configuration, and text-input-v3/input-method-v2 input method support
-- [Restricted Wayland connections](docs/user/security.md) for sandbox engines through security-context-v1
+- [Restricted Wayland connections](docs/user/security.md) for sandbox engines through security-context-v1, with
+  per-application protocol grants
 - Layer shell, session locking, clipboard management, screen capture, output control, and gamma control
 - X11 application support through xwayland-satellite
 - Live-reloaded TOML configuration with diagnostics and includes, plus local IPC and runtime inspection commands

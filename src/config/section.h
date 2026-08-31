@@ -68,6 +68,10 @@ namespace umbriel {
     // user-chosen names rather than a fixed vocabulary.
     Section& freeform();
 
+    // Whether every key in the table has been claimed, for readers that reject
+    // an entry on a stray key instead of only warning.
+    [[nodiscard]] bool allKeysKnown() const;
+
   private:
     [[nodiscard]] std::string qualified(std::string_view key) const;
     const toml::node* claim(std::string_view key);

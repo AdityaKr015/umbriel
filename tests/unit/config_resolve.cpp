@@ -1,8 +1,10 @@
 #include "check.h"
 #include "config/resolve.h"
 
+#include <algorithm>
 #include <regex>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -12,6 +14,7 @@ using umbriel::LayerRule;
 using umbriel::LayoutMode;
 using umbriel::OutputIdentity;
 using umbriel::OutputRule;
+using umbriel::SecurityContextRule;
 using umbriel::VrrMode;
 using umbriel::WindowRule;
 using umbriel::WorkspaceConfig;
@@ -514,6 +517,48 @@ UMBRIEL_TEST(layerRulesMergeMatchingFieldsInOrder) {
   CHECK(!unmatched.blur);
   CHECK(!unmatched.ignoreAlpha);
   CHECK(!unmatched.optimized);
+}
+
+UMBRIEL_TEST(securityContextRulesGrantGlobalsByMetadata) {
+  Config config;
+
+  SecurityContextRule scoped;
+  scoped.sandboxEnginePattern = "^org\\.flatpak$";
+  scoped.sandboxEngineRegex = std::regex(scoped.sandboxEnginePattern);
+  scoped.appIdPattern = "^org\\.example\\.Bar$";
+  scoped.appIdRegex = std::regex(scoped.appIdPattern);
+  scoped.allowGlobals = {"zwlr_layer_shell_v1"};
+  config.securityContextRules.push_back(std::move(scoped));
+
+  SecurityContextRule wildcard;
+  wildcard.allowGlobals = {"ext_idle_notifier_v1"};
+  config.securityContextRules.push_back(std::move(wildcard));
+
+  SecurityContextRule partial;
+  partial.appIdPattern = "example";
+  partial.appIdRegex = std::regex(partial.appIdPattern);
+  partial.allowGlobals = {"zwlr_screencopy_manager_v1"};
+  config.securityContextRules.push_back(std::move(partial));
+
+  const auto grants = [&](const char* engine, const char* appId, std::string_view global) {
+    const std::vector<std::string> globals = umbriel::securityContextRuleGlobals(config, engine, appId);
+    return std::ranges::find(globals, global) != globals.end();
+  };
+
+  CHECK(grants("org.flatpak", "org.example.Bar", "zwlr_layer_shell_v1"));
+  // Every specified match key must hold.
+  CHECK(!grants("org.flatpak", "org.example.Other", "zwlr_layer_shell_v1"));
+  CHECK(!grants("waypak", "org.example.Bar", "zwlr_layer_shell_v1"));
+  // Absent metadata never satisfies a pattern.
+  CHECK(!grants(nullptr, "org.example.Bar", "zwlr_layer_shell_v1"));
+  // A rule without match keys applies to every client, but only for its own globals.
+  CHECK(grants(nullptr, nullptr, "ext_idle_notifier_v1"));
+  CHECK_EQ(umbriel::securityContextRuleGlobals(config, nullptr, nullptr).size(), size_t{1});
+  // The whole value must match; a substring is not enough.
+  CHECK(!grants("org.flatpak", "org.example.Bar", "zwlr_screencopy_manager_v1"));
+  CHECK(grants(nullptr, "example", "zwlr_screencopy_manager_v1"));
+  // Matching rules pool their globals.
+  CHECK_EQ(umbriel::securityContextRuleGlobals(config, "org.flatpak", "org.example.Bar").size(), size_t{2});
 }
 
 int main() { return RUN_TESTS(); }

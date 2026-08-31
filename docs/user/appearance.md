@@ -105,8 +105,7 @@ saturation = 1.1  # 0.0-2.0
 [window rules](window-rules.md) or [layer rules](layer-rules.md).
 Blur only renders where a surface is transparent. Sampling remains confined to
 the surface's owning output when a window overflows into a neighbouring output.
-Disabling the master switch also releases SceneFX's per-output blur render
-targets.
+Disabling the master switch also releases the per-output blur render targets.
 
 | Key          | Type  | Default | Description                                                                                                                       |
 | ------------ | ----- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |

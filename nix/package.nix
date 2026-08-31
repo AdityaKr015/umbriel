@@ -27,26 +27,17 @@
 }:
 let
   inherit (builtins)
-    baseNameOf
     head
     match
     readFile
     ;
-  source = lib.throwIf (!builtins.pathExists (../. + "/subprojects/scenefx/meson.build")) ''
-    umbriel: subprojects/scenefx is missing.
-
-    This flake needs a Git submodule, which the `github:` fetcher cannot
-    fetch because it downloads a tarball. Use the Git fetcher instead:
-
-      inputs.umbriel.url = "git+https://github.com/noctalia-dev/umbriel";
-  '' ../.;
   version = head (match ".*\n  version: '([0-9][^']+)'.*" (readFile ../meson.build));
 in
 stdenv.mkDerivation {
   pname = "umbriel";
   inherit version;
 
-  src = source;
+  src = ../.;
 
   nativeBuildInputs = [
     makeBinaryWrapper
@@ -77,7 +68,6 @@ stdenv.mkDerivation {
   ];
 
   mesonBuildType = "release";
-  mesonInstallFlags = [ "--skip-subprojects" ];
 
   postInstall = ''
     if [ -f "$out/share/wayland-sessions/umbriel.desktop" ]; then
@@ -91,7 +81,7 @@ stdenv.mkDerivation {
   passthru.providedSessions = [ "umbriel" ];
 
   meta = with lib; {
-    description = "A Wayland compositor built on wlroots and SceneFX";
+    description = "A Wayland compositor built on wlroots";
     homepage = "https://github.com/noctalia-dev/umbriel";
     license = licenses.mit;
     platforms = platforms.linux;

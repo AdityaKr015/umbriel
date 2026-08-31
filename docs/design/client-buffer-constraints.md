@@ -16,7 +16,7 @@ resolution.
 
 ## Capture readback format
 
-`fx_texture_preferred_read_format` in the SceneFX fork never reports packed
+`fx_texture_preferred_read_format` in `umbrielfx` never reports packed
 24-bit. It is the only shm format the capture protocols offer clients, and the
 NVIDIA blob reports `GL_RGB` / `GL_UNSIGNED_BYTE` for opaque targets, which maps
 to `DRM_FORMAT_BGR888`. Clients assume a 4-byte pixel, derive `width * 4`, and
@@ -24,7 +24,7 @@ wlroots rejects it because a stride must divide by the pixel size. GLES2 always
 allows `GL_RGBA` / `GL_UNSIGNED_BYTE` readback, so the clamp to 32-bit costs
 nothing at 8bpc.
 
-Do not fix this by dropping `DRM_FORMAT_BGR888` from the fork's pixel format
+Do not fix this by dropping `DRM_FORMAT_BGR888` from `umbrielfx`'s pixel format
 table: the table also drives `wl_shm` advertisement and texture upload, and it
 is identical to wlroots' gles2 table.
 
@@ -40,9 +40,9 @@ the output buffer's DRM format while storing Gamma 2.2 SDR values. For an XR30
 HDR output, replacing that sidecar with XR24 after negotiation makes the client
 request packed 10-bit readback from an 8-bit framebuffer.
 
-SceneFX creates the sidecar lazily from its pre-output-transform linear blend
-buffer. This can happen during texture import, outside the normal SceneFX
-render pass, so the SceneFX EGL context must be current while the framebuffer
+`umbrielfx` creates the sidecar lazily from its pre-output-transform linear
+blend buffer. This can happen during texture import, outside the normal
+`umbrielfx` render pass, so its EGL context must be current while the framebuffer
 is allocated. Export-DMA-BUF frames bypass the SDR sidecar and retain the
 output's native representation.
 
@@ -56,8 +56,8 @@ buffer as Windows-scRGB would incorrectly dim parametric extended-linear
 content.
 
 Umbriel therefore marks only image descriptions created by
-`create_windows_scrgb` with a SceneFX luminance multiplier of `80 / 203`.
-SceneFX applies that multiplier while normalizing the buffer into its
+`create_windows_scrgb` with an `umbrielfx` luminance multiplier of `80 / 203`.
+`umbrielfx` applies that multiplier while normalizing the buffer into its
 reference-white-relative blend space. The output transform subsequently maps
 the normalized reference white to the configured output `sdr_white` level.
 Buffers using this multiplier cannot use direct scanout because scanout would

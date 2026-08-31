@@ -5,7 +5,8 @@ workspaces, window rules, blur, shadows, and fluid animations.
 
 It runs independently and can be paired with [Noctalia](https://github.com/noctalia-dev/noctalia), which provides a
 first-class desktop shell experience for Umbriel. Umbriel is built in C++23 on
-[wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) and [SceneFX](https://github.com/wlrfx/scenefx), with
+[wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) and `umbrielfx`, its own hard fork of
+[SceneFX](https://github.com/wlrfx/scenefx), with
 Xwayland support provided by [xwayland-satellite](https://github.com/Supreeeme/xwayland-satellite) and portal screen
 capture and sharing by [xdg-desktop-portal-umbriel](https://github.com/noctalia-dev/xdg-desktop-portal-umbriel), an
 xdg-desktop-portal backend for Umbriel.
@@ -58,18 +59,15 @@ To understand the values and philosophy guiding the project, read our [ethos](ht
 ## Building
 
 Distribution maintainers should also read [PACKAGING.md](PACKAGING.md) for the
-installed layout, dependency notes, SceneFX requirements, and config fallback.
+installed layout, dependency notes, and config fallback.
 
-After cloning, initialize the patched SceneFX fork tracked in `subprojects/scenefx`:
-
-```sh
-git submodule update --init
-```
+The scene graph and renderer live in [`umbrielfx/`](umbrielfx/) and build as part of the tree.
 
 ### System build
 
 Install a C++23 compiler, Meson, Ninja, pkg-config, wayland-scanner, and development packages for wlroots 0.20,
-Wayland, xkbcommon, libinput, pixman, libdrm, Cairo, Pango, tomlplusplus, and nlohmann-json. Then build Umbriel:
+Wayland, xkbcommon, libinput, pixman, libdrm, EGL, GLES2, GBM, lcms2, Cairo, Pango, tomlplusplus, and
+nlohmann-json. Then build Umbriel:
 
 ```sh
 just release
@@ -81,8 +79,7 @@ fragmentation in long-running sessions. Meson's `-Djemalloc=enabled` or `-Djemal
 default (`auto`) uses it when the development package is installed and skips it otherwise (non-glibc libc builds
 always skip it).
 
-The binaries are written to `build-debug/umbriel` and `build-release/umbriel`. Meson uses a system `scenefx-0.5`
-only when its headers provide the required APIs; otherwise it builds the initialized submodule.
+The binaries are written to `build-debug/umbriel` and `build-release/umbriel`.
 
 ### Nix
 

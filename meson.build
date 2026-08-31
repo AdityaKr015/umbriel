@@ -50,15 +50,15 @@ add_project_arguments(
   language: 'c',
 )
 
-wayland_server_dep = dependency('wayland-server', version: '>=1.23')
+# Version floors here are the union of the compositor's needs and umbrielfx's.
+wayland_server_dep = dependency('wayland-server', version: '>=1.24')
 wayland_client_dep = dependency('wayland-client')
 wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.47')
-wlroots_dep = dependency('wlroots-0.20')
-# Prefer an installed SceneFX only when it provides Umbriel's patched API.
-# Otherwise, build the patched git submodule.
+# umbrielfx compiles against wlroots' private struct layouts, so it is pinned to
+# one minor series rather than tracking whatever is installed.
+wlroots_dep = dependency('wlroots-0.20', version: ['>=0.20.0', '<0.21.0'])
 cpp = meson.get_compiler('cpp')
 fs = import('fs')
-pkgconfig = find_program('pkg-config', required: false)
 
 # jemalloc keeps a long-running compositor's heap compact: fewer arenas and fast page decay bound RSS. It interposes malloc only on glibc, so other libc builds
 # skip it (auto) or fail (enabled).
@@ -78,78 +78,19 @@ if is_glibc
     jemalloc_cpp_args += ['-DUMBRIEL_USE_JEMALLOC=1']
   endif
 endif
-use_system_scenefx = false
-if pkgconfig.found()
-  scenefx_exists = run_command(pkgconfig, '--exists', 'scenefx-0.5', check: false)
-  if scenefx_exists.returncode() == 0
-    scenefx_cflags = run_command(
-      pkgconfig,
-      '--cflags',
-      'scenefx-0.5',
-      check: true,
-    ).stdout().strip().split()
-    use_system_scenefx = cpp.has_header_symbol(
-      'scenefx/types/wlr_scene.h',
-      'wlr_scene_blur_set_ignore_alpha',
-      args: scenefx_cflags,
-    ) and cpp.has_header_symbol(
-      'scenefx/types/wlr_scene.h',
-      'wlr_scene_tree_set_clip',
-      args: scenefx_cflags,
-    ) and cpp.has_header_symbol(
-      'scenefx/types/wlr_scene.h',
-      'wlr_scene_output_set_sdr_white_level',
-      args: scenefx_cflags,
-    ) and cpp.has_header_symbol(
-      'scenefx/types/wlr_scene.h',
-      'wlr_scene_buffer_set_luminance_multiplier',
-      args: scenefx_cflags,
-    ) and cpp.has_member(
-      'struct wlr_scene_output_state_options',
-      'capture_sdr',
-      prefix: '#include <scenefx/types/wlr_scene.h>',
-      args: scenefx_cflags,
-    ) and cpp.has_header_symbol(
-      'scenefx/types/wlr_scene.h',
-      'wlr_scene_output_set_direct_scanout_enabled',
-      args: scenefx_cflags,
-    )
-  endif
-endif
-
-if use_system_scenefx
-  scenefx_dep = dependency('scenefx-0.5', allow_fallback: false)
-else
-  scenefx_header = meson.current_source_dir() / 'subprojects' / 'scenefx' / 'include' / 'scenefx' / 'types' / 'wlr_scene.h'
-  if not fs.exists(scenefx_header)
-    error('SceneFX submodule is missing, run git submodule update --init')
-  endif
-  scenefx_header_source = fs.read(scenefx_header)
-  if (
-    not scenefx_header_source.contains('wlr_scene_blur_set_ignore_alpha')
-    or not scenefx_header_source.contains('wlr_scene_tree_set_clip')
-    or not scenefx_header_source.contains('wlr_scene_output_set_sdr_white_level')
-    or not scenefx_header_source.contains('wlr_scene_buffer_set_luminance_multiplier')
-    or not scenefx_header_source.contains('capture_sdr')
-    or not scenefx_header_source.contains('wlr_scene_output_set_direct_scanout_enabled')
-  )
-    error('SceneFX submodule must provide Umbriel patched APIs')
-  endif
-  scenefx_proj = subproject(
-    'scenefx',
-    default_options: ['examples=false', 'tracy_enable=false', 'werror=false', 'default_library=static'],
-  )
-  scenefx_dep = scenefx_proj.get_variable('scenefx')
-endif
 
 xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput', version: '>=1.23')
-pixman_dep = dependency('pixman-1')
+pixman_dep = dependency('pixman-1', version: '>=0.43.0')
 tomlplusplus_dep = dependency('tomlplusplus')
 nlohmann_json_dep = dependency('nlohmann_json')
 cairo_dep = dependency('cairo')
 pangocairo_dep = dependency('pangocairo')
-libdrm_dep = dependency('libdrm')
+libdrm_dep = dependency('libdrm', version: '>=2.4.129')
+
+# Umbriel's fork of the wlroots scene graph and renderer. No installed package
+# can supply it, so it is never probed for.
+subdir('umbrielfx')
 
 # wlroots cursor-shape header pulls enum defs from wayland-protocols.
 wayland_protocols_enums = declare_dependency(
@@ -426,7 +367,7 @@ ext_workspace_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
-# Logic with no dependency on the compositor: string parsing and layout geometry. Built once and linked by both the compositor and the tests, so a test never recompiles a translation unit and two tests cannot drift in what they cover. Keep this list free of anything needing SceneFX, pango, or a running server; that is what makes these tests cheap and the coverage honest.
+# Logic with no dependency on the compositor: string parsing and layout geometry. Built once and linked by both the compositor and the tests, so a test never recompiles a translation unit and two tests cannot drift in what they cover. Keep this list free of anything needing umbrielfx, pango, or a running server; that is what makes these tests cheap and the coverage honest.
 pure_sources = files(
   'src/config/change.cpp',
   'src/config/resolve.cpp',
@@ -453,15 +394,15 @@ umbriel_pure = static_library(
   'umbriel-pure',
   pure_sources,
   include_directories: include_directories('src'),
-  dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep, tomlplusplus_dep],
+  dependencies: [wlroots_dep, xkbcommon_dep, umbrielfx_dep, tomlplusplus_dep],
 )
 
 # What a test needs to use the pure layer: the library, the include root, and
-# the dependencies its headers pull in (scenefx for the border ring's corner radii).
+# the dependencies its headers pull in (umbrielfx for the border ring's corner radii).
 umbriel_pure_dep = declare_dependency(
   link_with: umbriel_pure,
   include_directories: include_directories('src'),
-  dependencies: [wlroots_dep, xkbcommon_dep, scenefx_dep, tomlplusplus_dep],
+  dependencies: [wlroots_dep, xkbcommon_dep, umbrielfx_dep, tomlplusplus_dep],
 )
 
 # The compositor itself. main.cpp is deliberately not here: everything lives in a library so a test can link any of it without re-listing or recompiling sources,
@@ -518,7 +459,7 @@ core_sources = files(
 )
 
 umbriel_core_deps = [
-  scenefx_dep,
+  umbrielfx_dep,
   wlroots_dep,
   wayland_server_dep,
   wayland_client_dep,
@@ -547,7 +488,7 @@ umbriel_core = static_library(
   dependencies: umbriel_core_deps,
 )
 
-# A test over compositor code links this and nothing else. It is far heavier than umbriel_pure_dep (SceneFX, pango, cairo), so prefer the pure layer wherever the
+# A test over compositor code links this and nothing else. It is far heavier than umbriel_pure_dep (umbrielfx, pango, cairo), so prefer the pure layer wherever the
 # code under test allows it.
 umbriel_core_dep = declare_dependency(
   link_with: umbriel_core,

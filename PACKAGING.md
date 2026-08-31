@@ -7,7 +7,7 @@ in the [README](README.md) and at [docs.noctalia.dev](https://docs.noctalia.dev/
 
 Use this short description for package metadata:
 
-> A Wayland compositor built on wlroots and SceneFX.
+> A Wayland compositor built on wlroots.
 
 ## Identity
 
@@ -30,12 +30,7 @@ Umbriel is Linux-only. The project flake builds `x86_64-linux` and
 Umbriel requires a C++23 compiler and standard library. It uses Meson and
 Ninja, with `pkg-config` and `wayland-scanner` needed during configuration.
 
-Initialize the SceneFX submodule when building from a source checkout or
-release archive that represents submodules separately:
-
-```sh
-git submodule update --init
-```
+A source tarball or `git archive` of a tag is complete.
 
 Configure, build, test, and install with the intended final prefix:
 
@@ -43,7 +38,7 @@ Configure, build, test, and install with the intended final prefix:
 meson setup build --buildtype=release --prefix=/usr
 meson compile -C build
 meson test -C build
-meson install -C build --skip-subprojects
+meson install -C build
 ```
 
 The configured data directory is compiled into Umbriel so it can locate the
@@ -53,37 +48,34 @@ the installed files to another prefix.
 `jemalloc` is optional and recommended on glibc. The `jemalloc` Meson feature
 defaults to `auto`. It is skipped on non-glibc systems.
 
-## SceneFX
+## umbrielfx
 
-Umbriel requires APIs from the `umbriel` branch of the
-[Noctalia SceneFX fork](https://github.com/noctalia-dev/scenefx/tree/umbriel).
-The repository tracks it in `subprojects/scenefx`.
+Umbriel's scene graph and GLES2 renderer live in `umbrielfx/`, a hard fork of
+[SceneFX](https://github.com/wlrfx/scenefx). It builds in-tree as a static
+archive and is not installed, so there is no `scenefx` package to satisfy.
 
-Meson accepts an installed `scenefx-0.5` only when its headers contain the
-required patched API. Otherwise it builds the submodule. The bundled static
-SceneFX archive is linked as a whole so its internal utility symbols remain
-available with distribution-provided LTO. An unpatched upstream SceneFX package
-is not a compatible substitute.
+An installed SceneFX package is not a substitute and is never consulted. If a
+distribution already ships SceneFX, the two are unrelated and can coexist.
 
-Use `meson install --skip-subprojects` for distribution packages unless the
-package intentionally owns the SceneFX installation too.
+The archive is linked as a whole so its internal utility symbols survive
+distribution-provided LTO and archive member pruning.
 
 ## Dependencies
 
 ### Build and link dependencies
 
-- wlroots 0.20
-- Wayland server and client libraries
+- wlroots 0.20, and strictly below 0.21: `umbrielfx` compiles against wlroots' private struct layouts
+- wayland-server 1.24 or newer, plus the Wayland client library
 - wayland-protocols 1.47 or newer
 - xkbcommon
 - libinput 1.23 or newer
-- pixman
-- libdrm
+- pixman 0.43 or newer
+- libdrm 2.4.129 or newer
 - Cairo and PangoCairo
 - tomlplusplus
 - nlohmann-json
-- EGL, GLES, GBM, and related graphics dependencies required by wlroots and SceneFX
-- The patched SceneFX fork described above
+- EGL, GLES2, and GBM
+- lcms2, optional; without it `umbrielfx` rejects client ICC profiles and keeps only its parametric color transforms
 - jemalloc on glibc, optional
 
 The canonical dependency declarations are in [`meson.build`](meson.build).

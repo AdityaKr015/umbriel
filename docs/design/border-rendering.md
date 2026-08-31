@@ -1,6 +1,6 @@
 # Border rendering
 
-Umbriel renders each decorated window with one SceneFX `wlr_scene_border` node.
+Umbriel renders each decorated window with one `umbrielfx` `wlr_scene_border` node.
 The node owns both color bands and submits one draw through the dedicated
 `border.frag` shader. The regular rounded-rectangle shader is not part of the
 window border path.
@@ -58,7 +58,7 @@ zero inner width selects the outer color.
 
 ## CPU clipping
 
-SceneFX limits fragment work by subtracting areas that are certainly inside the
+`umbrielfx` limits fragment work by subtracting areas that are certainly inside the
 transparent content hole. Rounded corners must remain shader-owned.
 `apply_clip_region` uses the explicit content radii and subtracts only a central
 horizontal and vertical cross. Integer truncation of a diagonal approximation
@@ -74,7 +74,7 @@ that renders at the exact output scale can report a pixel count one short of
 that box, and shrinking the destination leaves a line of background inside the
 hole that neither the border nor the surface paints.
 
-Texel alignment is recovered from the source box instead. SceneFX snaps a source
+Texel alignment is recovered from the source box instead. `umbrielfx` snaps a source
 box to integer texels and then adopts the destination extent whenever the two
 are within one texel, so sampling lands on texel centers rather than between
 them, which is what keeps subpixel-hinted text sharp.

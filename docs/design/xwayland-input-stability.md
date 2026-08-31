@@ -34,7 +34,7 @@ Defense:
 `pinnedRoot`, `pinnedShadowRoot`): each output owns four scene trees carrying
 a `wlr_scene_tree_set_clip` of that output's layout box, and every workspace
 tree, fullscreen tree, pinned view and close snapshot hangs under them.
-Umbriel's SceneFX fork folds an ancestor tree clip into the visibility walk
+`umbrielfx` folds an ancestor tree clip into the visibility walk
 (`_scene_nodes_in_box` accumulates the clip, `scene_node_update_iterator`
 intersects `node->visible` with it), so a node that reaches past its own
 output has no visible region there at all: no rendering, no damage, no
@@ -44,7 +44,7 @@ The drag tree is deliberately outside those roots, which is what lets a
 dragged window span both outputs.
 
 A rejected approach, for whoever considers it next: pinning scene nodes to a
-single output at the SceneFX level (filtering `active_outputs` in
+single output inside `umbrielfx` (filtering `active_outputs` in
 `update_node_update_outputs`) does suppress the enter/leave churn, but it
 divorces output membership from rendering. `wlr_scene_output_build_state`
 asserts on buffers rendered on an output they are not members of (SIGABRT

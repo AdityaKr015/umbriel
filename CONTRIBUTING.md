@@ -11,9 +11,9 @@ requests.
 
 ## Design Principles
 
-- Thin layer over wlroots 0.20 + SceneFX: lean on the libraries, do not reimplement them.
+- Thin layer over wlroots 0.20 + `umbrielfx`: lean on the libraries, do not reimplement them.
 - Domain-oriented C++23: one domain per directory, headers beside their sources, and `src/` as the include root.
-- Effects (blur, shadows, rounded corners, animations) go through SceneFX; patched APIs live in the fork rather than
+- Effects (blur, shadows, rounded corners, animations) go through `umbrielfx`; new visuals land there rather than as
   ad-hoc scene hacks.
 - Mechanism and policy stay separate. Example: `View::applySeatFocus` is mechanism; focus policy lives in
   `Server::focusView`.
@@ -28,7 +28,7 @@ Direct project dependencies. Transitive dependencies are owned by their providin
 | Layer | Library |
 |-------|---------|
 | Compositor framework | `wlroots-0.20` |
-| Scene graph and effects | `SceneFX` (blur, shadows, rounded corners; patched fork, submodule) |
+| Scene graph and effects | `umbrielfx` (blur, shadows, rounded corners; vendored in `umbrielfx/`) |
 | Wayland core | `wayland-server`, `wayland-client`, `wayland-protocols`, `wayland-scanner` |
 | Input | `libinput`, `xkbcommon` |
 | Graphics | `pixman`, `libdrm`, OpenGL via wlroots |
@@ -168,6 +168,7 @@ src/
   config/     TOML parsing, resolution, reloads, and diagnostics
   core/       animation, logging, process, and resource helpers
   cli/        runtime inspection and command-line entry points
+umbrielfx/    vendored scene graph and GLES2 renderer (C, hard fork of SceneFX)
 protocols/    vendored Wayland protocol XML
 data/         session desktop entry
 nix/          package and system integration modules
@@ -182,10 +183,20 @@ Conventions:
   config options. The reference pages are linked from [`examples/config.toml`](examples/config.toml) and the
   [README](README.md#configuration). Maintainer design notes live in [`docs/design/`](docs/design/).
 
-## SceneFX submodule
+## umbrielfx
 
-SceneFX is a git submodule tracking the `umbriel` branch of `noctalia-dev/scenefx`. Edit its sources in place, commit
-in the submodule, and push to the fork.
+`umbrielfx/` is a hard fork of [SceneFX](https://github.com/wlrfx/scenefx), built by `subdir('umbrielfx')` from the
+root `meson.build`. Edit it like any other directory and commit alongside the compositor change that needs it. Never
+rebase it onto upstream SceneFX.
+
+It is C compiled against wlroots' private struct layouts (`-DWLR_PRIVATE=`), so its compiler flags stay on its own
+target and never reach the compositor's C++23 units. See [`umbrielfx/README.md`](umbrielfx/README.md).
+
+Its color transform regressions run in their own suite:
+
+```sh
+meson test -C build-release --suite umbrielfx
+```
 
 ## Debugging
 

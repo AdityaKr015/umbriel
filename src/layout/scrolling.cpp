@@ -375,19 +375,14 @@ namespace umbriel {
     m_columns.insert(m_columns.begin() + index, std::move(column));
   }
 
-  void ScrollingLayout::insertViewIntoColumn(View* view, int columnIndex, int rowIndex) {
-    if (view == nullptr
-        || columnOf(view) >= 0
-        || columnIndex < 0
-        || columnIndex >= static_cast<int>(m_columns.size())) {
-      return;
-    }
-    Column& column = m_columns[static_cast<size_t>(columnIndex)];
+  // Weight for a row about to be added at `row`, and the gap it takes over. A column keeps free space at its ends as
+  // gap weight (pointer drags and the height actions both put it there), and that free space is exactly where the next
+  // row belongs, so the incoming row claims it instead of squeezing in beside it. Without a gap to claim the row keeps
+  // `fallbackWeight`. The scaling keeps the other rows at their current pixel extents across the stack shrinking by
+  // one inter-row gap.
+  double ScrollingLayout::claimInsertWeight(Column& column, int row, double fallbackWeight) {
     ensureWeightCount(column);
     const int existingRows = static_cast<int>(column.views.size());
-    const int row = std::clamp(rowIndex, 0, existingRows);
-
-    double insertedWeight = 1.0;
     double edgeGapWeight = 0.0;
     bool consumesTopGap = false;
     bool consumesBottomGap = false;
@@ -398,27 +393,41 @@ namespace umbriel {
       edgeGapWeight = column.bottomGapWeight;
       consumesBottomGap = true;
     }
-
-    if (edgeGapWeight > 0.0) {
-      insertedWeight = edgeGapWeight;
-      if (m_lastAvailableCross > 0) {
-        const int gap = m_config->totalGap;
-        const int oldStackHeight = std::max(existingRows, m_lastAvailableCross - std::max(0, existingRows - 1) * gap);
-        const int newStackHeight = std::max(existingRows + 1, m_lastAvailableCross - existingRows * gap);
-        const double oldTotalWeight = columnTotalWeight(column);
-        const double unchangedWeight = oldTotalWeight - edgeGapWeight;
-        const double newTotalWeight =
-            oldTotalWeight * static_cast<double>(newStackHeight) / static_cast<double>(oldStackHeight);
-        insertedWeight = std::max(kMinHeightWeight, newTotalWeight - unchangedWeight);
-      }
-      if (consumesTopGap) {
-        column.topGapWeight = 0.0;
-      }
-      if (consumesBottomGap) {
-        column.bottomGapWeight = 0.0;
-      }
+    if (edgeGapWeight <= 0.0) {
+      return fallbackWeight;
     }
 
+    double insertedWeight = edgeGapWeight;
+    if (m_lastAvailableCross > 0) {
+      const int gap = m_config->totalGap;
+      const int oldStackHeight = std::max(existingRows, m_lastAvailableCross - std::max(0, existingRows - 1) * gap);
+      const int newStackHeight = std::max(existingRows + 1, m_lastAvailableCross - existingRows * gap);
+      const double oldTotalWeight = columnTotalWeight(column);
+      const double unchangedWeight = oldTotalWeight - edgeGapWeight;
+      const double newTotalWeight =
+          oldTotalWeight * static_cast<double>(newStackHeight) / static_cast<double>(oldStackHeight);
+      insertedWeight = std::max(kMinHeightWeight, newTotalWeight - unchangedWeight);
+    }
+    if (consumesTopGap) {
+      column.topGapWeight = 0.0;
+    }
+    if (consumesBottomGap) {
+      column.bottomGapWeight = 0.0;
+    }
+    return insertedWeight;
+  }
+
+  void ScrollingLayout::insertViewIntoColumn(View* view, int columnIndex, int rowIndex) {
+    if (view == nullptr
+        || columnOf(view) >= 0
+        || columnIndex < 0
+        || columnIndex >= static_cast<int>(m_columns.size())) {
+      return;
+    }
+    Column& column = m_columns[static_cast<size_t>(columnIndex)];
+    ensureWeightCount(column);
+    const int row = std::clamp(rowIndex, 0, static_cast<int>(column.views.size()));
+    const double insertedWeight = claimInsertWeight(column, row, 1.0);
     column.views.insert(column.views.begin() + row, view);
     column.heightWeights.insert(column.heightWeights.begin() + row, insertedWeight);
   }
@@ -442,8 +451,9 @@ namespace umbriel {
     if (row >= 0 && row < static_cast<int>(source.heightWeights.size())) {
       source.heightWeights.erase(source.heightWeights.begin() + row);
     }
+    const double insertedWeight = claimInsertWeight(destination, static_cast<int>(destination.views.size()), weight);
     destination.views.push_back(view);
-    destination.heightWeights.push_back(weight);
+    destination.heightWeights.push_back(insertedWeight);
     if (source.views.empty()) {
       m_columns.erase(m_columns.begin() + sourceColumn);
     }
@@ -787,10 +797,9 @@ namespace umbriel {
       return 1.0;
     }
     const Column& column = m_columns[static_cast<size_t>(columnIndex)];
-    if (column.views.size() <= 1) {
-      return 1.0;
-    }
     const int row = rowOf(view);
+    // A lone row is not automatically full height: the edge gaps it can be dragged away from count towards the
+    // column's weight, so the same weight-over-total ratio describes solo and stacked rows alike.
     return std::max(kMinHeightWeight, heightWeight(columnIndex, row)) / columnTotalWeight(column);
   }
 
@@ -799,11 +808,24 @@ namespace umbriel {
     if (columnIndex < 0) {
       return false;
     }
-    const Column& column = m_columns[static_cast<size_t>(columnIndex)];
-    if (column.views.size() <= 1) {
-      return false;
-    }
+    Column& column = m_columns[static_cast<size_t>(columnIndex)];
     const int row = rowOf(view);
+    if (column.views.size() == 1) {
+      // No sibling row to trade weight with, so the remainder goes to the column's edge gaps, exactly as dragging the
+      // window's top or bottom edge does. An ungapped window keeps its top edge and frees the space below, which is
+      // where the next window in the column lands. Existing gaps keep their proportion, so a window a drag pushed
+      // against one end stays there.
+      ensureWeightCount(column);
+      const double total = columnTotalWeight(column);
+      const double target = std::clamp(fraction, 0.1, 1.0);
+      const double remainder = total * (1.0 - target);
+      const double topGap = std::max(0.0, column.topGapWeight);
+      const double gaps = topGap + std::max(0.0, column.bottomGapWeight);
+      const double topShare = gaps > 0.0 ? topGap / gaps : 0.0;
+      column.topGapWeight = remainder * topShare;
+      column.bottomGapWeight = remainder - column.topGapWeight;
+      return setHeightWeight(columnIndex, row, total * target);
+    }
     const double oldWeight = std::max(kMinHeightWeight, heightWeight(columnIndex, row));
     const double others = columnTotalWeight(column) - oldWeight;
     const double target = std::clamp(fraction, 0.1, 0.95);

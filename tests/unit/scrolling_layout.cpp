@@ -177,11 +177,86 @@ UMBRIEL_TEST(setHeightFractionResizesAStackedRow) {
   CHECK(std::abs(fixture.layout.targetBox(stub(1)).height - static_cast<int>(std::lround(0.7 * stackCross))) <= 1);
 }
 
-UMBRIEL_TEST(setHeightFractionRejectsASoloRow) {
+UMBRIEL_TEST(setHeightFractionShrinksASoloRowFromItsBottomEdge) {
   Fixture fixture;
   fixture.addColumns(1);
-  CHECK(!fixture.layout.setHeightFraction(stub(0), 0.7));
   CHECK(std::fabs(fixture.layout.heightFraction(stub(0)) - 1.0) < 1e-9);
+
+  CHECK(fixture.layout.setHeightFraction(stub(0), 1.0 / 3));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(0)) - 1.0 / 3) < 1e-9);
+  fixture.layout.arrange(kUsable);
+
+  // A row with no sibling uses the gap-weight model the pointer resize uses. With no gap established yet the window
+  // keeps its top edge, so the freed space collects below it, where the column's next window goes.
+  const int stackCross = kUsable.height - 2 * fixture.config.edgePad;
+  const wlr_box box = fixture.layout.targetBox(stub(0));
+  CHECK(std::abs(box.height - static_cast<int>(std::lround(stackCross / 3.0))) <= 1);
+  CHECK_EQ(box.y, fixture.config.edgePad);
+  CHECK(std::fabs(fixture.layout.topGapWeight(0)) < 1e-9);
+
+  // Back to full height, gaps cleared.
+  CHECK(fixture.layout.setHeightFraction(stub(0), 1.0));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(0)) - 1.0) < 1e-9);
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.targetBox(stub(0)).height, stackCross);
+}
+
+UMBRIEL_TEST(aSecondRowTakesTheSpaceASoloRowFreed) {
+  // Why the top edge is kept: the space below a shrunk lone window is where the next window in the column lands, at
+  // the size the user made room for.
+  Fixture fixture;
+  fixture.addColumns(1);
+  CHECK(fixture.layout.setHeightFraction(stub(0), 1.0 / 3));
+  fixture.layout.arrange(kUsable);
+  const int soloHeight = fixture.layout.targetBox(stub(0)).height;
+
+  fixture.layout.insertViewIntoColumn(stub(1), 0, 1);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box first = fixture.layout.targetBox(stub(0));
+  const wlr_box second = fixture.layout.targetBox(stub(1));
+  const int stackCross = kUsable.height - 2 * fixture.config.edgePad - fixture.config.totalGap;
+  CHECK_EQ(first.y, fixture.config.edgePad);
+  CHECK(std::abs(first.height - soloHeight) <= 2);
+  CHECK_EQ(second.y, first.y + first.height + fixture.config.totalGap);
+  CHECK_EQ(second.height, stackCross - first.height);
+}
+
+UMBRIEL_TEST(consumeIntoAColumnTakesTheSpaceItsRowFreed) {
+  // Consuming a neighbour is the other way a second window reaches the column, so it claims the freed space too.
+  // Carrying the incoming row's old weight in beside the gap would leave a dead band at the column's bottom.
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setHeightFraction(stub(0), 1.0 / 3));
+  fixture.layout.arrange(kUsable);
+  const int soloHeight = fixture.layout.targetBox(stub(0)).height;
+
+  CHECK(fixture.layout.consume(stub(1), -1));
+  CHECK(std::fabs(fixture.layout.bottomGapWeight(0)) < 1e-9);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box first = fixture.layout.targetBox(stub(0));
+  const wlr_box second = fixture.layout.targetBox(stub(1));
+  const int stackCross = kUsable.height - 2 * fixture.config.edgePad - fixture.config.totalGap;
+  CHECK(std::abs(first.height - soloHeight) <= 2);
+  CHECK_EQ(second.y, first.y + first.height + fixture.config.totalGap);
+  CHECK_EQ(second.height, stackCross - first.height);
+}
+
+UMBRIEL_TEST(soloRowHeightFractionReportsPointerDrivenEdgeGaps) {
+  // What the pointer leaves behind must be what the cycle action reads, otherwise cycling from a mouse-resized solo
+  // window starts from the wrong preset.
+  Fixture fixture;
+  fixture.addColumns(1);
+  CHECK(fixture.layout.setBottomGapWeight(0, 1.0));
+
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(0)) - 0.5) < 1e-9);
+  // The setter preserves the anchor the drag established: all remaining weight stays in the bottom gap.
+  CHECK(fixture.layout.setHeightFraction(stub(0), 0.25));
+  CHECK(std::fabs(fixture.layout.heightFraction(stub(0)) - 0.25) < 1e-9);
+  CHECK(std::fabs(fixture.layout.topGapWeight(0)) < 1e-9);
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.targetBox(stub(0)).y, fixture.config.edgePad);
 }
 
 UMBRIEL_TEST(moveViewVerticalReordersWithinAColumn) {

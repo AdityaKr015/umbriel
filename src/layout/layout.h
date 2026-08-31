@@ -206,10 +206,11 @@ namespace umbriel {
     virtual void clearFullWidthState(int columnIndex) = 0;
     [[nodiscard]] virtual double widthFraction(int columnIndex) const = 0;
 
-    // Height of `view` as a fraction of its column's stacking extent. 1.0 when the
-    // view is alone on its stacking axis.
+    // Height of `view` as a fraction of its column's stacking extent. A layout whose lone row can still be shrunk by
+    // pointer resize reports and accepts that same fraction (scrolling shrinks it against the column's edge gaps);
+    // where a lone row has no resizable stacking edges, the fraction is 1.0 and the setter refuses.
     [[nodiscard]] virtual double heightFraction(const View* view) const = 0;
-    // Returns false when the view is not tiled here or is alone on its stacking axis.
+    // Returns false when the view is not tiled here, or when the layout cannot size it on the stacking axis.
     virtual bool setHeightFraction(View* view, double fraction) = 0;
 
     // Interactive resize

@@ -9,7 +9,6 @@ extern "C" {
 #include <cmath>
 #include <cstdint>
 #include <optional>
-#include <ranges>
 #include <vector>
 
 namespace umbriel {
@@ -92,26 +91,19 @@ namespace umbriel {
     return static_cast<double>(size) / static_cast<double>(usable);
   }
 
-  // The next preset fraction from `current` in `direction` (negative shrinks),
-  // wrapping to the opposite end. Shared by scrolling columns and floats.
-  [[nodiscard]] inline double nextFractionPreset(const std::vector<double>& presets, double current, int direction) {
-    if (presets.empty()) {
-      return current;
-    }
-    if (direction < 0) {
-      for (const double preset : std::views::reverse(presets)) {
-        if (preset < current - 0.0001) {
-          return preset;
-        }
-      }
-      return presets.back();
-    }
+  // A float's cycle basis. `floatingFractionSize` rounds, so a size read back as
+  // a fraction can sit just under the preset that produced it (a third of 700 is
+  // 233, which reads back as 0.3329), and `nextFractionPreset` would hand that
+  // same preset back and stall the cycle. Snapping onto the preset whose pixel
+  // size matches keeps the basis exact; any other size, a pointer resize say,
+  // keeps its measured fraction. The caller guarantees extent > 0.
+  [[nodiscard]] inline double presetSnappedFraction(const std::vector<double>& presets, int size, int extent) {
     for (const double preset : presets) {
-      if (preset > current + 0.0001) {
+      if (floatingFractionSize(preset, extent) == size) {
         return preset;
       }
     }
-    return presets.front();
+    return floatingSizeFraction(size, extent);
   }
 
   // The remembered state of a window's floating identity, kept across tiled round trips so that floating a window twice

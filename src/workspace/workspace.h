@@ -3,6 +3,7 @@
 #include "core/animation.h"
 #include "layout/layout.h"
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -167,6 +168,9 @@ namespace umbriel {
     // without a fraction keeps its current basis size. False when no float is
     // focused or the usable area is degenerate.
     bool resizeFocusedFloating(const std::optional<double>& widthFrac, const std::optional<double>& heightFrac);
+    // The focused floating window's pixel size and usable extent on one axis,
+    // as {size, extent}; nullopt when unavailable.
+    [[nodiscard]] std::optional<std::array<int, 2>> focusedFloatingAxis(bool width) const;
     // The focused floating window's size as a fraction of the usable axis; nullopt when unavailable.
     [[nodiscard]] std::optional<double> focusedFloatingFraction(bool width) const;
     // Pull the scroll offset back into [0, maxScroll]. Only for removals: a

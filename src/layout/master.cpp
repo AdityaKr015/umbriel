@@ -18,7 +18,6 @@ namespace umbriel {
   namespace {
 
     constexpr double kFullWidth = 0.9;
-    constexpr double kFractionEpsilon = 0.0001;
 
     struct MasterSnapshot final : LayoutSnapshot {
       struct Row {
@@ -505,19 +504,7 @@ namespace umbriel {
     if (m_master.views.empty() || m_stack.views.empty() || visualArea(columnIndex) == nullptr) {
       return false;
     }
-    const auto& presets = m_config->widthPresets;
-    const double current = widthFraction(columnIndex);
-    double next = current;
-    if (direction < 0) {
-      const auto it = std::ranges::find_if(presets | std::views::reverse, [current](double preset) {
-        return preset < current - kFractionEpsilon;
-      });
-      next = it == presets.rend() ? presets.back() : *it;
-    } else {
-      const auto it =
-          std::ranges::find_if(presets, [current](double preset) { return preset > current + kFractionEpsilon; });
-      next = it == presets.end() ? presets.front() : *it;
-    }
+    const double next = nextFractionPreset(m_config->widthPresets, widthFraction(columnIndex), direction);
     return setWidthFraction(columnIndex, next);
   }
 

@@ -1015,7 +1015,7 @@ namespace umbriel {
     return true;
   }
 
-  std::optional<double> Workspace::focusedFloatingFraction(bool width) const {
+  std::optional<std::array<int, 2>> Workspace::focusedFloatingAxis(bool width) const {
     View* view = m_focusedView;
     if (view == nullptr || !view->mapped() || !view->floating()) {
       return std::nullopt;
@@ -1027,7 +1027,15 @@ namespace umbriel {
     if (extent <= 0 || basis <= 0) {
       return std::nullopt;
     }
-    return floatingSizeFraction(basis, extent);
+    return std::array{basis, extent};
+  }
+
+  std::optional<double> Workspace::focusedFloatingFraction(bool width) const {
+    const auto axis = focusedFloatingAxis(width);
+    if (!axis) {
+      return std::nullopt;
+    }
+    return floatingSizeFraction((*axis)[0], (*axis)[1]);
   }
 
   bool
@@ -1065,12 +1073,12 @@ namespace umbriel {
 
   bool Workspace::cycleFocusedWidth(int direction) {
     if (m_focusedView != nullptr && m_focusedView->floating()) {
-      if (const auto current = focusedFloatingFraction(true)) {
-        return resizeFocusedFloating(
-            nextFractionPreset(m_layoutConfig.widthPresets, *current, direction), std::nullopt
-        );
+      const auto axis = focusedFloatingAxis(true);
+      if (!axis) {
+        return false;
       }
-      return false;
+      const double current = presetSnappedFraction(m_layoutConfig.widthPresets, (*axis)[0], (*axis)[1]);
+      return resizeFocusedFloating(nextFractionPreset(m_layoutConfig.widthPresets, current, direction), std::nullopt);
     }
     if (m_focusedView != nullptr && m_focusedView->maximizedToEdges()) {
       m_focusedView->setMaximizedToEdges(false);
@@ -1087,12 +1095,12 @@ namespace umbriel {
 
   bool Workspace::cycleFocusedHeight(int direction) {
     if (m_focusedView != nullptr && m_focusedView->floating()) {
-      if (const auto current = focusedFloatingFraction(false)) {
-        return resizeFocusedFloating(
-            std::nullopt, nextFractionPreset(m_layoutConfig.widthPresets, *current, direction)
-        );
+      const auto axis = focusedFloatingAxis(false);
+      if (!axis) {
+        return false;
       }
-      return false;
+      const double current = presetSnappedFraction(m_layoutConfig.widthPresets, (*axis)[0], (*axis)[1]);
+      return resizeFocusedFloating(std::nullopt, nextFractionPreset(m_layoutConfig.widthPresets, current, direction));
     }
     if (m_focusedView != nullptr && m_focusedView->maximizedToEdges()) {
       m_focusedView->setMaximizedToEdges(false);

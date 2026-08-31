@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <vector>
 
@@ -133,6 +134,34 @@ namespace umbriel {
   // overlap, then the closest perpendicular center.
   [[nodiscard]] View*
   directionalNeighbor(std::span<const LayoutTarget> targets, const View* view, bool horizontal, int direction);
+
+  // Fractions this close count as the same size: looser than the ULP wobble a
+  // basis accumulates, tighter than any preset difference a user can perceive.
+  constexpr double kFractionEpsilon = 0.0001;
+
+  // The next preset from `current` in `direction` (negative shrinks), wrapping
+  // at the ends. Every layout's width and height cycle shares this rule, and so
+  // does the floating cycle. `current` must be an exact fraction: a basis
+  // recovered from pixels goes through `presetSnappedFraction` first.
+  [[nodiscard]] inline double nextFractionPreset(const std::vector<double>& presets, double current, int direction) {
+    if (presets.empty()) {
+      return current;
+    }
+    if (direction < 0) {
+      for (const double preset : std::views::reverse(presets)) {
+        if (preset < current - kFractionEpsilon) {
+          return preset;
+        }
+      }
+      return presets.back();
+    }
+    for (const double preset : presets) {
+      if (preset > current + kFractionEpsilon) {
+        return preset;
+      }
+    }
+    return presets.front();
+  }
 
   // Layout-owned interactive resize session. Cursor feeds a pointer delta; the session mutates only its layout's
   // geometry state (split ratios, width fractions, row weights). Protocol calls and arrange() stay in Cursor.

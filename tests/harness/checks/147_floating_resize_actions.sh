@@ -63,6 +63,16 @@ wait_for_field float-resize h 480
 "$UMBRIEL" msg window-cycle-height-back > /dev/null
 wait_for_field float-resize h 360
 
+# Cycling has to step by pixels, not by the fraction those pixels read back as.
+# A third of 1280 rounds up to 427, which reads back as 0.3336: a fraction
+# search finds 1/3 still below that and re-picks it, so the float would stall on
+# the smallest preset for good. The second step is the transition that proves
+# it: 427 has to wrap to the largest preset.
+"$UMBRIEL" msg window-cycle-width-back > /dev/null
+wait_for_field float-resize w 427
+"$UMBRIEL" msg window-cycle-width-back > /dev/null
+wait_for_field float-resize w 853
+
 # Set assigns the fraction outright on the named axis only.
 "$UMBRIEL" msg window-set-width:0.25 > /dev/null
 wait_for_field float-resize w 320

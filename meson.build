@@ -577,6 +577,7 @@ unit_tests = [
   ['shortcut-labels', ['tests/unit/shortcut_labels.cpp'], []],
   ['border-ring', ['tests/unit/border_ring.cpp'], []],
   ['floating', ['tests/unit/floating.cpp'], []],
+  ['preset-cycle', ['tests/unit/preset_cycle.cpp'], []],
   ['maximize', ['tests/unit/maximize.cpp'], []],
   ['deferred-unfullscreen', ['tests/unit/deferred_unfullscreen.cpp'], []],
   ['config-section', ['tests/unit/config_section.cpp'], []],

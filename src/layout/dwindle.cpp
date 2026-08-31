@@ -578,18 +578,7 @@ namespace umbriel {
     for (const Split& split : axisSplits) {
       current *= splitShare(split);
     }
-    const auto& presets = m_config->widthPresets;
-    double next = 0.0;
-    if (direction < 0) {
-      const auto it = std::ranges::find_if(presets | std::views::reverse, [current](double preset) {
-        return preset < current - 0.0001;
-      });
-      next = it == presets.rend() ? presets.back() : *it;
-    } else {
-      const auto it = std::ranges::find_if(presets, [current](double preset) { return preset > current + 0.0001; });
-      next = it == presets.end() ? presets[0] : *it;
-    }
-    return applyFraction(axisSplits, next);
+    return applyFraction(axisSplits, nextFractionPreset(m_config->widthPresets, current, direction));
   }
 
   bool DwindleLayout::toggleFullWidth(int columnIndex) {
@@ -604,7 +593,7 @@ namespace umbriel {
       current *= splitShare(split);
       maximum *= 0.9;
     }
-    if (current >= maximum - 0.0001) {
+    if (current >= maximum - kFractionEpsilon) {
       applyFraction(axisSplits, 0.5);
       return false;
     }
@@ -623,7 +612,7 @@ namespace umbriel {
       current *= splitShare(split);
       maximum *= 0.9;
     }
-    return current >= maximum - 0.0001;
+    return current >= maximum - kFractionEpsilon;
   }
 
   bool DwindleLayout::setWidthFraction(int columnIndex, double fraction) {

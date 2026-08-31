@@ -4,6 +4,7 @@
 #include "config/config_diag.h"
 #include "core/fdlimit.h"
 #include "core/log.h"
+#include "server/ipc.h"
 #include "server/ipc_commands.h"
 #include "server/server.h"
 #include "umbriel_git_revision.h"
@@ -78,6 +79,17 @@ namespace {
       }
       row("       ", cmd, spec.description);
     }
+    {
+      std::string names;
+      for (const auto& name : umbriel::Ipc::kEventNames) {
+        if (!names.empty()) {
+          names += ", ";
+        }
+        names += name;
+      }
+      row("       ", "subscribe <event>[,<event>…]", "stream events as JSON lines");
+      std::println(stream, "{:>15}{}", "", "events: " + names);
+    }
     row("       ", "outputs", "list outputs and modes");
     row("       ", "validate [-c <config>]", "check the config file");
     row("       ", "help | -h | --help", "show this help");
@@ -134,6 +146,37 @@ int main(int argc, char** argv) {
     // IPC subcommands
     auto isJsonFlag = [](const char* arg) { return std::strcmp(arg, "--json") == 0 || std::strcmp(arg, "-j") == 0; };
     auto isHelpFlag = [](const char* arg) { return std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0; };
+
+    // Not an IpcCommandSpec: the reply is a stream, not one response, so it has its own client path.
+    if (std::strcmp(argv[1], "subscribe") == 0) {
+      std::vector<std::string> events;
+      for (int i = 2; i < argc; ++i) {
+        if (isHelpFlag(argv[i])) {
+          printHelp(stdout);
+          return EXIT_SUCCESS;
+        }
+        // Comma-separated or repeated arguments, so `subscribe workspaces,windows` and `subscribe workspaces windows`
+        // both work.
+        std::string_view arg{argv[i]};
+        while (!arg.empty()) {
+          const size_t comma = arg.find(',');
+          std::string_view name = arg.substr(0, comma);
+          if (!name.empty()) {
+            events.emplace_back(name);
+          }
+          if (comma == std::string_view::npos) {
+            break;
+          }
+          arg.remove_prefix(comma + 1);
+        }
+      }
+      if (events.empty()) {
+        std::println(stderr, "error: subscribe requires at least one event");
+        printHelp(stderr);
+        return EXIT_FAILURE;
+      }
+      return umbriel::runIpcSubscribe(events);
+    }
 
     if (const auto* spec = umbriel::findIpcCommand(argv[1])) {
       if (!spec->takesArg) {

@@ -1212,6 +1212,24 @@ namespace umbriel {
     }
   }
 
+  void Server::scheduleIpcWorkspacesEvent() {
+    if (m_ipc == nullptr || m_ipcWorkspacesIdle != nullptr) {
+      return;
+    }
+    m_ipcWorkspacesIdle = wl_event_loop_add_idle(wl_display_get_event_loop(m_display), onIpcWorkspacesIdle, this);
+    if (m_ipcWorkspacesIdle == nullptr) {
+      kLog.error("failed to register IPC workspaces idle source");
+    }
+  }
+
+  void Server::onIpcWorkspacesIdle(void* data) {
+    auto* server = static_cast<Server*>(data);
+    server->m_ipcWorkspacesIdle = nullptr;
+    if (server->m_ipc != nullptr) {
+      server->m_ipc->notifyWorkspacesChanged();
+    }
+  }
+
   void Server::addPointer(wlr_input_device* device) {
     auto pointer = std::make_unique<PointerDevice>();
     pointer->server = this;

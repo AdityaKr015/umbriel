@@ -165,6 +165,123 @@ if ! grep -F "* HEADLESS-1: 1 [dwindle] (focused)" <<< "$workspace_human" > /dev
 fi
 "$UMBRIEL" msg workspace-set-layout:scrolling > /dev/null
 
+# The workspaces event family carries the layout mode, which no Wayland protocol exposes, so a bar follows
+# workspace-set-layout by subscribing instead of polling.
+python3 - "$UMBRIEL_SOCKET" "$UMBRIEL" <<'PY'
+import json
+import selectors
+import socket
+import subprocess
+import sys
+import time
+
+socket_path, umbriel = sys.argv[1:]
+
+
+def connect():
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.connect(socket_path)
+    return client
+
+
+def read_one(client, buf):
+    client.settimeout(5)
+    while b"\n" not in buf:
+        chunk = client.recv(4096)
+        if not chunk:
+            return None, buf
+        buf += chunk
+    line, buf = buf.split(b"\n", 1)
+    return line, buf
+
+
+def action(*args):
+    subprocess.run([umbriel, "msg", *args], check=True, capture_output=True, text=True, timeout=5)
+
+
+def focused_layout(payload):
+    focused = [ws for ws in payload["data"] if ws["focused"]]
+    return focused[0]["layout"] if focused else None
+
+
+sub = connect()
+sub.sendall(b'{"cmd":"subscribe","events":["workspaces"]}\n')
+buf = b""
+line, buf = read_one(sub, buf)
+if line is None:
+    raise SystemExit("subscribing to workspaces delivered no initial state")
+initial = json.loads(line)
+if initial.get("event") != "workspaces" or not isinstance(initial.get("data"), list) or not initial["data"]:
+    raise SystemExit(f"initial workspaces event has the wrong shape: {line!r}")
+for key in ("id", "name", "index", "output", "active", "focused", "layout"):
+    if key not in initial["data"][0]:
+        raise SystemExit(f"workspaces event entry lacks '{key}': {initial['data'][0]}")
+if focused_layout(initial) != "scrolling":
+    raise SystemExit(f"initial workspaces event does not report the active layout: {initial['data']}")
+
+# A runtime layout switch must be pushed, and the pushed payload must be the effective mode.
+action("workspace-set-layout:master")
+pushed = None
+deadline = time.monotonic() + 5
+while time.monotonic() < deadline:
+    line, buf = read_one(sub, buf)
+    if line is None:
+        break
+    parsed = json.loads(line)
+    if parsed.get("event") == "workspaces" and focused_layout(parsed) == "master":
+        pushed = parsed
+        break
+if pushed is None:
+    raise SystemExit("workspace-set-layout did not push a workspaces event")
+sub.close()
+action("workspace-set-layout:scrolling")
+
+# The CLI verb relays the same stream, one flushed line per event, so a script can read it live.
+stream = subprocess.Popen(
+    [umbriel, "subscribe", "workspaces"],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+)
+selector = selectors.DefaultSelector()
+selector.register(stream.stdout, selectors.EVENT_READ)
+
+
+def relayed_line(seconds=5):
+    return stream.stdout.readline() if selector.select(seconds) else ""
+
+
+try:
+    first = relayed_line()
+    if not first.strip():
+        raise SystemExit("umbriel subscribe printed no initial line")
+    if json.loads(first).get("event") != "workspaces":
+        raise SystemExit(f"umbriel subscribe printed a foreign line: {first!r}")
+    action("workspace-set-layout:dwindle")
+    relayed = None
+    for _ in range(10):
+        line = relayed_line()
+        if not line.strip():
+            break
+        if focused_layout(json.loads(line)) == "dwindle":
+            relayed = line
+            break
+    if relayed is None:
+        raise SystemExit("umbriel subscribe did not relay the pushed event")
+finally:
+    selector.close()
+    stream.terminate()
+    stream.wait(timeout=5)
+action("workspace-set-layout:scrolling")
+
+# An unknown family is rejected by name, and the client exits instead of waiting on a stream that will never open.
+rejected = subprocess.run([umbriel, "subscribe", "definitely-not-an-event"], capture_output=True, text=True, timeout=5)
+if rejected.returncode == 0:
+    raise SystemExit("umbriel subscribe accepted an unknown event")
+if "unknown subscription event: definitely-not-an-event" not in rejected.stderr:
+    raise SystemExit(f"umbriel subscribe did not name the unknown event: {rejected.stderr!r}")
+PY
+
 submap=$("$UMBRIEL" submap --json)
 if ! jq -e '. == null' <<< "$submap" > /dev/null; then
   echo "submap --json did not report the default context: $submap"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -23,6 +24,14 @@ namespace umbriel {
       kEventOverview = 1 << 1,
       kEventKeyboardLayout = 1 << 2,
       kEventWindows = 1 << 3,
+      kEventWorkspaces = 1 << 4,
+    };
+    // Number of bits above; sizes the last-broadcast cache.
+    static constexpr size_t kEventCount = 5;
+    // Subscribable names in bit order: the subscribe handler matches against this table and `umbriel subscribe`
+    // lists it, so a new family cannot be accepted by one and unknown to the other.
+    static constexpr std::array<std::string_view, kEventCount> kEventNames = {
+        "theme", "overview", "keyboard_layout", "windows", "workspaces"
     };
 
     Ipc(Server& server, const std::string& waylandSocketName);
@@ -35,6 +44,7 @@ namespace umbriel {
     void notifyOverviewChanged();
     void notifyKeyboardLayoutChanged();
     void notifyWindowsChanged();
+    void notifyWorkspacesChanged();
 
   private:
     struct Connection {
@@ -68,6 +78,10 @@ namespace umbriel {
     int m_listenFd = -1;
     wl_event_source* m_eventSource = nullptr;
     std::vector<std::unique_ptr<Connection>> m_connections;
+    // Last payload broadcast per family, indexed by the bit position of the event. A family that recomputes to the
+    // same JSON is dropped rather than woken through to every subscriber; a fresh subscriber gets its own initial
+    // line from the subscribe handler, so skipping a no-op broadcast can never leave anyone behind.
+    std::array<std::string, kEventCount> m_lastBroadcast;
   };
 
 } // namespace umbriel

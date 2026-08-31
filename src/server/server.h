@@ -262,6 +262,9 @@ namespace umbriel {
     // Coalesced windows-event notification: at most one idle callback per frame
     // regardless of how many window-list-relevant changes happened.
     void scheduleIpcWindowsEvent();
+    // Same coalescing for the workspace list: layout mode, activation, names and membership all land in one payload,
+    // so a switch that renames, reindexes and reactivates emits once.
+    void scheduleIpcWorkspacesEvent();
 
     // Focus lives in FocusManager; these forward so call sites that already
     // hold a Server do not need a second reference.
@@ -379,6 +382,7 @@ namespace umbriel {
     static int onBackgroundFrameTimer(void* data);
     static int onTerminateSignal(int signal, void* data);
     static void onIpcWindowsIdle(void* data);
+    static void onIpcWorkspacesIdle(void* data);
     static void onDisplacedRestoreIdle(void* data);
 
     void trackActivationToken(wlr_xdg_activation_token_v1* token, bool compositorIssued);
@@ -579,6 +583,7 @@ namespace umbriel {
     // Non-null while a windows-event idle callback is pending. The idle source
     // removes itself when it runs, so a non-null pointer means "already queued".
     wl_event_source* m_ipcWindowsIdle = nullptr;
+    wl_event_source* m_ipcWorkspacesIdle = nullptr;
     wl_event_source* m_displacedRestoreIdle = nullptr;
     struct DisplacedWorkspaceSelection {
       std::string outputName;

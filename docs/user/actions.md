@@ -1,7 +1,9 @@
 # Actions
 
 Assign actions to keybinds or invoke them through `umbriel msg`; this reference
-lists every available action. See [Keybinds](keybinds.md) for binding syntax.
+lists every available action. See [Keybinds](keybinds.md) for binding syntax and
+[IPC](ipc.md) for the socket behind `umbriel msg`, including the event stream
+that reports what an action changed.
 
 ## Parameterized actions
 

@@ -26,7 +26,8 @@ xdg-desktop-portal backend for Umbriel.
 - Keyboard, pointer, touch, touchpad gestures, XKB configuration, and text-input-v3/input-method-v2 input method support
 - Layer shell, session locking, clipboard management, screen capture, output control, and gamma control
 - X11 application support through xwayland-satellite
-- Live-reloaded TOML configuration with diagnostics and includes, plus local IPC and runtime inspection commands
+- Live-reloaded TOML configuration with diagnostics and includes, plus [local IPC](ipc.md) with an event stream and
+  runtime inspection commands
 
 ## Configuration
 

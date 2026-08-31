@@ -228,8 +228,12 @@ packaged configuration. Home Manager also accepts a raw TOML string or a path. T
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, naming conventions, the dependency stack, and debugging
-helpers. Umbriel shares its conventions with [noctalia](https://github.com/noctalia-dev/noctalia). For general help
-and design discussion, join the community on [Discord](https://discord.noctalia.dev).
+helpers, and [SCOPE.md](SCOPE.md) for what the project takes on and what it declines. Umbriel shares its conventions
+with [noctalia](https://github.com/noctalia-dev/noctalia). For general help and design discussion, join the community
+on [Discord](https://discord.noctalia.dev).
+
+Bug reports are always welcome. Feature requests are read against [SCOPE.md](SCOPE.md), so please skim it before
+opening one, and ask on Discord if you are unsure whether an idea fits.
 
 ## License
 

@@ -47,6 +47,7 @@
 ## Checklist
 
 - [ ] This PR is ready for review, or it is marked as Draft.
+- [ ] This change fits `SCOPE.md`, or its scope was agreed in an issue or on Discord first.
 - [ ] I read and followed the relevant guidance in `CONTRIBUTING.md`.
 - [ ] I initialized and updated the SceneFX submodule where required.
 - [ ] I ran `just format`, or this PR has no C++ changes.

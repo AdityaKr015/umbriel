@@ -5,7 +5,9 @@ This file collects contributor-facing details for Umbriel: design goals, stack n
 and debugging helpers. Umbriel shares its conventions with [noctalia](https://github.com/noctalia-dev/noctalia):
 same team, same style. If in doubt, match what noctalia does.
 
-For dependencies and normal build commands, start with [README.md](README.md).
+For dependencies and normal build commands, start with [README.md](README.md). For what the project accepts and
+declines, read [SCOPE.md](SCOPE.md): it is the reference used when triaging feature requests and unsolicited pull
+requests.
 
 ## Design Principles
 

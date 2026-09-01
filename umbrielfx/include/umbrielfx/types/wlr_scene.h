@@ -340,8 +340,6 @@ struct wlr_scene_output {
 		struct wlr_color_transform *prev_gamma_lut_color_transform;
 		struct wlr_color_transform *prev_supplied_color_transform;
 		struct wlr_color_transform *combined_color_transform;
-		float sdr_white_level;
-		bool color_transform_dirty;
 
 		struct wl_listener output_commit;
 		struct wl_listener output_damage;
@@ -356,6 +354,13 @@ struct wlr_scene_output {
 		struct wlr_drm_syncobj_timeline *out_timeline;
 		uint64_t out_point;
 
+		// Fields Umbriel adds must stay after every wlroots field so this
+		// struct remains a strict prefix extension of wlroots'. The scene
+		// helpers Umbriel reuses from wlroots (wlr_scene_attach_output_layout,
+		// wlr_scene_output_layout_add_output) read this struct at wlroots
+		// offsets.
+		float sdr_white_level;
+		bool color_transform_dirty;
 		bool direct_scanout_enabled;
 	} WLR_PRIVATE;
 };

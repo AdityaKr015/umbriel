@@ -13,7 +13,7 @@ Umbriel's scene graph and GLES2 renderer, a hard fork of
 | `render/fx_renderer/`   | GLES2 renderer, render passes, shaders            |
 | `types/`                | Scene graph, output helpers, blur and clip state   |
 | `util/`                 | Helpers shared inside the library                  |
-| `tests/`                | Color transform regressions                        |
+| `tests/`                | Color transform and scene ABI regressions          |
 
 ## Building
 
@@ -33,8 +33,14 @@ meson test -C build --suite umbrielfx
   reach the compositor's C++23 translation units.
 - Shaders are embedded as generated char arrays, so an installed binary never
   locates shader data files at runtime.
-- Exports `wlr_scene_*`, `wlr_egl_*`, `wlr_color_*`, and `wlr_matrix_*` names
-  that collide with `libwlroots`. Do not add another wlroots-shadowing symbol.
+- Replaces wlroots' scene graph but reuses the scene helpers it does not
+  reimplement (`wlr_scene_xdg_surface_create`, `wlr_scene_subsurface_tree_create`,
+  `wlr_scene_layer_surface_v1_create`, `wlr_scene_drag_icon_create`,
+  `wlr_scene_attach_output_layout`, `wlr_scene_output_layout_add_output`). Those
+  resolve to `libwlroots` and read these structs at wlroots' field offsets, so
+  every struct in `types/wlr_scene.h` that wlroots also declares must stay a
+  strict prefix extension: fields Umbriel adds go after every wlroots field.
+  `tests/abi.c` enforces this.
 
 ## License
 

@@ -194,6 +194,12 @@ target and never reach the compositor's C++23 units. Public headers are `umbriel
 live in `umbrielfx/internal/` and stay off the compositor's include path. See
 [`umbrielfx/README.md`](umbrielfx/README.md).
 
+It replaces wlroots' scene graph but reuses the scene helpers it does not reimplement, such as
+`wlr_scene_xdg_surface_create` and `wlr_scene_attach_output_layout`. Those resolve to `libwlroots` and read
+umbrielfx's structs at wlroots' field offsets, so a struct in `types/wlr_scene.h` that wlroots also declares must stay
+a strict prefix extension: new fields go after every wlroots field. `umbrielfx/tests/abi.c` fails the build's test
+suite if that slips.
+
 Its regressions run in their own suite:
 
 ```sh

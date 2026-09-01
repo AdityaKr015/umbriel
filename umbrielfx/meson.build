@@ -195,3 +195,27 @@ foreach case_name : [
     suite: 'umbrielfx',
   )
 endforeach
+
+# The compositor calls scene helpers umbrielfx does not reimplement, so they
+# resolve to libwlroots and read umbrielfx's structs at wlroots' field offsets.
+# One source, built against each header, proves the offsets still agree.
+umbrielfx_abi_probes = []
+foreach probe : [
+  ['wlroots', '<wlr/types/wlr_scene.h>', [wlroots_dep]],
+  ['umbrielfx', '<umbrielfx/types/wlr_scene.h>', [wlroots_dep, umbrielfx_dep]],
+]
+  umbrielfx_abi_probes += executable(
+    'umbrielfx-abi-probe-' + probe[0],
+    'tests/abi.c',
+    c_args: umbrielfx_c_args + ['-DABI_PROBE_HEADER=' + probe[1]],
+    dependencies: probe[2],
+    build_by_default: false,
+  )
+endforeach
+
+test(
+  'umbrielfx-scene-abi',
+  find_program('tests/abi_compare.sh', native: true),
+  args: umbrielfx_abi_probes,
+  suite: 'umbrielfx',
+)

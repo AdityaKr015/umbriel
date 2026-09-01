@@ -15,10 +15,6 @@ add_project_arguments(
   '-DWLR_USE_UNSTABLE',
   language: 'cpp',
 )
-add_project_arguments(
-  '-DUMBRIEL_VERSION="' + meson.project_version() + '"',
-  language: 'cpp',
-)
 git_program = find_program('git', required: false)
 if git_program.found()
   umbriel_git_revision_h = vcs_tag(
@@ -526,10 +522,14 @@ umbriel_core_dep = declare_dependency(
   dependencies: umbriel_core_deps,
 )
 
+# build_info.cpp is the only unit compiled against the generated revision header
+# and the version define, and it stays out of umbriel_core so a new commit
+# rebuilds one small object and relinks the compositor instead of the library
+# every test links.
 umbriel = executable(
   'umbriel',
-  ['src/main.cpp', umbriel_git_revision_h],
-  cpp_args: jemalloc_cpp_args,
+  ['src/main.cpp', 'src/core/build_info.cpp', umbriel_git_revision_h],
+  cpp_args: jemalloc_cpp_args + ['-DUMBRIEL_VERSION="' + meson.project_version() + '"'],
   dependencies: [umbriel_core_dep] + jemalloc_deps,
   install: true,
 )

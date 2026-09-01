@@ -2,13 +2,13 @@
 #include "cli/outputs.h"
 #include "config/config.h"
 #include "config/config_diag.h"
+#include "core/build_info.h"
 #include "core/fdlimit.h"
 #include "core/log.h"
 #include "scene/cheatsheet_rows.h"
 #include "server/ipc.h"
 #include "server/ipc_commands.h"
 #include "server/server.h"
-#include "umbriel_git_revision.h"
 
 #include <algorithm>
 #include <csignal>
@@ -28,10 +28,6 @@
 #else
 #include <malloc.h>
 #endif
-#endif
-
-#ifndef UMBRIEL_VERSION
-#define UMBRIEL_VERSION "unknown"
 #endif
 
 namespace {
@@ -71,7 +67,7 @@ namespace {
     auto row = [stream](std::string_view lead, std::string_view cmd, std::string_view desc) {
       std::println(stream, "{}umbriel {:<30} {}", lead, cmd, desc);
     };
-    std::println(stream, "umbriel {}: a wayland compositor\n", UMBRIEL_VERSION);
+    std::println(stream, "umbriel {}: a wayland compositor\n", umbriel::build_info::version());
     row("Usage: ", "[-s <command>] [-c <config>]", "run the compositor");
     for (const auto& spec : umbriel::ipcCommands()) {
       std::string cmd{spec.name};
@@ -136,11 +132,11 @@ int main(int argc, char** argv) {
     }
     if (std::strcmp(argv[1], "--version") == 0 || std::strcmp(argv[1], "-v") == 0 || std::strcmp(argv[1], "-V") == 0) {
       constexpr std::string_view unknownRevision = "unknown";
-      const std::string_view revision = UMBRIEL_GIT_REVISION;
+      const std::string_view revision = umbriel::build_info::revision();
       if (!revision.empty() && revision != unknownRevision) {
-        std::println("umbriel {} ({})", UMBRIEL_VERSION, revision);
+        std::println("umbriel {} ({})", umbriel::build_info::version(), revision);
       } else {
-        std::println("umbriel {}", UMBRIEL_VERSION);
+        std::println("umbriel {}", umbriel::build_info::version());
       }
       return EXIT_SUCCESS;
     }
@@ -313,7 +309,7 @@ int main(int argc, char** argv) {
   }
 
   try {
-    kLog.info("starting umbriel version={} commit={}", UMBRIEL_VERSION, UMBRIEL_GIT_REVISION);
+    kLog.info("starting umbriel version={} commit={}", umbriel::build_info::version(), umbriel::build_info::revision());
     umbriel::loadConfig(configPath);
     umbriel::Server server;
 

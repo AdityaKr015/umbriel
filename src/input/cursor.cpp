@@ -1775,10 +1775,10 @@ namespace umbriel {
     if (button != toggleButton) {
       return;
     }
-    m_server->hideInsertHint();
     if (config().input.windowDragToggle == WindowDragToggle::None) {
       return;
     }
+    m_server->hideInsertHint();
 
     if (auto* grab = std::get_if<TiledMoveGrab>(&m_grab)) {
       View* view = grab->view;

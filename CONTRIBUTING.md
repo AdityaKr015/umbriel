@@ -28,7 +28,7 @@ Direct project dependencies. Transitive dependencies are owned by their providin
 | Layer | Library |
 |-------|---------|
 | Compositor framework | `wlroots-0.20` |
-| Scene graph and effects | `umbrielfx` (blur, shadows, rounded corners; vendored in `umbrielfx/`) |
+| Scene graph and effects | `umbrielfx` (blur, shadows, rounded corners; maintained in-tree) |
 | Wayland core | `wayland-server`, `wayland-client`, `wayland-protocols`, `wayland-scanner` |
 | Input | `libinput`, `xkbcommon` |
 | Graphics | `pixman`, `libdrm`, OpenGL via wlroots |
@@ -168,7 +168,7 @@ src/
   config/     TOML parsing, resolution, reloads, and diagnostics
   core/       animation, logging, process, and resource helpers
   cli/        runtime inspection and command-line entry points
-umbrielfx/    vendored scene graph and GLES2 renderer (C, hard fork of SceneFX)
+umbrielfx/    in-tree scene graph and GLES2 renderer (C, hard fork of SceneFX)
 protocols/    vendored Wayland protocol XML
 data/         session desktop entry
 nix/          package and system integration modules

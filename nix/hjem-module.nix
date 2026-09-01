@@ -24,7 +24,7 @@ let
 in
 {
   options.programs.umbriel = {
-    enable = mkEnableOption "Umbriel, a Wayland compositor built on wlroots and SceneFX.";
+    enable = mkEnableOption "Umbriel, a Wayland compositor built on wlroots.";
 
     package = mkOption {
       type = lib.types.nullOr lib.types.package;

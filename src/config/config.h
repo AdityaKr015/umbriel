@@ -131,6 +131,13 @@ namespace umbriel {
     Global,
     Window,
   };
+
+  enum class WindowDragToggle : uint8_t {
+    None,
+    Floating,
+    Pinned,
+  };
+
   enum class HdrMode {
     Off,
     On,
@@ -635,6 +642,7 @@ namespace umbriel {
       // Advertise and accept the primary-selection clipboard used for
       // middle-click paste.
       bool middleClickPaste = true;
+      WindowDragToggle windowDragToggle = WindowDragToggle::Floating;
 
       struct Keyboard {
         // Comma-separated XKB layout list ("us,de"); the first entry is active at startup. `options` carries XKB option

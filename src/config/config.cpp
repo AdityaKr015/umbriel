@@ -79,6 +79,20 @@ namespace umbriel {
       return std::nullopt;
     }
 
+    std::optional<WindowDragToggle> readWindowDragToggle(const toml::node& node) {
+      const auto value = node.value<std::string>();
+      if (value == "none") {
+        return WindowDragToggle::None;
+      }
+      if (value == "floating") {
+        return WindowDragToggle::Floating;
+      }
+      if (value == "pinned") {
+        return WindowDragToggle::Pinned;
+      }
+      return std::nullopt;
+    }
+
     std::optional<HdrMode> readHdrMode(const toml::node& node) {
       const auto value = node.value<std::string>();
       if (value == "off") {
@@ -1171,6 +1185,13 @@ namespace umbriel {
       auto& in = loaded.input;
       root.sub("input", [&](Section& s) {
         s.boolean("middle_click_paste", in.middleClickPaste);
+        if (const toml::node* node = s.take("window_drag_toggle")) {
+          if (const auto value = readWindowDragToggle(*node)) {
+            in.windowDragToggle = *value;
+          } else {
+            warnAt(node->source(), R"(ignoring input.window_drag_toggle (expected "none", "floating", or "pinned"))");
+          }
+        }
         s.sub("keyboard", [&](Section& k) {
           k.text("layout", in.keyboard.layout)
               .text("variant", in.keyboard.variant)

@@ -39,7 +39,7 @@ Every client surface's node was then allocated by wlroots at 456 bytes while
 `umbrielfx` read its own fields at offsets 456-479, past the end of the
 allocation. `luminance_multiplier` read back as zero, `tex.frag` multiplies RGB
 by it, and **every surface rendered pure black with correct geometry, alpha and
-borders** — borders are `umbrielfx`'s own node types, which `umbrielfx`
+borders**: borders are `umbrielfx`'s own node types, which `umbrielfx`
 allocates. `linked_node_destroy(&scene_buffer->blur)` in `umbrielfx`'s
 `wlr_scene_node_destroy` never ran either, because a borrowed helper tearing a
 node down called wlroots' destroy, so blur lists kept entries into freed memory.
@@ -89,5 +89,5 @@ helper from corrupting memory before the guard is consulted.
 This is not specific to Umbriel. Upstream SceneFX ships the same six helpers as
 wlroots' and appends `corners` and `blur` to `wlr_scene_buffer`, so any
 compositor on it that links a Debian or Ubuntu `libwlroots` has the same
-out-of-bounds access — with different symptoms, since it has no
+out-of-bounds access, with different symptoms, since it has no
 `luminance_multiplier` to zero.

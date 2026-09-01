@@ -4,7 +4,7 @@
 # names stay on the focused output, qualified selectors address one group, and bad targets report useful errors.
 set -euo pipefail
 
-readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/workspace-client}"
+readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/tests/workspace-client}"
 readonly BASELINE="$(< "$UMBRIEL_CONFIG")"
 
 accepts() {

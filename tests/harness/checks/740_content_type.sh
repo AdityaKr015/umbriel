@@ -4,7 +4,7 @@
 # must refresh dynamic rules without replaying one-shot opening behavior.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/content-type-client.log"
 readonly CONTROL_FIFO="$UMBRIEL_RUNTIME_DIR/content-type-control"
 readonly BEFORE_SHOT="$UMBRIEL_RUNTIME_DIR/content-type-before.png"

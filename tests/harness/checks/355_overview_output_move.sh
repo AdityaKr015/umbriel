@@ -4,8 +4,8 @@
 # into the destination output tree. IPC geometry alone cannot see a stale card.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
-readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/pointer-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
+readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/tests/pointer-client}"
 readonly SOURCE_SHOT="$UMBRIEL_RUNTIME_DIR/overview-output-source.png"
 readonly TARGET_SHOT="$UMBRIEL_RUNTIME_DIR/overview-output-target.png"
 

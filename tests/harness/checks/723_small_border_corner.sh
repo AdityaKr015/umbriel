@@ -4,7 +4,7 @@
 # Positive inner contours stay rounded, while zero preserves a square corner.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/small-border-client.log"
 readonly SCREENSHOT="$UMBRIEL_RUNTIME_DIR/small-border.png"
 readonly TOTAL_WIDTH=9

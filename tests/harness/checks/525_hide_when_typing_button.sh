@@ -7,7 +7,7 @@ set -euo pipefail
 readonly OUTPUT_W=1280
 readonly OUTPUT_H=720
 readonly LEFT_BUTTON=272
-readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/pointer-client}"
+readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/tests/pointer-client}"
 readonly POINTER_LOG="$UMBRIEL_RUNTIME_DIR/hide-typing-pointer.log"
 readonly BEFORE="$UMBRIEL_RUNTIME_DIR/hide-typing-before.png"
 readonly AFTER="$UMBRIEL_RUNTIME_DIR/hide-typing-after.png"

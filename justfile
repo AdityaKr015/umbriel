@@ -11,7 +11,7 @@ default:
 configure m=mode install_prefix=prefix:
     #!/usr/bin/env bash
     set -euo pipefail
-    args=(-Dcpp_std={{cpp-std}} --prefix "{{install_prefix}}")
+    args=(-Dcpp_std={{cpp-std}} -Dtests=enabled --prefix "{{install_prefix}}")
     case "{{m}}" in
       release)
         args+=(--buildtype=release -Db_lto=true)
@@ -24,7 +24,10 @@ configure m=mode install_prefix=prefix:
         ;;
     esac
     if [[ -d "build-{{m}}" ]]; then
-        meson setup "build-{{m}}" "${args[@]}" --reconfigure
+        # A build directory rejects an option added since it was configured
+        # until Meson re-reads the option file, so regenerate and try again.
+        meson setup "build-{{m}}" "${args[@]}" --reconfigure \
+          || { meson setup "build-{{m}}" --reconfigure && meson setup "build-{{m}}" "${args[@]}" --reconfigure; }
     else
         meson setup "build-{{m}}" "${args[@]}"
     fi

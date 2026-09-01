@@ -6,8 +6,8 @@
 # from already mapped workspaces.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_FRACTIONAL_CLIENT:-./build-debug/fractional-client}"
-readonly LAYER_CLIENT="${UMBRIEL_LAYER_CLIENT:-./build-debug/layer-client}"
+readonly CLIENT="${UMBRIEL_FRACTIONAL_CLIENT:-./build-debug/tests/fractional-client}"
+readonly LAYER_CLIENT="${UMBRIEL_LAYER_CLIENT:-./build-debug/tests/layer-client}"
 readonly BASE_CONFIG="$UMBRIEL_RUNTIME_DIR/layout-struts-base.toml"
 readonly PANEL_LOG="$UMBRIEL_RUNTIME_DIR/layout-struts-panel.log"
 readonly SCREENSHOT="$UMBRIEL_RUNTIME_DIR/layout-struts.png"

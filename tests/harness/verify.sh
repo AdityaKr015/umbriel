@@ -98,22 +98,24 @@ fi
 BINARY=$(realpath "$BINARY")
 BINARY_DIR=$(dirname "$BINARY")
 
-# Checks use helper clients built alongside the selected compositor. Keeping
-# this resolution here makes every build mode consistent without each recipe
-# having to export a matching set of paths.
-export UMBRIEL_POINTER_CLIENT="$BINARY_DIR/pointer-client"
-export UMBRIEL_INPUT_METHOD_CLIENT="$BINARY_DIR/input-method-client"
-export UMBRIEL_DRAG_CLIENT="$BINARY_DIR/drag-client"
-export UMBRIEL_LAYER_CLIENT="$BINARY_DIR/layer-client"
-export UMBRIEL_GLOBAL_CLIENT="$BINARY_DIR/global-client"
-export UMBRIEL_WORKSPACE_CLIENT="$BINARY_DIR/workspace-client"
-export UMBRIEL_FOREIGN_TOPLEVEL_CLIENT="$BINARY_DIR/foreign-toplevel-client"
-export UMBRIEL_UNMAP_CLIENT="$BINARY_DIR/unmap-client"
-export UMBRIEL_POPUP_CLIENT="$BINARY_DIR/popup-client"
-export UMBRIEL_IDLE_INHIBIT_CLIENT="$BINARY_DIR/idle-inhibit-client"
-export UMBRIEL_SUBSURFACE_CLIENT="$BINARY_DIR/subsurface-client"
-export UMBRIEL_FRACTIONAL_CLIENT="$BINARY_DIR/fractional-client"
-export UMBRIEL_SECURITY_CONTEXT_CLIENT="$BINARY_DIR/security-context-client"
+# Checks use helper clients built alongside the selected compositor. They land in
+# the build directory's `tests` subdir, where their Meson definitions live.
+# Keeping this resolution here makes every build mode consistent without each
+# recipe having to export a matching set of paths.
+CLIENT_DIR=$BINARY_DIR/tests
+export UMBRIEL_POINTER_CLIENT="$CLIENT_DIR/pointer-client"
+export UMBRIEL_INPUT_METHOD_CLIENT="$CLIENT_DIR/input-method-client"
+export UMBRIEL_DRAG_CLIENT="$CLIENT_DIR/drag-client"
+export UMBRIEL_LAYER_CLIENT="$CLIENT_DIR/layer-client"
+export UMBRIEL_GLOBAL_CLIENT="$CLIENT_DIR/global-client"
+export UMBRIEL_WORKSPACE_CLIENT="$CLIENT_DIR/workspace-client"
+export UMBRIEL_FOREIGN_TOPLEVEL_CLIENT="$CLIENT_DIR/foreign-toplevel-client"
+export UMBRIEL_UNMAP_CLIENT="$CLIENT_DIR/unmap-client"
+export UMBRIEL_POPUP_CLIENT="$CLIENT_DIR/popup-client"
+export UMBRIEL_IDLE_INHIBIT_CLIENT="$CLIENT_DIR/idle-inhibit-client"
+export UMBRIEL_SUBSURFACE_CLIENT="$CLIENT_DIR/subsurface-client"
+export UMBRIEL_FRACTIONAL_CLIENT="$CLIENT_DIR/fractional-client"
+export UMBRIEL_SECURITY_CONTEXT_CLIENT="$CLIENT_DIR/security-context-client"
 export UMBRIEL=$BINARY
 
 # Live instance state. The EXIT trap reaches for these, so they stay declared

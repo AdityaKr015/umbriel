@@ -3,7 +3,7 @@
 # overview restores the same pinned window, and switching workspaces afterwards proves that its pinned state survived.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/overview-pinned-client.log"
 readonly BEFORE="$UMBRIEL_RUNTIME_DIR/overview-pinned-before.png"
 readonly OPEN="$UMBRIEL_RUNTIME_DIR/overview-pinned-open.png"

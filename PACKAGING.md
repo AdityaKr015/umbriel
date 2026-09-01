@@ -32,18 +32,29 @@ Ninja, with `pkg-config` and `wayland-scanner` needed during configuration.
 
 A source tarball or `git archive` of a tag is complete.
 
-Configure, build, test, and install with the intended final prefix:
+Configure, build, and install with the intended final prefix:
 
 ```sh
 meson setup build --buildtype=release --prefix=/usr
 meson compile -C build
-meson test -C build
 meson install -C build
 ```
 
 The configured data directory is compiled into Umbriel so it can locate the
 packaged default configuration. Do not configure with one prefix and relocate
 the installed files to another prefix.
+
+The `tests` feature option defaults to `auto`, which defines unit tests, harness
+clients, and umbrielfx checks only for unsanitized debug builds, so the release
+build above compiles nothing but the compositor and its installed data. Pass
+`-Dtests=disabled` to state that intent explicitly, or `-Dtests=enabled` to get
+the suite in a release build:
+
+```sh
+meson setup build --buildtype=release --prefix=/usr -Dtests=enabled
+meson compile -C build
+meson test -C build
+```
 
 `jemalloc` is optional and recommended on glibc. The `jemalloc` Meson feature
 defaults to `auto`. It is skipped on non-glibc systems.

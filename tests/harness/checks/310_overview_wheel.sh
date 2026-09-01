@@ -4,8 +4,8 @@ set -euo pipefail
 
 readonly OUTPUT_W=1280
 readonly OUTPUT_H=720
-readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/pointer-client}"
-readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/workspace-client}"
+readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/tests/pointer-client}"
+readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/tests/workspace-client}"
 
 if [[ ! -x $POINTER ]]; then
   echo "pointer client not built at $POINTER"

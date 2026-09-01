@@ -3,7 +3,7 @@
 # child surface. Firefox presents its visible content through exactly this path.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/subsurface-client}"
+readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/tests/subsurface-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/subsurface-opacity.log"
 readonly FOCUS_LOG="$UMBRIEL_RUNTIME_DIR/subsurface-focus-target.log"
 readonly SCREENSHOT="$UMBRIEL_RUNTIME_DIR/rule-opacity-subsurface-commit.png"

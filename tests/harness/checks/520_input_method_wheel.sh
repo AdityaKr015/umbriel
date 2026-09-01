@@ -5,9 +5,9 @@ set -euo pipefail
 
 readonly OUTPUT_W=1280
 readonly OUTPUT_H=720
-readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/pointer-client}"
-readonly INPUT_METHOD="${UMBRIEL_INPUT_METHOD_CLIENT:-./build-debug/input-method-client}"
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/tests/pointer-client}"
+readonly INPUT_METHOD="${UMBRIEL_INPUT_METHOD_CLIENT:-./build-debug/tests/input-method-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 readonly INPUT_METHOD_LOG="$UMBRIEL_RUNTIME_DIR/input-method.log"
 readonly POINTER_LOG="$UMBRIEL_RUNTIME_DIR/pointer.log"
 readonly FIRST_LOG="$UMBRIEL_RUNTIME_DIR/input-first.log"

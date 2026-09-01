@@ -4,8 +4,8 @@
 # the same names. Windows must find their way home across that too.
 set -euo pipefail
 
-readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/workspace-client}"
-readonly FOREIGN_TOPLEVEL="${UMBRIEL_FOREIGN_TOPLEVEL_CLIENT:-./build-debug/foreign-toplevel-client}"
+readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/tests/workspace-client}"
+readonly FOREIGN_TOPLEVEL="${UMBRIEL_FOREIGN_TOPLEVEL_CLIENT:-./build-debug/tests/foreign-toplevel-client}"
 
 spawn_client() {
   foot --title="$1" sh -c 'sleep 120' > /dev/null 2>&1 &

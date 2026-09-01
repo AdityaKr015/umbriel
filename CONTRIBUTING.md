@@ -59,6 +59,7 @@ Tests live in three places, and which one a change belongs in follows from what 
 
 ```
 tests/unit/            C++ unit tests, one binary per test, run by `just test`
+tests/meson.build      the unit test table and the harness client targets
 tests/harness/verify.sh the headless compositor harness, run by `just verify`
 tests/harness/checks/   one script per behaviour it asserts
 tests/harness/clients/  Wayland helper clients the checks drive
@@ -67,8 +68,13 @@ tests/harness/clients/  Wayland helper clients the checks drive
 A unit test covers math and pure decisions (layout geometry, config classification, keybind parsing) and never needs a
 compositor. A harness check covers anything that only exists in a running compositor: real clients, real framebuffers,
 seat grabs, live reloads. Every unit test gets `umbriel_pure_dep`, and one that needs compositor code adds
-`umbriel_core_dep` in the third field of the `unit_tests` table in `meson.build`. A test that is not in that table is
-not built and will rot unnoticed.
+`umbriel_core_dep` in the third field of the `unit_tests` table in `tests/meson.build`. A test that is not in that
+table is not built and will rot unnoticed.
+
+Test targets exist only where the `tests` feature option resolves to enabled. `just configure` passes
+`-Dtests=enabled` for every mode, so `just test` and `just verify` work in debug, asan, and release build directories.
+A build directory configured by hand without that option follows `auto`: unsanitized debug builds get the targets, a
+release build gets none. Test binaries land in the build directory's `tests` subdir.
 
 `verify.sh` runs every script in `tests/harness/checks/` against its own dedicated compositor: one contained headless
 instance is booted per check, the check runs in its own process group with `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`

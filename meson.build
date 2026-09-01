@@ -60,6 +60,17 @@ wlroots_dep = dependency('wlroots-0.20', version: ['>=0.20.0', '<0.21.0'])
 cpp = meson.get_compiler('cpp')
 fs = import('fs')
 
+# Unit tests, harness clients, and umbrielfx's checks are defined only when
+# `tests` resolves to enabled. Auto mode covers unsanitized debug builds, so a
+# distribution release build defines no test targets and `meson install` never
+# builds one.
+tests_opt = get_option('tests')
+build_tests = tests_opt.enabled() or (
+  tests_opt.auto()
+  and get_option('buildtype') == 'debug'
+  and get_option('b_sanitize') == 'none'
+)
+
 # jemalloc keeps a long-running compositor's heap compact: fewer arenas and fast page decay bound RSS. It interposes malloc only on glibc, so other libc builds
 # skip it (auto) or fail (enabled).
 jemalloc_option = get_option('jemalloc')
@@ -97,6 +108,14 @@ layer_shell_protocol_h = custom_target(
   input: 'protocols/wlr-layer-shell-unstable-v1.xml',
   output: 'wlr-layer-shell-unstable-v1-protocol.h',
   command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+
+# wlroots' layer-shell header includes the generated header by name, so any
+# target reaching src/wlr.h needs it generated and on its include path. It lands
+# in the build root, which only root-scope targets get for free.
+layer_shell_protocol_dep = declare_dependency(
+  sources: layer_shell_protocol_h,
+  include_directories: include_directories('.'),
 )
 
 # Umbriel's fork of the wlroots scene graph and renderer. No installed package
@@ -393,11 +412,19 @@ pure_sources = files(
   'src/view/floating.cpp',
 )
 
+umbriel_pure_deps = [
+  wlroots_dep,
+  xkbcommon_dep,
+  umbrielfx_dep,
+  tomlplusplus_dep,
+  layer_shell_protocol_dep,
+]
+
 umbriel_pure = static_library(
   'umbriel-pure',
   pure_sources,
   include_directories: include_directories('src'),
-  dependencies: [wlroots_dep, xkbcommon_dep, umbrielfx_dep, tomlplusplus_dep],
+  dependencies: umbriel_pure_deps,
 )
 
 # What a test needs to use the pure layer: the library, the include root, and
@@ -405,7 +432,7 @@ umbriel_pure = static_library(
 umbriel_pure_dep = declare_dependency(
   link_with: umbriel_pure,
   include_directories: include_directories('src'),
-  dependencies: [wlroots_dep, xkbcommon_dep, umbrielfx_dep, tomlplusplus_dep],
+  dependencies: umbriel_pure_deps,
 )
 
 # The compositor itself. main.cpp is deliberately not here: everything lives in a library so a test can link any of it without re-listing or recompiling sources,
@@ -475,12 +502,12 @@ umbriel_core_deps = [
   pangocairo_dep,
   libdrm_dep,
   nlohmann_json_dep,
+  layer_shell_protocol_dep,
 ]
 
 umbriel_core = static_library(
   'umbriel-core',
   core_sources + [
-    layer_shell_protocol_h,
     output_mgmt_client_h,
     output_mgmt_client_c,
     color_management_server_h,
@@ -507,244 +534,12 @@ umbriel = executable(
   install: true,
 )
 
-# Unit tests. Each entry is [name, test sources, extra dependencies]. Every test gets umbriel_pure_dep; add umbriel_core_dep to the third field for a test that
-# needs compositor code. Either way a test never lists or recompiles a source.
-unit_tests = [
-  ['presented-crop', ['tests/unit/presented_crop.cpp'], []],
-  ['scene-node', ['tests/unit/scene_node.cpp'], []],
-  ['scene-clip', ['tests/unit/scene_clip.cpp'], [wayland_server_dep]],
-  ['presentation', ['tests/unit/presentation.cpp'], [umbriel_core_dep]],
-  ['animation', ['tests/unit/animation.cpp'], [umbriel_core_dep]],
-  ['window-opacity-blur', ['tests/unit/window_opacity_blur.cpp'], [umbriel_core_dep]],
-  ['value-parse', ['tests/unit/value_parse.cpp'], []],
-  ['keybind-parse', ['tests/unit/keybind_parse.cpp'], []],
-  ['modifier-tap', ['tests/unit/modifier_tap.cpp'], []],
-  ['keyboard-layout', ['tests/unit/keyboard_layout.cpp'], []],
-  ['surface-layouts', ['tests/unit/surface_layouts.cpp'], []],
-  ['shortcut-keysym', ['tests/unit/shortcut_keysym.cpp'], []],
-  ['output-direction', ['tests/unit/output_direction.cpp'], []],
-  ['output-identity', ['tests/unit/output_identity.cpp'], []],
-  ['output-frame-schedule', ['tests/unit/output_frame_schedule.cpp'], []],
-  ['hdr-format', ['tests/unit/hdr_format.cpp'], []],
-  ['layout-struts', ['tests/unit/layout_struts.cpp'], []],
-  ['scrolling-layout', ['tests/unit/scrolling_layout.cpp'], []],
-  ['dwindle-layout', ['tests/unit/dwindle_layout.cpp'], []],
-  ['master-layout', ['tests/unit/master_layout.cpp'], []],
-  ['cheatsheet-rows', ['tests/unit/cheatsheet_rows.cpp'], []],
-  ['shortcut-labels', ['tests/unit/shortcut_labels.cpp'], []],
-  ['border-ring', ['tests/unit/border_ring.cpp'], []],
-  ['floating', ['tests/unit/floating.cpp'], []],
-  ['preset-cycle', ['tests/unit/preset_cycle.cpp'], []],
-  ['maximize', ['tests/unit/maximize.cpp'], []],
-  ['deferred-unfullscreen', ['tests/unit/deferred_unfullscreen.cpp'], []],
-  ['config-section', ['tests/unit/config_section.cpp'], []],
-  ['config-change', ['tests/unit/config_change.cpp'], []],
-  ['config-load', ['tests/unit/config_load.cpp'], [umbriel_core_dep]],
-  ['config-watcher', ['tests/unit/config_watcher.cpp'], [umbriel_core_dep]],
-  ['action-registry', ['tests/unit/action_registry.cpp'], [umbriel_core_dep]],
-  ['ipc-commands', ['tests/unit/ipc_commands.cpp'], [umbriel_core_dep]],
-  ['config-resolve', ['tests/unit/config_resolve.cpp'], []],
-  # Reads docs/user/actions.md from the source tree: the doc's tables are generated from the same spec strings the CLI
-  # prints, so the compiled table and the page cannot drift apart unnoticed.
-  [
-    'docs-actions',
-    ['tests/unit/docs_actions.cpp'],
-    [],
-    ['-DUMBRIEL_DOCS_ACTIONS_MD="' + meson.current_source_dir() / 'docs/user/actions.md' + '"'],
-  ],
-]
-
-# Harness helper, not a unit test: drives virtual pointer and modifier input against a running compositor. The headless backend has no input devices, so protocol
-# input is the only way to exercise pointer hit-testing and grabs.
-pointer_client = executable(
-  'pointer-client',
-  [
-    'tests/harness/clients/pointer_client.cpp',
-    virtual_pointer_client_h,
-    virtual_pointer_client_c,
-    virtual_keyboard_client_h,
-    virtual_keyboard_client_c,
-  ],
-  dependencies: [wayland_client_dep, xkbcommon_dep],
-)
-
-# Harness helper that reproduces the keyboard ownership of a real input method.
-input_method_client = executable(
-  'input-method-client',
-  [
-    'tests/harness/clients/input_method_client.cpp',
-    input_method_client_h,
-    input_method_client_c,
-    virtual_keyboard_client_h,
-    virtual_keyboard_client_c,
-  ],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that owns a mapped surface and initiates a data-device drag.
-drag_client = executable(
-  'drag-client',
-  ['tests/harness/clients/drag_client.cpp', layer_shell_client_h, layer_shell_client_c, xdg_shell_client_c],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that reserves an exclusive zone on a named output. Output
-# restoration checks use it to reproduce a panel returning after windows do.
-layer_client = executable(
-  'layer-client',
-  ['tests/harness/clients/layer_client.cpp', layer_shell_client_h, layer_shell_client_c, xdg_shell_client_c],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that checks whether a Wayland global is visible to a newly
-# connected client.
-global_client = executable(
-  'global-client',
-  [
-    'tests/harness/clients/global_client.cpp',
-    xdg_shell_client_h,
-    xdg_shell_client_c,
-    xdg_decoration_client_h,
-    xdg_decoration_client_c,
-  ],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that reports the active workspace through ext-workspace-v1.
-workspace_client = executable(
-  'workspace-client',
-  ['tests/harness/clients/workspace_client.cpp', ext_workspace_client_h, ext_workspace_client_c],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that checks the output membership advertised for a foreign
-# toplevel, including while its workspace is inactive.
-foreign_toplevel_client = executable(
-  'foreign-toplevel-client',
-  [
-    'tests/harness/clients/foreign_toplevel_client.cpp',
-    foreign_toplevel_client_h,
-    foreign_toplevel_client_c,
-  ],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that unmaps its toplevel on a close request without destroying
-# it, so the compositor keeps the View registered but unmapped.
-unmap_client = executable(
-  'unmap-client',
-  [
-    'tests/harness/clients/unmap_client.cpp',
-    xdg_shell_client_h,
-    xdg_shell_client_c,
-    xdg_activation_client_h,
-    xdg_activation_client_c,
-    xdg_toplevel_tag_client_h,
-    xdg_toplevel_tag_client_c,
-    content_type_client_h,
-    content_type_client_c,
-    color_management_client_h,
-    color_management_client_c,
-    tearing_control_client_h,
-    tearing_control_client_c,
-  ],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that creates a grabbed XDG popup and reports its dismissal.
-popup_client = executable(
-  'popup-client',
-  ['tests/harness/clients/popup_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
-  dependencies: [wayland_client_dep],
-)
-
-
-# Harness helper whose whole content is drawn by a full-window desynchronized
-# wl_subsurface, the way Firefox presents its chrome and web content.
-subsurface_client = executable(
-  'subsurface-client',
-  ['tests/harness/clients/subsurface_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that renders one buffer at the preferred fractional scale and
-# publishes its logical size through wp_viewporter, the way a fractional-scale
-# aware toolkit does.
-fractional_client = executable(
-  'fractional-client',
-  [
-    'tests/harness/clients/fractional_client.cpp',
-    xdg_shell_client_h,
-    xdg_shell_client_c,
-    viewporter_client_h,
-    viewporter_client_c,
-    fractional_scale_client_h,
-    fractional_scale_client_c,
-  ],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness helper that keeps an idle inhibitor attached to a mapped toplevel and
-# reports when the compositor starts honoring its idle notification.
-idle_inhibit_client = executable(
-  'idle-inhibit-client',
-  [
-    'tests/harness/clients/idle_inhibit_client.cpp',
-    xdg_shell_client_h,
-    xdg_shell_client_c,
-    idle_inhibit_client_h,
-    idle_inhibit_client_c,
-    ext_idle_notify_client_h,
-    ext_idle_notify_client_c,
-  ],
-  dependencies: [wayland_client_dep],
-)
-
-# Harness wrapper that runs another Wayland client through a committed
-# security-context listener.
-security_context_client = executable(
-  'security-context-client',
-  [
-    'tests/harness/clients/security_context_client.cpp',
-    security_context_client_h,
-    security_context_client_c,
-  ],
-  dependencies: [wayland_client_dep],
-)
-
-alias_target(
-  'harness-clients',
-  pointer_client,
-  input_method_client,
-  drag_client,
-  layer_client,
-  global_client,
-  workspace_client,
-  foreign_toplevel_client,
-  unmap_client,
-  popup_client,
-  subsurface_client,
-  fractional_client,
-  idle_inhibit_client,
-  security_context_client,
-)
-
-unit_test_targets = []
-foreach unit_test : unit_tests
-  # Optional fourth element: compile args for tests that need a path or flag baked in.
-  unit_test_args = unit_test.length() > 3 ? unit_test[3] : []
-  test_exe = executable(
-    unit_test[0] + '-test',
-    unit_test[1],
-    include_directories: include_directories('tests/unit'),
-    dependencies: [umbriel_pure_dep] + unit_test[2],
-    cpp_args: unit_test_args,
-  )
-  unit_test_targets += test_exe
-  test(unit_test[0], test_exe)
-endforeach
-
-alias_target('unit-tests', unit_test_targets)
+# Unit tests and the harness clients the verify script drives.
+if build_tests
+  subdir('tests')
+  alias_target('unit-tests', unit_test_targets)
+  alias_target('harness-clients', harness_client_targets)
+endif
 
 install_data(
   'data/umbriel.desktop',

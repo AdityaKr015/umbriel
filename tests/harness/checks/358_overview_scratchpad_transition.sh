@@ -2,7 +2,7 @@
 # Opening overview dismisses a visible scratchpad immediately instead of showing its ordinary hide fade underneath.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/overview-scratchpad-transition-client.log"
 readonly BEFORE="$UMBRIEL_RUNTIME_DIR/overview-scratchpad-transition-before.png"
 readonly EARLY="$UMBRIEL_RUNTIME_DIR/overview-scratchpad-transition-early.png"

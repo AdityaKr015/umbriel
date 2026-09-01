@@ -4,7 +4,7 @@
 # reload updates the default for future columns without resizing existing ones.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/subsurface-client}"
+readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/tests/subsurface-client}"
 
 window_state() {
   local title=$1

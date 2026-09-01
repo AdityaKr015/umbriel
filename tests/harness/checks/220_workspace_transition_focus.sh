@@ -7,8 +7,8 @@ set -euo pipefail
 readonly OUTPUT_W=1280
 readonly OUTPUT_H=720
 readonly BTN_LEFT=272
-readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/pointer-client}"
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/tests/pointer-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 
 # The wrapper survives only to pin the output dimensions every pointer call needs.
 pointer() {

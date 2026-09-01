@@ -5,7 +5,7 @@
 # backdrop, so a pixel just outside the corner arc reports which of the three the compositor drew.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/subsurface-client}"
+readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/tests/subsurface-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/subsurface-client.log"
 readonly SCREENSHOT="$UMBRIEL_RUNTIME_DIR/subsurface-corner-radius.png"
 readonly RADIUS=64

@@ -3,7 +3,7 @@
 # left must swap it with A, not move it upward into B's tile.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 
 spawn_client() {
   local title=$1

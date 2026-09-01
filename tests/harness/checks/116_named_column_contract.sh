@@ -2,8 +2,8 @@
 # Named scrolling columns honor orientation and workspace scope without changing other layouts.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
-readonly VERTICAL_CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/subsurface-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
+readonly VERTICAL_CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/tests/subsurface-client}"
 readonly MAX_LOG="$UMBRIEL_RUNTIME_DIR/named-vertical-max.log"
 
 spawn_client() {

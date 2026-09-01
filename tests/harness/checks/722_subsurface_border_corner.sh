@@ -3,7 +3,7 @@
 # paints a full-window blue subsurface so a protruding corner is directly visible.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/subsurface-client}"
+readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/tests/subsurface-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/subsurface-border-client.log"
 readonly SCREENSHOT="$UMBRIEL_RUNTIME_DIR/subsurface-border.png"
 

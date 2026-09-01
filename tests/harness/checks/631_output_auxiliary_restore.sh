@@ -5,8 +5,8 @@
 # dwindle, and master workspaces so every layout participates in the recovery.
 set -euo pipefail
 
-readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/workspace-client}"
-readonly UNMAP_CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly WORKSPACE="${UMBRIEL_WORKSPACE_CLIENT:-./build-debug/tests/workspace-client}"
+readonly UNMAP_CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 readonly BASE_CONFIG="$(< "$UMBRIEL_CONFIG")"
 
 layouts=(scroll dwindle master)

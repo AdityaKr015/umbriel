@@ -3,7 +3,7 @@
 # mapped view must use that pending fullscreen state when deciding whether to create rounded window chrome.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/subsurface-client}"
+readonly CLIENT="${UMBRIEL_SUBSURFACE_CLIENT:-./build-debug/tests/subsurface-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/fullscreen-pending-map-client.log"
 readonly SCREENSHOT="$UMBRIEL_RUNTIME_DIR/fullscreen-pending-map.png"
 

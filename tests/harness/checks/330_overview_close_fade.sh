@@ -4,7 +4,7 @@
 # before unmap, still visible immediately afterwards, then gone after the configured half-duration close fade.
 set -euo pipefail
 
-readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/unmap-client}"
+readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 readonly CLIENT_LOG="$UMBRIEL_RUNTIME_DIR/overview-close-fade-client.log"
 readonly BEFORE="$UMBRIEL_RUNTIME_DIR/overview-close-before.png"
 readonly DURING="$UMBRIEL_RUNTIME_DIR/overview-close-during.png"

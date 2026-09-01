@@ -14,6 +14,7 @@ boundaries, or regression-sensitive behavior.
 - [Border rendering](border-rendering.md)
 - [Xwayland input stability](xwayland-input-stability.md)
 - [Client buffer constraints](client-buffer-constraints.md)
+- [Scene helper ownership](scene-helper-ownership.md)
 
 ## Pointer drag completion
 

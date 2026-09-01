@@ -5,6 +5,8 @@
 
 cc = meson.get_compiler('c')
 
+# dladdr, for the scene helper guard. Folded into libc since glibc 2.34.
+umbrielfx_dl_dep = cc.find_library('dl', required: false)
 umbrielfx_egl_dep = dependency('egl')
 umbrielfx_gbm_dep = dependency('gbm')
 umbrielfx_glesv2_dep = dependency('glesv2')
@@ -38,8 +40,15 @@ umbrielfx_sources = files(
   'types/fx/blur_data.c',
   'types/fx/clipped_region.c',
   'types/output/output.c',
+  'types/scene/drag_icon.c',
+  'types/scene/layer_shell_v1.c',
   'types/scene/linked_node.c',
+  'types/scene/output_layout.c',
+  'types/scene/scene_guard.c',
+  'types/scene/subsurface_tree.c',
+  'types/scene/surface.c',
   'types/scene/wlr_scene.c',
+  'types/scene/xdg_shell.c',
   'util/array.c',
   'util/env.c',
   'util/matrix.c',
@@ -49,6 +58,7 @@ umbrielfx_sources = files(
 umbrielfx_deps = [
   libdrm_dep,
   pixman_dep,
+  umbrielfx_dl_dep,
   umbrielfx_egl_dep,
   umbrielfx_gbm_dep,
   umbrielfx_glesv2_dep,
@@ -67,6 +77,9 @@ if umbrielfx_lcms2_dep.found()
 else
   umbrielfx_sources += files('render/color_fallback.c')
 endif
+
+# wlroots' layer-shell header pulls in the generated server protocol header.
+umbrielfx_sources += layer_shell_protocol_h
 
 umbrielfx_little_endian = target_machine.endian() == 'little'
 

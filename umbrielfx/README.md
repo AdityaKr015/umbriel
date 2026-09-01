@@ -33,14 +33,14 @@ meson test -C build --suite umbrielfx
   reach the compositor's C++23 translation units.
 - Shaders are embedded as generated char arrays, so an installed binary never
   locates shader data files at runtime.
-- Replaces wlroots' scene graph but reuses the scene helpers it does not
-  reimplement (`wlr_scene_xdg_surface_create`, `wlr_scene_subsurface_tree_create`,
-  `wlr_scene_layer_surface_v1_create`, `wlr_scene_drag_icon_create`,
-  `wlr_scene_attach_output_layout`, `wlr_scene_output_layout_add_output`). Those
-  resolve to `libwlroots` and read these structs at wlroots' field offsets, so
-  every struct in `types/wlr_scene.h` that wlroots also declares must stay a
-  strict prefix extension: fields Umbriel adds go after every wlroots field.
-  `tests/abi.c` enforces this.
+- Replaces wlroots' scene graph completely: every helper that creates or
+  destroys scene nodes lives here, and borrowing one from `libwlroots` is a bug.
+  `umbrielfx_scene_check_helpers()` refuses to start when one does.
+- Structs that wlroots also declares stay a strict prefix extension: fields
+  Umbriel adds go after every wlroots field. `tests/abi.c` enforces it.
+
+  Both rules exist for the same reason, and the reason is not obvious. See
+  [scene helper ownership](../docs/design/scene-helper-ownership.md).
 
 ## License
 

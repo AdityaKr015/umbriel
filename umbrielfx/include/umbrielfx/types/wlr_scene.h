@@ -444,6 +444,17 @@ struct wlr_scene_node *wlr_scene_node_at(struct wlr_scene_node *node,
 	double lx, double ly, double *nx, double *ny);
 
 /**
+ * Check that every scene helper resolves into umbrielfx rather than libwlroots.
+ *
+ * umbrielfx's scene structs carry trailing fields wlroots knows nothing about,
+ * so a node allocated by wlroots is short and umbrielfx reads those fields past
+ * the end of it. Call this before building a scene: it returns NULL when the
+ * helpers are sound, otherwise a message naming the first one that came from
+ * elsewhere. The message points at a static buffer and stays valid.
+ */
+const char *umbrielfx_scene_check_helpers(void);
+
+/**
  * Create a new scene-graph.
  *
  * The graph is also a struct wlr_scene_node. Associated resources can be

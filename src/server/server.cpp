@@ -330,6 +330,12 @@ namespace umbriel {
 
     m_outputLayout = wlr_output_layout_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_outputLayout);
+    // A scene helper served by libwlroots allocates nodes too small for
+    // umbrielfx's trailing fields, which renders every surface black instead of
+    // failing. Refuse to build a scene on top of that.
+    if (const char* mismatch = umbrielfx_scene_check_helpers(); mismatch != nullptr) {
+      throw std::runtime_error(std::string("umbrielfx scene helpers are not linked correctly: ") + mismatch);
+    }
     m_scene = wlr_scene_create();
     if (linuxDmabuf != nullptr) {
       wlr_scene_set_linux_dmabuf_v1(m_scene, linuxDmabuf);

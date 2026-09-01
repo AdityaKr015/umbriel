@@ -19,6 +19,7 @@
 #include "view/xdg_size.h"
 // clang-format off
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <linux/input-event-codes.h>
@@ -596,6 +597,7 @@ namespace umbriel {
     }
     const bool restoreDragPresentation = std::holds_alternative<FloatingMoveGrab>(m_grab)
         || (std::get_if<TiledMoveGrab>(&m_grab) != nullptr && !std::get<TiledMoveGrab>(m_grab).pending);
+    const bool leavingFloatingMove = std::holds_alternative<FloatingMoveGrab>(m_grab);
     if (std::holds_alternative<FloatingResizeGrab>(m_grab) && view != nullptr) {
       view->finishFloatingResize();
     }
@@ -603,6 +605,9 @@ namespace umbriel {
     m_moveButton = 0;
     if (restoreDragPresentation && view != nullptr) {
       view->restoreHomePresentation();
+    }
+    if (leavingFloatingMove && view != nullptr && view->mapped()) {
+      view->finishSizeAnimation();
     }
     refreshInteractiveCursor();
   }
@@ -787,6 +792,7 @@ namespace umbriel {
     if (m_moveButton != 0 && button != m_moveButton) {
       if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
         m_swallowedButtons.push_back(button);
+        toggleFloatingDuringMove(button);
       }
       return;
     }
@@ -1762,6 +1768,78 @@ namespace umbriel {
 
     resetMode();
     m_server->focusView(view, FocusReason::DragDrop);
+  }
+
+  void Cursor::toggleFloatingDuringMove(uint32_t button) {
+    const uint32_t toggleButton = m_moveButton == BTN_LEFT ? BTN_RIGHT : BTN_LEFT;
+    if (button != toggleButton) {
+      return;
+    }
+    m_server->hideInsertHint();
+
+    if (auto* grab = std::get_if<TiledMoveGrab>(&m_grab)) {
+      View* view = grab->view;
+      if (view == nullptr || !view->mapped()) {
+        return;
+      }
+      if (grab->pending) {
+        grab->pending = false;
+        if (grab->sourceWorkspace != nullptr) {
+          grab->sourceWorkspace->layoutDetach(grab->view);
+        }
+        view->enterDragPresentation();
+      }
+      view->setFloating(true, false);
+      // Preserve the cursor's relative position within the window across the size change
+      const std::array<int, 2> floatSize = view->floatingSize();
+      const wlr_box& geo = view->toplevel()->base->geometry;
+      const double windowWidth = std::max(1, geo.width);
+      const double windowHeight = std::max(1, geo.height);
+      const double offsetX = static_cast<double>(floatSize[0]) * (grab->offsetX / windowWidth);
+      const double offsetY = static_cast<double>(floatSize[1]) * (grab->offsetY / windowHeight);
+      m_grab = FloatingMoveGrab{.view = view, .offsetX = offsetX, .offsetY = offsetY};
+      view->enterDragPresentation();
+      processMove();
+      return;
+    }
+
+    auto* grab = std::get_if<FloatingMoveGrab>(&m_grab);
+    if (grab == nullptr || grab->view == nullptr || !grab->view->mapped()) {
+      return;
+    }
+    View* view = grab->view;
+
+    if (m_server->scratchpadManager() != nullptr && m_server->scratchpadManager()->contains(view)) {
+      return;
+    }
+
+    Workspace* workspace = view->workspace();
+    view->setFloating(false, false);
+    int sourceColumn = -1;
+    std::optional<DropColumnWidth> sourceWidth = std::nullopt;
+    if (workspace != nullptr) {
+      sourceColumn = workspace->layout().columnOf(view);
+      sourceWidth = captureDropColumnWidth(*workspace, view);
+      workspace->layoutDetach(view);
+    }
+    const double offsetX = m_cursor->x - view->sceneTree()->node.x;
+    const double offsetY = m_cursor->y - view->sceneTree()->node.y;
+    TiledMoveGrab tiledGrab{
+        .view = view,
+        .offsetX = offsetX,
+        .offsetY = offsetY,
+        .sourceWorkspace = workspace,
+        .sourceColumn = sourceColumn,
+        .sourceWidth = sourceWidth,
+        .drop = {.workspace = workspace, .column = std::max(0, sourceColumn)},
+        .pending = false,
+        .startX = m_cursor->x,
+        .startY = m_cursor->y,
+    };
+    m_grab = tiledGrab;
+    view->enterDragPresentation();
+    processMove();
+    updateDropTarget();
   }
 
   void Cursor::processResize() {

@@ -197,6 +197,7 @@ namespace umbriel {
     void updateDropTarget();
     void finishTileMove();
     void finishFloatMove();
+    void toggleFloatingDuringMove(uint32_t button);
     void processResize();
     void processResizeTile();
     [[nodiscard]] uint32_t floatResizeEdges(View* view) const;

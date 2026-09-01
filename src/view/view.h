@@ -354,6 +354,7 @@ namespace umbriel {
     void resizeFloating(int width, int height);
     void finishFloatingResize();
     void syncFloatingResizePosition();
+    void presentFloatingResizeSize(int width, int height);
     void adoptFloatingClientSize();
     // Where `origin` has to move so a float of `width` by `height` keeps its on-screen margin, or nullopt when the
     // clamp does not apply or the origin already satisfies it.

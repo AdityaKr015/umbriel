@@ -673,6 +673,16 @@ namespace umbriel {
       updateShadow(width, height);
     }
     updateBlur(width, height);
+    if (m_workspace != nullptr && m_server->cursor() != nullptr && m_server->cursor()->isDraggingView(this)) {
+      const wlr_box content = {m_sceneTree->node.x, m_sceneTree->node.y, width, height};
+      const wlr_box surfaceClip = {
+          m_toplevel->base->geometry.x - m_presentation.offsetX(),
+          m_toplevel->base->geometry.y - m_presentation.offsetY(), width, height
+      };
+      setSurfaceTreeClip(&surfaceClip);
+      applyPresentedCrop(content, surfaceClip);
+      return;
+    }
     if (m_workspace != nullptr) {
       m_workspace->syncViewPresentation(this);
     }
@@ -875,7 +885,7 @@ namespace umbriel {
       }
       if (sizeAnimating()) {
         active = true;
-      } else {
+      } else if (!sizeGrabActive()) {
         finishSizeAnimation();
       }
     }
@@ -1597,6 +1607,26 @@ namespace umbriel {
   void View::resizeFloating(int width, int height) {
     syncFloatingResizePosition();
     requestFloatingSize(width, height);
+  }
+
+  void View::presentFloatingResizeSize(int width, int height) {
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    const auto& animation = config().animation;
+    const auto& move = animation.windowsMove;
+    if (width == m_presentation.width() && height == m_presentation.height()) {
+      return;
+    }
+    if (animation.enabled && move.enabled) {
+      if (m_presentation.targeting(width, height)) {
+        return;
+      }
+      m_presentation.animateTo(width, height, move.durationMs, move.curve);
+      scheduleFrame();
+    } else {
+      m_presentation.setSize(width, height);
+    }
   }
 
   void View::finishFloatingResize() { m_floating.endResize(); }
@@ -2682,7 +2712,11 @@ namespace umbriel {
           && (m_toplevel->scheduled.width != keepWidth || m_toplevel->scheduled.height != keepHeight)) {
         requestFloatingSize(keepWidth, keepHeight);
       }
-      beginResizeAnimation(keepWidth, keepHeight);
+      if (sizeGrabActive()) {
+        presentFloatingResizeSize(keepWidth, keepHeight);
+      } else {
+        beginResizeAnimation(keepWidth, keepHeight);
+      }
       const wlr_box usable = floatingUsableArea();
       int floatX = keepX + 50;
       int floatY = keepY + 50;

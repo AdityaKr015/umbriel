@@ -26,6 +26,7 @@ struct wlr_surface;
 
 namespace umbriel {
 
+  enum class KeybindAction;
   class Output;
   class Server;
   class View;
@@ -90,9 +91,11 @@ namespace umbriel {
     void handleMotion(double lx, double ly);
     bool handleAxisNotch(bool vertical, double direction, double lx, double ly);
     bool handleFallbackKey(uint32_t keysym);
-    // Focus a neighboring column while keeping the overview card strip in
-    // sync with the regular horizontal window animation.
-    bool focusAdjacent(int direction);
+    // Give direct vertical focus actions overview-row semantics, clear pending
+    // badge input for directional focus, and consume those actions while the
+    // closing animation is no longer interactive. Returning false delegates
+    // to the regular action handler, preserving composite action fallbacks.
+    bool handleKeybindAction(KeybindAction action);
     // Step the active workspace `delta` rows down the filmstrip on `output` (null: wherever the pointer is). Returns
     // false at either end. The wheel, the arrow keys and the three-finger swipe all arrive here: while the overview is
     // up the real trees are hidden, so there is nothing to slide and switching is a discrete step rather than the

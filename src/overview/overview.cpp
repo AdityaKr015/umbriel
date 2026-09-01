@@ -1906,22 +1906,6 @@ namespace umbriel {
     return true;
   }
 
-  bool Overview::focusAdjacent(int direction) {
-    if (!interactive()) {
-      return false;
-    }
-    Workspace* workspace = preferredWorkspace();
-    if (workspace == nullptr) {
-      return false;
-    }
-    View* target = workspace->focusAdjacent(direction);
-    if (target == nullptr) {
-      return false;
-    }
-    m_server->focusView(target, FocusReason::Directional);
-    return true;
-  }
-
   void Overview::refreshShortcutMatches() {
     for (const auto& state : m_outputs) {
       for (const auto& card : state->cards) {
@@ -2000,6 +1984,46 @@ namespace umbriel {
     return true;
   }
 
+  bool Overview::handleKeybindAction(KeybindAction action) {
+    const bool directional = action == KeybindAction::WindowFocusLeft
+        || action == KeybindAction::WindowFocusRight
+        || action == KeybindAction::WindowFocusOrOutputLeft
+        || action == KeybindAction::WindowFocusOrOutputRight
+        || action == KeybindAction::WindowFocusUp
+        || action == KeybindAction::WindowFocusDown
+        || action == KeybindAction::WindowFocusOrWorkspaceUp
+        || action == KeybindAction::WindowFocusOrWorkspaceDown
+        || action == KeybindAction::WindowFocusOrOutputUp
+        || action == KeybindAction::WindowFocusOrOutputDown;
+    if (!directional || !active()) {
+      return false;
+    }
+
+    // Once closing starts the filmstrip is no longer interactive. Consume a
+    // held or newly pressed navigation bind so it cannot mutate the hidden
+    // desktop during the zoom, while Server still applies its submapAfter.
+    if (!interactive()) {
+      return true;
+    }
+
+    if (!m_shortcutInput.empty()) {
+      clearShortcutInput();
+    }
+    switch (action) {
+    case KeybindAction::WindowFocusUp:
+      selectRelativeWorkspace(-1, nullptr);
+      return true;
+    case KeybindAction::WindowFocusDown:
+      selectRelativeWorkspace(1, nullptr);
+      return true;
+    default:
+      // Horizontal card focus and composite focus actions already have the
+      // desired behavior through their normal handlers. In particular, an
+      // OrWorkspace or OrOutput action must retain its documented fallback.
+      return false;
+    }
+  }
+
   bool Overview::handleFallbackKey(uint32_t keysym) {
     if (!interactive()) {
       return false;
@@ -2007,6 +2031,11 @@ namespace umbriel {
     if (handleShortcutKey(keysym)) {
       return true;
     }
+    auto dispatch = [this](KeybindAction action) {
+      Keybind bind;
+      bind.action = action;
+      return m_server->executeKeybindAction(bind);
+    };
     switch (keysym) {
     case XKB_KEY_Escape:
       close();
@@ -2019,15 +2048,13 @@ namespace umbriel {
       }
       return true;
     case XKB_KEY_Left:
+      return dispatch(KeybindAction::WindowFocusLeft);
     case XKB_KEY_Right:
-      clearShortcutInput();
-      focusAdjacent(keysym == XKB_KEY_Left ? -1 : 1);
-      return true;
+      return dispatch(KeybindAction::WindowFocusRight);
     case XKB_KEY_Up:
+      return dispatch(KeybindAction::WindowFocusUp);
     case XKB_KEY_Down:
-      clearShortcutInput();
-      selectRelativeWorkspace(keysym == XKB_KEY_Up ? -1 : 1, nullptr);
-      return true;
+      return dispatch(KeybindAction::WindowFocusDown);
     default:
       return false;
     }

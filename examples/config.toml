@@ -328,6 +328,9 @@ follows_mouse = false
 # "Mod+Alt+0" = "scratchpad-focus-next:DP-1"
 "Mod" = "spawn:noctalia msg panel-toggle launcher"
 "Mod+O" = "overview-toggle"
+# Directional focus binds also navigate the overview: left/right select cards,
+# while up/down select workspace rows. The default Mod+H/J/K/L binds need no
+# separate overview mapping.
 # "Mod+Space" is taken above; pick a free chord for layout switching.
 # "Mod+Shift+K" = "keyboard-layout-next"
 # Drag a scrolling workspace directly along its configured axis.

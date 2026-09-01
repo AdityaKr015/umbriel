@@ -1822,7 +1822,13 @@ namespace umbriel {
 
     Workspace* workspace = view->workspace();
     if (config().input.windowDragToggle == WindowDragToggle::Pinned) {
-      view->setPinned(false, false);
+      const bool wasPinned = view->pinned();
+      view->setPinned(!wasPinned, false);
+      if (view->floating()) {
+        view->enterDragPresentation();
+        processMove();
+        return;
+      }
     } else {
       view->setFloating(false, false);
     }

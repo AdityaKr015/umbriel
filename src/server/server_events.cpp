@@ -1176,6 +1176,12 @@ namespace umbriel {
     }
   }
 
+  void Server::notifySubmapChanged() {
+    if (m_ipc != nullptr) {
+      m_ipc->notifySubmapChanged();
+    }
+  }
+
   void Server::scheduleIpcWindowsEvent() {
     if (m_ipc == nullptr || m_ipcWindowsIdle != nullptr) {
       return;

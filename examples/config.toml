@@ -340,7 +340,8 @@ follows_mouse = false
 # "Mod+Shift+K" = "keyboard-layout-next"
 # Drag a scrolling workspace directly along its configured axis.
 # "Mod+MouseMiddle" = "layout-scroll-drag"
-# Submaps can nest; entry binds should not repeat. Inspect the active layer with `umbriel submap`.
+# Submaps can nest; entry binds should not repeat. Inspect the active layer with `umbriel submap`, or follow changes
+# with `umbriel subscribe submap`.
 # "Mod+R" = { action = "submap:resize", repeat = false }
 # Omit `submap` to add no post-action transition, or set it to "reset" to exit after the action.
 # "submap[resize],1" = { action = "window-set-width:0.5", submap = "reset" }

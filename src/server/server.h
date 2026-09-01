@@ -262,6 +262,7 @@ namespace umbriel {
     [[nodiscard]] std::optional<KeyboardLayoutState> keyboardLayoutState() const;
     void notifyKeyboardLayoutIpc();
     void notifyOverviewChanged();
+    void notifySubmapChanged();
     // Coalesced windows-event notification: at most one idle callback per frame
     // regardless of how many window-list-relevant changes happened.
     void scheduleIpcWindowsEvent();

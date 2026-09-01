@@ -274,6 +274,35 @@ finally:
     stream.wait(timeout=5)
 action("workspace-set-layout:scrolling")
 
+# Submap subscribers receive the current context immediately, then each change
+# to the active value. A reset of a nested layer reveals its parent before the
+# default context returns as null.
+sub = connect()
+sub.sendall(b'{"cmd":"subscribe","events":["submap"]}\n')
+buf = b""
+
+
+def expect_submap(want, reason):
+    global buf
+    line, buf = read_one(sub, buf)
+    if line is None:
+        raise SystemExit(f"{reason} delivered no submap event")
+    event = json.loads(line)
+    if event.get("event") != "submap" or event.get("data") != want:
+        raise SystemExit(f"{reason} delivered the wrong submap event: {event!r}")
+
+
+expect_submap(None, "subscribing")
+action("submap:outer")
+expect_submap("outer", "entering the outer layer")
+action("submap:inner")
+expect_submap("inner", "entering the inner layer")
+action("submap:reset")
+expect_submap("outer", "resetting the inner layer")
+action("submap:reset")
+expect_submap(None, "resetting the outer layer")
+sub.close()
+
 # An unknown family is rejected by name, and the client exits instead of waiting on a stream that will never open.
 rejected = subprocess.run([umbriel, "subscribe", "definitely-not-an-event"], capture_output=True, text=True, timeout=5)
 if rejected.returncode == 0:

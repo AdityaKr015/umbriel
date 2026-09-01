@@ -249,12 +249,14 @@ namespace umbriel {
   void Server::pushSubmap(const std::string& name) {
     cancelModifierTap();
     m_activeSubmaps.push_back(name);
+    notifySubmapChanged();
   }
 
   void Server::popSubmap() {
     cancelModifierTap();
     if (!m_activeSubmaps.empty()) {
       m_activeSubmaps.pop_back();
+      notifySubmapChanged();
     }
   }
 

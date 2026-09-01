@@ -80,6 +80,10 @@ namespace umbriel {
       // layout mode of every workspace, which no Wayland protocol carries.
       return nlohmann::json{{"event", "workspaces"}, {"data", IpcCommands::workspaces(server, {}).at("ok")}};
     }
+
+    nlohmann::json submapEvent(Server& server) {
+      return nlohmann::json{{"event", "submap"}, {"data", IpcCommands::submap(server, {}).at("ok")}};
+    }
   } // namespace
 
   Ipc::Ipc(Server& server, const std::string& waylandSocketName) : m_server(&server) {
@@ -375,6 +379,9 @@ namespace umbriel {
       if ((requested & Ipc::kEventWorkspaces) != 0) {
         append(workspacesEvent(*m_server));
       }
+      if ((requested & Ipc::kEventSubmap) != 0) {
+        append(submapEvent(*m_server));
+      }
       return response;
     }
     const IpcCommandSpec* spec = findIpcCommand(cmd);
@@ -440,5 +447,7 @@ namespace umbriel {
   void Ipc::notifyWindowsChanged() { broadcastEvent(kEventWindows, windowsEvent(*m_server)); }
 
   void Ipc::notifyWorkspacesChanged() { broadcastEvent(kEventWorkspaces, workspacesEvent(*m_server)); }
+
+  void Ipc::notifySubmapChanged() { broadcastEvent(kEventSubmap, submapEvent(*m_server)); }
 
 } // namespace umbriel

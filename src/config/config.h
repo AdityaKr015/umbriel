@@ -186,6 +186,14 @@ namespace umbriel {
     float sdrWhite = 203.0F;
     // Explicit workspace inventory. Omitted means dynamic workspaces.
     std::optional<std::vector<std::string>> workspaces;
+    struct Layout {
+      struct Scrolling {
+        // Initial strip-axis extent inherited by workspaces on this output.
+        std::optional<double> defaultWidthFraction;
+        bool operator==(const Scrolling&) const = default;
+      } scrolling;
+      bool operator==(const Layout&) const = default;
+    } layout;
     bool operator==(const OutputRule&) const = default;
   };
 

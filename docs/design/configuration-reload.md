@@ -30,6 +30,9 @@ Output state and workspace inventory are independent effects.
   and refreshes workspace layout.
 - Changing only layout settings refreshes workspace geometry without
   reconciling the inventory or reapplying output state.
+- Changing an output's `layout.scrolling.default_width_fraction` refreshes only
+  resolved workspace layout configuration. Existing scrolling columns retain
+  their stored widths; columns created after the reload use the new default.
 - Changing total border width refreshes window decoration and workspace layout
   because borders contribute to resolved tile spacing.
 - Changing an output or window-rule tearing policy re-evaluates eligibility,
@@ -59,5 +62,8 @@ The relevant regression coverage is in:
 - [`tests/harness/checks/050_config_reload.sh`](../../tests/harness/checks/050_config_reload.sh),
   which checks inert reloads, selective layout updates, border dependencies,
   and recovery after an included file fails to parse.
+- [`tests/harness/checks/144_output_scrolling_width.sh`](../../tests/harness/checks/144_output_scrolling_width.sh),
+  which checks per-output initial scrolling widths and preserves existing
+  column widths when that default changes on reload.
 - [`tests/harness/checks/045_session_environment.sh`](../../tests/harness/checks/045_session_environment.sh),
   which checks that environment changes remain unapplied until restart.

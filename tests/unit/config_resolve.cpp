@@ -134,6 +134,40 @@ UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   CHECK(elsewhere.master.newOnTop);
   CHECK(!elsewhere.dwindle.preserveSplit);
 }
+
+UMBRIEL_TEST(outputScrollingDefaultPrecedesWorkspaceRulesAndFollowsGlobalLayout) {
+  Config config;
+  config.layout.scrolling.defaultWidthFraction = 0.2;
+
+  OutputRule output;
+  output.name = "DP-1";
+  output.layout.scrolling.defaultWidthFraction = 0.3;
+  config.outputs.push_back(std::move(output));
+
+  WorkspaceConfig globalWorkspace;
+  globalWorkspace.name = "dev";
+  globalWorkspace.layout.scrolling.defaultWidthFraction = 0.4;
+  config.workspaceRules.push_back(std::move(globalWorkspace));
+
+  WorkspaceConfig outputWorkspace;
+  outputWorkspace.name = "dev";
+  outputWorkspace.output = "DP-1";
+  outputWorkspace.layout.scrolling.defaultWidthFraction = 0.5;
+  config.workspaceRules.push_back(std::move(outputWorkspace));
+
+  const auto outputSpecific = umbriel::resolveWorkspaceLayout(config, identity("DP-1"), "dev", 0);
+  CHECK_EQ(*outputSpecific.scrolling.defaultWidthFraction, 0.5);
+
+  const auto outputDefault = umbriel::resolveWorkspaceLayout(config, identity("DP-1"), "chat", 1);
+  CHECK_EQ(*outputDefault.scrolling.defaultWidthFraction, 0.3);
+
+  const auto workspaceDefault = umbriel::resolveWorkspaceLayout(config, identity("DP-2"), "dev", 0);
+  CHECK_EQ(*workspaceDefault.scrolling.defaultWidthFraction, 0.4);
+
+  const auto globalDefault = umbriel::resolveWorkspaceLayout(config, identity("DP-2"), "chat", 1);
+  CHECK_EQ(*globalDefault.scrolling.defaultWidthFraction, 0.2);
+}
+
 UMBRIEL_TEST(outputSpecificWorkspaceRulesBeatLaterGlobalRules) {
   Config config;
 
@@ -223,15 +257,18 @@ UMBRIEL_TEST(workspaceRulesMatchConnectorAndDescriptorWithoutOutputSection) {
 
 UMBRIEL_TEST(descriptorOutputRuleOverridesConnectorFallback) {
   Config config;
+  config.layout.scrolling.defaultWidthFraction = 0.5;
 
   OutputRule connector;
   connector.name = "HDMI-A-1";
   connector.workspaces = std::vector<std::string>{"fallback"};
+  connector.layout.scrolling.defaultWidthFraction = 0.25;
   config.outputs.push_back(std::move(connector));
 
   OutputRule descriptor;
   descriptor.name = "Microstep MSI G2712F CD6T084401192";
   descriptor.workspaces = std::vector<std::string>{"specific"};
+  descriptor.layout.scrolling.defaultWidthFraction = 0.75;
   config.outputs.push_back(std::move(descriptor));
 
   constexpr OutputIdentity monitor = identity("HDMI-A-1", "Microstep", "MSI G2712F", "CD6T084401192");
@@ -239,6 +276,7 @@ UMBRIEL_TEST(descriptorOutputRuleOverridesConnectorFallback) {
   CHECK(selected != nullptr);
   if (selected != nullptr) {
     CHECK_EQ(selected->name, std::string{"Microstep MSI G2712F CD6T084401192"});
+    CHECK_EQ(*selected->layout.scrolling.defaultWidthFraction, 0.75);
   }
 
   const auto resolved = umbriel::resolveWorkspacesForOutput(config, monitor);
@@ -246,6 +284,7 @@ UMBRIEL_TEST(descriptorOutputRuleOverridesConnectorFallback) {
   CHECK_EQ(resolved.workspaces.size(), size_t{1});
   if (resolved.workspaces.size() == 1) {
     CHECK_EQ(resolved.workspaces[0].name, std::string{"specific"});
+    CHECK_EQ(*resolved.workspaces[0].layout.scrolling.defaultWidthFraction, 0.75);
   }
 }
 

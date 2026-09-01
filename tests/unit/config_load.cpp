@@ -317,6 +317,36 @@ UMBRIEL_TEST(scrollingDefaultWidthIsOptional) {
   CHECK(!store.config().layout.scrolling.defaultWidthFraction.has_value());
 }
 
+UMBRIEL_TEST(outputScrollingDefaultWidthUsesNarrowLayoutScope) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write(R"(
+[output.DP-1.layout]
+gap = 12
+
+[output.DP-1.layout.scrolling]
+default_width_fraction = 0.05
+center_focused = true
+)");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK(store.config().outputs[0].layout.scrolling.defaultWidthFraction.has_value());
+  if (store.config().outputs[0].layout.scrolling.defaultWidthFraction) {
+    CHECK_EQ(*store.config().outputs[0].layout.scrolling.defaultWidthFraction, 0.1);
+  }
+  CHECK(containsDiagnostic(
+      store, "output.DP-1.layout.scrolling.default_width_fraction = 0.05 out of range, clamped to 0.1"
+  ));
+  CHECK(containsDiagnostic(store, "unknown key output.DP-1.layout.gap"));
+  CHECK(containsDiagnostic(store, "unknown key output.DP-1.layout.scrolling.center_focused"));
+
+  file.write("[output.DP-1]\nenabled = true\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().outputs[0].layout.scrolling.defaultWidthFraction.has_value());
+}
+
 UMBRIEL_TEST(expandSingleColumnParsesAndDefaultsToFalse) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

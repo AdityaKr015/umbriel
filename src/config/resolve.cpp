@@ -345,6 +345,10 @@ namespace umbriel {
   ResolvedLayoutConfig
   resolveWorkspaceLayout(const Config& config, const OutputIdentity& identity, std::string_view name, size_t index) {
     ResolvedLayoutConfig resolved = resolveGlobalLayout(config);
+    if (const OutputRule* output = matchingOutputRule(config, identity);
+        output != nullptr && output->layout.scrolling.defaultWidthFraction) {
+      resolved.scrolling.defaultWidthFraction = output->layout.scrolling.defaultWidthFraction;
+    }
     const auto applyMatchingRules = [&](bool outputScoped) {
       for (const auto& rule : config.workspaceRules) {
         const bool outputMatches = outputScoped

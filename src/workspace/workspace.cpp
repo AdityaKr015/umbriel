@@ -2002,11 +2002,10 @@ namespace umbriel {
     const size_t index = m_workspaces.size();
     std::string id = nextWorkspaceId();
     std::string wsName = (name != nullptr && name[0] != '\0') ? name : std::to_string(index + 1);
+    ResolvedLayoutConfig layout = resolveWorkspaceLayout(config(), m_output->identity(), wsName, index);
     wlr_ext_workspace_handle_v1* handle = wlr_ext_workspace_handle_v1_create(manager, id.c_str(), kWorkspaceCaps);
     m_workspaces.push_back(
-        std::make_unique<Workspace>(
-            *this, handle, std::move(id), std::move(wsName), index, resolveGlobalLayout(config())
-        )
+        std::make_unique<Workspace>(*this, handle, std::move(id), std::move(wsName), index, std::move(layout))
     );
     m_server->scheduleIpcWorkspacesEvent();
     return m_workspaces.back().get();

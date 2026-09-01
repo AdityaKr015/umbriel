@@ -196,6 +196,7 @@ bottom = 0
 # Vertical workspaces stack horizontal lanes from top to bottom.
 # direction = "horizontal"
 default_width_fraction = 0.5  # remove to let clients choose their initial width
+# A matching output may override this initial-only value for all its workspaces.
 center_underfull_strip = true  # center the strip whenever it is narrower than the viewport
 center_focused = false # always center the focused column
 expand_single_column = true # fill lone column to viewport width
@@ -235,6 +236,10 @@ new_on_top = true             # place new windows at the top of the stack
 # enabled = true                # false removes it; re-enabling restores windows, layout, active workspace, and taskbar entries
 # Dynamic workspaces are the default; use a count or name list for static workspaces.
 # workspaces = 5
+# New scrolling columns on this output use this value. Reloading it does not
+# resize existing columns, and a more specific workspace rule still wins.
+# [output.DP-1.layout.scrolling]
+# default_width_fraction = 0.4
 
 # Input ----------------------------------------------------------------------
 

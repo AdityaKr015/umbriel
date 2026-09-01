@@ -433,6 +433,37 @@ UMBRIEL_TEST(outputStateAndWorkspaceInventoryAreIndependent) {
   CHECK(reenableEffects.outputState);
   CHECK(!reenableEffects.workspaceInventory);
 }
+
+UMBRIEL_TEST(outputScrollingDefaultOnlyRefreshesWorkspaceLayout) {
+  Config before;
+  OutputRule output;
+  output.name = "HEADLESS-1";
+  before.outputs.push_back(output);
+
+  Config after = before;
+  after.outputs[0].layout.scrolling.defaultWidthFraction = 0.75;
+
+  const ConfigChange change = ConfigChange::between(before, after);
+  CHECK(change.outputs);
+  CHECK(!change.layout);
+
+  const ConfigEffects effects = ConfigEffects::between(before, after);
+  CHECK(effects.workspaceLayout);
+  CHECK(!effects.outputState);
+  CHECK(!effects.tearingPolicy);
+  CHECK(!effects.directScanoutPolicy);
+  CHECK(!effects.workspaceInventory);
+  CHECK(!effects.sceneBlur);
+  CHECK(!effects.viewChrome);
+  CHECK(!effects.layerEffects);
+  CHECK(!effects.animation);
+  CHECK(!effects.input);
+  CHECK(!effects.overviewPresentation);
+  CHECK(!effects.internalUi);
+  CHECK(effects.invalidatesOverview());
+  CHECK_EQ(effects.summary(), std::string("workspace layout"));
+}
+
 UMBRIEL_TEST(outputRuleNameSetChangesRefreshIdentityDependentEffects) {
   Config before;
   OutputRule connector;

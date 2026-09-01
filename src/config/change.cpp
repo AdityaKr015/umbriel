@@ -66,6 +66,13 @@ namespace umbriel {
       return lhs.directScanout == rhs.directScanout;
     }
 
+    bool sameOutputLayout(const OutputRule* before, const OutputRule* after) {
+      static const OutputRule defaults;
+      const OutputRule& lhs = before != nullptr ? *before : defaults;
+      const OutputRule& rhs = after != nullptr ? *after : defaults;
+      return lhs.layout == rhs.layout;
+    }
+
     bool sameWindowTearingPolicy(const Config& before, const Config& after) {
       size_t beforeIndex = 0;
       size_t afterIndex = 0;
@@ -117,6 +124,7 @@ namespace umbriel {
         outputNamesChanged || outputProjectionChanged(before, after, sameOutputDirectScanoutPolicy);
     const bool workspaceInventory =
         outputNamesChanged || outputProjectionChanged(before, after, sameWorkspaceInventory);
+    const bool outputLayout = outputNamesChanged || outputProjectionChanged(before, after, sameOutputLayout);
     const bool sceneBlur = before.appearance.blur != after.appearance.blur;
     const bool focusDim = before.animation.enabled != after.animation.enabled
         || before.animation.dimUnfocused != after.animation.dimUnfocused;
@@ -126,6 +134,7 @@ namespace umbriel {
         .directScanoutPolicy = directScanoutPolicy,
         .workspaceInventory = workspaceInventory,
         .workspaceLayout = workspaceInventory
+            || outputLayout
             || before.layout != after.layout
             || before.workspaceRules != after.workspaceRules
             || before.appearance.totalBorderWidth() != after.appearance.totalBorderWidth(),

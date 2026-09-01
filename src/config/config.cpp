@@ -1255,6 +1255,11 @@ namespace umbriel {
         keys.boolean("enabled", rule.enabled)
             .boolean("tearing", rule.allowTearing)
             .boolean("direct_scanout", rule.directScanout);
+        keys.sub("layout", [&](Section& layout) {
+          layout.sub("scrolling", [&](Section& scrolling) {
+            scrolling.real("default_width_fraction", 0.1, 1.0, rule.layout.scrolling.defaultWidthFraction);
+          });
+        });
         if (const toml::node* workspacesNode = keys.take("workspaces")) {
           if (const auto count = workspacesNode->value<std::int64_t>()) {
             if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {

@@ -23,9 +23,9 @@
 #include "render/fx_renderer/util.h"
 #include "render/pass.h"
 #include "render/tracy.h"
-#include "scenefx/render/fx_renderer/fx_offscreen_buffers.h"
-#include "scenefx/render/fx_renderer/fx_renderer.h"
-#include "scenefx/render/pass.h"
+#include "umbrielfx/render/fx_renderer/fx_offscreen_buffers.h"
+#include "umbrielfx/render/fx_renderer/fx_renderer.h"
+#include "umbrielfx/render/pass.h"
 #include "util/time.h"
 
 static const struct wlr_renderer_impl renderer_impl;
@@ -534,7 +534,7 @@ struct wlr_renderer *fx_renderer_create_egl(struct wlr_egl *egl) {
 	renderer->exts_str = exts_str;
 	renderer->drm_fd = -1;
 
-	wlr_log(WLR_INFO, "Creating scenefx FX renderer");
+	wlr_log(WLR_INFO, "Creating umbrielfx renderer");
 	wlr_log(WLR_INFO, "Using %s", glGetString(GL_VERSION));
 	wlr_log(WLR_INFO, "GL vendor: %s", glGetString(GL_VENDOR));
 	wlr_log(WLR_INFO, "GL renderer: %s", glGetString(GL_RENDERER));

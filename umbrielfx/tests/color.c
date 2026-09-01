@@ -21,10 +21,10 @@
 
 #include "render/color.h"
 #include "render/fx_renderer/fx_renderer.h"
-#include "scenefx/render/fx_renderer/fx_renderer.h"
-#include "scenefx/render/fx_renderer/fx_offscreen_buffers.h"
-#include "scenefx/render/pass.h"
-#include "scenefx/types/fx/blur_data.h"
+#include "umbrielfx/render/fx_renderer/fx_renderer.h"
+#include "umbrielfx/render/fx_renderer/fx_offscreen_buffers.h"
+#include "umbrielfx/render/pass.h"
+#include "umbrielfx/types/fx/blur_data.h"
 
 #define TEST_WIDTH 16
 #define TEST_HEIGHT 16

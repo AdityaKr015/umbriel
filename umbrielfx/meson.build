@@ -142,14 +142,18 @@ foreach shader : [
   )
 endforeach
 
+# Only `include` reaches the compositor. `internal` holds headers whose paths
+# (`render/`, `types/`, `util/`) would otherwise sit at the root of every
+# compositor translation unit's include path.
 umbrielfx_inc = include_directories('include')
+umbrielfx_internal_inc = include_directories('internal')
 
 umbrielfx_lib = static_library(
   'umbrielfx',
   umbrielfx_sources,
   c_args: umbrielfx_c_args,
   dependencies: umbrielfx_deps,
-  include_directories: umbrielfx_inc,
+  include_directories: [umbrielfx_inc, umbrielfx_internal_inc],
   override_options: [
     'c_std=' + (meson.version().version_compare('>=1.4.0') ? 'c23,c11' : 'c11'),
   ],
@@ -170,7 +174,7 @@ umbrielfx_color_test = executable(
   'tests/color.c',
   c_args: umbrielfx_c_args,
   dependencies: umbrielfx_deps,
-  include_directories: umbrielfx_inc,
+  include_directories: [umbrielfx_inc, umbrielfx_internal_inc],
   link_with: umbrielfx_lib,
   build_by_default: false,
 )

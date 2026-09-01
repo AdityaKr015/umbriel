@@ -190,9 +190,11 @@ root `meson.build`. Edit it like any other directory and commit alongside the co
 rebase it onto upstream SceneFX.
 
 It is C compiled against wlroots' private struct layouts (`-DWLR_PRIVATE=`), so its compiler flags stay on its own
-target and never reach the compositor's C++23 units. See [`umbrielfx/README.md`](umbrielfx/README.md).
+target and never reach the compositor's C++23 units. Public headers are `umbrielfx/include/umbrielfx/`; private ones
+live in `umbrielfx/internal/` and stay off the compositor's include path. See
+[`umbrielfx/README.md`](umbrielfx/README.md).
 
-Its color transform regressions run in their own suite:
+Its regressions run in their own suite:
 
 ```sh
 meson test -C build-release --suite umbrielfx

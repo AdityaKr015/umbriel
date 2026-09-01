@@ -19,9 +19,9 @@
 #include "render/fx_renderer/shaders.h"
 #include "render/pass.h"
 #include "render/tracy.h"
-#include "scenefx/render/fx_renderer/fx_offscreen_buffers.h"
-#include "scenefx/render/fx_renderer/fx_renderer.h"
-#include "scenefx/types/fx/blur_data.h"
+#include "umbrielfx/render/fx_renderer/fx_offscreen_buffers.h"
+#include "umbrielfx/render/fx_renderer/fx_renderer.h"
+#include "umbrielfx/types/fx/blur_data.h"
 #include "util/matrix.h"
 
 #define MAX_QUADS 86 // 4kb

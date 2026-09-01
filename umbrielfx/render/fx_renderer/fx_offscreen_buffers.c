@@ -4,8 +4,8 @@
 #include <wlr/util/log.h>
 
 #include "render/fx_renderer/fx_renderer.h"
-#include "scenefx/render/fx_renderer/fx_renderer.h"
-#include "scenefx/render/fx_renderer/fx_offscreen_buffers.h"
+#include "umbrielfx/render/fx_renderer/fx_renderer.h"
+#include "umbrielfx/render/fx_renderer/fx_offscreen_buffers.h"
 
 static void addon_handle_destroy(struct wlr_addon *addon) {
 	struct fx_offscreen_buffers *fbos = wl_container_of(addon, fbos, addon);

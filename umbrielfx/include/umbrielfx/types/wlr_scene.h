@@ -28,9 +28,9 @@
 #include <wlr/util/addon.h>
 #include <wlr/util/box.h>
 
-#include "scenefx/types/fx/blur_data.h"
-#include "scenefx/types/fx/clipped_region.h"
-#include "scenefx/types/linked_node.h"
+#include "umbrielfx/types/fx/blur_data.h"
+#include "umbrielfx/types/fx/clipped_region.h"
+#include "umbrielfx/types/linked_node.h"
 
 struct wlr_output;
 struct wlr_output_layout;

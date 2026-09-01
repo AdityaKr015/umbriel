@@ -3,7 +3,7 @@
 
 #include <GLES2/gl2.h>
 #include <stdbool.h>
-#include <scenefx/types/fx/clipped_region.h>
+#include <umbrielfx/types/fx/clipped_region.h>
 #include "types/fx/clipped_region.h"
 
 struct fx_renderer;

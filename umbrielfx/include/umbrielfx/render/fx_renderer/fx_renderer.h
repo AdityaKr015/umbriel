@@ -1,5 +1,5 @@
-#ifndef SCENEFX_FX_OPENGL_H
-#define SCENEFX_FX_OPENGL_H
+#ifndef UMBRIELFX_RENDER_FX_RENDERER_H
+#define UMBRIELFX_RENDER_FX_RENDERER_H
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>

@@ -1,5 +1,5 @@
-#ifndef SCENEFX_TYPES_FX_CLIPPED_REGION_H
-#define SCENEFX_TYPES_FX_CLIPPED_REGION_H
+#ifndef UMBRIELFX_TYPES_FX_CLIPPED_REGION_H
+#define UMBRIELFX_TYPES_FX_CLIPPED_REGION_H
 
 #include <wlr/util/box.h>
 
@@ -95,4 +95,4 @@ struct clipped_region {
 
 struct clipped_region clipped_region_get_default(void);
 
-#endif // !SCENEFX_TYPES_FX_CLIPPED_REGION_H
+#endif // !UMBRIELFX_TYPES_FX_CLIPPED_REGION_H

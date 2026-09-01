@@ -87,7 +87,7 @@ static bool fixture_init(struct fixture *fixture) {
 		return false;
 	}
 
-	const char *requested_device = getenv("SCENEFX_TEST_DRM_DEVICE");
+	const char *requested_device = getenv("UMBRIELFX_TEST_DRM_DEVICE");
 	if (requested_device != NULL &&
 			fixture_try_device(fixture, requested_device)) {
 		goto create_output;

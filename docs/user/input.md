@@ -8,6 +8,7 @@ place.
 ```toml
 [input]
 middle_click_paste = false
+window_drag_toggle = "floating"
 ```
 
 `middle_click_paste` controls the primary-selection clipboard. It defaults to
@@ -22,6 +23,9 @@ disabled are not offered the primary-selection protocol. The setting applies
 immediately on config reload, but protocol visibility is fixed when an
 application connects. Applications started while it was disabled must be
 restarted after re-enabling it.
+
+`window_drag_toggle` defines the action triggered by right-clicking while dragging
+a window. The options are `none` to disable, `floating` or `pinned`.
 
 ### Keyboard
 

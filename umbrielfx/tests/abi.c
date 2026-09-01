@@ -13,7 +13,6 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#define WLR_USE_UNSTABLE
 #include ABI_PROBE_HEADER
 
 #define OFF(s, f) printf("offsetof(struct %s, %s) = %zu\n", #s, #f, offsetof(struct s, f))

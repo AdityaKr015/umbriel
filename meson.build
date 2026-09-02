@@ -139,6 +139,32 @@ layer_shell_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+wlr_data_control_client_h = custom_target(
+  'wlr-data-control-unstable-v1-client-protocol.h',
+  input: 'protocols/wlr-data-control-unstable-v1.xml',
+  output: 'wlr-data-control-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+wlr_data_control_client_c = custom_target(
+  'wlr-data-control-unstable-v1-client-protocol.c',
+  input: 'protocols/wlr-data-control-unstable-v1.xml',
+  output: 'wlr-data-control-unstable-v1-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
+ext_data_control_client_h = custom_target(
+  'ext-data-control-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-data-control/ext-data-control-v1.xml',
+  output: 'ext-data-control-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+ext_data_control_client_c = custom_target(
+  'ext-data-control-v1-client-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-data-control/ext-data-control-v1.xml',
+  output: 'ext-data-control-v1-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 foreign_toplevel_client_h = custom_target(
   'wlr-foreign-toplevel-management-unstable-v1-client-protocol.h',
   input: 'protocols/wlr-foreign-toplevel-management-unstable-v1.xml',

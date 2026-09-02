@@ -326,7 +326,12 @@ namespace umbriel {
     if (m_contentTypeManager == nullptr) {
       throw std::runtime_error("failed to create content-type manager");
     }
-    wlr_ext_data_control_manager_v1_create(m_display, 1);
+    if (wlr_ext_data_control_manager_v1_create(m_display, 1) == nullptr) {
+      throw std::runtime_error("failed to create ext-data-control manager");
+    }
+    if (wlr_data_control_manager_v1_create(m_display) == nullptr) {
+      throw std::runtime_error("failed to create legacy data-control manager");
+    }
 
     m_outputLayout = wlr_output_layout_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_outputLayout);

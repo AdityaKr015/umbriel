@@ -485,4 +485,4 @@ blur_optimized = false
 # [[security_context_rule]]
 # match.sandbox_engine = 'org\.flatpak'
 # match.app_id = 'org\.example\.ClipboardManager'
-# allow_globals = ["ext_data_control_manager_v1"]
+# allow_globals = ["ext_data_control_manager_v1", "zwlr_data_control_manager_v1"]

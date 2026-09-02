@@ -116,6 +116,20 @@ global_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper that sets the regular clipboard through the legacy data-control
+# protocol and receives it through the standardized replacement.
+data_control_client = executable(
+  'data-control-client',
+  [
+    'harness/clients/data_control_client.cpp',
+    wlr_data_control_client_h,
+    wlr_data_control_client_c,
+    ext_data_control_client_h,
+    ext_data_control_client_c,
+  ],
+  dependencies: [wayland_client_dep],
+)
+
 # Harness helper that reports the active workspace through ext-workspace-v1.
 workspace_client = executable(
   'workspace-client',
@@ -224,6 +238,7 @@ harness_client_targets = [
   drag_client,
   layer_client,
   global_client,
+  data_control_client,
   workspace_client,
   foreign_toplevel_client,
   unmap_client,

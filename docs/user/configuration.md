@@ -3,9 +3,11 @@
 Umbriel checks `$XDG_CONFIG_HOME/umbriel/config.toml` first, followed by each
 `$XDG_CONFIG_DIRS/umbriel/config.toml`, then the packaged
 `share/umbriel/config.toml`. Pass `umbriel -c <path>` to use a different file.
-The packaged file is [`examples/config.toml`](../../examples/config.toml) and
-can be copied into your user config directory as a starting point. Umbriel
-does not create or modify a user config automatically.
+The default example configuration is
+[`examples/config.toml`](../../examples/config.toml). It is installed as
+`config.toml` under Umbriel's data directory, and can be copied into your user
+config directory as a starting point. Umbriel does not create or modify a user
+config automatically.
 
 ## Starting configuration
 
@@ -17,9 +19,9 @@ mkdir -p ~/.config/umbriel
 cp /usr/share/umbriel/config.toml ~/.config/umbriel/config.toml
 ```
 
-For an installation using another prefix, replace `/usr/share` with that
-installation's data directory, commonly `/usr/local/share`. Nix users should
-prefer `programs.umbriel.settings` in Home Manager or hjem.
+With a manual installation using the `/usr/local` prefix, the default example
+configuration is available at `/usr/local/share/umbriel/config.toml`. Nix users
+should prefer `programs.umbriel.settings` in Home Manager or hjem.
 
 Changes normally apply as soon as you save. If a reload fails, Umbriel keeps
 your last working configuration and continues watching included files. Save a

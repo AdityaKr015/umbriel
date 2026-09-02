@@ -309,6 +309,8 @@ hide_when_typing = false       # hide after typing unless a pointer button is he
 hide_timeout_ms = 0            # 0-3600000, 0 disables hiding
 
 [input.focus]
+# Focus the pointer target on motion after scene changes, and when a client data
+# drag finishes over another window.
 follows_mouse = false
 # Refuse hover focus when revealing the window would scroll further than this,
 # measured in viewport widths (1.0 = one full screen). Omit for no limit.

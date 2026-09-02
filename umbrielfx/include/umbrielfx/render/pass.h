@@ -126,11 +126,19 @@ struct fx_render_blur_pass_options {
 struct fx_gles_render_pass *fx_get_render_pass(struct wlr_render_pass *render_pass);
 
 /**
- * Initializes the render pass offscreen buffers required for advanced effects
- * like blur.
+ * Attaches the output's offscreen buffer set to the render pass. The
+ * individual buffers are allocated when an effect first needs them.
  */
 bool fx_render_pass_init_offscreen_buffers(struct wlr_render_pass *render_pass,
 		struct wlr_output *output);
+
+/**
+ * Returns the buffer holding the pixels saved around blurred regions,
+ * allocating it on first use. NULL without offscreen buffers or when the
+ * allocation failed.
+ */
+struct fx_framebuffer *fx_render_pass_blur_saved_pixels_buffer(
+		struct fx_gles_render_pass *pass);
 
 /**
  * Render a fx texture.

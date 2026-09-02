@@ -3818,11 +3818,15 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
 		fx_pass->has_blur = false;
 		should_compensate_blur = false;
 	}
+	struct fx_framebuffer *blur_saved_pixels = NULL;
 	if (should_compensate_blur) {
 		// Capture the padding pixels around the blur where artifacts will be drawn
 		// and draw them back after rendering the scene.
-		fx_render_pass_read_to_buffer(fx_pass, &fx_pass->blur_padding_region,
-				fx_pass->fx_offscreen_buffers->blur_saved_pixels_buffer, fx_pass->buffer);
+		blur_saved_pixels = fx_render_pass_blur_saved_pixels_buffer(fx_pass);
+		if (blur_saved_pixels != NULL) {
+			fx_render_pass_read_to_buffer(fx_pass, &fx_pass->blur_padding_region,
+					blur_saved_pixels, fx_pass->buffer);
+		}
 	}
 
 	pixman_region32_t background;
@@ -3908,10 +3912,10 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
 
 	wlr_output_add_software_cursors_to_render_pass(output, render_pass, &render_data.damage);
 
-	if (should_compensate_blur) {
+	if (blur_saved_pixels != NULL) {
 		// Render the saved pixels over the blur artifacts
 		fx_render_pass_read_to_buffer(fx_pass, &fx_pass->blur_padding_region,
-				fx_pass->buffer, fx_pass->fx_offscreen_buffers->blur_saved_pixels_buffer);
+				fx_pass->buffer, blur_saved_pixels);
 	}
 
 	pixman_region32_fini(&render_data.damage);

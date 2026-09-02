@@ -35,6 +35,12 @@ void get_fx_shm_formats(const struct fx_renderer *renderer, struct wlr_drm_forma
 
 GLuint fx_framebuffer_get_fbo(struct fx_framebuffer *buffer);
 
+/**
+ * Attaches a stencil renderbuffer to the framebuffer on first use. Leaves the
+ * framebuffer bound. Returns false when no stencil could be attached.
+ */
+bool fx_framebuffer_ensure_stencil(struct fx_framebuffer *buffer);
+
 ///
 /// fx_framebuffer
 ///

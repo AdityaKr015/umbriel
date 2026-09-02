@@ -5,12 +5,15 @@
 #include <wlr/util/addon.h>
 
 /**
- * Used to add effect framebuffers per output instead of every output sharing
- * them.
+ * Per-output effect framebuffers. Each buffer is allocated the first time an
+ * effect needs it and kept, sized to the output, until the output goes away
+ * or `fx_renderer_clear_output_effect_buffers` is called.
  */
 struct fx_offscreen_buffers {
 	struct wl_list link; // fx_renderer.offscreen_buffers
 	struct wlr_addon addon;
+	// Allocator of the output the buffers belong to
+	struct wlr_allocator *allocator;
 
 	// Contains the blurred background for tiled windows
 	struct fx_framebuffer *optimized_blur_buffer;

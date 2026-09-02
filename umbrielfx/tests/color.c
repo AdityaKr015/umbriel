@@ -253,12 +253,16 @@ static bool render_texture(struct fixture *fixture, int width, int height,
 		struct fx_gles_render_pass *fx_pass = fx_get_render_pass(pass);
 		ok = check(fx_render_pass_init_offscreen_buffers(
 			pass, fixture->output), "initialize save/restore buffers");
+		struct fx_framebuffer *saved = NULL;
 		if (ok) {
-			fx_render_pass_read_to_buffer(fx_pass, &region,
-				fx_pass->fx_offscreen_buffers->blur_saved_pixels_buffer,
+			saved = fx_render_pass_blur_saved_pixels_buffer(fx_pass);
+			ok = check(saved != NULL, "allocate save/restore buffer");
+		}
+		if (ok) {
+			fx_render_pass_read_to_buffer(fx_pass, &region, saved,
 				fx_pass->buffer);
 			fx_render_pass_read_to_buffer(fx_pass, &region, fx_pass->buffer,
-				fx_pass->fx_offscreen_buffers->blur_saved_pixels_buffer);
+				saved);
 		}
 	}
 	pixman_region32_fini(&region);

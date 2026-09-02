@@ -45,15 +45,6 @@ GLuint fx_framebuffer_get_fbo(struct fx_framebuffer *buffer) {
 			GL_RENDERBUFFER, buffer->rbo);
 	GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 
-	// Init stencil buffer
-	glGenRenderbuffers(1, &buffer->sb);
-	glBindRenderbuffer(GL_RENDERBUFFER, buffer->sb);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8,
-			buffer->buffer->width, buffer->buffer->height);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT,
-			GL_RENDERBUFFER, buffer->sb);
-	fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	if (fb_status != GL_FRAMEBUFFER_COMPLETE) {
@@ -65,6 +56,40 @@ GLuint fx_framebuffer_get_fbo(struct fx_framebuffer *buffer) {
 	pop_fx_debug(buffer->renderer);
 
 	return buffer->fbo;
+}
+
+bool fx_framebuffer_ensure_stencil(struct fx_framebuffer *buffer) {
+	if (buffer->sb) {
+		return true;
+	}
+	GLuint fbo = fx_framebuffer_get_fbo(buffer);
+	if (!fbo) {
+		return false;
+	}
+
+	push_fx_debug(buffer->renderer);
+
+	glGenRenderbuffers(1, &buffer->sb);
+	glBindRenderbuffer(GL_RENDERBUFFER, buffer->sb);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8,
+			buffer->buffer->width, buffer->buffer->height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT,
+			GL_RENDERBUFFER, buffer->sb);
+	GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (fb_status != GL_FRAMEBUFFER_COMPLETE) {
+		wlr_log(WLR_ERROR, "Failed to attach stencil buffer to FBO");
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT,
+				GL_RENDERBUFFER, 0);
+		glDeleteRenderbuffers(1, &buffer->sb);
+		buffer->sb = 0;
+	}
+
+	pop_fx_debug(buffer->renderer);
+
+	return buffer->sb != 0;
 }
 
 void fx_framebuffer_get_or_create_custom(struct fx_renderer *renderer,

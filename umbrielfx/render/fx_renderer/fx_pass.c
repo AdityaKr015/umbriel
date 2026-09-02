@@ -69,37 +69,44 @@ bool fx_render_pass_init_offscreen_buffers(struct wlr_render_pass *render_pass,
 				output->name);
 		return false;
 	}
-
-	// Update the buffers if needed
-	struct fx_renderer *renderer = pass->buffer->renderer;
-	const int width = pass->buffer->buffer->width;
-	const int height = pass->buffer->buffer->height;
-	bool failed = false;
-	const uint32_t opaque_format = pass->has_color_transform
-		? DRM_FORMAT_ABGR16161616F : DRM_FORMAT_XBGR8888;
-	const uint32_t alpha_format = pass->has_color_transform
-		? DRM_FORMAT_ABGR16161616F : DRM_FORMAT_ABGR8888;
-	fx_framebuffer_get_or_create_custom(renderer, output->allocator, width, height, opaque_format,
-			&pass->fx_offscreen_buffers->blur_saved_pixels_buffer, &failed);
-	fx_framebuffer_get_or_create_custom(renderer, output->allocator, width, height, alpha_format,
-			&pass->fx_offscreen_buffers->effects_buffer, &failed);
-	fx_framebuffer_get_or_create_custom(renderer, output->allocator, width, height, alpha_format,
-			&pass->fx_offscreen_buffers->effects_buffer_swapped, &failed);
-	fx_framebuffer_get_or_create_custom(renderer, output->allocator, width, height, opaque_format,
-			&pass->fx_offscreen_buffers->optimized_blur_buffer, &failed);
-	fx_framebuffer_get_or_create_custom(renderer, output->allocator, width, height, opaque_format,
-			&pass->fx_offscreen_buffers->optimized_no_blur_buffer, &failed);
-
-	// Bind back to the default buffer
-	fx_framebuffer_bind(pass->buffer);
-
-	if (failed) {
-		fx_offscreen_buffers_destroy(pass->fx_offscreen_buffers);
-		pass->fx_offscreen_buffers = NULL;
-		wlr_log(WLR_ERROR, "Failed to create effect framebuffers");
-		return false;
-	}
+	pass->fx_offscreen_buffers->allocator = output->allocator;
 	return true;
+}
+
+// Allocates the offscreen buffer in *slot on first use, matching the pass
+// target's size and its FP16 format under a color transform. Rebinds the pass
+// target. Returns NULL when the buffer could not be allocated.
+static struct fx_framebuffer *ensure_offscreen_buffer(struct fx_gles_render_pass *pass,
+		struct fx_framebuffer **slot, bool alpha) {
+	struct fx_offscreen_buffers *fbos = pass->fx_offscreen_buffers;
+	if (fbos == NULL) {
+		return NULL;
+	}
+	uint32_t format;
+	if (pass->has_color_transform) {
+		format = DRM_FORMAT_ABGR16161616F;
+	} else {
+		format = alpha ? DRM_FORMAT_ABGR8888 : DRM_FORMAT_XBGR8888;
+	}
+	bool failed = false;
+	fx_framebuffer_get_or_create_custom(pass->buffer->renderer, fbos->allocator,
+		pass->buffer->buffer->width, pass->buffer->buffer->height, format,
+		slot, &failed);
+	fx_framebuffer_bind(pass->buffer);
+	if (failed) {
+		wlr_log(WLR_ERROR, "Failed to create effect framebuffer");
+		return NULL;
+	}
+	return *slot;
+}
+
+struct fx_framebuffer *fx_render_pass_blur_saved_pixels_buffer(
+		struct fx_gles_render_pass *pass) {
+	if (pass->fx_offscreen_buffers == NULL) {
+		return NULL;
+	}
+	return ensure_offscreen_buffer(pass,
+		&pass->fx_offscreen_buffers->blur_saved_pixels_buffer, false);
 }
 
 ///
@@ -279,10 +286,13 @@ static const struct wlr_render_pass_impl render_pass_impl = {
 /// FX pass functions
 ///
 
-// TODO: REMOVE STENCILING
-
-// Initialize the stenciling work
-static void stencil_mask_init(void) {
+// Initialize the stenciling work. Returns false when the pass target has no
+// stencil buffer, in which case no mask is active and stencil_mask_close and
+// stencil_mask_fini must be skipped.
+static bool stencil_mask_init(struct fx_gles_render_pass *pass) {
+	if (!fx_framebuffer_ensure_stencil(pass->buffer)) {
+		return false;
+	}
 	glClearStencil(0);
 	glClear(GL_STENCIL_BUFFER_BIT);
 	glEnable(GL_STENCIL_TEST);
@@ -291,6 +301,7 @@ static void stencil_mask_init(void) {
 	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 	// Disable writing to color buffer
 	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+	return true;
 }
 
 // Close the mask
@@ -1409,6 +1420,12 @@ static struct fx_framebuffer *get_main_buffer_blur(struct fx_gles_render_pass *p
 	}
 	fx_options->blur_data = &blur_data;
 
+	struct fx_offscreen_buffers *fbos = pass->fx_offscreen_buffers;
+	if (ensure_offscreen_buffer(pass, &fbos->effects_buffer, true) == NULL
+			|| ensure_offscreen_buffer(pass, &fbos->effects_buffer_swapped, true) == NULL) {
+		return NULL;
+	}
+
 	// The clip and current buffer are already in physical render-target
 	// coordinates. The incoming transform belongs to the optional surface mask
 	// and must not rotate either the full-framebuffer samples or their damage.
@@ -1529,22 +1546,28 @@ void fx_render_pass_add_blur(struct fx_gles_render_pass *pass,
 	push_fx_debug(renderer);
 
 	const bool has_strength = fx_options->blur_strength < 1.0;
-	struct fx_framebuffer *buffer = pass->fx_offscreen_buffers->optimized_blur_buffer;
+	struct fx_offscreen_buffers *fbos = pass->fx_offscreen_buffers;
+	struct fx_framebuffer *buffer = NULL;
 	TRACY_ZONE_TEXT_f("Use Optimized Blur: %d", fx_options->use_optimized_blur);
-	TRACY_ZONE_TEXT_f("Optimized Blur Successfully Used: %d",
-			buffer && fx_options->use_optimized_blur);
 	if (!fx_options->use_optimized_blur || has_strength) {
 		// Render the blur into its own buffer
 		struct fx_render_blur_pass_options blur_options = *fx_options;
 		if (fx_options->use_optimized_blur && has_strength) {
 			// Re-blur the saved non-blurred version of the optimized blur.
 			// Isn't as efficient as just using the optimized blur buffer
-			blur_options.current_buffer = pass->fx_offscreen_buffers->optimized_no_blur_buffer;
+			blur_options.current_buffer = ensure_offscreen_buffer(pass,
+				&fbos->optimized_no_blur_buffer, false);
 		} else {
 			blur_options.current_buffer = pass->buffer;
 		}
-		buffer = get_main_buffer_blur(pass, &blur_options);
+		if (blur_options.current_buffer != NULL) {
+			buffer = get_main_buffer_blur(pass, &blur_options);
+		}
+	} else {
+		buffer = ensure_offscreen_buffer(pass, &fbos->optimized_blur_buffer, false);
 	}
+	TRACY_ZONE_TEXT_f("Optimized Blur Successfully Used: %d",
+			buffer && fx_options->use_optimized_blur);
 	if (!buffer) {
 		goto finish;
 	}
@@ -1553,9 +1576,11 @@ void fx_render_pass_add_blur(struct fx_gles_render_pass *pass,
 	struct fx_texture *blur_texture = fx_get_texture(wlr_texture);
 
 	// Get a stencil of the window ignoring transparent regions
+	bool masked = false;
 	if (fx_options->ignore_alpha > 0.0f && fx_options->tex_options.base.texture) {
-		stencil_mask_init();
-
+		masked = stencil_mask_init(pass);
+	}
+	if (masked) {
 		struct fx_render_texture_options tex_options = fx_options->tex_options;
 		tex_options.discard_transparent = fx_options->ignore_alpha;
 		tex_options.clipped_region = fx_options->clipped_region;
@@ -1590,7 +1615,7 @@ void fx_render_pass_add_blur(struct fx_gles_render_pass *pass,
 	wlr_texture_destroy(&blur_texture->wlr_texture);
 
 	// Finish stenciling
-	if (fx_options->ignore_alpha > 0.0f && fx_options->tex_options.base.texture) {
+	if (masked) {
 		stencil_mask_fini();
 	}
 
@@ -1641,18 +1666,24 @@ bool fx_render_pass_add_optimized_blur(struct fx_gles_render_pass *pass,
 			dst_box.x, dst_box.y, dst_box.width, dst_box.height);
 
 	// Render the blur into its own buffer
-	struct fx_render_blur_pass_options blur_options = *fx_options;
-	blur_options.current_buffer = pass->buffer;
-	blur_options.tex_options.base.clip = &clip;
-	struct fx_framebuffer *fx_buffer = get_main_buffer_blur(pass, &blur_options);
+	struct fx_offscreen_buffers *fbos = pass->fx_offscreen_buffers;
+	struct fx_framebuffer *blur_buffer =
+		ensure_offscreen_buffer(pass, &fbos->optimized_blur_buffer, false);
+	struct fx_framebuffer *no_blur_buffer =
+		ensure_offscreen_buffer(pass, &fbos->optimized_no_blur_buffer, false);
+	struct fx_framebuffer *fx_buffer = NULL;
+	if (blur_buffer != NULL && no_blur_buffer != NULL) {
+		struct fx_render_blur_pass_options blur_options = *fx_options;
+		blur_options.current_buffer = pass->buffer;
+		blur_options.tex_options.base.clip = &clip;
+		fx_buffer = get_main_buffer_blur(pass, &blur_options);
+	}
 	if (fx_buffer != NULL) {
 		// Render the newly blurred content into the blur_buffer
-		fx_render_pass_read_to_buffer(pass, &clip,
-				pass->fx_offscreen_buffers->optimized_blur_buffer, fx_buffer);
+		fx_render_pass_read_to_buffer(pass, &clip, blur_buffer, fx_buffer);
 
 		// Save the current scene pass state
-		fx_render_pass_read_to_buffer(pass, &clip,
-				pass->fx_offscreen_buffers->optimized_no_blur_buffer, pass->buffer);
+		fx_render_pass_read_to_buffer(pass, &clip, no_blur_buffer, pass->buffer);
 	}
 
 	pixman_region32_fini(&clip);

@@ -709,6 +709,12 @@ UMBRIEL_TEST(defaultKeybindsAreUsable) {
 
   // No default may carry an unset action.
   CHECK(std::ranges::none_of(binds, [](const Keybind& bind) { return bind.action == KeybindAction::None; }));
+  const auto close =
+      std::ranges::find_if(binds, [](const Keybind& bind) { return bind.action == KeybindAction::WindowClose; });
+  CHECK(close != binds.end());
+  CHECK(close->useMod);
+  CHECK_EQ(close->modifiers, uint32_t{0});
+  CHECK_EQ(close->keysym, xkb_keysym_to_lower(XKB_KEY_q));
 
   // Overview toggle must not key-repeat: holding it would thrash open/close.
   const auto overview =

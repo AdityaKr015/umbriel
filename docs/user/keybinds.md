@@ -7,7 +7,7 @@ reference.
 ```toml
 [keybinds]
 "Mod+T" = "spawn:kitty"
-"Mod+Shift+Q" = "window-close"
+"Mod+Q" = "window-close"
 "Mod+I" = "overview-toggle"
 ```
 

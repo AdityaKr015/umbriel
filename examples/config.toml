@@ -323,11 +323,15 @@ follows_mouse = false
 # Runtime switchers can use `window-focus-warp:<id>` to move both focus and the
 # cursor. Window ids come from `umbriel windows`, so they are not static binds.
 "Mod+Return" = "spawn:kitty"
+"Mod+Left" = "window-focus-left"
+"Mod+Right" = "window-focus-right"
+"Mod+Up" = "window-focus-up"
+"Mod+Down" = "window-focus-down"
 "Mod+T" = "window-toggle-floating"
 "Mod+Shift+T" = "window-focus-switch-floating"
 "Mod+P" = "window-toggle-pinned"
 "Mod+M" = "window-toggle-maximize-to-edges"
-"Mod+Shift+Q" = "window-close"
+"Mod+Q" = "window-close"
 "Mod+Shift+Space" = "window-move-to-scratchpad"
 "Mod+Space" = "scratchpad-toggle"
 "Mod+Ctrl+Space" = "window-restore-from-scratchpad"

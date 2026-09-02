@@ -25,9 +25,9 @@ mkdir -p ~/.config/umbriel
 cp /usr/share/umbriel/config.toml ~/.config/umbriel/config.toml
 ```
 
-For an installation using another prefix, replace `/usr/share` with that
-installation's data directory, commonly `/usr/local/share`. Nix users should
-prefer `programs.umbriel.settings` in Home Manager or hjem.
+With a manual installation using the `/usr/local` prefix, the default example
+configuration is available at `/usr/local/share/umbriel/config.toml`. Nix users
+should prefer `programs.umbriel.settings` in Home Manager or hjem.
 
 Creating the user file while Umbriel is running applies it automatically, as
 do later saves. No logout or restart is needed. If a reload fails, Umbriel

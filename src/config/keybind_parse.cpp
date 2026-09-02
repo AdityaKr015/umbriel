@@ -541,6 +541,7 @@ namespace umbriel {
     };
 
     add(KeybindAction::SessionQuit, XKB_KEY_Escape);
+    add(KeybindAction::WindowClose, XKB_KEY_q);
     add(KeybindAction::WindowFocusNext, XKB_KEY_F1);
 
     add(KeybindAction::WindowFocusLeft, XKB_KEY_Left);

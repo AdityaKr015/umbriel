@@ -148,6 +148,8 @@ color = "#0000007F"
 [overview]
 zoom = 0.5                     # 0.1-0.75
 # Pinned windows stay hidden until overview closes; visible scratchpads are dismissed.
+# One card wears border_focused: the window a focus or close action would act on, on the output holding the cursor.
+# Other rows mark their own window with a fainter blend of border_focused into border_unfocused.
 # background_blur = true        # blur the wallpaper while the overview is open
 # background_tint = "#10101430"
 # workspace_background = "#00000044" # set alpha to FF for an opaque background

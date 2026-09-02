@@ -195,7 +195,11 @@ namespace umbriel {
 
     void applyProgress();
     void layoutOutput(OutputState& state);
-    void layoutCard(Card& card, const RowMetrics& metrics, double rowScroll);
+    void layoutCard(Card& card, const RowMetrics& metrics, double rowScroll, const View* liveTarget);
+    // The window a focus or close action would act on right now: the focused view of the active workspace on the
+    // output holding the cursor. Null when that workspace is empty, which is also when those actions do nothing.
+    [[nodiscard]] View* liveTargetView() const;
+    [[nodiscard]] std::array<float, 4> cardBorderColor(const Card& card, const View* liveTarget) const;
     void assignShortcuts();
     void renderCardShortcut(Card& card);
     bool handleShortcutKey(uint32_t keysym);
@@ -242,6 +246,8 @@ namespace umbriel {
     std::string m_shortcutInput;
     std::vector<ShortcutAssignment> m_shortcutAssignments;
     size_t m_shortcutLabelCapacity = 0;
+    // Output under the pointer, which is the output the live target resolves against.
+    Output* m_pointerOutput = nullptr;
 
     Card* m_pressCard = nullptr;
     Workspace* m_pressWorkspace = nullptr;

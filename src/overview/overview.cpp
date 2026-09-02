@@ -37,6 +37,16 @@ namespace umbriel {
     constexpr double kRowGapFraction = 0.1;
     // Pointer travel that promotes a press on a card into a relocate drag.
     constexpr double kDragThreshold = 10.0;
+    // How much of the focused border color mixes into the unfocused one for a landing target that is not the live one.
+    constexpr float kLandingTargetBlend = 0.4F;
+
+    std::array<float, 4> mixColor(const std::array<float, 4>& from, const std::array<float, 4>& to, float amount) {
+      std::array<float, 4> out{};
+      for (size_t index = 0; index < out.size(); ++index) {
+        out[index] = std::lerp(from[index], to[index], amount);
+      }
+      return out;
+    }
 
     bool boxContains(const wlr_box& box, double x, double y) {
       return x >= box.x && y >= box.y && x < box.x + box.width && y < box.y + box.height;
@@ -152,7 +162,7 @@ namespace umbriel {
     return static_cast<int>(std::lround(metrics.baseY + offset));
   }
 
-  void Overview::layoutCard(Card& card, const RowMetrics& metrics, double rowScroll) {
+  void Overview::layoutCard(Card& card, const RowMetrics& metrics, double rowScroll, const View* liveTarget) {
     View* view = card.view;
     const wlr_box& geometry = view->toplevel()->base->geometry;
     if (geometry.width <= 0 || geometry.height <= 0) {
@@ -218,12 +228,7 @@ namespace umbriel {
       applyBorderGeometry(
           card.border, makeBorderRing(contentW, contentH, outerRadius, innerWidth, outerWidth), innerWidth, outerWidth
       );
-      // Every row advertises its own focused window, not just the active one:
-      // the filmstrip is a browsing aid, and the border identifies its target.
-      const Workspace* workspace = view->workspace();
-      const bool focused = workspace != nullptr && workspace->focusedView() == view && m_dragCard != &card;
-      const std::array<float, 4> innerColor =
-          tint(focused ? appearance.borderFocused : appearance.borderUnfocused, presentedOpacity);
+      const std::array<float, 4> innerColor = tint(cardBorderColor(card, liveTarget), presentedOpacity);
       const std::array<float, 4> outerColor = tint(appearance.outerBorderColor, presentedOpacity);
       wlr_scene_border_set_colors(card.border, innerColor.data(), outerColor.data());
     }
@@ -345,9 +350,29 @@ namespace umbriel {
       layoutWorkspaceBackground(background, full, backgroundRadius, backgroundColor);
     }
 
+    const View* liveTarget = liveTargetView();
     for (const auto& card : state.cards) {
-      layoutCard(*card, metrics, state.rowScroll);
+      layoutCard(*card, metrics, state.rowScroll, liveTarget);
     }
+  }
+
+  View* Overview::liveTargetView() const {
+    const Workspace* workspace = preferredWorkspace();
+    return workspace != nullptr ? workspace->focusedView() : nullptr;
+  }
+
+  std::array<float, 4> Overview::cardBorderColor(const Card& card, const View* liveTarget) const {
+    const auto& appearance = config().appearance;
+    const Workspace* workspace = card.view != nullptr ? card.view->workspace() : nullptr;
+    if (workspace == nullptr || workspace->focusedView() != card.view || &card == m_dragCard) {
+      return appearance.borderUnfocused;
+    }
+    // No window holds the seat while the overview is up, so exactly one card wears the focused color: the one a focus
+    // or close action would act on. Every other row still marks the card it would land on, with a weaker mix.
+    if (card.view == liveTarget) {
+      return appearance.borderFocused;
+    }
+    return mixColor(appearance.borderUnfocused, appearance.borderFocused, kLandingTargetBlend);
   }
 
   void Overview::applyProgress() {
@@ -486,7 +511,7 @@ namespace umbriel {
     wlr_surface_for_each_surface(card->view->toplevel()->base->surface, syncCardSurface, card);
     RowMetrics metrics{};
     if (rowMetrics(*card->owner, *self->m_server, self->zoom(), metrics)) {
-      self->layoutCard(*card, metrics, card->owner->rowScroll);
+      self->layoutCard(*card, metrics, card->owner->rowScroll, self->liveTargetView());
       wlr_output_schedule_frame(card->owner->output->wlr());
     }
   }
@@ -623,10 +648,7 @@ namespace umbriel {
         wlr_scene_node_set_position(
             &copy->node, card.tree->node.x + card.border->node.x, card.tree->node.y + card.border->node.y
         );
-        const Workspace* workspace = card.view->workspace();
-        const bool focused = workspace != nullptr && workspace->focusedView() == card.view;
-        std::array<float, 4> innerColor =
-            focused ? config().appearance.borderFocused : config().appearance.borderUnfocused;
+        std::array<float, 4> innerColor = cardBorderColor(card, liveTargetView());
         std::array<float, 4> outerColor = config().appearance.outerBorderColor;
         const float presentedOpacity = card.view->presentedOpacity();
         innerColor[3] *= presentedOpacity;
@@ -1043,6 +1065,7 @@ namespace umbriel {
     m_progress = 0.0;
     m_targetProgress = 0.0;
     m_pendingFocus = nullptr;
+    m_pointerOutput = m_server->outputFromWlr(m_server->preferredOutput());
     m_server->notifyOverviewChanged();
 
     // Initialize every View's canonical presentation box before cards consume it. Hidden workspaces normally skip
@@ -1264,6 +1287,7 @@ namespace umbriel {
     m_closing = false;
     m_progress = 0.0;
     m_targetProgress = 0.0;
+    m_pointerOutput = nullptr;
     m_server->notifyOverviewChanged();
     m_pressCard = nullptr;
     m_pressWorkspace = nullptr;
@@ -1833,6 +1857,13 @@ namespace umbriel {
     if (!interactive()) {
       return;
     }
+    // The live target resolves through preferredOutput(), and the overview owns motion while it is up: repaint when
+    // the pointer crosses outputs, whether by hand or through the warp a keybind performs to change output.
+    if (Output* output = m_server->outputFromWlr(wlr_output_layout_output_at(m_server->outputLayout(), lx, ly));
+        output != m_pointerOutput) {
+      m_pointerOutput = output;
+      applyProgress();
+    }
     if (m_middlePressed) {
       if (!m_middleDragging) {
         const double dx = lx - m_middlePressX;
@@ -2094,7 +2125,7 @@ namespace umbriel {
     wlr_scene_node_raise_to_top(&card->tree->node);
     RowMetrics metrics{};
     if (card->owner != nullptr && rowMetrics(*card->owner, *m_server, zoom(), metrics)) {
-      layoutCard(*card, metrics, card->owner->rowScroll);
+      layoutCard(*card, metrics, card->owner->rowScroll, liveTargetView());
     }
     m_server->cursor()->overrideCursor("grabbing");
   }

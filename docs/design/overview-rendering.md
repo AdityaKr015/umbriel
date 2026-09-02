@@ -63,10 +63,22 @@ alpha and strength fade with zoom progress. When `[appearance.blur] optimized`
 is enabled, it samples the optimized background buffer. The node is absent when
 appearance blur or `overview.background_blur` is disabled.
 
-The focused border tracks the workspace's focused view, so each row shows where
-it will land when zoomed into. Closing the focused window reassigns focus to its
-nearest predecessor while the overview stays open, or to the next neighbor when
-there is no predecessor. The border moves with it.
+No window holds the seat while the overview is open, so exactly one card can
+wear `appearance.border_focused`: the live target, meaning the focused view of
+the active workspace on the output under the cursor. That is the window a focus
+or close action resolves to through `preferredOutput()`, so the strong border
+also identifies the current output. Every other row marks its own focused view
+with a blend of `border_focused` into `border_unfocused`, showing where the row
+would land without claiming focus. An empty current workspace leaves no strong
+border, which is also when those actions have no target.
+
+The live target is resolved per layout pass. `Overview::handleMotion` repaints
+when the pointer changes output, which covers both hand motion and the cursor
+warp an output-changing keybind performs, and `onFocusChanged` covers the rest.
+
+Closing the focused window reassigns focus to its nearest predecessor while the
+overview stays open, or to the next neighbor when there is no predecessor. The
+markers move with it.
 
 ## Dragging
 
@@ -99,6 +111,9 @@ The relevant checks are:
   close snapshot settles.
 - [`tests/harness/checks/340_overview_focus_motion.sh`](../../tests/harness/checks/340_overview_focus_motion.sh)
   for selected-column focus and reveal beginning during the closing zoom.
+- [`tests/harness/checks/361_overview_focus_marker.sh`](../../tests/harness/checks/361_overview_focus_marker.sh)
+  for one live marker across two outputs, following both an output-changing
+  keybind and plain pointer motion.
 - [`tests/harness/checks/350_overview_horizontal_overflow.sh`](../../tests/harness/checks/350_overview_horizontal_overflow.sh)
   for cards extending past the scaled workspace background while staying inside
   the output.

@@ -672,8 +672,49 @@ namespace umbriel {
     Server* self;
     self = wl_container_of(listener, self, m_newVirtualKeyboard);
     auto* keyboard = static_cast<wlr_virtual_keyboard_v1*>(data);
-    self->addKeyboard(&keyboard->keyboard.base);
-    self->updateSeatCapabilities();
+    if (keyboard->keyboard.keymap != nullptr) {
+      self->addKeyboard(&keyboard->keyboard.base);
+      self->updateSeatCapabilities();
+      return;
+    }
+
+    // Virtual-keyboard creation and keymap upload are separate protocol
+    // requests. Do not expose the device until it has a usable map, otherwise
+    // wlroots broadcasts a transient no-keymap event to every keyboard client.
+    auto* pending = new PendingVirtualKeyboard{
+        .server = self,
+        .keyboard = &keyboard->keyboard,
+    };
+    pending->keymap.notify = onPendingVirtualKeyboardKeymap;
+    wl_signal_add(&keyboard->keyboard.events.keymap, &pending->keymap);
+    pending->destroy.notify = onPendingVirtualKeyboardDestroy;
+    wl_signal_add(&keyboard->keyboard.base.events.destroy, &pending->destroy);
+  }
+
+  void Server::onPendingVirtualKeyboardKeymap(wl_listener* listener, void* /*data*/) {
+    PendingVirtualKeyboard* pending;
+    pending = wl_container_of(listener, pending, keymap);
+    if (pending->keyboard->keymap == nullptr) {
+      return;
+    }
+
+    Server* server = pending->server;
+    wlr_input_device* device = &pending->keyboard->base;
+    destroyPendingVirtualKeyboard(pending);
+    server->addKeyboard(device);
+    server->updateSeatCapabilities();
+  }
+
+  void Server::onPendingVirtualKeyboardDestroy(wl_listener* listener, void* /*data*/) {
+    PendingVirtualKeyboard* pending;
+    pending = wl_container_of(listener, pending, destroy);
+    destroyPendingVirtualKeyboard(pending);
+  }
+
+  void Server::destroyPendingVirtualKeyboard(PendingVirtualKeyboard* pending) {
+    wl_list_remove(&pending->keymap.link);
+    wl_list_remove(&pending->destroy.link);
+    delete pending;
   }
 
   void Server::onNewVirtualPointer(wl_listener* listener, void* data) {
@@ -1097,10 +1138,10 @@ namespace umbriel {
       notifyKeyboardLayoutIpc();
     }
 
-    // A virtual keyboard may arrive before its client provides a keymap. Keep
-    // an existing seat keyboard until real input selects another device, but an
-    // empty seat needs one for focus enter and input-method keymap delivery.
-    if (!seatHasKeyboard) {
+    // Pending virtual keyboards are promoted only after their first keymap.
+    // Keep the same guard for physical-keymap setup failures so wlroots never
+    // broadcasts a transient no-keymap event from this path.
+    if (!seatHasKeyboard && keyboard->wlr()->keymap != nullptr) {
       wlr_seat_set_keyboard(seat, keyboard->wlr());
     }
   }

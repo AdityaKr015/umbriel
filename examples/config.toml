@@ -250,6 +250,7 @@ new_on_top = true             # place new windows at the top of the stack
 middle_click_paste = true      # primary-selection clipboard, applies on reload
 
 [input.keyboard]
+# Physical keyboard XKB settings; virtual keyboards provide their own keymaps.
 # ASCII keybind fallback uses only layouts listed for this keyboard; a single
 # non-Latin layout has no implicit Latin fallback.
 layout = ""                    # "us,de" loads both; switch with keyboard-layout-next

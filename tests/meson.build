@@ -74,6 +74,17 @@ pointer_client = executable(
   dependencies: [wayland_client_dep, xkbcommon_dep],
 )
 
+# Harness helper that checks deferred virtual-keyboard keymaps as seen by regular wl_keyboard clients.
+keyboard_keymap_client = executable(
+  'keyboard-keymap-client',
+  [
+    'harness/clients/keyboard_keymap_client.cpp',
+    virtual_keyboard_client_h,
+    virtual_keyboard_client_c,
+  ],
+  dependencies: [wayland_client_dep, xkbcommon_dep],
+)
+
 # Harness helper that reproduces the keyboard ownership of a real input method.
 input_method_client = executable(
   'input-method-client',
@@ -234,6 +245,7 @@ security_context_client = executable(
 
 harness_client_targets = [
   pointer_client,
+  keyboard_keymap_client,
   input_method_client,
   drag_client,
   layer_client,

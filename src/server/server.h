@@ -35,6 +35,7 @@ struct wlr_foreign_toplevel_manager_v1;
 struct wlr_idle_inhibit_manager_v1;
 struct wlr_idle_notifier_v1;
 struct wlr_input_device;
+struct wlr_keyboard;
 struct wlr_layer_shell_v1;
 struct wlr_output;
 struct wlr_output_layout;
@@ -359,6 +360,8 @@ namespace umbriel {
     static void onNewSessionLock(wl_listener* listener, void* data);
     static void onNewPointerConstraint(wl_listener* listener, void* data);
     static void onNewVirtualKeyboard(wl_listener* listener, void* data);
+    static void onPendingVirtualKeyboardKeymap(wl_listener* listener, void* data);
+    static void onPendingVirtualKeyboardDestroy(wl_listener* listener, void* data);
     static void onNewVirtualPointer(wl_listener* listener, void* data);
     static void onVirtualPointerDestroy(wl_listener* listener, void* data);
     static void onNewIdleInhibitor(wl_listener* listener, void* data);
@@ -393,6 +396,13 @@ namespace umbriel {
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
+    struct PendingVirtualKeyboard {
+      Server* server = nullptr;
+      wlr_keyboard* keyboard = nullptr;
+      wl_listener keymap{};
+      wl_listener destroy{};
+    };
+    static void destroyPendingVirtualKeyboard(PendingVirtualKeyboard* pending);
     void syncKeyboardLayout(Keyboard* source);
     // Restore a remembered named layout through a compatible physical keyboard.
     bool setKeyboardLayout(std::string_view layout);

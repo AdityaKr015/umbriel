@@ -22,6 +22,7 @@
 #include "render/fx_renderer/fx_renderer.h"
 #include "render/tracy.h"
 #include "umbrielfx/render/fx_renderer/fx_offscreen_buffers.h"
+#include "umbrielfx/render/fx_renderer/fx_renderer.h"
 #include "umbrielfx/render/pass.h"
 #include "umbrielfx/types/fx/blur_data.h"
 #include "umbrielfx/types/fx/clipped_region.h"
@@ -3654,6 +3655,10 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
 	}
 
 	if (scanout) {
+		if (wlr_renderer_is_fx(output->renderer)) {
+			// The shared blend target did not receive the scanned-out frame.
+			fx_offscreen_buffers_invalidate_blend(output);
+		}
 		scene_output_state_attempt_gamma(scene_output, state);
 
 		if (timer) {
@@ -3712,13 +3717,15 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
 	}
 
 	scene_output->in_point++;
-	struct wlr_render_pass *render_pass = wlr_renderer_begin_buffer_pass(output->renderer, buffer,
-			&(struct wlr_buffer_pass_options){
+	const struct wlr_buffer_pass_options pass_options = {
 		.timer = timer ? timer->render_timer : NULL,
 		.color_transform = scene_output->combined_color_transform,
 		.signal_timeline = scene_output->in_timeline,
 		.signal_point = scene_output->in_point,
-	});
+	};
+	struct wlr_render_pass *render_pass = wlr_renderer_is_fx(output->renderer)
+		? fx_renderer_begin_output_buffer_pass(output, buffer, &pass_options)
+		: wlr_renderer_begin_buffer_pass(output->renderer, buffer, &pass_options);
 	if (render_pass == NULL) {
 		wlr_buffer_unlock(buffer);
 
@@ -3733,6 +3740,15 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
 		&render_data.damage);
 
 	struct fx_gles_render_pass *fx_pass = fx_get_render_pass(render_pass);
+	if (fx_pass->needs_full_damage) {
+		pixman_region32_t full_damage;
+		pixman_region32_init_rect(&full_damage, 0, 0,
+			buffer->width, buffer->height);
+		pixman_region32_union(&render_data.damage, &render_data.damage,
+			&full_damage);
+		wlr_output_state_set_damage(state, &full_damage);
+		pixman_region32_fini(&full_damage);
+	}
 	fx_pass->output_buffer->capture_sdr =
 		options->capture_sdr && fx_pass->has_color_transform;
 	bool should_compensate_blur = false;

@@ -201,6 +201,12 @@ if build_tests
     'fp16-blur',
     'fp16-blur-effects',
     'fp16-save-restore',
+    'shared-output-buffers',
+    'output-lut-cache',
+    'shared-sdr-capture',
+    'shared-output-transform-transition',
+    'shared-sdr-capture-lock',
+    'shared-sdr-capture-storage-change',
   ]
     test(
       'umbrielfx-color-' + case_name,

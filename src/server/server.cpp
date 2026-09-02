@@ -730,7 +730,17 @@ namespace umbriel {
     return true;
   }
 
-  void Server::showConfigDiagnostics() { m_configBanner->show(configDiagnostics()); }
+  void Server::showConfigDiagnostics() {
+    std::vector<ConfigDiagnostic> diagnostics = configDiagnostics();
+    if (m_xwayland != nullptr && !m_xwayland->executableAvailable()) {
+      ConfigDiagnostic diagnostic;
+      diagnostic.severity = ConfigDiagnostic::Severity::Warning;
+      diagnostic.message =
+          "general.xwayland is enabled, but xwayland-satellite was not found on PATH; X11 applications will not work";
+      diagnostics.push_back(std::move(diagnostic));
+    }
+    m_configBanner->show(diagnostics);
+  }
 
   void Server::markDirty(Dirty what) {
     m_dirty |= what;

@@ -397,7 +397,7 @@ follows_mouse = false
 # Blur all windows
 [[window_rule]]
 blur = true
-blur_optimized = true
+blur_optimized = false
 
 # Open an app maximized while keeping its parented dialogs at their natural size
 # [[window_rule]]

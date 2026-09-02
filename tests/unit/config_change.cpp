@@ -636,6 +636,35 @@ UMBRIEL_TEST(blurRulesAndInputReachOnlyTheirConsumers) {
   CHECK(ConfigEffects::between(before, cursorChanged).input);
 }
 
+UMBRIEL_TEST(ruleRequestingOptimizedBlurReachesTheOutputs) {
+  Config before;
+  before.appearance.blur.optimized = false;
+  CHECK(!before.optimizedBlurNeeded());
+
+  // Adding a window rule normally only touches view chrome, but a rule that
+  // asks for the cached background blur has to create it on every output.
+  Config windowed = before;
+  WindowRule rule;
+  rule.blurOptimized = true;
+  windowed.windowRules.push_back(rule);
+  CHECK(windowed.optimizedBlurNeeded());
+  CHECK(ConfigEffects::between(before, windowed).sceneBlur);
+
+  Config layered = before;
+  LayerRule layerRule;
+  layerRule.optimized = true;
+  layered.layerRules.push_back(layerRule);
+  CHECK(layered.optimizedBlurNeeded());
+  CHECK(ConfigEffects::between(before, layered).sceneBlur);
+
+  Config optedOut = before;
+  WindowRule plain;
+  plain.blurOptimized = false;
+  optedOut.windowRules.push_back(plain);
+  CHECK(!optedOut.optimizedBlurNeeded());
+  CHECK(!ConfigEffects::between(before, optedOut).sceneBlur);
+}
+
 UMBRIEL_TEST(overviewInvalidationExcludesIrrelevantRuntimeEffects) {
   const Config before;
 

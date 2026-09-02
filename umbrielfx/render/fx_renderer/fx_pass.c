@@ -1532,6 +1532,13 @@ static struct fx_framebuffer *get_main_buffer_blur(struct fx_gles_render_pass *p
 	return fx_options->current_buffer;
 }
 
+static bool optimized_buffer_ready(const struct fx_gles_render_pass *pass,
+		const struct fx_framebuffer *buffer) {
+	return buffer != NULL
+		&& buffer->buffer->width == pass->buffer->buffer->width
+		&& buffer->buffer->height == pass->buffer->buffer->height;
+}
+
 void fx_render_pass_add_blur(struct fx_gles_render_pass *pass,
 		struct fx_render_blur_pass_options *fx_options) {
 	if (pass->fx_offscreen_buffers == NULL) {
@@ -1547,27 +1554,29 @@ void fx_render_pass_add_blur(struct fx_gles_render_pass *pass,
 
 	const bool has_strength = fx_options->blur_strength < 1.0;
 	struct fx_offscreen_buffers *fbos = pass->fx_offscreen_buffers;
+	// The optimized buffers only hold content once an optimized blur node has
+	// rendered on this output at the current size. Without that, blur the live
+	// pass target rather than an empty buffer.
+	const bool use_optimized = fx_options->use_optimized_blur
+		&& optimized_buffer_ready(pass, fbos->optimized_blur_buffer)
+		&& optimized_buffer_ready(pass, fbos->optimized_no_blur_buffer);
 	struct fx_framebuffer *buffer = NULL;
 	TRACY_ZONE_TEXT_f("Use Optimized Blur: %d", fx_options->use_optimized_blur);
-	if (!fx_options->use_optimized_blur || has_strength) {
+	if (!use_optimized || has_strength) {
 		// Render the blur into its own buffer
 		struct fx_render_blur_pass_options blur_options = *fx_options;
-		if (fx_options->use_optimized_blur && has_strength) {
+		if (use_optimized) {
 			// Re-blur the saved non-blurred version of the optimized blur.
 			// Isn't as efficient as just using the optimized blur buffer
-			blur_options.current_buffer = ensure_offscreen_buffer(pass,
-				&fbos->optimized_no_blur_buffer, false);
+			blur_options.current_buffer = fbos->optimized_no_blur_buffer;
 		} else {
 			blur_options.current_buffer = pass->buffer;
 		}
-		if (blur_options.current_buffer != NULL) {
-			buffer = get_main_buffer_blur(pass, &blur_options);
-		}
+		buffer = get_main_buffer_blur(pass, &blur_options);
 	} else {
-		buffer = ensure_offscreen_buffer(pass, &fbos->optimized_blur_buffer, false);
+		buffer = fbos->optimized_blur_buffer;
 	}
-	TRACY_ZONE_TEXT_f("Optimized Blur Successfully Used: %d",
-			buffer && fx_options->use_optimized_blur);
+	TRACY_ZONE_TEXT_f("Optimized Blur Successfully Used: %d", buffer && use_optimized);
 	if (!buffer) {
 		goto finish;
 	}

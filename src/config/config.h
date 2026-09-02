@@ -704,6 +704,25 @@ namespace umbriel {
     std::vector<SecurityContextRule> securityContextRules;
     std::vector<WorkspaceConfig> workspaceRules; // [[workspace]] layout rules
 
+    // True when any surface may sample the cached background blur, so every
+    // output has to keep its optimized blur node alive.
+    [[nodiscard]] bool optimizedBlurNeeded() const {
+      if (appearance.blur.optimized) {
+        return true;
+      }
+      for (const WindowRule& rule : windowRules) {
+        if (rule.blurOptimized.value_or(false)) {
+          return true;
+        }
+      }
+      for (const LayerRule& rule : layerRules) {
+        if (rule.optimized.value_or(false)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     bool operator==(const Config&) const = default;
   };
 

@@ -125,7 +125,8 @@ namespace umbriel {
     const bool workspaceInventory =
         outputNamesChanged || outputProjectionChanged(before, after, sameWorkspaceInventory);
     const bool outputLayout = outputNamesChanged || outputProjectionChanged(before, after, sameOutputLayout);
-    const bool sceneBlur = before.appearance.blur != after.appearance.blur;
+    const bool sceneBlur =
+        before.appearance.blur != after.appearance.blur || before.optimizedBlurNeeded() != after.optimizedBlurNeeded();
     const bool focusDim = before.animation.enabled != after.animation.enabled
         || before.animation.dimUnfocused != after.animation.dimUnfocused;
     return {

@@ -764,7 +764,7 @@ namespace umbriel {
 
   void Output::updateOptimizedBlur(const wlr_box& fullArea) {
     const auto& blur = config().appearance.blur;
-    if (!blur.enabled || !blur.optimized) {
+    if (!blur.enabled || !config().optimizedBlurNeeded()) {
       if (m_optimizedBlur != nullptr) {
         wlr_scene_node_destroy(&m_optimizedBlur->node);
         m_optimizedBlur = nullptr;

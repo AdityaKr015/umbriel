@@ -158,6 +158,7 @@ zoom = 0.5                     # 0.1-0.75
 # One card wears colors.border.focused: the window a focus or close action would act on, on the output holding the cursor.
 # Other rows mark their own window with a fainter blend of colors.border.focused into colors.border.unfocused.
 # background_blur = true        # blur the wallpaper while the overview is open
+# workspace_wallpaper = true    # mirror the background- and bottom-layer surfaces inside each workspace preview
 # shortcuts = true
 # shortcut_keys = "1234567890" # favorite keys in preference order
 

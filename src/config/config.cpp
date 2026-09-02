@@ -869,6 +869,7 @@ namespace umbriel {
       root.sub("overview", [&](Section& s) {
         s.real("zoom", 0.1, 0.75, loaded.overview.zoom)
             .boolean("background_blur", loaded.overview.backgroundBlur)
+            .boolean("workspace_wallpaper", loaded.overview.workspaceWallpaper)
             .boolean("shortcuts", loaded.overview.shortcuts);
 
         const toml::node* node = s.take("shortcut_keys");

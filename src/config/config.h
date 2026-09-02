@@ -535,6 +535,10 @@ namespace umbriel {
       // Blur the wallpaper behind the filmstrip while the overview is visible. Uses [appearance.blur] parameters;
       // inert when appearance blur is disabled.
       bool backgroundBlur = true;
+      // Mirror the output's background- and bottom-layer surfaces inside every workspace preview instead of the flat
+      // colors.overview.workspace_background fill. The real bottom layer is hidden while the overview is open, so a
+      // surface there appears once per workspace rather than twice at two scales.
+      bool workspaceWallpaper = true;
       // Keyboard shortcut badges on overview cards. Pressing a badge key focuses
       // that window and closes the overview.
       bool shortcuts = true;

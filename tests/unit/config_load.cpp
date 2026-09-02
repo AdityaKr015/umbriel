@@ -610,6 +610,20 @@ UMBRIEL_TEST(overviewBackgroundBlurLoads) {
   CHECK(!store.config().overview.backgroundBlur);
 }
 
+UMBRIEL_TEST(overviewWorkspaceWallpaperLoads) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[overview]\nzoom = 0.5\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().overview.workspaceWallpaper);
+
+  file.write("[overview]\nworkspace_wallpaper = false\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().overview.workspaceWallpaper);
+}
+
 UMBRIEL_TEST(overviewShortcutConfigurationLoads) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

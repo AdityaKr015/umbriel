@@ -56,9 +56,26 @@ does.
 Each workspace has a rounded background behind its cards. The configured alpha
 controls whether this is a light tint, a translucent panel, or an opaque fill.
 
+With `overview.workspace_wallpaper`, one passive scene buffer per row and per
+mirrored surface draws over that fill. The source is the output's background-
+and bottom-layer trees, walked in place so the copies keep their render order,
+and each surface's output-local box maps through the same row and zoom transform
+the cards use. Every row clips to its own bounds, so a partially anchored
+surface cannot reach into the gap between rows.
+
+The real bottom layer is disabled for as long as the overview is open, exactly
+as the window trees are: a bottom-layer surface appears once per workspace
+instead of twice at two scales, and at zoom 1 the rows reproduce the output
+pixel for pixel, so neither the opening nor the teardown swap is visible. Those
+copies are then the only place their surfaces are sampled, so each one carries
+the presentation feedback, release points, and frame callbacks that pace its
+client. The background layer stays enabled: it is the blur source and what shows
+around the filmstrip. An output where no client maps either layer shows the flat
+fill.
+
 A dedicated scene root between the layer-shell background and bottom layers
 carries each output's wallpaper blur node. This placement blurs the background
-layer while bottom-layer widgets render afterward and remain sharp. The node's
+layer while bottom-layer surfaces render afterward and remain sharp. The node's
 alpha and strength fade with zoom progress. When `[appearance.blur] optimized`
 is enabled, it samples the optimized background buffer. The node is absent when
 appearance blur or `overview.background_blur` is disabled.

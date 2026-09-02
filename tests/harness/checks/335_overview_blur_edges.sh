@@ -25,6 +25,8 @@ saturation = 1.0
 
 [overview]
 background_blur = true
+# The centre sample is the blur reference, so the workspace preview must not mirror the wallpaper over it.
+workspace_wallpaper = false
 
 [animation.overview]
 enabled = false

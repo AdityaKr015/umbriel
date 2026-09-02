@@ -179,9 +179,13 @@ Stop with mod+Escape or `Ctrl+C` from the parent terminal.
 
 ## Configuration
 
-Umbriel first checks `$XDG_CONFIG_HOME/umbriel/config.toml`, then `$XDG_CONFIG_DIRS`, and finally its packaged
-`share/umbriel/config.toml`. Pass `-c path/to/config.toml` to use another file. Config files can include files with
-`[include] files = ["theme.toml", "keybinds.toml"]`; later files and the main file override earlier values.
+Umbriel first checks `$XDG_CONFIG_HOME/umbriel/config.toml`, then
+`$XDG_CONFIG_DIRS`, and finally its packaged `share/umbriel/config.toml`.
+These paths remain watched, so creating a higher-priority config switches to it
+without a session restart. Pass `-c path/to/config.toml` to pin another file.
+Config files can include files with
+`[include] files = ["theme.toml", "keybinds.toml"]`; later files and the main
+file override earlier values.
 
 See [`examples/config.toml`](examples/config.toml) for the packaged starting configuration and
 [`our online documentation`](https://docs.noctalia.dev/umbriel/) for the full reference.

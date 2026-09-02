@@ -135,6 +135,121 @@ UMBRIEL_TEST(defaultConfigLookupPrefersUserThenSystem) {
   CHECK(!store.fileMissing());
 }
 
+UMBRIEL_TEST(implicitConfigReloadAdoptsAndReleasesHigherPriorityUserPath) {
+  const TempConfigTree tree;
+  const std::filesystem::path userHome = tree.path("user");
+  const std::filesystem::path systemDir = tree.path("system");
+  const std::filesystem::path systemConfig = systemDir / "umbriel/config.toml";
+  const std::filesystem::path userConfig = userHome / "umbriel/config.toml";
+  tree.write("system/umbriel/config.toml", "[layout]\ngap = 17\n");
+  const ScopedEnvironment configHome("XDG_CONFIG_HOME", userHome.string());
+  const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
+
+  ConfigStore& store = umbriel::configStore();
+  store.load(nullptr);
+
+  CHECK_EQ(store.rootPath(), systemConfig);
+  CHECK_EQ(store.config().layout.gap, 17);
+
+  tree.write("user/umbriel/config.toml", "[layout]\ngap = 19\n");
+  const umbriel::ConfigReloadResult adopted = store.reload();
+
+  CHECK(adopted.success);
+  CHECK_EQ(store.rootPath(), userConfig);
+  CHECK_EQ(store.config().layout.gap, 19);
+
+  std::filesystem::remove(userConfig);
+  const umbriel::ConfigReloadResult released = store.reload();
+
+  CHECK(released.success);
+  CHECK_EQ(store.rootPath(), systemConfig);
+  CHECK_EQ(store.config().layout.gap, 17);
+}
+
+UMBRIEL_TEST(malformedNewUserConfigKeepsActiveSystemConfigAndRetriesAfterCorrection) {
+  const TempConfigTree tree;
+  const std::filesystem::path userHome = tree.path("user");
+  const std::filesystem::path systemDir = tree.path("system");
+  const std::filesystem::path systemConfig = systemDir / "umbriel/config.toml";
+  const std::filesystem::path userConfig = userHome / "umbriel/config.toml";
+  tree.write("system/umbriel/config.toml", "[layout]\ngap = 17\n");
+  const ScopedEnvironment configHome("XDG_CONFIG_HOME", userHome.string());
+  const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
+
+  ConfigStore& store = umbriel::configStore();
+  store.load(nullptr);
+  const uint64_t generation = store.generation();
+
+  tree.write("user/umbriel/config.toml", "[layout\n");
+  const umbriel::ConfigReloadResult malformed = store.reload();
+
+  CHECK(!malformed.success);
+  CHECK_EQ(store.rootPath(), systemConfig);
+  CHECK_EQ(store.config().layout.gap, 17);
+  CHECK_EQ(store.generation(), generation);
+  CHECK(std::ranges::find(store.watchPaths(), userConfig) != store.watchPaths().end());
+  CHECK(std::ranges::find(store.watchPaths(), systemConfig) != store.watchPaths().end());
+
+  tree.write("user/umbriel/config.toml", "[layout]\ngap = 19\n");
+  const umbriel::ConfigReloadResult corrected = store.reload();
+
+  CHECK(corrected.success);
+  CHECK_EQ(store.rootPath(), userConfig);
+  CHECK_EQ(store.config().layout.gap, 19);
+  CHECK_EQ(store.generation(), generation + 1);
+}
+
+UMBRIEL_TEST(implicitConfigReloadKeepsCandidatesCapturedAtInitialLoad) {
+  const TempConfigTree tree;
+  const std::filesystem::path initialUserHome = tree.path("initial-user");
+  const std::filesystem::path changedUserHome = tree.path("changed-user");
+  const std::filesystem::path systemDir = tree.path("system");
+  const std::filesystem::path systemConfig = systemDir / "umbriel/config.toml";
+  const std::filesystem::path changedUserConfig = changedUserHome / "umbriel/config.toml";
+  tree.write("system/umbriel/config.toml", "[layout]\ngap = 17\n");
+  const ScopedEnvironment configHome("XDG_CONFIG_HOME", initialUserHome.string());
+  const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
+
+  ConfigStore& store = umbriel::configStore();
+  store.load(nullptr);
+  const std::vector<std::filesystem::path> initialWatchPaths = store.watchPaths();
+
+  tree.write("changed-user/umbriel/config.toml", "[layout]\ngap = 29\n");
+  const ScopedEnvironment changedConfigHome("XDG_CONFIG_HOME", changedUserHome.string());
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK_EQ(store.rootPath(), systemConfig);
+  CHECK_EQ(store.config().layout.gap, 17);
+  CHECK_EQ(store.watchPaths(), initialWatchPaths);
+  CHECK(std::ranges::find(store.watchPaths(), changedUserConfig) == store.watchPaths().end());
+}
+
+UMBRIEL_TEST(explicitConfigReloadStaysPinnedWhenUserConfigAppears) {
+  const TempConfigTree tree;
+  const std::filesystem::path userHome = tree.path("user");
+  const std::filesystem::path systemDir = tree.path("system");
+  const std::filesystem::path explicitConfig = tree.path("chosen.toml");
+  tree.write("chosen.toml", "[layout]\ngap = 23\n");
+  tree.write("system/umbriel/config.toml", "[layout]\ngap = 17\n");
+  const ScopedEnvironment configHome("XDG_CONFIG_HOME", userHome.string());
+  const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
+
+  ConfigStore& store = umbriel::configStore();
+  const std::string explicitPath = explicitConfig.string();
+  store.load(explicitPath.c_str());
+
+  CHECK_EQ(store.rootPath(), explicitConfig);
+  CHECK_EQ(store.config().layout.gap, 23);
+
+  tree.write("user/umbriel/config.toml", "[layout]\ngap = 29\n");
+  const umbriel::ConfigReloadResult result = store.reload();
+
+  CHECK(result.success);
+  CHECK_EQ(store.rootPath(), explicitConfig);
+  CHECK_EQ(store.config().layout.gap, 23);
+}
+
 UMBRIEL_TEST(sharedLayoutAndNumberReadersPreserveConfigBehavior) {
   const TempConfig file;
   file.write(R"(

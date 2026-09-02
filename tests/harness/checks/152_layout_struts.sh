@@ -21,11 +21,13 @@ write_config() {
 [animation]
 enabled = false
 
+[colors]
+backdrop = "#000000FF"
+
 [appearance]
 border_width = 0
 outer_border_width = 0
 corner_radius = 0
-backdrop_color = "#000000FF"
 
 [layout]
 mode = "dwindle"

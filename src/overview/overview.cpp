@@ -229,7 +229,7 @@ namespace umbriel {
           card.border, makeBorderRing(contentW, contentH, outerRadius, innerWidth, outerWidth), innerWidth, outerWidth
       );
       const std::array<float, 4> innerColor = tint(cardBorderColor(card, liveTarget), presentedOpacity);
-      const std::array<float, 4> outerColor = tint(appearance.outerBorderColor, presentedOpacity);
+      const std::array<float, 4> outerColor = tint(config().colors.border.outer, presentedOpacity);
       wlr_scene_border_set_colors(card.border, innerColor.data(), outerColor.data());
     }
 
@@ -337,13 +337,13 @@ namespace umbriel {
 
     wlr_scene_node_set_position(&state.backgroundTint->node, metrics.outputBox.x, metrics.outputBox.y);
     wlr_scene_rect_set_size(state.backgroundTint, metrics.outputBox.width, metrics.outputBox.height);
-    const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, m_progress);
+    const std::array<float, 4> backgroundTint = tint(config().colors.overview.backgroundTint, m_progress);
     // A fully transparent tint leaves the wallpaper untouched.
     wlr_scene_node_set_enabled(&state.backgroundTint->node, backgroundTint[3] > 0.001F);
     wlr_scene_rect_set_color(state.backgroundTint, backgroundTint.data());
 
     const int backgroundRadius = static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom));
-    const std::array<float, 4> backgroundColor = tint(config().overview.workspaceBackground, m_progress);
+    const std::array<float, 4> backgroundColor = tint(config().colors.overview.workspaceBackground, m_progress);
     for (size_t row = 0; row < state.workspaceBackgrounds.size(); ++row) {
       wlr_scene_rect* background = state.workspaceBackgrounds[row];
       const wlr_box full{metrics.rowX, rowTop(metrics, state.rowScroll, row), metrics.rowW, metrics.rowH};
@@ -362,17 +362,17 @@ namespace umbriel {
   }
 
   std::array<float, 4> Overview::cardBorderColor(const Card& card, const View* liveTarget) const {
-    const auto& appearance = config().appearance;
+    const auto& border = config().colors.border;
     const Workspace* workspace = card.view != nullptr ? card.view->workspace() : nullptr;
     if (workspace == nullptr || workspace->focusedView() != card.view || &card == m_dragCard) {
-      return appearance.borderUnfocused;
+      return border.unfocused;
     }
     // No window holds the seat while the overview is up, so exactly one card wears the focused color: the one a focus
     // or close action would act on. Every other row still marks the card it would land on, with a weaker mix.
     if (card.view == liveTarget) {
-      return appearance.borderFocused;
+      return border.focused;
     }
-    return mixColor(appearance.borderUnfocused, appearance.borderFocused, kLandingTargetBlend);
+    return mixColor(border.unfocused, border.focused, kLandingTargetBlend);
   }
 
   void Overview::applyProgress() {
@@ -575,8 +575,8 @@ namespace umbriel {
     if (card->tree == nullptr) {
       return nullptr;
     }
-    const std::array<float, 4> innerColor = tint(config().appearance.borderUnfocused, 1.0);
-    const std::array<float, 4> outerColor = tint(config().appearance.outerBorderColor, 1.0);
+    const std::array<float, 4> innerColor = tint(config().colors.border.unfocused, 1.0);
+    const std::array<float, 4> outerColor = tint(config().colors.border.outer, 1.0);
     card->border = wlr_scene_border_create(card->tree, innerColor.data(), outerColor.data());
     if (card->border == nullptr) {
       wlr_scene_node_destroy(&card->tree->node);
@@ -649,7 +649,7 @@ namespace umbriel {
             &copy->node, card.tree->node.x + card.border->node.x, card.tree->node.y + card.border->node.y
         );
         std::array<float, 4> innerColor = cardBorderColor(card, liveTargetView());
-        std::array<float, 4> outerColor = config().appearance.outerBorderColor;
+        std::array<float, 4> outerColor = config().colors.border.outer;
         const float presentedOpacity = card.view->presentedOpacity();
         innerColor[3] *= presentedOpacity;
         outerColor[3] *= presentedOpacity;
@@ -758,7 +758,7 @@ namespace umbriel {
     const size_t matched = card.shortcutMatched == SIZE_MAX ? 0 : std::min(card.shortcutMatched, card.shortcut.size());
     const std::string_view shortcut(card.shortcut);
     const auto& colors = config().colors;
-    const std::array<float, 4> badgeColor = config().overview.badgeColor.value_or(colors.accentPrimary);
+    const std::array<float, 4>& badgeColor = colors.overview.badge;
     card.badgeBackground = keycapBackgroundColor(colors.background, badgeColor);
     const std::string markup = std::format(
         "<span foreground='{}' weight='bold'>{}</span><span foreground='{}' weight='bold'>{}</span>",
@@ -1005,11 +1005,11 @@ namespace umbriel {
           wlr_scene_blur_set_should_only_blur_bottom_layer(state->backgroundBlur, config().appearance.blur.optimized);
         }
       }
-      const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, 0.0);
+      const std::array<float, 4> backgroundTint = tint(config().colors.overview.backgroundTint, 0.0);
       state->backgroundTint = wlr_scene_rect_create(state->tree, 1, 1, backgroundTint.data());
       wlr_scene_rect_set_corner_radius(state->backgroundTint, 0);
       state->workspaceBackgrounds.reserve(group->workspaceCount());
-      const std::array<float, 4> backgroundColor = tint(config().overview.workspaceBackground, 0.0);
+      const std::array<float, 4> backgroundColor = tint(config().colors.overview.workspaceBackground, 0.0);
       for (size_t row = 0; row < group->workspaceCount(); ++row) {
         state->workspaceBackgrounds.push_back(wlr_scene_rect_create(state->tree, 1, 1, backgroundColor.data()));
       }
@@ -2297,7 +2297,7 @@ namespace umbriel {
       }
     }
     while (state.workspaceBackgrounds.size() < group.workspaceCount()) {
-      const std::array<float, 4> color = tint(config().overview.workspaceBackground, m_progress);
+      const std::array<float, 4> color = tint(config().colors.overview.workspaceBackground, m_progress);
       wlr_scene_rect* background = wlr_scene_rect_create(state.tree, 1, 1, color.data());
       if (background != nullptr) {
         // Backgrounds stay below every card even when created after the

@@ -140,11 +140,16 @@ namespace umbriel {
             || before.workspaceRules != after.workspaceRules
             || before.appearance.totalBorderWidth() != after.appearance.totalBorderWidth(),
         .sceneBlur = sceneBlur,
-        .viewChrome = before.appearance != after.appearance || before.windowRules != after.windowRules || focusDim,
+        // [colors] owns the border, backdrop, insert-hint, and shadow colors, so
+        // any color edit refreshes window chrome.
+        .viewChrome = before.appearance != after.appearance
+            || before.colors != after.colors
+            || before.windowRules != after.windowRules
+            || focusDim,
         .layerEffects = sceneBlur || before.layerRules != after.layerRules,
         .animation = before.animation != after.animation,
         .input = before.input != after.input || before.hotCorners != after.hotCorners,
-        .overviewPresentation = before.overview != after.overview,
+        .overviewPresentation = before.overview != after.overview || before.colors != after.colors,
         .internalUi = before.colors != after.colors || before.general.modKey != after.general.modKey,
     };
   }

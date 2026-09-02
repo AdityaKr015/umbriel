@@ -583,7 +583,24 @@ namespace umbriel {
             .color("accent_primary", colors.accentPrimary)
             .color("accent_secondary", colors.accentSecondary)
             .color("warning", colors.warning)
-            .color("error", colors.error);
+            .color("error", colors.error)
+            .color("insert_hint", colors.insertHint)
+            .color("backdrop", colors.backdrop)
+            .color("shadow", colors.shadow);
+
+        s.sub("border", [&](Section& border) {
+          border.color("focused", colors.border.focused)
+              .color("unfocused", colors.border.unfocused)
+              .color("scratchpad_focused", colors.border.scratchpadFocused)
+              .color("scratchpad_unfocused", colors.border.scratchpadUnfocused)
+              .color("outer", colors.border.outer);
+        });
+
+        s.sub("overview", [&](Section& overview) {
+          overview.color("background_tint", colors.overview.backgroundTint)
+              .color("workspace_background", colors.overview.workspaceBackground)
+              .color("badge", colors.overview.badge);
+        });
       });
     }
 
@@ -826,13 +843,6 @@ namespace umbriel {
         s.integer("border_width", 0, 100, appearance.borderWidth)
             .integer("outer_border_width", 0, 100, appearance.outerBorderWidth)
             .integer("corner_radius", 0, 100, appearance.cornerRadius)
-            .color("border_focused", appearance.borderFocused)
-            .color("border_unfocused", appearance.borderUnfocused)
-            .color("scratchpad_border_focused", appearance.scratchpadBorderFocused)
-            .color("scratchpad_border_unfocused", appearance.scratchpadBorderUnfocused)
-            .color("outer_border_color", appearance.outerBorderColor)
-            .color("insert_hint_color", appearance.insertHintColor)
-            .color("backdrop_color", appearance.backdropColor)
             .real("drag_opacity", 0.0, 1.0, appearance.dragOpacity)
             .boolean("prefer_no_csd", appearance.preferNoCsd);
 
@@ -850,8 +860,7 @@ namespace umbriel {
           shadow.boolean("enabled", appearance.shadow.enabled)
               .integer("softness", 0, 200, appearance.shadow.softness)
               .integer("offset_x", -200, 200, appearance.shadow.offsetX)
-              .integer("offset_y", -200, 200, appearance.shadow.offsetY)
-              .color("color", appearance.shadow.color);
+              .integer("offset_y", -200, 200, appearance.shadow.offsetY);
         });
       });
     }
@@ -860,21 +869,7 @@ namespace umbriel {
       root.sub("overview", [&](Section& s) {
         s.real("zoom", 0.1, 0.75, loaded.overview.zoom)
             .boolean("background_blur", loaded.overview.backgroundBlur)
-            .color("background_tint", loaded.overview.backgroundTint)
-            .color("workspace_background", loaded.overview.workspaceBackground)
             .boolean("shortcuts", loaded.overview.shortcuts);
-
-        if (const toml::node* badgeNode = s.take("badge_color")) {
-          const auto value = badgeNode->value<std::string>();
-          std::array<float, 4> parsed{};
-          if (!value) {
-            warnAt(badgeNode->source(), "ignoring overview.badge_color (expected color string)");
-          } else if (!parseColor(*value, parsed)) {
-            warnAt(badgeNode->source(), "ignoring overview.badge_color (invalid color '{}')", *value);
-          } else {
-            loaded.overview.badgeColor = parsed;
-          }
-        }
 
         const toml::node* node = s.take("shortcut_keys");
         if (node == nullptr) {

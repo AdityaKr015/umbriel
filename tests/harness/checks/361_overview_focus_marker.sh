@@ -40,22 +40,28 @@ assert_markers() {
 
 cat >> "$UMBRIEL_CONFIG" <<'EOF'
 
+[colors]
+backdrop = "#000000FF"
+
+[colors.border]
+focused = "#00FF00FF"
+unfocused = "#000000FF"
+
+[colors.overview]
+background_tint = "#000000FF"
+workspace_background = "#000000FF"
+
 [appearance]
 animation_ms = 100
 border_width = 100
 outer_border_width = 0
 corner_radius = 0
-border_focused = "#00FF00FF"
-border_unfocused = "#000000FF"
-backdrop_color = "#000000FF"
 
 [appearance.blur]
 enabled = false
 
 [overview]
 zoom = 0.5
-background_tint = "#000000FF"
-workspace_background = "#000000FF"
 
 [[window_rule]]
 match.app_id = "^overview-marker-first$"

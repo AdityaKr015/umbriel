@@ -64,13 +64,13 @@ is enabled, it samples the optimized background buffer. The node is absent when
 appearance blur or `overview.background_blur` is disabled.
 
 No window holds the seat while the overview is open, so exactly one card can
-wear `appearance.border_focused`: the live target, meaning the focused view of
+wear `colors.border.focused`: the live target, meaning the focused view of
 the active workspace on the output under the cursor. That is the window a focus
 or close action resolves to through `preferredOutput()`, so the strong border
 also identifies the current output. Every other row marks its own focused view
-with a blend of `border_focused` into `border_unfocused`, showing where the row
-would land without claiming focus. An empty current workspace leaves no strong
-border, which is also when those actions have no target.
+with a blend of `colors.border.focused` into `colors.border.unfocused`, showing
+where the row would land without claiming focus. An empty current workspace
+leaves no strong border, which is also when those actions have no target.
 
 The live target is resolved per layout pass. `Overview::handleMotion` repaints
 when the pointer changes output, which covers both hand motion and the cursor

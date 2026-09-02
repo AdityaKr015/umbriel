@@ -1142,8 +1142,8 @@ namespace umbriel {
     }
 
     const auto& targetBase = m_scratchpadBorder
-        ? (focused ? config().appearance.scratchpadBorderFocused : config().appearance.scratchpadBorderUnfocused)
-        : (focused ? config().appearance.borderFocused : config().appearance.borderUnfocused);
+        ? (focused ? config().colors.border.scratchpadFocused : config().colors.border.scratchpadUnfocused)
+        : (focused ? config().colors.border.focused : config().colors.border.unfocused);
 
     const auto& border = animation.border;
     if (m_mapped && focusChanged && animation.enabled && border.enabled) {

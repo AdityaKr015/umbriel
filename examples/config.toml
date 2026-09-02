@@ -48,6 +48,21 @@ empty_above = false
 # accent_secondary = "#F5C96BFF"
 # warning = "#F5C96BFF"
 # error = "#FF6B6BFF"
+# insert_hint = "#7FC8FF80"    # drop-target preview during drag
+# backdrop = "#000000FF"       # fullscreen gaps and the lock screen
+# shadow = "#0000007F"         # window shadow
+
+[colors.border]
+# outer = "#1A1A1FFF"          # no focus variant
+# focused = "#7AA3FFFF"
+# unfocused = "#292933FF"
+# scratchpad_focused = "#E5C07BFF"
+# scratchpad_unfocused = "#5C4A2AFF"
+
+[colors.overview]
+# background_tint = "#10101430"
+# workspace_background = "#00000044" # set alpha to FF for an opaque background
+# badge = "#7AA3FFFF"          # keyboard shortcut badges on overview cards
 
 # Animation ------------------------------------------------------------------
 
@@ -118,13 +133,6 @@ border_width = 2               # 0-100
 outer_border_width = 0         # 0-100
 corner_radius = 10             # 0-100, radius of the final decorated outer edge
 drag_opacity = 0.75
-# border_focused = "#7AA3FFFF"
-# border_unfocused = "#292933FF"
-# scratchpad_border_focused = "#E5C07BFF"
-# scratchpad_border_unfocused = "#5C4A2AFF"
-# outer_border_color = "#1A1A1FFF"
-# insert_hint_color = "#7FC8FF80"
-# backdrop_color = "#000000FF"
 
 [appearance.blur]
 enabled = true
@@ -141,21 +149,17 @@ enabled = true
 softness = 10                  # 0-200, 0 = hard edge
 offset_x = 2                   # -200 to 200
 offset_y = 2
-color = "#0000007F"
 
 # Overview -------------------------------------------------------------------
 
 [overview]
 zoom = 0.5                     # 0.1-0.75
 # Pinned windows stay hidden until overview closes; visible scratchpads are dismissed.
-# One card wears border_focused: the window a focus or close action would act on, on the output holding the cursor.
-# Other rows mark their own window with a fainter blend of border_focused into border_unfocused.
+# One card wears colors.border.focused: the window a focus or close action would act on, on the output holding the cursor.
+# Other rows mark their own window with a fainter blend of colors.border.focused into colors.border.unfocused.
 # background_blur = true        # blur the wallpaper while the overview is open
-# background_tint = "#10101430"
-# workspace_background = "#00000044" # set alpha to FF for an opaque background
 # shortcuts = true
 # shortcut_keys = "1234567890" # favorite keys in preference order
-# badge_color = "#7AA3FFFF"   # defaults to colors.accent_primary
 
 # Hot corners ---------------------------------------------------------------
 
@@ -178,6 +182,94 @@ action = "overview-toggle"
 enabled = false
 delay_ms = 500
 action = "spawn:notify-send 'Bottom right'"
+
+
+# Keybinds (see docs/user/keybinds.md) --------------------------------------
+
+[keybinds]
+# Runtime switchers can use `window-focus-warp:<id>` to move both focus and the
+# cursor. Window ids come from `umbriel windows`, so they are not static binds.
+"Mod+Return" = "spawn:kitty"
+"Mod+Left" = "window-focus-left"
+"Mod+Right" = "window-focus-right"
+"Mod+Up" = "window-focus-up"
+"Mod+Down" = "window-focus-down"
+"Mod+T" = "window-toggle-floating"
+"Mod+Shift+T" = "window-focus-switch-floating"
+"Mod+P" = "window-toggle-pinned"
+"Mod+M" = "window-toggle-maximize-to-edges"
+"Mod+Q" = "window-close"
+"Mod+Shift+Space" = "window-move-to-scratchpad"
+"Mod+Space" = "scratchpad-toggle"
+"Mod+Ctrl+Space" = "window-restore-from-scratchpad"
+"Mod+Tab" = "scratchpad-focus-next"
+# Scratchpads return to their original output and position after temporary output loss.
+# Add `:DP-1` to any scratchpad action to target that output from anywhere.
+# "Mod+0" = "scratchpad-toggle:DP-1"
+# "Mod+Shift+0" = "window-move-to-scratchpad:DP-1"
+# "Mod+Ctrl+0" = "window-restore-from-scratchpad:DP-1"
+# "Mod+Alt+0" = "scratchpad-focus-next:DP-1"
+"Mod" = "spawn:noctalia msg panel-toggle launcher"
+"Mod+O" = "overview-toggle"
+# Directional focus binds also navigate the overview: left/right select cards,
+# while up/down select workspace rows. The default Mod+H/J/K/L binds need no
+# separate overview mapping.
+# "Mod+Space" is taken above; pick a free chord for layout switching.
+# "Mod+Shift+K" = "keyboard-layout-next"
+# Drag a scrolling workspace directly along its configured axis.
+# "Mod+MouseMiddle" = "layout-scroll-drag"
+# Submaps can nest; entry binds should not repeat. Inspect the active layer with `umbriel submap`, or follow changes
+# with `umbriel subscribe submap`.
+# "Mod+R" = { action = "submap:resize", repeat = false }
+# Omit `submap` to add no post-action transition, or set it to "reset" to exit after the action.
+# "submap[resize],1" = { action = "window-set-width:0.5", submap = "reset" }
+# "submap[resize],Escape" = "submap:reset"
+
+# Output, workspace, and window movement actions.
+# "Mod+Home" = "column-focus-first"
+# "Mod+End" = "column-focus-last"
+# "Mod+Shift+Home" = "column-move-to-first"
+# "Mod+Shift+End" = "column-move-to-last"
+# "Mod+Comma" = "workspace-previous"
+# "Mod+Period" = "workspace-next"
+# "Mod+Shift+Comma" = "window-move-to-workspace-previous"
+# "Mod+Shift+Period" = "window-move-to-workspace-next"
+# "Mod+Ctrl+Page_Up" = "column-move-to-workspace-previous"
+# "Mod+Ctrl+Page_Down" = "column-move-to-workspace-next"
+# "Mod+Bracketright" = "window-focus-next"
+# "Mod+Bracketleft" = "window-focus-previous"
+# "Mod+Shift+Bracketright" = "window-swap-next"
+# "Mod+Shift+Bracketleft" = "window-swap-previous"
+# "Mod+Shift+Equal" = "layout-master-count-increase"
+# "Mod+Shift+Minus" = "layout-master-count-decrease"
+# "Mod+Ctrl+1" = "column-move-to-workspace:1"
+# "Mod+Ctrl+Comma" = "workspace-move-up"
+# "Mod+Ctrl+Period" = "workspace-move-down"
+# "Mod+Ctrl+H" = "output-focus-left"
+# "Mod+Shift+O" = "dpms-off"        # new input wakes displays after all are off
+# "Mod+Ctrl+O" = "dpms-off:DP-1"   # stays off while another display is awake
+# "Mod+Minus" = "window-modify-width:-0.1"
+# "Mod+Alt+Minus" = "window-modify-height:-0.1"
+# "Mod+R" = "window-cycle-width"
+# "Mod+Shift+R" = "window-cycle-width-back"
+# "Mod+Alt+R" = "window-cycle-height"
+# "Mod+Alt+Shift+R" = "window-cycle-height-back"
+# "Mod+Grave" = "window-focus-last"
+# "Mod+BackSpace" = "window-consume-or-expel-left"
+# "Mod+C" = "column-center"
+# "Mod+Shift+C" = "window-center"
+# "Mod+Shift+T" = "workspace-set-layout:toggle"
+
+# Media and volume (see docs/user/keybinds.md#example-media-and-brightness-keys)
+# "XF86AudioRaiseVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
+# "XF86AudioLowerVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+# "Mod+XF86AudioMute"   = "spawn:wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+# "XF86AudioPlay"       = "spawn:playerctl play-pause"
+# "XF86AudioNext"       = "spawn:playerctl next"
+# "XF86AudioPrev"       = "spawn:playerctl prev"
+# Controls intended to remain usable while the session is locked use the table form.
+# "XF86MonBrightnessDown" = { action = "spawn:noctalia msg brightness-down 10", allow_when_locked = true }
+
 
 # Layout ---------------------------------------------------------------------
 
@@ -318,92 +410,6 @@ follows_mouse = false
 # Refuse hover focus when revealing the window would scroll further than this,
 # measured in viewport widths (1.0 = one full screen). Omit for no limit.
 # follows_mouse_max_scroll = 0.5
-
-# Keybinds (see docs/user/keybinds.md) --------------------------------------
-
-[keybinds]
-# Runtime switchers can use `window-focus-warp:<id>` to move both focus and the
-# cursor. Window ids come from `umbriel windows`, so they are not static binds.
-"Mod+Return" = "spawn:kitty"
-"Mod+Left" = "window-focus-left"
-"Mod+Right" = "window-focus-right"
-"Mod+Up" = "window-focus-up"
-"Mod+Down" = "window-focus-down"
-"Mod+T" = "window-toggle-floating"
-"Mod+Shift+T" = "window-focus-switch-floating"
-"Mod+P" = "window-toggle-pinned"
-"Mod+M" = "window-toggle-maximize-to-edges"
-"Mod+Q" = "window-close"
-"Mod+Shift+Space" = "window-move-to-scratchpad"
-"Mod+Space" = "scratchpad-toggle"
-"Mod+Ctrl+Space" = "window-restore-from-scratchpad"
-"Mod+Tab" = "scratchpad-focus-next"
-# Scratchpads return to their original output and position after temporary output loss.
-# Add `:DP-1` to any scratchpad action to target that output from anywhere.
-# "Mod+0" = "scratchpad-toggle:DP-1"
-# "Mod+Shift+0" = "window-move-to-scratchpad:DP-1"
-# "Mod+Ctrl+0" = "window-restore-from-scratchpad:DP-1"
-# "Mod+Alt+0" = "scratchpad-focus-next:DP-1"
-"Mod" = "spawn:noctalia msg panel-toggle launcher"
-"Mod+O" = "overview-toggle"
-# Directional focus binds also navigate the overview: left/right select cards,
-# while up/down select workspace rows. The default Mod+H/J/K/L binds need no
-# separate overview mapping.
-# "Mod+Space" is taken above; pick a free chord for layout switching.
-# "Mod+Shift+K" = "keyboard-layout-next"
-# Drag a scrolling workspace directly along its configured axis.
-# "Mod+MouseMiddle" = "layout-scroll-drag"
-# Submaps can nest; entry binds should not repeat. Inspect the active layer with `umbriel submap`, or follow changes
-# with `umbriel subscribe submap`.
-# "Mod+R" = { action = "submap:resize", repeat = false }
-# Omit `submap` to add no post-action transition, or set it to "reset" to exit after the action.
-# "submap[resize],1" = { action = "window-set-width:0.5", submap = "reset" }
-# "submap[resize],Escape" = "submap:reset"
-
-# Output, workspace, and window movement actions.
-# "Mod+Home" = "column-focus-first"
-# "Mod+End" = "column-focus-last"
-# "Mod+Shift+Home" = "column-move-to-first"
-# "Mod+Shift+End" = "column-move-to-last"
-# "Mod+Comma" = "workspace-previous"
-# "Mod+Period" = "workspace-next"
-# "Mod+Shift+Comma" = "window-move-to-workspace-previous"
-# "Mod+Shift+Period" = "window-move-to-workspace-next"
-# "Mod+Ctrl+Page_Up" = "column-move-to-workspace-previous"
-# "Mod+Ctrl+Page_Down" = "column-move-to-workspace-next"
-# "Mod+Bracketright" = "window-focus-next"
-# "Mod+Bracketleft" = "window-focus-previous"
-# "Mod+Shift+Bracketright" = "window-swap-next"
-# "Mod+Shift+Bracketleft" = "window-swap-previous"
-# "Mod+Shift+Equal" = "layout-master-count-increase"
-# "Mod+Shift+Minus" = "layout-master-count-decrease"
-# "Mod+Ctrl+1" = "column-move-to-workspace:1"
-# "Mod+Ctrl+Comma" = "workspace-move-up"
-# "Mod+Ctrl+Period" = "workspace-move-down"
-# "Mod+Ctrl+H" = "output-focus-left"
-# "Mod+Shift+O" = "dpms-off"        # new input wakes displays after all are off
-# "Mod+Ctrl+O" = "dpms-off:DP-1"   # stays off while another display is awake
-# "Mod+Minus" = "window-modify-width:-0.1"
-# "Mod+Alt+Minus" = "window-modify-height:-0.1"
-# "Mod+R" = "window-cycle-width"
-# "Mod+Shift+R" = "window-cycle-width-back"
-# "Mod+Alt+R" = "window-cycle-height"
-# "Mod+Alt+Shift+R" = "window-cycle-height-back"
-# "Mod+Grave" = "window-focus-last"
-# "Mod+BackSpace" = "window-consume-or-expel-left"
-# "Mod+C" = "column-center"
-# "Mod+Shift+C" = "window-center"
-# "Mod+Shift+T" = "workspace-set-layout:toggle"
-
-# Media and volume (see docs/user/keybinds.md#example-media-and-brightness-keys)
-# "XF86AudioRaiseVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
-# "XF86AudioLowerVolume" = "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
-# "Mod+XF86AudioMute"   = "spawn:wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
-# "XF86AudioPlay"       = "spawn:playerctl play-pause"
-# "XF86AudioNext"       = "spawn:playerctl next"
-# "XF86AudioPrev"       = "spawn:playerctl prev"
-# Controls intended to remain usable while the session is locked use the table form.
-# "XF86MonBrightnessDown" = { action = "spawn:noctalia msg brightness-down 10", allow_when_locked = true }
 
 # Window rules (see docs/user/window-rules.md) ---------------------------
 

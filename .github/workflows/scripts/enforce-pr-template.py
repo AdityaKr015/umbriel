@@ -15,10 +15,11 @@ TEMPLATE_URL = (
     "https://github.com/noctalia-dev/umbriel/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
 )
 # Only structure that states an obligation is required. Sections that merely offer
-# context (Motivation, Related Issue, Screenshots / Videos, Manual Coverage,
-# Additional Notes) may be filled in, left empty, or deleted.
+# context (Related Issue, Screenshots / Videos, Manual Coverage, Additional Notes)
+# may be filled in, left empty, or deleted.
 REQUIRED_HEADINGS = (
     "## Summary",
+    "## Motivation",
     "## Type of Change",
     "## Testing",
     "## Checklist",

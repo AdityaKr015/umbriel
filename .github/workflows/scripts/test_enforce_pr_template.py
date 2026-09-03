@@ -58,7 +58,6 @@ class TemplateValidationTests(unittest.TestCase):
         """Sections that only offer context may be deleted (pull request 96)."""
         body = ready_template()
         for heading in (
-            "## Motivation",
             "## Related Issue",
             "## Manual Coverage",
             "## Screenshots / Videos",
@@ -110,6 +109,13 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(
             enforce_pr_template.missing_requirements(body, require_completed=True),
             ["the `## Testing` heading"],
+        )
+
+    def test_rejects_missing_motivation_section(self) -> None:
+        body = drop_section(ready_template(), "## Motivation")
+        self.assertEqual(
+            enforce_pr_template.missing_requirements(body, require_completed=True),
+            ["the `## Motivation` heading"],
         )
 
     def test_rejects_renamed_section(self) -> None:

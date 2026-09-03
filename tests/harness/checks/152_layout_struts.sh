@@ -2,8 +2,9 @@
 # harness: outputs=1
 # Layout struts reserve signed logical space for normal tiled windows after a
 # real layer-shell exclusive zone. Floating windows, maximize-to-edges, and
-# fullscreen keep their broader Niri-style areas, and reload removes struts
-# from already mapped workspaces.
+# fullscreen keep their own broader areas while the scrolling strip reserves the
+# strut band they bleed into, and reload removes struts from already mapped
+# workspaces.
 set -euo pipefail
 
 readonly CLIENT="${UMBRIEL_FRACTIONAL_CLIENT:-./build-debug/tests/fractional-client}"
@@ -250,6 +251,21 @@ assert_box strut-scroll-h 608 604 25 79
 capture_maximized_to_edges strut-scroll-h
 "$UMBRIEL" msg window-toggle-maximize-to-edges > /dev/null
 assert_box strut-scroll-h 608 604 25 79
+
+# A maximize-to-edges window is presented against the usable area, past the
+# struts the strip is inset by, so the strip has to reserve that band: the
+# neighboring column keeps one gap of clearance instead of ending up underneath
+# the window.
+spawn_client strut-scroll-neighbor
+focus_window strut-scroll-neighbor
+assert_box strut-scroll-neighbor 608 604 641 79
+focus_window strut-scroll-h
+"$UMBRIEL" msg window-toggle-maximize-to-edges > /dev/null
+capture_maximized_to_edges strut-scroll-h
+assert_box strut-scroll-neighbor 608 604 1288 79
+"$UMBRIEL" msg window-toggle-maximize-to-edges > /dev/null
+assert_box strut-scroll-h 608 604 25 79
+assert_box strut-scroll-neighbor 608 604 641 79
 
 "$UMBRIEL" msg workspace-switch:scroll-v > /dev/null
 spawn_client strut-scroll-v

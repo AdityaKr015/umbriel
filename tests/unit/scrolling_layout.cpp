@@ -585,6 +585,35 @@ UMBRIEL_TEST(maximizedToEdgesColumnFillsTheUsableAreaIgnoringFractions) {
   CHECK(!fixture.layout.isFullWidth(1));
 }
 
+// A column that fills the viewport is presented against the usable area rather than the strut-inset strip, so the
+// strip has to reserve the strut band the window bleeds into. Without that reservation the next column keeps its old
+// offset and the window paints over it.
+UMBRIEL_TEST(aFillingColumnReservesTheStrutBandItBleedsInto) {
+  Fixture fixture;
+  fixture.config.struts = {.left = 17, .right = 23};
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(1, 0.5));
+  fixture.layout.setConstraints([](const View* view) {
+    return LayoutConstraints{.maximizedToEdges = view == stub(0)};
+  });
+  const int filling = kViewport + 2 * fixture.config.edgePad;
+  CHECK_EQ(fixture.layout.columnWidth(0, kViewport), filling);
+  // Leading strut for the filling column, trailing strut before its neighbor.
+  CHECK_EQ(fixture.layout.columnX(0, kViewport), 17);
+  CHECK_EQ(fixture.layout.columnX(1, kViewport), 17 + filling + fixture.config.totalGap + 23);
+}
+
+UMBRIEL_TEST(aFillingColumnInAVerticalStripReservesTheTopAndBottomStruts) {
+  Fixture fixture(ScrollingDirection::Vertical);
+  fixture.config.struts = {.left = 17, .right = 23, .top = 31, .bottom = 41};
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(1, 0.5));
+  fixture.layout.setConstraints([](const View* view) { return LayoutConstraints{.fullscreen = view == stub(0)}; });
+  const int filling = kVerticalViewport + 2 * fixture.config.edgePad;
+  CHECK_EQ(fixture.layout.columnX(0, kVerticalViewport), 31);
+  CHECK_EQ(fixture.layout.columnX(1, kVerticalViewport), 31 + filling + fixture.config.totalGap + 41);
+}
+
 UMBRIEL_TEST(preservedFullWidthSurvivesEdgeMaximizeToggle) {
   Fixture fixture;
   fixture.addColumns(1);
@@ -711,6 +740,26 @@ UMBRIEL_TEST(theShiftIsTheColumnWidthPlusOneGap) {
   fixture.layout.setScroll(636);
   // 624 wide + 12 of gap: the whole span the column occupied.
   CHECK_EQ(fixture.layout.scrollShiftForColumnRemoval(0, kViewport), 636.0);
+}
+
+UMBRIEL_TEST(closingAnOffScreenFillingColumnCompensatesItsBleedToo) {
+  Fixture fixture;
+  fixture.config.struts = {.left = 17, .right = 23};
+  fixture.addColumns(3);
+  fixture.layout.setConstraints([](const View* view) {
+    return LayoutConstraints{.maximizedToEdges = view == stub(0)};
+  });
+  // 17 of leading strut, 1280 of column, 12 of gap and 23 of trailing strut: the whole span column 0 held.
+  const double span = 17 + (kViewport + 2 * fixture.config.edgePad) + fixture.config.totalGap + 23;
+  fixture.layout.setScroll(span);
+  const int before = screenX(fixture.layout, 1);
+
+  const double shift = fixture.layout.scrollShiftForColumnRemoval(0, kViewport);
+  CHECK_EQ(shift, span);
+  fixture.layout.removeView(stub(0));
+  fixture.layout.setScroll(fixture.layout.scroll() - shift);
+
+  CHECK_EQ(screenX(fixture.layout, 0), before);
 }
 
 UMBRIEL_TEST(aColumnAtTheViewportEdgeIsNotCompensated) {

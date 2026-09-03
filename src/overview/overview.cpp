@@ -2373,13 +2373,9 @@ namespace umbriel {
     case XKB_KEY_Right:
       return dispatch(KeybindAction::WindowFocusRight);
     case XKB_KEY_Up:
-      clearShortcutInput();
-      selectRelativeWorkspace(-1, nullptr);
-      return true;
+      return dispatch(KeybindAction::WindowFocusOrWorkspaceUp);
     case XKB_KEY_Down:
-      clearShortcutInput();
-      selectRelativeWorkspace(1, nullptr);
-      return true;
+      return dispatch(KeybindAction::WindowFocusOrWorkspaceDown);
     default:
       return false;
     }

@@ -71,6 +71,10 @@ test m=mode: (configure m)
     meson compile -C build-{{m}} unit-tests
     meson test -C build-{{m}} --print-errorlogs
 
+# Regressions for the GitHub workflow scripts. Pure Python, builds nothing.
+test-workflows:
+    python3 -m unittest discover -s .github/workflows/scripts -p 'test_*.py'
+
 # Whole harness suite, or the checks whose names contain any given fragment. Each
 # check runs against its own headless compositor instance, so a fragment selects
 # a group as readily as a single check.

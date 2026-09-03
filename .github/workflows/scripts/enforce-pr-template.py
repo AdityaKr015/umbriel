@@ -10,19 +10,21 @@ from pathlib import Path
 from typing import Any
 
 
-TEMPLATE_MARKER = "<!-- umbriel-pr-template:v1 -->"
 COMMENT_MARKER = "<!-- umbriel-pr-template-enforcement -->"
+TEMPLATE_URL = (
+    "https://github.com/noctalia-dev/umbriel/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
+)
+# Only structure that states an obligation is required. Sections that merely offer
+# context (Motivation, Related Issue, Screenshots / Videos, Manual Coverage,
+# Additional Notes) may be filled in, left empty, or deleted.
 REQUIRED_HEADINGS = (
     "## Summary",
-    "## Motivation",
     "## Type of Change",
-    "## Related Issue",
     "## Testing",
-    "## Manual Coverage",
-    "## Screenshots / Videos",
     "## Checklist",
-    "## Additional Notes",
 )
+# Unchecked change types are ballot options, not obligations: a description may keep
+# only the ones that apply. A pull request ready for review needs one of them checked.
 TYPE_CHANGE_ITEMS = (
     "Bug fix",
     "New feature",
@@ -30,16 +32,6 @@ TYPE_CHANGE_ITEMS = (
     "Refactoring",
     "Build / packaging",
     "Documentation",
-)
-MANUAL_COVERAGE_ITEMS = (
-    "Tested in a nested Umbriel session",
-    "Tested in a native Umbriel session",
-    "Tested with multiple monitors",
-    "Tested with a scaled output",
-    "Tested with native Wayland applications",
-    "Tested with X11 applications through xwayland-satellite",
-    "Tested with the scrolling layout",
-    "Tested with the dwindle layout",
 )
 MANDATORY_CHECKLIST_ITEMS = (
     "This PR is ready for review, or it is marked as Draft.",
@@ -53,31 +45,43 @@ MANDATORY_CHECKLIST_ITEMS = (
     "I updated `docs/` and `examples/config.toml`, or this PR does not change user-facing configuration or behavior.",
     "I used canonical names for config keys, IPC actions, paths, and identifiers.",
 )
-REQUIRED_CHECKLIST_ITEMS = TYPE_CHANGE_ITEMS + MANUAL_COVERAGE_ITEMS + MANDATORY_CHECKLIST_ITEMS
-CLOSURE_INTRO = f"""{COMMENT_MARKER}
-This pull request was automatically closed because its description no longer contains
-every part of [the pull request template](https://github.com/noctalia-dev/umbriel/blob/main/.github/PULL_REQUEST_TEMPLATE.md)
-that this repository requires.
+CONVERTED_INTRO = f"""{COMMENT_MARKER}
+This pull request was converted to a draft because its description is missing required
+parts of [the pull request template]({TEMPLATE_URL}).
 
 Missing:
 """
-CLOSURE_OUTRO = """
-Please add the items listed above back to the description, keeping their exact wording, then
-reopen the pull request. Reopening re-runs this check. Draft pull requests may leave boxes
+DRAFT_INTRO = f"""{COMMENT_MARKER}
+This draft pull request is missing required parts of
+[the pull request template]({TEMPLATE_URL}).
+
+Missing:
+"""
+OUTRO = """
+Add the items above to the description, keeping their exact wording, then mark the pull
+request ready for review. That re-runs this check. Draft pull requests may leave boxes
 unchecked. Before a pull request is ready for review, select at least one change type and
 check every item under Checklist.
+
+Sections that only offer context may be deleted; nothing else about this pull request was
+changed.
+"""
+RESOLVED_COMMENT = f"""{COMMENT_MARKER}
+The description now contains the required template structure.
 """
 
 
-def build_closure_comment(missing: list[str]) -> str:
+def build_enforcement_comment(missing: list[str], *, converted: bool) -> str:
     bullets = "".join(f"- {item}\n" for item in missing)
-    return f"{CLOSURE_INTRO}{bullets}{CLOSURE_OUTRO}"
+    intro = CONVERTED_INTRO if converted else DRAFT_INTRO
+    return f"{intro}{bullets}{OUTRO}"
 
 
 def checklist_state(normalized_body: str, item: str) -> str | None:
-    for state in (" ", "x", "X"):
-        if f"- [{state}] {item}" in normalized_body:
-            return state
+    for bullet in ("-", "*"):
+        for state in (" ", "x", "X"):
+            if f"{bullet} [{state}] {item}" in normalized_body:
+                return state
     return None
 
 
@@ -89,16 +93,13 @@ def missing_requirements(body: object, *, require_completed: bool = False) -> li
     normalized_body = " ".join(body.split())
     missing: list[str] = []
 
-    if TEMPLATE_MARKER not in normalized_body:
-        missing.append(f"the template marker line `{TEMPLATE_MARKER}`")
-
     for heading in REQUIRED_HEADINGS:
         if heading not in lines:
             missing.append(f"the `{heading}` heading")
 
     states = {
         item: checklist_state(normalized_body, item)
-        for item in REQUIRED_CHECKLIST_ITEMS
+        for item in MANDATORY_CHECKLIST_ITEMS
     }
     for item, state in states.items():
         if state is None:
@@ -107,8 +108,10 @@ def missing_requirements(body: object, *, require_completed: bool = False) -> li
     if not require_completed:
         return missing
 
-    checked_change_types = sum(states[item] in ("x", "X") for item in TYPE_CHANGE_ITEMS)
-    if checked_change_types == 0:
+    if not any(
+        checklist_state(normalized_body, item) in ("x", "X")
+        for item in TYPE_CHANGE_ITEMS
+    ):
         missing.append("at least one checked change type")
 
     for item in MANDATORY_CHECKLIST_ITEMS:
@@ -143,9 +146,31 @@ def github_request(
     return json.loads(response_body) if response_body else None
 
 
-def latest_enforcement_comment(issue_url: str, token: str) -> str | None:
+def convert_to_draft(pull_request_url: str, node_id: str, token: str) -> None:
+    api_root, separator, _ = pull_request_url.partition("/repos/")
+    if not separator:
+        raise ValueError("pull request URL does not point at a GitHub API host")
+    result = github_request(
+        f"{api_root}/graphql",
+        token,
+        method="POST",
+        payload={
+            "query": (
+                "mutation($id:ID!)"
+                "{convertPullRequestToDraft(input:{pullRequestId:$id})"
+                "{pullRequest{isDraft}}}"
+            ),
+            "variables": {"id": node_id},
+        },
+    )
+    errors = result.get("errors") if isinstance(result, dict) else None
+    if errors:
+        raise RuntimeError(f"GitHub refused to convert the pull request to a draft: {errors}")
+
+
+def latest_enforcement_comment(issue_url: str, token: str) -> dict[str, Any] | None:
     page = 1
-    latest: str | None = None
+    latest: dict[str, Any] | None = None
     while True:
         comments = github_request(
             f"{issue_url}/comments?per_page=100&page={page}",
@@ -154,14 +179,32 @@ def latest_enforcement_comment(issue_url: str, token: str) -> str | None:
         if not isinstance(comments, list):
             raise RuntimeError("GitHub returned an invalid pull request comment list")
         for comment in comments:
-            if not isinstance(comment, dict):
-                continue
-            body = str(comment.get("body", ""))
-            if COMMENT_MARKER in body:
-                latest = body
+            if isinstance(comment, dict) and COMMENT_MARKER in str(comment.get("body", "")):
+                latest = comment
         if len(comments) < 100:
             return latest
         page += 1
+
+
+def sync_enforcement_comment(issue_url: str, token: str, comment: str) -> None:
+    """Keep exactly one bot comment on the pull request, rewritten in place."""
+    existing = latest_enforcement_comment(issue_url, token)
+    if existing is None:
+        if comment == RESOLVED_COMMENT:
+            return
+        github_request(
+            f"{issue_url}/comments",
+            token,
+            method="POST",
+            payload={"body": comment},
+        )
+        return
+    if str(existing.get("body", "")) == comment:
+        return
+    comment_url = existing.get("url")
+    if not isinstance(comment_url, str):
+        raise RuntimeError("GitHub comment is missing its API URL")
+    github_request(comment_url, token, method="PATCH", payload={"body": comment})
 
 
 def enforce(event: dict[str, object], token: str) -> list[str]:
@@ -174,30 +217,28 @@ def enforce(event: dict[str, object], token: str) -> list[str]:
         pull_request.get("body"),
         require_completed=not is_draft,
     )
-    if not missing:
-        return []
 
     issue_url = pull_request.get("issue_url")
     pull_request_url = pull_request.get("url")
+    node_id = pull_request.get("node_id")
     if not isinstance(issue_url, str) or not isinstance(pull_request_url, str):
         raise ValueError("pull request event is missing GitHub API URLs")
     if not token:
-        raise ValueError("GITHUB_TOKEN is required to close an invalid pull request")
+        raise ValueError("GITHUB_TOKEN is required to report on a pull request")
 
-    comment = build_closure_comment(missing)
-    if latest_enforcement_comment(issue_url, token) != comment:
-        github_request(
-            f"{issue_url}/comments",
-            token,
-            method="POST",
-            payload={"body": comment},
-        )
-    github_request(
-        pull_request_url,
+    if not missing:
+        sync_enforcement_comment(issue_url, token, RESOLVED_COMMENT)
+        return []
+
+    sync_enforcement_comment(
+        issue_url,
         token,
-        method="PATCH",
-        payload={"state": "closed"},
+        build_enforcement_comment(missing, converted=not is_draft),
     )
+    if not is_draft:
+        if not isinstance(node_id, str):
+            raise ValueError("pull request event is missing its node ID")
+        convert_to_draft(pull_request_url, node_id, token)
     return missing
 
 

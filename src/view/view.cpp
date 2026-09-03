@@ -1887,7 +1887,7 @@ namespace umbriel {
     }
     m_initialRulesSettled = false;
     m_initialRules = {};
-    m_initialRulesXdgTag.clear();
+    m_initialRulesXdgTag.reset();
     m_initialRulesContentType = ContentType::None;
     m_namedScrollingColumnName.reset();
     m_namedScrollingColumnOrder.reset();
@@ -1912,7 +1912,7 @@ namespace umbriel {
     if (m_xdgTag == tag) {
       return;
     }
-    m_xdgTag = tag;
+    m_xdgTag = std::string(tag);
     m_server->scheduleIpcWindowsEvent();
     if (m_mapped) {
       applyDynamicRules();
@@ -2804,8 +2804,8 @@ namespace umbriel {
     // Late app ID or title settlement may select opening rules, but identity
     // hints changed after map must not select new one-shot behavior.
     const ResolvedWindowRule rule = resolveWindowRules(
-        config(), m_toplevel->app_id, m_toplevel->title, m_initialRulesXdgTag, m_initialRulesContentType,
-        m_borderFocusedState
+        config(), ruleText(m_toplevel->app_id), ruleText(m_toplevel->title), m_initialRulesXdgTag,
+        m_initialRulesContentType, m_borderFocusedState
     );
 
     const bool namedScrollingColumnNameChanged = rule.defaultScrollingColumn.has_value()
@@ -2936,16 +2936,16 @@ namespace umbriel {
   }
 
   const ResolvedWindowRule& View::resolvedRules() {
-    const char* appId = m_toplevel->app_id;
-    const char* title = m_toplevel->title;
-    const std::string_view appIdView = appId != nullptr ? appId : "";
-    const std::string_view titleView = title != nullptr ? title : "";
+    const std::optional<std::string_view> appId = ruleText(m_toplevel->app_id);
+    const std::optional<std::string_view> title = ruleText(m_toplevel->title);
     const uint64_t generation = configStore().generation();
 
+    // An unset identity string is a distinct key from an empty one: only the latter matches a pattern accepting the
+    // empty string, so a client that replaces a missing title with an empty one must re-resolve.
     if (m_rulesGeneration == generation
         && m_rulesFocused == m_borderFocusedState
-        && m_rulesAppId == appIdView
-        && m_rulesTitle == titleView
+        && m_rulesAppId == appId
+        && m_rulesTitle == title
         && m_rulesXdgTag == m_xdgTag
         && m_rulesContentType == m_contentType) {
       return m_rules;
@@ -2954,8 +2954,8 @@ namespace umbriel {
     m_rules = resolveWindowRules(config(), appId, title, m_xdgTag, m_contentType, m_borderFocusedState);
     m_rulesGeneration = generation;
     m_rulesFocused = m_borderFocusedState;
-    m_rulesAppId = appIdView;
-    m_rulesTitle = titleView;
+    m_rulesAppId = appId;
+    m_rulesTitle = title;
     m_rulesXdgTag = m_xdgTag;
     m_rulesContentType = m_contentType;
     return m_rules;

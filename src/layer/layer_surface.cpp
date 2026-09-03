@@ -52,7 +52,7 @@ namespace umbriel {
       m_layerSurface = nullptr;
       return;
     }
-    m_rule = resolveLayerRules(config(), m_layerSurface->namespace_);
+    m_rule = resolveLayerRules(config(), ruleText(m_layerSurface->namespace_));
     m_scene->tree->node.data = sceneNodeData(this);
     m_layerSurface->data = this;
 
@@ -282,7 +282,7 @@ namespace umbriel {
   }
 
   void LayerSurface::applyConfig() {
-    m_rule = resolveLayerRules(config(), m_layerSurface->namespace_);
+    m_rule = resolveLayerRules(config(), ruleText(m_layerSurface->namespace_));
     updateBlur();
   }
 

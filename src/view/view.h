@@ -49,7 +49,7 @@ namespace umbriel {
     View& operator=(const View&) = delete;
 
     [[nodiscard]] wlr_xdg_toplevel* toplevel() const { return m_toplevel; }
-    [[nodiscard]] const std::string& xdgTag() const { return m_xdgTag; }
+    [[nodiscard]] const std::optional<std::string>& xdgTag() const { return m_xdgTag; }
     [[nodiscard]] ContentType contentType() const { return m_contentType; }
     [[nodiscard]] wlr_scene_tree* sceneTree() const { return m_sceneTree; }
     [[nodiscard]] wlr_scene_tree* captureTree() const;
@@ -372,15 +372,15 @@ namespace umbriel {
     // Cache for resolvedRules(); m_rulesGeneration 0 means never resolved.
     ResolvedWindowRule m_rules;
     uint64_t m_rulesGeneration = 0;
-    std::string m_rulesAppId;
-    std::string m_rulesTitle;
-    std::string m_rulesXdgTag;
+    std::optional<std::string> m_rulesAppId;
+    std::optional<std::string> m_rulesTitle;
+    std::optional<std::string> m_rulesXdgTag;
     ContentType m_rulesContentType = ContentType::None;
     bool m_rulesFocused = false;
     // One-shot effects already applied at map. Late identity resolution only
     // reapplies a field when its resolved value changes.
     ResolvedWindowRule m_initialRules;
-    std::string m_initialRulesXdgTag;
+    std::optional<std::string> m_initialRulesXdgTag;
     ContentType m_initialRulesContentType = ContentType::None;
     std::optional<std::string> m_namedScrollingColumnName;
     std::optional<int> m_namedScrollingColumnOrder;
@@ -390,7 +390,7 @@ namespace umbriel {
 
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
-    std::string m_xdgTag;
+    std::optional<std::string> m_xdgTag;
     ContentType m_contentType = ContentType::None;
     wlr_scene_tree* m_sceneTree = nullptr;
     // A separate scene containing only client-owned surfaces. Window capture

@@ -2,6 +2,7 @@
 #include "config/resolve.h"
 
 #include <algorithm>
+#include <optional>
 #include <regex>
 #include <string>
 #include <string_view>
@@ -351,7 +352,8 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   unfocused.defaultFloating = true;
   config.windowRules.push_back(std::move(unfocused));
 
-  const auto resolved = umbriel::resolveWindowRules(config, "foot", "project shell", "", ContentType::None, false);
+  const auto resolved =
+      umbriel::resolveWindowRules(config, "foot", "project shell", std::nullopt, ContentType::None, false);
   CHECK(resolved.opacity && *resolved.opacity == 0.8);
   CHECK(resolved.blur && *resolved.blur);
   CHECK(resolved.defaultFloating && *resolved.defaultFloating);
@@ -368,7 +370,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK(resolved.allowTearing && *resolved.allowTearing);
   CHECK(resolved.hdr == umbriel::HdrMode::On);
 
-  const auto appOnly = umbriel::resolveWindowRules(config, "foot", "editor", "", ContentType::None, false);
+  const auto appOnly = umbriel::resolveWindowRules(config, "foot", "editor", std::nullopt, ContentType::None, false);
   CHECK(appOnly.defaultPinned && *appOnly.defaultPinned);
   CHECK(appOnly.defaultScrollingColumn && *appOnly.defaultScrollingColumn == "browser-stack");
   CHECK(appOnly.defaultScrollingColumnOrder && *appOnly.defaultScrollingColumnOrder == 20);
@@ -376,7 +378,8 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK(appOnly.allowTearing && !*appOnly.allowTearing);
   CHECK(appOnly.hdr == umbriel::HdrMode::Off);
 
-  const auto focused = umbriel::resolveWindowRules(config, "foot", "project shell", "", ContentType::None, true);
+  const auto focused =
+      umbriel::resolveWindowRules(config, "foot", "project shell", std::nullopt, ContentType::None, true);
   CHECK(focused.opacity && *focused.opacity == 0.8);
   CHECK(!focused.defaultFloating);
   CHECK(umbriel::anyWindowRuleHasTitlePattern(config));
@@ -399,7 +402,8 @@ UMBRIEL_TEST(windowRulesMergeFractionSizingLastWriterWins) {
   second.defaultWidth = 0.75;
   config.windowRules.push_back(std::move(second));
 
-  const auto resolved = umbriel::resolveWindowRules(config, "utility", "", "", ContentType::None, false);
+  const auto resolved =
+      umbriel::resolveWindowRules(config, "utility", std::nullopt, std::nullopt, ContentType::None, false);
   CHECK(resolved.defaultFloating && *resolved.defaultFloating);
   // Later rules overwrite only the fields they set.
   CHECK(resolved.defaultWidth && *resolved.defaultWidth == 0.75);
@@ -429,23 +433,29 @@ UMBRIEL_TEST(windowRulesMatchContentTypesAndComposeSelectors) {
   none.defaultFloating = true;
   config.windowRules.push_back(std::move(none));
 
-  const auto matchingGame = umbriel::resolveWindowRules(config, "runner", "now playing", "", ContentType::Game, false);
+  const auto matchingGame =
+      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, false);
   CHECK(matchingGame.opacity && *matchingGame.opacity == 0.75);
 
-  const auto wrongApp = umbriel::resolveWindowRules(config, "launcher", "now playing", "", ContentType::Game, false);
+  const auto wrongApp =
+      umbriel::resolveWindowRules(config, "launcher", "now playing", std::nullopt, ContentType::Game, false);
   CHECK(!wrongApp.opacity);
-  const auto wrongTitle = umbriel::resolveWindowRules(config, "runner", "paused", "", ContentType::Game, false);
+  const auto wrongTitle =
+      umbriel::resolveWindowRules(config, "runner", "paused", std::nullopt, ContentType::Game, false);
   CHECK(!wrongTitle.opacity);
-  const auto wrongFocus = umbriel::resolveWindowRules(config, "runner", "now playing", "", ContentType::Game, true);
+  const auto wrongFocus =
+      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, true);
   CHECK(!wrongFocus.opacity);
 
-  const auto matchingPhoto = umbriel::resolveWindowRules(config, "viewer", "photo", "", ContentType::Photo, false);
+  const auto matchingPhoto =
+      umbriel::resolveWindowRules(config, "viewer", "photo", std::nullopt, ContentType::Photo, false);
   CHECK(matchingPhoto.opacity && *matchingPhoto.opacity == 0.25);
 
-  const auto matchingNone = umbriel::resolveWindowRules(config, "terminal", "shell", "", ContentType::None, false);
+  const auto matchingNone =
+      umbriel::resolveWindowRules(config, "terminal", "shell", std::nullopt, ContentType::None, false);
   CHECK(matchingNone.defaultFloating && *matchingNone.defaultFloating);
 
-  const auto video = umbriel::resolveWindowRules(config, "viewer", "video", "", ContentType::Video, false);
+  const auto video = umbriel::resolveWindowRules(config, "viewer", "video", std::nullopt, ContentType::Video, false);
   CHECK(!video.opacity);
   CHECK(!video.defaultFloating);
 }
@@ -504,13 +514,56 @@ UMBRIEL_TEST(windowRulesMatchXdgTagsAndComposeSelectors) {
       umbriel::resolveWindowRules(config, "runner", "now playing", "game-running", ContentType::Game, true);
   CHECK(wrongFocus.opacity && *wrongFocus.opacity == 0.25);
 
-  const auto missingTag = umbriel::resolveWindowRules(config, "runner", "now playing", "", ContentType::Game, false);
+  const auto missingTag =
+      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, false);
   CHECK(!missingTag.opacity);
   CHECK(!missingTag.defaultFloating);
   const auto unknownTag =
       umbriel::resolveWindowRules(config, "runner", "now playing", "browser", ContentType::Game, false);
   CHECK(!unknownTag.opacity);
   CHECK(!unknownTag.defaultFloating);
+}
+
+UMBRIEL_TEST(windowRulesMatchEmptyIdentityOnlyWhenTheClientSetIt) {
+  Config config;
+
+  WindowRule blankTitle;
+  blankTitle.titlePattern = "^$";
+  blankTitle.titleRegex = std::regex(blankTitle.titlePattern);
+  blankTitle.defaultFloating = true;
+  config.windowRules.push_back(std::move(blankTitle));
+
+  WindowRule blankAppId;
+  blankAppId.appIdPattern = "^$";
+  blankAppId.appIdRegex = std::regex(blankAppId.appIdPattern);
+  blankAppId.opacity = 0.5;
+  config.windowRules.push_back(std::move(blankAppId));
+
+  WindowRule blankTag;
+  blankTag.xdgTagPattern = "^$";
+  blankTag.xdgTagRegex = std::regex(blankTag.xdgTagPattern);
+  blankTag.defaultMaximize = true;
+  config.windowRules.push_back(std::move(blankTag));
+
+  // A window whose title, app ID, and tag are all set to the empty string.
+  const auto allEmpty = umbriel::resolveWindowRules(config, "", "", "", ContentType::None, false);
+  CHECK(allEmpty.defaultFloating && *allEmpty.defaultFloating);
+  CHECK(allEmpty.opacity && *allEmpty.opacity == 0.5);
+  CHECK(allEmpty.defaultMaximize && *allEmpty.defaultMaximize);
+
+  // A window that never sent any of them matches nothing: an unset value is not an empty one.
+  const auto allUnset =
+      umbriel::resolveWindowRules(config, std::nullopt, std::nullopt, std::nullopt, ContentType::None, false);
+  CHECK(!allUnset.defaultFloating);
+  CHECK(!allUnset.opacity);
+  CHECK(!allUnset.defaultMaximize);
+
+  // Selectors are independent: an empty title matches while a non-empty app ID and an unset tag do not.
+  const auto emptyTitleOnly =
+      umbriel::resolveWindowRules(config, "firefox", "", std::nullopt, ContentType::None, false);
+  CHECK(emptyTitleOnly.defaultFloating && *emptyTitleOnly.defaultFloating);
+  CHECK(!emptyTitleOnly.opacity);
+  CHECK(!emptyTitleOnly.defaultMaximize);
 }
 
 UMBRIEL_TEST(windowVrrRuleOverridesTheOutputPolicy) {
@@ -556,6 +609,17 @@ UMBRIEL_TEST(layerRulesMergeMatchingFieldsInOrder) {
   CHECK(!unmatched.blur);
   CHECK(!unmatched.ignoreAlpha);
   CHECK(!unmatched.optimized);
+
+  LayerRule blank;
+  blank.namespacePattern = "^$";
+  blank.namespaceRegex = std::regex(blank.namespacePattern);
+  blank.blur = true;
+  config.layerRules.push_back(std::move(blank));
+
+  // Layer surfaces name themselves at creation, so an empty namespace is a value a rule can match.
+  const auto blankNamespace = umbriel::resolveLayerRules(config, "");
+  CHECK(blankNamespace.blur && *blankNamespace.blur);
+  CHECK(!umbriel::resolveLayerRules(config, std::nullopt).blur);
 }
 
 UMBRIEL_TEST(securityContextRulesGrantGlobalsByMetadata) {

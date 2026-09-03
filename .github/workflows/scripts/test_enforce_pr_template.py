@@ -184,8 +184,12 @@ class TemplateEnforcementTests(unittest.TestCase):
         return mock.call(f"{self.ISSUE_URL}/comments?per_page=100&page={page}", "token")
 
     def draft_call(self) -> mock._Call:
-        call = mock.call(self.GRAPHQL_URL, "token", method="POST", payload=mock.ANY)
-        return call
+        return mock.call(
+            self.GRAPHQL_URL,
+            "token",
+            method="POST",
+            payload={"query": mock.ANY, "variables": {"id": self.NODE_ID}},
+        )
 
     def test_valid_template_writes_nothing_when_no_comment_exists(self) -> None:
         with mock.patch.object(
@@ -203,7 +207,7 @@ class TemplateEnforcementTests(unittest.TestCase):
         stale = {
             "body": enforce_pr_template.build_enforcement_comment(
                 ["the `## Testing` heading"],
-                converted=True,
+                converted=False,
             ),
             "url": self.COMMENT_URL,
         }
@@ -229,81 +233,57 @@ class TemplateEnforcementTests(unittest.TestCase):
             ],
         )
 
-    def test_invalid_ready_pull_request_is_converted_to_draft(self) -> None:
+    def test_invalid_ready_pull_request_is_converted_then_gets_fresh_comment(self) -> None:
         body = drop_section(ready_template(), "## Testing")
         with mock.patch.object(
             enforce_pr_template,
             "github_request",
-            side_effect=[[], {}, {"data": {"convertPullRequestToDraft": {}}}],
+            side_effect=[
+                {"data": {"convertPullRequestToDraft": {"pullRequest": {"isDraft": True}}}},
+                {},
+            ],
         ) as request:
             missing = enforce_pr_template.enforce(self.event(body), "token")
 
         self.assertEqual(missing, ["the `## Testing` heading"])
-        comment = enforce_pr_template.build_enforcement_comment(missing, converted=True)
+        comment = enforce_pr_template.build_enforcement_comment(
+            missing,
+            converted=True,
+        )
         self.assertIn("converted to a draft", comment)
         self.assertEqual(
             request.call_args_list,
             [
-                self.comments_call(),
+                self.draft_call(),
                 mock.call(
                     f"{self.ISSUE_URL}/comments",
                     "token",
                     method="POST",
                     payload={"body": comment},
                 ),
-                mock.call(
-                    self.GRAPHQL_URL,
-                    "token",
-                    method="POST",
-                    payload={
-                        "query": mock.ANY,
-                        "variables": {"id": self.NODE_ID},
-                    },
-                ),
             ],
         )
 
-    def test_invalid_pull_request_is_never_closed(self) -> None:
+    def test_each_conversion_posts_a_fresh_comment_without_reading_old_comments(
+        self,
+    ) -> None:
         with mock.patch.object(
             enforce_pr_template,
             "github_request",
-            side_effect=[[], {}, {"data": {}}],
+            side_effect=[
+                {"data": {"convertPullRequestToDraft": {"pullRequest": {"isDraft": True}}}},
+                {},
+            ],
         ) as request:
             enforce_pr_template.enforce(self.event("AI-generated body"), "token")
 
-        for call in request.call_args_list:
-            self.assertNotEqual(call.kwargs.get("payload"), {"state": "closed"})
-            self.assertNotEqual(call.kwargs.get("method"), "PATCH")
-
-    def test_invalid_draft_is_reported_without_state_change(self) -> None:
-        with mock.patch.object(
-            enforce_pr_template,
-            "github_request",
-            side_effect=[[], {}],
-        ) as request:
-            missing = enforce_pr_template.enforce(
-                self.event("AI-generated body", draft=True),
-                "token",
-            )
-
-        self.assertIn("the `## Summary` heading", missing)
-        comment = enforce_pr_template.build_enforcement_comment(missing, converted=False)
-        self.assertIn("This draft pull request is missing", comment)
+        self.assertEqual(request.call_args_list[0], self.draft_call())
         self.assertEqual(
-            request.call_args_list,
-            [
-                self.comments_call(),
-                mock.call(
-                    f"{self.ISSUE_URL}/comments",
-                    "token",
-                    method="POST",
-                    payload={"body": comment},
-                ),
-            ],
+            request.call_args_list[1].args[0],
+            f"{self.ISSUE_URL}/comments",
         )
 
-    def test_stale_enforcement_comment_is_rewritten_in_place(self) -> None:
-        body = drop_section(ready_template(), "## Testing")
+    def test_invalid_draft_updates_the_latest_enforcement_comment(self) -> None:
         stale = {
             "body": enforce_pr_template.build_enforcement_comment(
                 ["at least one checked change type"],
@@ -314,63 +294,65 @@ class TemplateEnforcementTests(unittest.TestCase):
         with mock.patch.object(
             enforce_pr_template,
             "github_request",
-            side_effect=[[stale], {}, {"data": {}}],
+            side_effect=[[stale], {}],
         ) as request:
-            missing = enforce_pr_template.enforce(self.event(body), "token")
-
-        self.assertEqual(
-            request.call_args_list[1],
-            mock.call(
-                self.COMMENT_URL,
+            missing = enforce_pr_template.enforce(
+                self.event("AI-generated body", draft=True),
                 "token",
-                method="PATCH",
-                payload={
-                    "body": enforce_pr_template.build_enforcement_comment(
-                        missing,
-                        converted=True,
-                    )
-                },
-            ),
+            )
+
+        self.assertIn("the `## Summary` heading", missing)
+        comment = enforce_pr_template.build_enforcement_comment(
+            missing,
+            converted=False,
+        )
+        self.assertEqual(
+            request.call_args_list,
+            [
+                self.comments_call(),
+                mock.call(
+                    self.COMMENT_URL,
+                    "token",
+                    method="PATCH",
+                    payload={"body": comment},
+                ),
+            ],
         )
 
-    def test_identical_enforcement_comment_is_not_rewritten(self) -> None:
-        body = drop_section(ready_template(), "## Testing")
-        missing = enforce_pr_template.missing_requirements(body, require_completed=True)
+    def test_identical_draft_comment_is_not_rewritten(self) -> None:
+        missing = enforce_pr_template.missing_requirements(
+            "AI-generated body",
+            require_completed=False,
+        )
         existing = {
             "body": enforce_pr_template.build_enforcement_comment(
                 missing,
-                converted=True,
+                converted=False,
             ),
             "url": self.COMMENT_URL,
         }
         with mock.patch.object(
             enforce_pr_template,
             "github_request",
-            side_effect=[[existing], {"data": {}}],
+            side_effect=[[existing]],
         ) as request:
-            enforce_pr_template.enforce(self.event(body), "token")
+            enforce_pr_template.enforce(
+                self.event("AI-generated body", draft=True),
+                "token",
+            )
 
-        self.assertEqual(
-            request.call_args_list,
-            [
-                self.comments_call(),
-                mock.call(
-                    self.GRAPHQL_URL,
-                    "token",
-                    method="POST",
-                    payload={"query": mock.ANY, "variables": {"id": self.NODE_ID}},
-                ),
-            ],
-        )
+        self.assertEqual(request.call_args_list, [self.comments_call()])
 
-    def test_graphql_errors_fail_the_check(self) -> None:
+    def test_graphql_error_stops_before_posting_conversion_comment(self) -> None:
         with mock.patch.object(
             enforce_pr_template,
             "github_request",
-            side_effect=[[], {}, {"errors": [{"message": "Resource not accessible"}]}],
-        ):
+            side_effect=[{"errors": [{"message": "Resource not accessible"}]}],
+        ) as request:
             with self.assertRaises(RuntimeError):
                 enforce_pr_template.enforce(self.event("AI-generated body"), "token")
+
+        self.assertEqual(request.call_args_list, [self.draft_call()])
 
 
 if __name__ == "__main__":

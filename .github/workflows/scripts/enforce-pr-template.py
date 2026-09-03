@@ -163,9 +163,17 @@ def convert_to_draft(pull_request_url: str, node_id: str, token: str) -> None:
             "variables": {"id": node_id},
         },
     )
-    errors = result.get("errors") if isinstance(result, dict) else None
+    if not isinstance(result, dict):
+        raise RuntimeError("GitHub returned an invalid draft conversion response")
+    errors = result.get("errors")
     if errors:
         raise RuntimeError(f"GitHub refused to convert the pull request to a draft: {errors}")
+    converted = result.get("data", {}).get("convertPullRequestToDraft", {})
+    pull_request = converted.get("pullRequest") if isinstance(converted, dict) else None
+    if not isinstance(pull_request, dict) or pull_request.get("isDraft") is not True:
+        raise RuntimeError("GitHub did not confirm that the pull request became a draft")
+
+
 
 
 def latest_enforcement_comment(issue_url: str, token: str) -> dict[str, Any] | None:
@@ -230,15 +238,19 @@ def enforce(event: dict[str, object], token: str) -> list[str]:
         sync_enforcement_comment(issue_url, token, RESOLVED_COMMENT)
         return []
 
-    sync_enforcement_comment(
-        issue_url,
-        token,
-        build_enforcement_comment(missing, converted=not is_draft),
-    )
-    if not is_draft:
+    comment = build_enforcement_comment(missing, converted=not is_draft)
+    if is_draft:
+        sync_enforcement_comment(issue_url, token, comment)
+    else:
         if not isinstance(node_id, str):
             raise ValueError("pull request event is missing its node ID")
         convert_to_draft(pull_request_url, node_id, token)
+        github_request(
+            f"{issue_url}/comments",
+            token,
+            method="POST",
+            payload={"body": comment},
+        )
     return missing
 
 

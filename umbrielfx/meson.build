@@ -209,7 +209,7 @@ if build_tests
     'shared-sdr-capture-storage-change',
   ]
     test(
-      'umbrielfx-color-' + case_name,
+      'color-' + case_name,
       umbrielfx_color_test,
       args: case_name,
       suite: 'umbrielfx',
@@ -234,7 +234,7 @@ if build_tests
   endforeach
 
   test(
-    'umbrielfx-scene-abi',
+    'scene-abi',
     find_program('tests/abi_compare.sh', native: true),
     args: umbrielfx_abi_probes,
     suite: 'umbrielfx',

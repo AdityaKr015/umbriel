@@ -1,8 +1,8 @@
 #!/bin/sh
 
-drs=
-if [ -z "${DBUS_SESSION_BUS_ADDRESS}" ]; then
-  drs=dbus-run-session
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] &&
+   command -v dbus-run-session >/dev/null 2>&1; then
+    drs=dbus-run-session
 fi
 
 if [ -n "${MANAGERPID:-}" ] && [ "${SYSTEMD_EXEC_PID:-}" = "$$" ]; then

@@ -216,7 +216,8 @@ namespace umbriel {
     const auto& appearance = config().appearance;
     const int total = appearance.totalBorderWidth();
     const bool decorated = total > 0 && !view->toplevel()->current.fullscreen && !view->maximizedToEdges();
-    const int outerRadius = decorated ? static_cast<int>(std::lround(appearance.cornerRadius * z)) : 0;
+    const int scaledRadius = static_cast<int>(std::lround(appearance.cornerRadius * z));
+    const int outerRadius = decorated ? scaledRadius : 0;
     const auto scaledWidth = [z](int width) {
       return width > 0 ? std::max(1, static_cast<int>(std::lround(width * z))) : 0;
     };
@@ -245,6 +246,11 @@ namespace umbriel {
         wlr_scene_buffer_set_opacity(card.badgeText, badgeAlpha);
         const std::array<float, 4> background = tint(card.badgeBackground, badgeAlpha);
         wlr_scene_rect_set_color(card.badgeRect, background.data());
+        // The badge renders unscaled, so it takes the zoomed radius the cards
+        // around it use instead of the full-size one.
+        wlr_scene_rect_set_corner_radius(
+            card.badgeRect, std::min(scaledRadius, std::min(card.badgeWidth, card.badgeHeight) / 2)
+        );
       }
     }
 
@@ -1039,7 +1045,7 @@ namespace umbriel {
         .markup = markup,
         .font = "monospace 19",
         .maxWidth = 350,
-        .padding = 7,
+        .padding = 0,
         .scale = scale,
         .bgA = 0.0,
     });
@@ -1053,9 +1059,13 @@ namespace umbriel {
       return;
     }
     wlr_scene_node_set_position(&card.badge->node, 6, 6);
+    // Keycap proportions: the label's line box sets the height, and the badge is
+    // never narrower than it is tall, so a single character reads as a square.
+    constexpr int kBadgeSidePad = 8;
+    const int badgeHeight = rendered.logicalHeight;
+    const int badgeWidth = std::max(rendered.logicalWidth + 2 * kBadgeSidePad, badgeHeight);
     const std::array<float, 4> background = tint(card.badgeBackground, 1.0);
-    card.badgeRect =
-        wlr_scene_rect_create(card.badge, rendered.logicalWidth, rendered.logicalHeight, background.data());
+    card.badgeRect = wlr_scene_rect_create(card.badge, badgeWidth, badgeHeight, background.data());
     card.badgeText = wlr_scene_buffer_create(card.badge, rendered.buffer);
     wlr_buffer_drop(rendered.buffer);
     if (card.badgeRect == nullptr || card.badgeText == nullptr) {
@@ -1066,13 +1076,13 @@ namespace umbriel {
       return;
     }
 
-    wlr_scene_rect_set_corner_radius(
-        card.badgeRect, std::min(config().appearance.cornerRadius, rendered.logicalHeight / 4)
+    wlr_scene_node_set_position(
+        &card.badgeText->node, (badgeWidth - rendered.logicalWidth) / 2, (badgeHeight - rendered.logicalHeight) / 2
     );
     wlr_scene_buffer_set_dest_size(card.badgeText, rendered.logicalWidth, rendered.logicalHeight);
     card.badgeText->point_accepts_input = rejectInput;
-    card.badgeWidth = rendered.logicalWidth;
-    card.badgeHeight = rendered.logicalHeight;
+    card.badgeWidth = badgeWidth;
+    card.badgeHeight = badgeHeight;
     wlr_scene_node_raise_to_top(&card.badge->node);
     wlr_scene_node_set_enabled(&card.badge->node, false);
   }

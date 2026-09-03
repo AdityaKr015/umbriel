@@ -6,8 +6,10 @@ the main configuration guide but remain part of Umbriel's observable behavior.
 ## Live content
 
 Overview cards display live window content. The real workspace windows are
-hidden while the overview is open, so wheel steps, arrow keys, and 3-finger
-swipes move one workspace at a time instead of sliding the live workspace.
+hidden while the overview is open, so wheel steps, fallback vertical arrow
+keys, and 3-finger swipes move one workspace at a time instead of sliding the
+live workspace. Configured vertical focus actions retain their layout-specific
+behavior, including stacked-card traversal in horizontal scrolling workspaces.
 
 Transparent windows keep their window-rule blur throughout the zoom
 transition.
@@ -114,6 +116,8 @@ The relevant checks are:
 
 - [`tests/harness/checks/310_overview_wheel.sh`](../../tests/harness/checks/310_overview_wheel.sh)
   for overview interaction and workspace navigation.
+- [`tests/harness/checks/346_overview_keybind_actions.sh`](../../tests/harness/checks/346_overview_keybind_actions.sh)
+  for configured directional actions and fallback arrow navigation.
 - [`tests/harness/checks/460_external_drag.sh`](../../tests/harness/checks/460_external_drag.sh)
   for client drag ownership during overview activation.
 - [`tests/harness/checks/430_drag_opacity.sh`](../../tests/harness/checks/430_drag_opacity.sh)

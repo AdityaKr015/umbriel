@@ -179,14 +179,16 @@ chord 45 # X
 wait_for_count 3
 wait_for_focus "$top_title"
 
-# Direct vertical focus selects overview rows even though a local vertical neighbor exists. This transition also proves
-# the close above did not close overview.
+# Direct vertical focus follows stacked cards within the selected workspace. This transition also proves the close
+# above did not close overview.
 chord 36 # J
-wait_for_workspace 2
+wait_for_focus "$bottom_title"
+wait_for_workspace 1
 chord 37 # K
+wait_for_focus "$top_title"
 wait_for_workspace 1
 
-# Unbound arrows reach those same focus actions through the fallback path.
+# Unbound vertical arrows remain dedicated workspace-row navigation.
 pointer tap 108 # Down
 wait_for_workspace 2
 pointer tap 103 # Up
@@ -200,4 +202,4 @@ wait_for_focus "$top_title"
 sleep 0.6
 wait_for_focus "$top_title"
 
-echo "overview routes configured actions and fallback arrows through shared card and row navigation"
+echo "overview keeps configured card navigation distinct from fallback workspace-row arrows"

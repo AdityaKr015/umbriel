@@ -275,7 +275,9 @@ follows_mouse = false                           # Focus the pointer target after
 "Mod" = "spawn:noctalia msg panel-toggle launcher"
 "Mod+Q" = "window-close"
 
-# Focus navigation
+# Focus navigation. In overview, Mod+Up/Down retain normal layout focus, so they
+# traverse stacks in the default horizontal layout. Bare Up/Down move between
+# workspace rows.
 "Mod+Left" = "window-focus-left"
 "Mod+Down" = "window-focus-down"
 "Mod+Up" = "window-focus-up"

@@ -2338,19 +2338,11 @@ namespace umbriel {
     if (!m_shortcutInput.empty()) {
       clearShortcutInput();
     }
-    switch (action) {
-    case KeybindAction::WindowFocusUp:
-      selectRelativeWorkspace(-1, nullptr);
-      return true;
-    case KeybindAction::WindowFocusDown:
-      selectRelativeWorkspace(1, nullptr);
-      return true;
-    default:
-      // Horizontal card focus and composite focus actions already have the
-      // desired behavior through their normal handlers. In particular, an
-      // OrWorkspace or OrOutput action must retain its documented fallback.
-      return false;
-    }
+    // Directional actions retain their normal handlers while the overview is
+    // interactive. In particular, direct vertical focus keeps its layout
+    // semantics, while OrWorkspace and OrOutput actions keep their documented
+    // fallbacks.
+    return false;
   }
 
   bool Overview::handleFallbackKey(uint32_t keysym) {
@@ -2381,9 +2373,13 @@ namespace umbriel {
     case XKB_KEY_Right:
       return dispatch(KeybindAction::WindowFocusRight);
     case XKB_KEY_Up:
-      return dispatch(KeybindAction::WindowFocusUp);
+      clearShortcutInput();
+      selectRelativeWorkspace(-1, nullptr);
+      return true;
     case XKB_KEY_Down:
-      return dispatch(KeybindAction::WindowFocusDown);
+      clearShortcutInput();
+      selectRelativeWorkspace(1, nullptr);
+      return true;
     default:
       return false;
     }

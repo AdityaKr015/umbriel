@@ -1493,6 +1493,9 @@ static struct fx_framebuffer *get_main_buffer_blur(struct fx_gles_render_pass *p
 		return NULL;
 	}
 
+	struct fx_render_blur_pass_options local_options = *fx_options;
+	fx_options = &local_options;
+
 	struct fx_renderer *renderer = pass->buffer->renderer;
 	struct wlr_box buffer_bounds = {
 		0, 0,

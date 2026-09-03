@@ -34,8 +34,8 @@ namespace umbriel {
     constexpr Logger kLog("cursor");
     constexpr double kHotCornerExtent = 8.0;
 
-    // Panels (top/overlay) keep working inside the overview. Wallpaper and bottom-layer widgets are part of the inert
-    // desktop behind the filmstrip, so their clicks belong to the overview instead.
+    // Panels (top/overlay) keep working inside the overview. Background- and bottom-layer surfaces are part of the
+    // inert backdrop behind the filmstrip, so their clicks belong to the overview instead.
     bool overviewPassthroughLayer(const LayerSurface* layer) {
       if (layer == nullptr) {
         return false;

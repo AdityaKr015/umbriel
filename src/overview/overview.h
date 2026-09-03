@@ -27,6 +27,7 @@ struct wlr_surface;
 namespace umbriel {
 
   enum class KeybindAction;
+  class LayerSurface;
   class Output;
   class Server;
   class View;
@@ -85,21 +86,23 @@ namespace umbriel {
     // size once per frame regardless of how many views resized together.
     void onViewPresentationChanged(View* view);
     void onOutputRemoved(Output* output);
+    // A background- or bottom-layer surface on `output` mapped, unmapped, or changed layer: the mirrored stack has
+    // to catch up while the real bottom layer is hidden.
+    void onDesktopLayerChanged(Output* output);
 
     // Input entry points; called from Cursor/Keyboard while active.
     bool handleButton(uint32_t button, bool pressed, double lx, double ly);
     void handleMotion(double lx, double ly);
     bool handleAxisNotch(bool vertical, double direction, double lx, double ly);
     bool handleFallbackKey(uint32_t keysym);
-    // Give direct vertical focus actions overview-row semantics, clear pending
-    // badge input for directional focus, and consume those actions while the
-    // closing animation is no longer interactive. Returning false delegates
-    // to the regular action handler, preserving composite action fallbacks.
+    // Clear pending badge input for directional focus, delegate to the regular
+    // action handler while interactive, and consume those actions once the
+    // closing animation starts.
     bool handleKeybindAction(KeybindAction action);
     // Step the active workspace `delta` rows down the filmstrip on `output` (null: wherever the pointer is). Returns
-    // false at either end. The wheel, the arrow keys and the three-finger swipe all arrive here: while the overview is
-    // up the real trees are hidden, so there is nothing to slide and switching is a discrete step rather than the
-    // animated transition it is outside.
+    // false at either end. The wheel, fallback vertical arrow keys and the three-finger swipe all arrive here: while
+    // the overview is up the real trees are hidden, so there is nothing to slide and switching is a discrete step
+    // rather than the animated transition it is outside.
     bool selectRelativeWorkspace(int delta, Output* output);
     [[nodiscard]] bool dragging() const { return m_dragCard != nullptr || m_middlePressed; }
 
@@ -146,13 +149,49 @@ namespace umbriel {
       std::string label;
     };
 
+    // One surface of the output's mirrored stack: a background- or bottom-layer surface copied into every workspace
+    // preview. `tree` is the layer surface's own scene tree, re-resolved every layout, and the source of both the
+    // mirror geometry and its color state.
+    struct DesktopSurface {
+      Overview* overview = nullptr;
+      OutputState* state = nullptr;
+      wlr_surface* surface = nullptr;
+      wlr_scene_tree* tree = nullptr;
+      wl_listener commit{};
+      wl_listener destroy{};
+    };
+
+    // One mirrored surface inside one row. Every copy paces its client: the real bottom layer is hidden while the
+    // overview is open, so these buffers are the only place its surfaces are sampled.
+    struct DesktopMirror {
+      DesktopSurface* source = nullptr;
+      wlr_scene_buffer* buffer = nullptr;
+      wl_listener outputSample{};
+      wl_listener frameDone{};
+    };
+
+    // Resolved stack entry, ordered bottom to top.
+    struct DesktopEntry {
+      wlr_surface* surface = nullptr;
+      wlr_scene_tree* tree = nullptr;
+    };
+
+    // One workspace row's backdrop: the flat fill, plus one mirror per stack surface drawn over it when
+    // `[overview] workspace_wallpaper` is on. The fill is what an output with an empty stack shows.
+    struct WorkspaceBackground {
+      wlr_scene_tree* tree = nullptr;
+      wlr_scene_rect* fill = nullptr;
+      std::vector<std::unique_ptr<DesktopMirror>> mirrors;
+    };
+
     struct OutputState {
       Output* output = nullptr;
       wlr_scene_tree* tree = nullptr;
       wlr_scene_blur* backgroundBlur = nullptr;
       wlr_scene_rect* backgroundTint = nullptr;
-      std::vector<wlr_scene_rect*> workspaceBackgrounds;
+      std::vector<WorkspaceBackground> workspaceBackgrounds;
       std::vector<std::unique_ptr<Card>> cards;
+      std::vector<std::unique_ptr<DesktopSurface>> desktop;
       double rowScroll = 0;
       double rowFrom = 0;
       double rowTo = 0;
@@ -175,6 +214,10 @@ namespace umbriel {
     static void onCardBufferFrameDone(wl_listener* listener, void* data);
     static void addCardSurface(wlr_surface* surface, int sx, int sy, void* data);
     static void syncCardSurface(wlr_surface* surface, int sx, int sy, void* data);
+    static void onDesktopSurfaceCommit(wl_listener* listener, void* data);
+    static void onDesktopSurfaceDestroy(wl_listener* listener, void* data);
+    static void onDesktopMirrorOutputSample(wl_listener* listener, void* data);
+    static void onDesktopMirrorFrameDone(wl_listener* listener, void* data);
 
     [[nodiscard]] double zoom() const;
     [[nodiscard]] static bool rowMetrics(const OutputState& state, const Server& server, double zoom, RowMetrics& out);
@@ -192,6 +235,16 @@ namespace umbriel {
     [[nodiscard]] OutputState* stateFor(const Output* output);
     [[nodiscard]] OutputState* stateForWorkspace(const Workspace* workspace);
     [[nodiscard]] Card* findCard(const View* view);
+    [[nodiscard]] WorkspaceBackground createWorkspaceBackground(OutputState& state) const;
+    // Mapped background- and bottom-layer surfaces of `output`, in render order.
+    void collectDesktopSurfaces(const Output& output, std::vector<DesktopEntry>& out) const;
+    // Re-resolves the output's mirrored stack, rebuilding every row's mirrors when its surfaces changed.
+    void refreshDesktop(OutputState& state);
+    void clearDesktop(OutputState& state) const;
+    void createRowMirrors(OutputState& state, WorkspaceBackground& background) const;
+    // Points every mirror at its surface's committed buffer and copies its color state.
+    void syncDesktopMirrors(const OutputState& state) const;
+    [[nodiscard]] static bool desktopSourceBox(const DesktopSurface& source, wlr_box& out);
 
     void applyProgress();
     void layoutOutput(OutputState& state);

@@ -289,7 +289,7 @@ namespace umbriel {
     return focusedColumn >= 0 ? focusedColumn + 1 : static_cast<int>(m_layout->columns().size());
   }
 
-  void Workspace::layoutAttach(View* view, std::optional<double> initialWidth) {
+  void Workspace::layoutAttach(View* view, std::optional<double> initialWidth, std::optional<int> initialPixelWidth) {
     if (view == nullptr || !view->mapped() || !view->tiled() || m_layout->columnOf(view) >= 0) {
       return;
     }
@@ -307,11 +307,15 @@ namespace umbriel {
 
     if (scrolling != nullptr && !placement) {
       const int column = scrolling->columnOf(view);
-      const std::optional<double> configuredWidth =
-          initialWidth ? initialWidth : m_layoutConfig.scrolling.defaultWidthFraction;
-      if (configuredWidth) {
+      if (initialPixelWidth && !scrollingVertical()) {
+        // default_size is expressed in physical axes, so its width only seeds
+        // the primary extent of a horizontal scrolling column.
+        scrolling->setWidthFromPixels(column, scrollViewportExtent(), *initialPixelWidth);
+      } else if (initialWidth) {
         // default_width is a viewport fraction: scrolling only. Dwindle ignores it.
-        scrolling->setWidthFraction(column, *configuredWidth);
+        scrolling->setWidthFraction(column, *initialWidth);
+      } else if (m_layoutConfig.scrolling.defaultWidthFraction) {
+        scrolling->setWidthFraction(column, *m_layoutConfig.scrolling.defaultWidthFraction);
       } else {
         const wlr_box& geometry = view->toplevel()->base->geometry;
         const int primary = scrollingVertical() ? geometry.height : geometry.width;

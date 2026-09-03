@@ -4,6 +4,7 @@
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "layer/layer_surface.h"
 #include "layout/drop_target.h"
 #include "layout/layout.h"
 #include "output/output.h"
@@ -215,7 +216,8 @@ namespace umbriel {
     const auto& appearance = config().appearance;
     const int total = appearance.totalBorderWidth();
     const bool decorated = total > 0 && !view->toplevel()->current.fullscreen && !view->maximizedToEdges();
-    const int outerRadius = decorated ? static_cast<int>(std::lround(appearance.cornerRadius * z)) : 0;
+    const int scaledRadius = static_cast<int>(std::lround(appearance.cornerRadius * z));
+    const int outerRadius = decorated ? scaledRadius : 0;
     const auto scaledWidth = [z](int width) {
       return width > 0 ? std::max(1, static_cast<int>(std::lround(width * z))) : 0;
     };
@@ -229,7 +231,7 @@ namespace umbriel {
           card.border, makeBorderRing(contentW, contentH, outerRadius, innerWidth, outerWidth), innerWidth, outerWidth
       );
       const std::array<float, 4> innerColor = tint(cardBorderColor(card, liveTarget), presentedOpacity);
-      const std::array<float, 4> outerColor = tint(appearance.outerBorderColor, presentedOpacity);
+      const std::array<float, 4> outerColor = tint(config().colors.border.outer, presentedOpacity);
       wlr_scene_border_set_colors(card.border, innerColor.data(), outerColor.data());
     }
 
@@ -244,6 +246,11 @@ namespace umbriel {
         wlr_scene_buffer_set_opacity(card.badgeText, badgeAlpha);
         const std::array<float, 4> background = tint(card.badgeBackground, badgeAlpha);
         wlr_scene_rect_set_color(card.badgeRect, background.data());
+        // The badge renders unscaled, so it takes the zoomed radius the cards
+        // around it use instead of the full-size one.
+        wlr_scene_rect_set_corner_radius(
+            card.badgeRect, std::min(scaledRadius, std::min(card.badgeWidth, card.badgeHeight) / 2)
+        );
       }
     }
 
@@ -337,17 +344,48 @@ namespace umbriel {
 
     wlr_scene_node_set_position(&state.backgroundTint->node, metrics.outputBox.x, metrics.outputBox.y);
     wlr_scene_rect_set_size(state.backgroundTint, metrics.outputBox.width, metrics.outputBox.height);
-    const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, m_progress);
+    const std::array<float, 4> backgroundTint = tint(config().colors.overview.backgroundTint, m_progress);
     // A fully transparent tint leaves the wallpaper untouched.
     wlr_scene_node_set_enabled(&state.backgroundTint->node, backgroundTint[3] > 0.001F);
     wlr_scene_rect_set_color(state.backgroundTint, backgroundTint.data());
 
+    refreshDesktop(state);
     const int backgroundRadius = static_cast<int>(std::lround(config().appearance.cornerRadius * metrics.zoom));
-    const std::array<float, 4> backgroundColor = tint(config().overview.workspaceBackground, m_progress);
+    const std::array<float, 4> backgroundColor = tint(config().colors.overview.workspaceBackground, m_progress);
+    const double z = metrics.zoom;
     for (size_t row = 0; row < state.workspaceBackgrounds.size(); ++row) {
-      wlr_scene_rect* background = state.workspaceBackgrounds[row];
-      const wlr_box full{metrics.rowX, rowTop(metrics, state.rowScroll, row), metrics.rowW, metrics.rowH};
-      layoutWorkspaceBackground(background, full, backgroundRadius, backgroundColor);
+      const WorkspaceBackground& background = state.workspaceBackgrounds[row];
+      const int top = rowTop(metrics, state.rowScroll, row);
+      const wlr_box full{metrics.rowX, top, metrics.rowW, metrics.rowH};
+      layoutWorkspaceBackground(background.fill, full, backgroundRadius, backgroundColor);
+      if (background.mirrors.empty()) {
+        continue;
+      }
+      // The row is the viewport onto the mirrored stack: a partially anchored surface must not reach into the gap
+      // between rows.
+      wlr_scene_tree_set_clip(background.tree, &full);
+      for (const auto& mirror : background.mirrors) {
+        wlr_box box{};
+        const bool visible = desktopSourceBox(*mirror->source, box);
+        wlr_scene_node_set_enabled(&mirror->buffer->node, visible);
+        if (!visible) {
+          continue;
+        }
+        wlr_scene_node_set_position(
+            &mirror->buffer->node, metrics.rowX + static_cast<int>(std::lround(box.x * z)),
+            top + static_cast<int>(std::lround(box.y * z))
+        );
+        wlr_scene_buffer_set_dest_size(
+            mirror->buffer, std::max(1, static_cast<int>(std::lround(box.width * z))),
+            std::max(1, static_cast<int>(std::lround(box.height * z)))
+        );
+        // Only a surface spanning the whole output takes the row's rounding; a smaller one keeps its own edges.
+        const bool spansOutput = box.x <= 0
+            && box.y <= 0
+            && box.x + box.width >= metrics.outputBox.width
+            && box.y + box.height >= metrics.outputBox.height;
+        wlr_scene_buffer_set_corner_radii(mirror->buffer, corner_radii_all(spansOutput ? backgroundRadius : 0));
+      }
     }
 
     const View* liveTarget = liveTargetView();
@@ -362,17 +400,17 @@ namespace umbriel {
   }
 
   std::array<float, 4> Overview::cardBorderColor(const Card& card, const View* liveTarget) const {
-    const auto& appearance = config().appearance;
+    const auto& border = config().colors.border;
     const Workspace* workspace = card.view != nullptr ? card.view->workspace() : nullptr;
     if (workspace == nullptr || workspace->focusedView() != card.view || &card == m_dragCard) {
-      return appearance.borderUnfocused;
+      return border.unfocused;
     }
     // No window holds the seat while the overview is up, so exactly one card wears the focused color: the one a focus
     // or close action would act on. Every other row still marks the card it would land on, with a weaker mix.
     if (card.view == liveTarget) {
-      return appearance.borderFocused;
+      return border.focused;
     }
-    return mixColor(appearance.borderUnfocused, appearance.borderFocused, kLandingTargetBlend);
+    return mixColor(border.unfocused, border.focused, kLandingTargetBlend);
   }
 
   void Overview::applyProgress() {
@@ -390,6 +428,244 @@ namespace umbriel {
     for (const auto& state : m_outputs) {
       wlr_output_schedule_frame(state->output->wlr());
     }
+  }
+
+  // -: background mirrors
+
+  void Overview::collectDesktopSurfaces(const Output& output, std::vector<DesktopEntry>& out) const {
+    out.clear();
+    if (!config().overview.workspaceWallpaper) {
+      return;
+    }
+    // Scene child order is bottom to top, so walking the two layer trees in place reproduces what renders below the
+    // windows. Children that are not a mapped layer surface (an unmap snapshot, for instance) have no surface to
+    // mirror and drop out here.
+    for (const uint32_t layer : {ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM}) {
+      wlr_scene_tree* layerTree = output.layerTree(layer);
+      if (layerTree == nullptr) {
+        continue;
+      }
+      wlr_scene_node* child = nullptr;
+      wl_list_for_each(child, &layerTree->children, link) {
+        if (child->type != WLR_SCENE_NODE_TREE || !child->enabled) {
+          continue;
+        }
+        wlr_scene_tree* tree = wlr_scene_tree_from_node(child);
+        for (const auto& candidate : m_server->layerSurfaces()) {
+          if (!candidate->mapped() || candidate->scene() == nullptr || candidate->scene()->tree != tree) {
+            continue;
+          }
+          wlr_surface* surface = candidate->layerSurface()->surface;
+          if (surface->buffer == nullptr || surface->current.width <= 0 || surface->current.height <= 0) {
+            break;
+          }
+          out.push_back({.surface = surface, .tree = tree});
+          break;
+        }
+      }
+    }
+  }
+
+  void Overview::clearDesktop(OutputState& state) const {
+    for (const auto& source : state.desktop) {
+      wl_list_remove(&source->commit.link);
+      wl_list_remove(&source->destroy.link);
+    }
+    state.desktop.clear();
+    for (WorkspaceBackground& background : state.workspaceBackgrounds) {
+      for (const auto& mirror : background.mirrors) {
+        wl_list_remove(&mirror->outputSample.link);
+        wl_list_remove(&mirror->frameDone.link);
+        if (mirror->buffer != nullptr) {
+          wlr_scene_node_destroy(&mirror->buffer->node);
+        }
+      }
+      background.mirrors.clear();
+    }
+  }
+
+  void Overview::refreshDesktop(OutputState& state) {
+    std::vector<DesktopEntry> resolved;
+    collectDesktopSurfaces(*state.output, resolved);
+    bool same = resolved.size() == state.desktop.size();
+    for (size_t index = 0; same && index < resolved.size(); ++index) {
+      same = state.desktop[index]->surface == resolved[index].surface;
+    }
+    if (same) {
+      // A surface keeps its scene tree, but the tree can be reparented between layers, so refresh the pointer the
+      // mirror geometry reads.
+      for (size_t index = 0; index < resolved.size(); ++index) {
+        state.desktop[index]->tree = resolved[index].tree;
+      }
+      return;
+    }
+
+    clearDesktop(state);
+    state.desktop.reserve(resolved.size());
+    for (const DesktopEntry& entry : resolved) {
+      auto source = std::make_unique<DesktopSurface>();
+      source->overview = this;
+      source->state = &state;
+      source->surface = entry.surface;
+      source->tree = entry.tree;
+      source->commit.notify = onDesktopSurfaceCommit;
+      wl_signal_add(&entry.surface->events.commit, &source->commit);
+      source->destroy.notify = onDesktopSurfaceDestroy;
+      wl_signal_add(&entry.surface->events.destroy, &source->destroy);
+      state.desktop.push_back(std::move(source));
+    }
+    for (WorkspaceBackground& background : state.workspaceBackgrounds) {
+      createRowMirrors(state, background);
+    }
+    syncDesktopMirrors(state);
+  }
+
+  void Overview::createRowMirrors(OutputState& state, WorkspaceBackground& background) const {
+    if (background.tree == nullptr) {
+      return;
+    }
+    background.mirrors.reserve(state.desktop.size());
+    // Created in stack order, above the fill: scene child order is what keeps a bottom-layer copy over the wallpaper.
+    for (const auto& source : state.desktop) {
+      wlr_scene_buffer* buffer = wlr_scene_buffer_create(background.tree, nullptr);
+      if (buffer == nullptr) {
+        continue;
+      }
+      wlr_scene_buffer_set_filter_mode(buffer, WLR_SCALE_FILTER_BILINEAR);
+      buffer->point_accepts_input = rejectInput;
+      auto mirror = std::make_unique<DesktopMirror>();
+      mirror->source = source.get();
+      mirror->buffer = buffer;
+      mirror->outputSample.notify = onDesktopMirrorOutputSample;
+      wl_signal_add(&buffer->events.output_sample, &mirror->outputSample);
+      mirror->frameDone.notify = onDesktopMirrorFrameDone;
+      wl_signal_add(&buffer->events.frame_done, &mirror->frameDone);
+      background.mirrors.push_back(std::move(mirror));
+    }
+  }
+
+  void Overview::syncDesktopMirrors(const OutputState& state) const {
+    for (const WorkspaceBackground& background : state.workspaceBackgrounds) {
+      for (const auto& mirror : background.mirrors) {
+        wlr_surface* surface = mirror->source->surface;
+        // The surface holds the authoritative committed buffer; a scene buffer may already have released the client
+        // one after importing its texture.
+        wlr_buffer* committed = surface->buffer != nullptr ? &surface->buffer->base : nullptr;
+        wlr_scene_buffer_set_buffer_options options{
+            .damage = committed != nullptr ? &surface->buffer_damage : nullptr,
+            .wait_timeline = nullptr,
+            .wait_point = 0,
+        };
+        if (wlr_linux_drm_syncobj_surface_v1_state* sync = wlr_linux_drm_syncobj_v1_get_surface_state(surface)) {
+          options.wait_timeline = sync->acquire_timeline;
+          options.wait_point = sync->acquire_point;
+        }
+        wlr_scene_buffer_set_buffer_with_options(mirror->buffer, committed, &options);
+        if (committed == nullptr) {
+          continue;
+        }
+        wlr_fbox src{};
+        wlr_surface_get_buffer_source_box(surface, &src);
+        wlr_scene_buffer_set_source_box(mirror->buffer, &src);
+        wlr_scene_buffer_set_transform(mirror->buffer, surface->current.transform);
+        // layoutOutput owns the destination geometry; only the color description follows the live node.
+        if (wlr_scene_buffer* live = sourceBufferForSurface(&mirror->source->tree->node, surface)) {
+          wlr_scene_buffer_set_transfer_function(mirror->buffer, live->transfer_function);
+          wlr_scene_buffer_set_primaries(mirror->buffer, live->primaries);
+          wlr_scene_buffer_set_luminance_multiplier(mirror->buffer, live->luminance_multiplier);
+          wlr_scene_buffer_set_color_encoding(mirror->buffer, live->color_encoding);
+          wlr_scene_buffer_set_color_range(mirror->buffer, live->color_range);
+        }
+      }
+    }
+  }
+
+  bool Overview::desktopSourceBox(const DesktopSurface& source, wlr_box& out) {
+    // The output's layer trees sit at its origin and hold every layer surface as a direct child, so the child's own
+    // offset is already output-local. Layout coordinates are unavailable here: the bottom layer is disabled while its
+    // copies stand in, and wlr_scene_node_coords reports nothing through a disabled ancestor.
+    if (!source.tree->node.enabled) {
+      return false;
+    }
+    out = {source.tree->node.x, source.tree->node.y, source.surface->current.width, source.surface->current.height};
+    return out.width > 0 && out.height > 0;
+  }
+
+  void Overview::onDesktopSurfaceCommit(wl_listener* listener, void* /*data*/) {
+    DesktopSurface* source = nullptr;
+    source = wl_container_of(listener, source, commit);
+    source->overview->syncDesktopMirrors(*source->state);
+    source->overview->layoutOutput(*source->state);
+    wlr_output_schedule_frame(source->state->output->wlr());
+  }
+
+  void Overview::onDesktopSurfaceDestroy(wl_listener* listener, void* /*data*/) {
+    DesktopSurface* source = nullptr;
+    source = wl_container_of(listener, source, destroy);
+    OutputState* state = source->state;
+    wl_list_remove(&source->commit.link);
+    wl_list_remove(&source->destroy.link);
+    // Drop this surface's copies only. Re-resolving here would re-bind a surface that is already being destroyed;
+    // the next layout notices the shorter stack and rebuilds from what is left.
+    for (WorkspaceBackground& background : state->workspaceBackgrounds) {
+      std::erase_if(background.mirrors, [source](const std::unique_ptr<DesktopMirror>& mirror) {
+        if (mirror->source != source) {
+          return false;
+        }
+        wl_list_remove(&mirror->outputSample.link);
+        wl_list_remove(&mirror->frameDone.link);
+        if (mirror->buffer != nullptr) {
+          wlr_scene_node_destroy(&mirror->buffer->node);
+        }
+        return true;
+      });
+    }
+    std::erase_if(state->desktop, [source](const std::unique_ptr<DesktopSurface>& candidate) {
+      return candidate.get() == source;
+    });
+    wlr_output_schedule_frame(state->output->wlr());
+  }
+
+  void Overview::onDesktopMirrorOutputSample(wl_listener* listener, void* data) {
+    DesktopMirror* mirror = nullptr;
+    mirror = wl_container_of(listener, mirror, outputSample);
+    auto* event = static_cast<wlr_scene_output_sample_event*>(data);
+    wlr_surface* surface = mirror->source->surface;
+    // No wl_surface.enter here: a mirrored surface leaves its outputs exactly as a window behind a card does.
+    if (event->direct_scanout) {
+      wlr_presentation_surface_scanned_out_on_output(surface, event->output->output);
+    } else {
+      wlr_presentation_surface_textured_on_output(surface, event->output->output);
+    }
+    if (wlr_linux_drm_syncobj_surface_v1_state* sync = wlr_linux_drm_syncobj_v1_get_surface_state(surface);
+        sync != nullptr && event->release_timeline != nullptr) {
+      wlr_linux_drm_syncobj_v1_state_add_release_point(
+          sync, event->release_timeline, event->release_point, event->output->output->event_loop
+      );
+    }
+  }
+
+  void Overview::onDesktopMirrorFrameDone(wl_listener* listener, void* data) {
+    DesktopMirror* mirror = nullptr;
+    mirror = wl_container_of(listener, mirror, frameDone);
+    auto* event = static_cast<wlr_scene_frame_done_event*>(data);
+    // The real bottom layer is hidden, so these copies are what keeps its clients drawing. A second row's copy finds
+    // the callback list already empty.
+    wlr_surface_send_frame_done(mirror->source->surface, &event->when);
+  }
+
+  Overview::WorkspaceBackground Overview::createWorkspaceBackground(OutputState& state) const {
+    WorkspaceBackground background{};
+    background.tree = wlr_scene_tree_create(state.tree);
+    if (background.tree == nullptr) {
+      return background;
+    }
+    // Rows stay below every card even when created after the overview scene was populated.
+    wlr_scene_node_place_above(&background.tree->node, &state.backgroundTint->node);
+    const std::array<float, 4> color = tint(config().colors.overview.workspaceBackground, m_progress);
+    background.fill = wlr_scene_rect_create(background.tree, 1, 1, color.data());
+    createRowMirrors(state, background);
+    return background;
   }
 
   // -: cards
@@ -575,8 +851,8 @@ namespace umbriel {
     if (card->tree == nullptr) {
       return nullptr;
     }
-    const std::array<float, 4> innerColor = tint(config().appearance.borderUnfocused, 1.0);
-    const std::array<float, 4> outerColor = tint(config().appearance.outerBorderColor, 1.0);
+    const std::array<float, 4> innerColor = tint(config().colors.border.unfocused, 1.0);
+    const std::array<float, 4> outerColor = tint(config().colors.border.outer, 1.0);
     card->border = wlr_scene_border_create(card->tree, innerColor.data(), outerColor.data());
     if (card->border == nullptr) {
       wlr_scene_node_destroy(&card->tree->node);
@@ -649,7 +925,7 @@ namespace umbriel {
             &copy->node, card.tree->node.x + card.border->node.x, card.tree->node.y + card.border->node.y
         );
         std::array<float, 4> innerColor = cardBorderColor(card, liveTargetView());
-        std::array<float, 4> outerColor = config().appearance.outerBorderColor;
+        std::array<float, 4> outerColor = config().colors.border.outer;
         const float presentedOpacity = card.view->presentedOpacity();
         innerColor[3] *= presentedOpacity;
         outerColor[3] *= presentedOpacity;
@@ -758,7 +1034,7 @@ namespace umbriel {
     const size_t matched = card.shortcutMatched == SIZE_MAX ? 0 : std::min(card.shortcutMatched, card.shortcut.size());
     const std::string_view shortcut(card.shortcut);
     const auto& colors = config().colors;
-    const std::array<float, 4> badgeColor = config().overview.badgeColor.value_or(colors.accentPrimary);
+    const std::array<float, 4>& badgeColor = colors.overview.badge;
     card.badgeBackground = keycapBackgroundColor(colors.background, badgeColor);
     const std::string markup = std::format(
         "<span foreground='{}' weight='bold'>{}</span><span foreground='{}' weight='bold'>{}</span>",
@@ -769,7 +1045,7 @@ namespace umbriel {
         .markup = markup,
         .font = "monospace 19",
         .maxWidth = 350,
-        .padding = 7,
+        .padding = 0,
         .scale = scale,
         .bgA = 0.0,
     });
@@ -783,9 +1059,13 @@ namespace umbriel {
       return;
     }
     wlr_scene_node_set_position(&card.badge->node, 6, 6);
+    // Keycap proportions: the label's line box sets the height, and the badge is
+    // never narrower than it is tall, so a single character reads as a square.
+    constexpr int kBadgeSidePad = 8;
+    const int badgeHeight = rendered.logicalHeight;
+    const int badgeWidth = std::max(rendered.logicalWidth + 2 * kBadgeSidePad, badgeHeight);
     const std::array<float, 4> background = tint(card.badgeBackground, 1.0);
-    card.badgeRect =
-        wlr_scene_rect_create(card.badge, rendered.logicalWidth, rendered.logicalHeight, background.data());
+    card.badgeRect = wlr_scene_rect_create(card.badge, badgeWidth, badgeHeight, background.data());
     card.badgeText = wlr_scene_buffer_create(card.badge, rendered.buffer);
     wlr_buffer_drop(rendered.buffer);
     if (card.badgeRect == nullptr || card.badgeText == nullptr) {
@@ -796,13 +1076,13 @@ namespace umbriel {
       return;
     }
 
-    wlr_scene_rect_set_corner_radius(
-        card.badgeRect, std::min(config().appearance.cornerRadius, rendered.logicalHeight / 4)
+    wlr_scene_node_set_position(
+        &card.badgeText->node, (badgeWidth - rendered.logicalWidth) / 2, (badgeHeight - rendered.logicalHeight) / 2
     );
     wlr_scene_buffer_set_dest_size(card.badgeText, rendered.logicalWidth, rendered.logicalHeight);
     card.badgeText->point_accepts_input = rejectInput;
-    card.badgeWidth = rendered.logicalWidth;
-    card.badgeHeight = rendered.logicalHeight;
+    card.badgeWidth = badgeWidth;
+    card.badgeHeight = badgeHeight;
     wlr_scene_node_raise_to_top(&card.badge->node);
     wlr_scene_node_set_enabled(&card.badge->node, false);
   }
@@ -1005,13 +1285,12 @@ namespace umbriel {
           wlr_scene_blur_set_should_only_blur_bottom_layer(state->backgroundBlur, config().appearance.blur.optimized);
         }
       }
-      const std::array<float, 4> backgroundTint = tint(config().overview.backgroundTint, 0.0);
+      const std::array<float, 4> backgroundTint = tint(config().colors.overview.backgroundTint, 0.0);
       state->backgroundTint = wlr_scene_rect_create(state->tree, 1, 1, backgroundTint.data());
       wlr_scene_rect_set_corner_radius(state->backgroundTint, 0);
       state->workspaceBackgrounds.reserve(group->workspaceCount());
-      const std::array<float, 4> backgroundColor = tint(config().overview.workspaceBackground, 0.0);
       for (size_t row = 0; row < group->workspaceCount(); ++row) {
-        state->workspaceBackgrounds.push_back(wlr_scene_rect_create(state->tree, 1, 1, backgroundColor.data()));
+        state->workspaceBackgrounds.push_back(createWorkspaceBackground(*state));
       }
       state->rowScroll = group->active() != nullptr ? static_cast<double>(group->active()->index()) : 0.0;
       state->rowFrom = state->rowScroll;
@@ -1087,6 +1366,11 @@ namespace umbriel {
     wlr_scene_node_set_enabled(&m_server->pinnedShadowTree()->node, false);
     wlr_scene_node_set_enabled(&m_server->pinnedTree()->node, false);
     wlr_scene_node_set_enabled(&m_tree->node, true);
+    // Bottom-layer surfaces are mirrored into every row, so the real ones step aside the way windows do. The
+    // background layer stays: it is the blur source and what shows around the filmstrip.
+    if (config().overview.workspaceWallpaper) {
+      wlr_scene_node_set_enabled(&m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM)->node, false);
+    }
 
     m_server->clearKeyboardFocus();
     wlr_seat_pointer_clear_focus(m_server->seat()->wlr());
@@ -1257,6 +1541,7 @@ namespace umbriel {
       m_dropHint->hideImmediate();
     }
     for (const auto& state : m_outputs) {
+      clearDesktop(*state);
       for (const auto& card : state->cards) {
         destroyCard(card.get());
       }
@@ -1282,6 +1567,7 @@ namespace umbriel {
     wlr_scene_node_set_enabled(&m_server->fullscreenTree()->node, true);
     wlr_scene_node_set_enabled(&m_server->pinnedShadowTree()->node, true);
     wlr_scene_node_set_enabled(&m_server->pinnedTree()->node, true);
+    wlr_scene_node_set_enabled(&m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM)->node, true);
 
     m_active = false;
     m_closing = false;
@@ -1591,6 +1877,17 @@ namespace umbriel {
     m_cardPresentationDirty = true;
   }
 
+  void Overview::onDesktopLayerChanged(Output* output) {
+    if (!m_active) {
+      return;
+    }
+    if (OutputState* state = stateFor(output)) {
+      // layoutOutput re-resolves the stack before placing the rows.
+      layoutOutput(*state);
+      wlr_output_schedule_frame(state->output->wlr());
+    }
+  }
+
   void Overview::onOutputRemoved(Output* output) {
     if (!m_active) {
       return;
@@ -1623,6 +1920,7 @@ namespace umbriel {
     if (m_middleOutput == output) {
       clearMiddlePress();
     }
+    clearDesktop(**it);
     for (const auto& card : (*it)->cards) {
       destroyCard(card.get());
     }
@@ -2040,19 +2338,11 @@ namespace umbriel {
     if (!m_shortcutInput.empty()) {
       clearShortcutInput();
     }
-    switch (action) {
-    case KeybindAction::WindowFocusUp:
-      selectRelativeWorkspace(-1, nullptr);
-      return true;
-    case KeybindAction::WindowFocusDown:
-      selectRelativeWorkspace(1, nullptr);
-      return true;
-    default:
-      // Horizontal card focus and composite focus actions already have the
-      // desired behavior through their normal handlers. In particular, an
-      // OrWorkspace or OrOutput action must retain its documented fallback.
-      return false;
-    }
+    // Directional actions retain their normal handlers while the overview is
+    // interactive. In particular, direct vertical focus keeps its layout
+    // semantics, while OrWorkspace and OrOutput actions keep their documented
+    // fallbacks.
+    return false;
   }
 
   bool Overview::handleFallbackKey(uint32_t keysym) {
@@ -2083,9 +2373,13 @@ namespace umbriel {
     case XKB_KEY_Right:
       return dispatch(KeybindAction::WindowFocusRight);
     case XKB_KEY_Up:
-      return dispatch(KeybindAction::WindowFocusUp);
+      clearShortcutInput();
+      selectRelativeWorkspace(-1, nullptr);
+      return true;
     case XKB_KEY_Down:
-      return dispatch(KeybindAction::WindowFocusDown);
+      clearShortcutInput();
+      selectRelativeWorkspace(1, nullptr);
+      return true;
     default:
       return false;
     }
@@ -2289,22 +2583,23 @@ namespace umbriel {
   }
 
   void Overview::syncWorkspaceRows(OutputState& state, WorkspaceGroup& group) {
+    const bool grew = state.workspaceBackgrounds.size() < group.workspaceCount();
     while (state.workspaceBackgrounds.size() > group.workspaceCount()) {
-      wlr_scene_rect* background = state.workspaceBackgrounds.back();
+      WorkspaceBackground background = std::move(state.workspaceBackgrounds.back());
       state.workspaceBackgrounds.pop_back();
-      if (background != nullptr) {
-        wlr_scene_node_destroy(&background->node);
+      for (const auto& mirror : background.mirrors) {
+        wl_list_remove(&mirror->outputSample.link);
+        wl_list_remove(&mirror->frameDone.link);
+      }
+      if (background.tree != nullptr) {
+        wlr_scene_node_destroy(&background.tree->node);
       }
     }
     while (state.workspaceBackgrounds.size() < group.workspaceCount()) {
-      const std::array<float, 4> color = tint(config().overview.workspaceBackground, m_progress);
-      wlr_scene_rect* background = wlr_scene_rect_create(state.tree, 1, 1, color.data());
-      if (background != nullptr) {
-        // Backgrounds stay below every card even when created after the
-        // overview scene was populated.
-        wlr_scene_node_place_above(&background->node, &state.backgroundTint->node);
-      }
-      state.workspaceBackgrounds.push_back(background);
+      state.workspaceBackgrounds.push_back(createWorkspaceBackground(state));
+    }
+    if (grew) {
+      syncDesktopMirrors(state);
     }
     for (const auto& card : state.cards) {
       if (card->view != nullptr && card->view->workspace() != nullptr) {

@@ -6,8 +6,10 @@ the main configuration guide but remain part of Umbriel's observable behavior.
 ## Live content
 
 Overview cards display live window content. The real workspace windows are
-hidden while the overview is open, so wheel steps, arrow keys, and 3-finger
-swipes move one workspace at a time instead of sliding the live workspace.
+hidden while the overview is open, so wheel steps, fallback vertical arrow
+keys, and 3-finger swipes move one workspace at a time instead of sliding the
+live workspace. Configured vertical focus actions retain their layout-specific
+behavior, including stacked-card traversal in horizontal scrolling workspaces.
 
 Transparent windows keep their window-rule blur throughout the zoom
 transition.
@@ -56,21 +58,38 @@ does.
 Each workspace has a rounded background behind its cards. The configured alpha
 controls whether this is a light tint, a translucent panel, or an opaque fill.
 
+With `overview.workspace_wallpaper`, one passive scene buffer per row and per
+mirrored surface draws over that fill. The source is the output's background-
+and bottom-layer trees, walked in place so the copies keep their render order,
+and each surface's output-local box maps through the same row and zoom transform
+the cards use. Every row clips to its own bounds, so a partially anchored
+surface cannot reach into the gap between rows.
+
+The real bottom layer is disabled for as long as the overview is open, exactly
+as the window trees are: a bottom-layer surface appears once per workspace
+instead of twice at two scales, and at zoom 1 the rows reproduce the output
+pixel for pixel, so neither the opening nor the teardown swap is visible. Those
+copies are then the only place their surfaces are sampled, so each one carries
+the presentation feedback, release points, and frame callbacks that pace its
+client. The background layer stays enabled: it is the blur source and what shows
+around the filmstrip. An output where no client maps either layer shows the flat
+fill.
+
 A dedicated scene root between the layer-shell background and bottom layers
 carries each output's wallpaper blur node. This placement blurs the background
-layer while bottom-layer widgets render afterward and remain sharp. The node's
+layer while bottom-layer surfaces render afterward and remain sharp. The node's
 alpha and strength fade with zoom progress. When `[appearance.blur] optimized`
 is enabled, it samples the optimized background buffer. The node is absent when
 appearance blur or `overview.background_blur` is disabled.
 
 No window holds the seat while the overview is open, so exactly one card can
-wear `appearance.border_focused`: the live target, meaning the focused view of
+wear `colors.border.focused`: the live target, meaning the focused view of
 the active workspace on the output under the cursor. That is the window a focus
 or close action resolves to through `preferredOutput()`, so the strong border
 also identifies the current output. Every other row marks its own focused view
-with a blend of `border_focused` into `border_unfocused`, showing where the row
-would land without claiming focus. An empty current workspace leaves no strong
-border, which is also when those actions have no target.
+with a blend of `colors.border.focused` into `colors.border.unfocused`, showing
+where the row would land without claiming focus. An empty current workspace
+leaves no strong border, which is also when those actions have no target.
 
 The live target is resolved per layout pass. `Overview::handleMotion` repaints
 when the pointer changes output, which covers both hand motion and the cursor
@@ -97,6 +116,8 @@ The relevant checks are:
 
 - [`tests/harness/checks/310_overview_wheel.sh`](../../tests/harness/checks/310_overview_wheel.sh)
   for overview interaction and workspace navigation.
+- [`tests/harness/checks/346_overview_keybind_actions.sh`](../../tests/harness/checks/346_overview_keybind_actions.sh)
+  for configured directional actions and fallback arrow navigation.
 - [`tests/harness/checks/460_external_drag.sh`](../../tests/harness/checks/460_external_drag.sh)
   for client drag ownership during overview activation.
 - [`tests/harness/checks/430_drag_opacity.sh`](../../tests/harness/checks/430_drag_opacity.sh)

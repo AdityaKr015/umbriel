@@ -696,15 +696,16 @@ UMBRIEL_TEST(colorKeysOutsideTheColorsSectionAreUnknown) {
   ConfigStore& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
 
+  const umbriel::Config defaults;
   file.write("[appearance]\nborder_focused = \"#FFFFFFFF\"\nbackdrop_color = \"#000000FF\"\n");
   CHECK(store.reload().success);
-  CHECK_EQ(store.config().colors.border.focused[0], umbriel::Config{}.colors.border.focused[0]);
+  CHECK_EQ(store.config().colors.border.focused[0], defaults.colors.border.focused[0]);
   CHECK(containsDiagnostic(store, "appearance.border_focused"));
   CHECK(containsDiagnostic(store, "appearance.backdrop_color"));
 
   file.write("[overview]\nbadge_color = \"#FFFFFFFF\"\nworkspace_background = \"#FFFFFFFF\"\n");
   CHECK(store.reload().success);
-  CHECK_EQ(store.config().colors.overview.badge[0], umbriel::Config{}.colors.overview.badge[0]);
+  CHECK_EQ(store.config().colors.overview.badge[0], defaults.colors.overview.badge[0]);
   CHECK(containsDiagnostic(store, "overview.badge_color"));
   CHECK(containsDiagnostic(store, "overview.workspace_background"));
 }
@@ -713,10 +714,11 @@ UMBRIEL_TEST(colorsRejectInvalidValues) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
+  const umbriel::Config defaults;
 
   file.write("[colors.overview]\nbadge = \"not-a-color\"\n");
   CHECK(store.reload().success);
-  CHECK_EQ(store.config().colors.overview.badge[0], umbriel::Config{}.colors.overview.badge[0]);
+  CHECK_EQ(store.config().colors.overview.badge[0], defaults.colors.overview.badge[0]);
   CHECK(containsDiagnostic(store, "colors.overview.badge (invalid color"));
 }
 

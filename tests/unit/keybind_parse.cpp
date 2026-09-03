@@ -693,8 +693,8 @@ UMBRIEL_TEST(everySpecHasAOneLineSummary) {
     CHECK(!spec.summary.empty());
     CHECK(spec.summary.size() <= 60);
     CHECK(!spec.summary.ends_with('.'));
-    CHECK(spec.summary.find('\n') == std::string_view::npos);
-    CHECK(spec.summary.find('|') == std::string_view::npos); // would break the markdown table cell
+    CHECK(!spec.summary.contains('\n'));
+    CHECK(!spec.summary.contains('|')); // would break the markdown table cell
     CHECK(!spec.summary.empty() && std::isupper(static_cast<unsigned char>(spec.summary.front())) != 0);
   }
 }

@@ -484,6 +484,13 @@ default_pinned = true
 # match.xdg_tag = "^proton-game$"
 # default_fullscreen = true
 
+# Seed a new horizontal scrolling column with a pixel width. The layout controls
+# its tiled height, and existing named columns keep their established width.
+
+# [[window_rule]]
+# match.app_id = "^org[.]example[.]Wide$"
+# default_size = [1200, 600]
+
 # Size a floating window as fractions of the usable area. `default_size` wins
 # on both axes if it is also present.
 

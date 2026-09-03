@@ -54,6 +54,10 @@ namespace umbriel {
       return current.has_value() && current != initiallyApplied;
     }
 
+    std::optional<int> defaultSizeWidth(const ResolvedWindowRule& rule) {
+      return rule.defaultSize ? std::optional<int>((*rule.defaultSize)[0]) : std::nullopt;
+    }
+
     constexpr int contentTypePriority(ContentType type) {
       switch (type) {
       case ContentType::Game:
@@ -329,7 +333,7 @@ namespace umbriel {
     if (m_workspace != target) {
       return false;
     }
-    target->layoutAttach(this, rule.defaultWidth);
+    target->layoutAttach(this, rule.defaultWidth, defaultSizeWidth(rule));
     return true;
   }
 
@@ -1699,7 +1703,7 @@ namespace umbriel {
     showDecorations(!m_toplevel->scheduled.fullscreen);
 
     if (m_workspace != nullptr) {
-      m_workspace->layoutAttach(this, rule.defaultWidth);
+      m_workspace->layoutAttach(this, rule.defaultWidth, defaultSizeWidth(rule));
     } else if (!attachToAvailableWorkspace(rule)) {
       setOnActiveWorkspace(true);
     }
@@ -2838,7 +2842,7 @@ namespace umbriel {
       if (target != nullptr && target != m_workspace) {
         setWorkspace(target, false);
         if (m_workspace == target) {
-          target->layoutAttach(this, rule.defaultWidth);
+          target->layoutAttach(this, rule.defaultWidth, defaultSizeWidth(rule));
           if (m_tiled && m_toplevel->scheduled.maximized && !m_maximizedToEdges) {
             setMaximized(true);
           }

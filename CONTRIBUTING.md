@@ -154,6 +154,15 @@ Getters are the noun, without a `get` prefix, and `[[nodiscard]]`: `toplevel()`,
   `m_event{}` member.
 - Include ordering follows clang-format regrouping: project `"..."` headers first, then system `<...>` headers.
 
+## Pull Request Template
+
+Pull request descriptions are checked automatically when they are opened, edited, reopened, or marked ready for
+review. Keep the required headings and checklist wording from [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
+
+Draft pull requests may leave checkboxes incomplete. Before marking a pull request ready for review, select at least one
+change type and check every item in the Checklist section. A pull request that loses required template structure is
+commented on and closed automatically; restore the required content and reopen it to run the check again.
+
 ## Project Layout
 
 ```text

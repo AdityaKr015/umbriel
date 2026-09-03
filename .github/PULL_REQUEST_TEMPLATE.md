@@ -1,4 +1,17 @@
-<!-- If this PR is not ready for review yet, please mark it as Draft. -->
+<!-- umbriel-pr-template:v1 -->
+<!-- Keep the marker line above this comment.
+
+     A bot closes pull requests whose description loses required template structure.
+     Draft pull requests may leave checkboxes incomplete. Before marking a pull request
+     ready for review:
+     - select at least one change type;
+     - check every item under Checklist.
+
+     An explanation does not replace a required check. If a required statement is not
+     true yet, keep the pull request as Draft.
+
+     Everything else, including these guidance comments, may be deleted. Required
+     headings and checklist wording must remain. -->
 
 ## Summary
 
@@ -45,6 +58,8 @@
 <!-- Include screenshots or videos for visual, animation, or layout changes. -->
 
 ## Checklist
+
+<!-- Before marking the pull request ready for review, check every item below. -->
 
 - [ ] This PR is ready for review, or it is marked as Draft.
 - [ ] This change fits `SCOPE.md`, or its scope was agreed in an issue or on Discord first.

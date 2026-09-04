@@ -2889,7 +2889,7 @@ namespace umbriel {
     // hints changed after map must not select new one-shot behavior.
     const ResolvedWindowRule rule = resolveWindowRules(
         config(), ruleText(m_toplevel->app_id), ruleText(m_toplevel->title), m_initialRulesXdgTag,
-        m_initialRulesContentType, m_borderFocusedState
+        m_initialRulesContentType, m_borderFocusedState, m_server->uptimeMs()
     );
 
     const bool namedScrollingColumnNameChanged = rule.defaultScrollingColumn.has_value()
@@ -3019,6 +3019,13 @@ namespace umbriel {
     applyDynamicRules();
   }
 
+  void View::refreshStartupRuleEffects() {
+    m_rulesGeneration = 0;
+    if (m_mapped) {
+      applyDynamicRules();
+    }
+  }
+
   const ResolvedWindowRule& View::resolvedRules() {
     const std::optional<std::string_view> appId = ruleText(m_toplevel->app_id);
     const std::optional<std::string_view> title = ruleText(m_toplevel->title);
@@ -3035,7 +3042,8 @@ namespace umbriel {
       return m_rules;
     }
 
-    m_rules = resolveWindowRules(config(), appId, title, m_xdgTag, m_contentType, m_borderFocusedState);
+    m_rules =
+        resolveWindowRules(config(), appId, title, m_xdgTag, m_contentType, m_borderFocusedState, m_server->uptimeMs());
     m_rulesGeneration = generation;
     m_rulesFocused = m_borderFocusedState;
     m_rulesAppId = appId;

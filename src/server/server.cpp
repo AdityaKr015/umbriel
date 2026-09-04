@@ -581,6 +581,10 @@ namespace umbriel {
       wl_event_source_remove(m_backgroundFrameTimer);
       m_backgroundFrameTimer = nullptr;
     }
+    if (m_startupRulesTimer != nullptr) {
+      wl_event_source_remove(m_startupRulesTimer);
+      m_startupRulesTimer = nullptr;
+    }
     for (wl_event_source*& source : m_signalSources) {
       if (source != nullptr) {
         wl_event_source_remove(source);
@@ -716,6 +720,13 @@ namespace umbriel {
       spawn(command.c_str(), "session environment synchronization");
     }
     applyConfiguredEnvironment();
+
+    m_startTime = std::chrono::steady_clock::now();
+    m_startupRulesTimer = wl_event_loop_add_timer(loop, onStartupRulesTimer, this);
+    if (m_startupRulesTimer != nullptr) {
+      wl_event_source_timer_update(m_startupRulesTimer, kStartupWindowRuleDurationMs);
+    }
+
     if (startupCmd != nullptr) {
       spawn(startupCmd);
     }
@@ -1063,4 +1074,8 @@ namespace umbriel {
     m_closeSnapshots.push_back(std::move(snapshot));
   }
 
+  uint64_t Server::uptimeMs() const {
+    const auto diff = std::chrono::steady_clock::now() - m_startTime;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
+  }
 } // namespace umbriel

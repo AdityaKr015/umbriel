@@ -60,6 +60,12 @@ foreach unit_test : unit_tests
   test(unit_test[0], test_exe)
 endforeach
 
+test(
+  'validate-config',
+  find_program('validate_config.sh'),
+  args: [umbriel],
+)
+
 # Harness helper, not a unit test: drives virtual pointer and modifier input against a running compositor. The headless backend has no input devices, so protocol
 # input is the only way to exercise pointer hit-testing and grabs.
 pointer_client = executable(

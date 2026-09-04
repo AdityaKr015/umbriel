@@ -50,17 +50,16 @@ namespace {
       std::println("config: ok ({})", umbriel::configRootPath().string());
       return EXIT_SUCCESS;
     }
-    bool hasError = false;
     for (const auto& d : diags) {
       const std::string loc = d.location();
       if (d.severity == umbriel::ConfigDiagnostic::Severity::Error) {
-        hasError = true;
         std::println(stderr, "error: {}{}", loc.empty() ? "" : loc + ": ", d.message);
       } else {
         std::println(stderr, "warning: {}{}", loc.empty() ? "" : loc + ": ", d.message);
       }
     }
-    return hasError ? EXIT_FAILURE : EXIT_SUCCESS;
+    std::println(stderr, "configuration invalid");
+    return EXIT_FAILURE;
   }
 
   void printHelp(FILE* stream) {

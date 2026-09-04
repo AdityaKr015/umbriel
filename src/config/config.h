@@ -131,6 +131,10 @@ namespace umbriel {
     Global,
     Window,
   };
+  enum class ClickMethod : uint8_t {
+    ButtonAreas,
+    ClickFinger,
+  };
   enum class HdrMode {
     Off,
     On,
@@ -655,6 +659,7 @@ namespace umbriel {
         std::optional<double> scrollFactor;
         std::optional<bool> disableWhileTyping;
         std::optional<bool> disableOnExternalMouse;
+        std::optional<ClickMethod> clickMethod;
         bool operator==(const Touchpad&) const = default;
       } touchpad;
 

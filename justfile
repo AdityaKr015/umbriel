@@ -94,7 +94,7 @@ test m=mode: (configure m)
 test-workflows:
     python3 -m unittest discover -s .github/workflows/scripts -p 'test_*.py'
 
-# Harness checks: the whole suite, or the ones whose names contain any given fragment, each against its own headless compositor instance. `just check 310`, `just check 310 520`, `just check overview`, `just check 310 -v` to keep the output of passing checks. Another build directory is `mode=`, as in `just mode=asan check 310`.
+# Harness checks: the whole suite, or the ones whose names contain any given fragment, each against its own headless compositor instance. `just check 310`, `just check 310 520`, `just check overview`, `just check 310 -v` to keep the output of passing checks. Checks run several at a time; `just check -j16` or `CHECK_JOBS=16` changes how many. Another build directory is `mode=`, as in `just mode=asan check 310`.
 [no-exit-message]
 check *filters: (_ensure-configured mode)
     #!/usr/bin/env bash

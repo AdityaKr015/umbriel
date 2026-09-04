@@ -48,7 +48,7 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 | `just asan` | Build with AddressSanitizer (see [AddressSanitizer](#addresssanitizer)) |
 | `just run <mode> [startup]` | Build and run a nested session, optionally spawning a command |
 | `just test` | Run the Meson test suite: unit tests plus the umbrielfx suites |
-| `just check [filter ...]` | Run the headless compositor harness (`tests/harness/check.sh`), every check or the ones whose names contain a fragment: `just check 721`, `just check drag`, `just check 721 -v`. Another build directory is `mode=`, as in `just mode=asan check 721` |
+| `just check [filter ...]` | Run the headless compositor harness (`tests/harness/check.sh`), every check or the ones whose names contain a fragment: `just check 721`, `just check drag`, `just check 721 -v`. Checks run several at a time; `-j16` or `CHECK_JOBS=16` changes how many. Another build directory is `mode=`, as in `just mode=asan check 721` |
 | `just check-names` | List every harness check name. Builds nothing |
 | `just lint` | Rebuild without compiler warnings and run clang-tidy |
 | `just format` | Format source and test files |
@@ -80,7 +80,9 @@ release build gets none. Test binaries land in the build directory's `tests` sub
 `check.sh` runs every script in `tests/harness/checks/` against its own dedicated compositor: one contained headless
 instance is booted per check, the check runs in its own process group with `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`
 already pointing at that instance, and the harness kills the group and asserts the instance exited cleanly. Boot plus
-teardown costs about 80ms, so isolation is cheaper than the cleanup it replaces. Five rules follow:
+teardown costs about 80ms, so isolation is cheaper than the cleanup it replaces. That isolation is also what lets the
+harness run several checks at once, bounded by `-j` (default: the core count, capped at eight). Reports stay in
+declaration order whatever order the checks finish in. Six rules follow:
 
 - A check must pass in a plain `just check` run, with no environment overrides.
 - A check starts from a pristine instance (no windows, overview closed, workspace 1 focused, `$UMBRIEL_CONFIG` holding
@@ -98,6 +100,9 @@ teardown costs about 80ms, so isolation is cheaper than the cleanup it replaces.
   screenshot is dead time on every run, and it still races a slower machine. Grab until two consecutive frames match
   and keep the fixed wait down to a primer that only covers dispatch, as `650_two_output_containment` does. Its settle
   loop is the barrier; the primers around it are 0.3s.
+- Never depend on a machine-wide resource a sibling check could be using at the same time: a fixed port, a shared
+  path outside `$UMBRIEL_RUNTIME_DIR`, a named process matched with `pkill`, or the wall-clock cost of a neighbour.
+  Everything a check needs lives in its own instance and its own runtime directory.
 
 Check names group by topic, and the leading number is the group: `0xx` session, IPC, and config reload, `1xx` layout,
 `2xx` workspaces, `3xx` overview, `4xx` drag, `5xx` input and seat, `6xx` output and display, `7xx` rendering. Numbers

@@ -22,11 +22,13 @@ cat >> "$UMBRIEL_CONFIG" <<EOF
 [animation]
 duration_ms = 1
 
+[colors]
+backdrop = "#00FF00FF"
+
 [appearance]
 border_width = 0
 outer_border_width = 0
 corner_radius = $RADIUS
-backdrop_color = "#00FF00FF"
 
 [appearance.shadow]
 enabled = false

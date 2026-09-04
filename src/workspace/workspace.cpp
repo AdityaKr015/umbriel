@@ -1235,7 +1235,54 @@ namespace umbriel {
     if (m_focusedView == nullptr || !m_focusedView->mapped()) {
       return false;
     }
-    m_focusedView->toggleFullscreen();
+
+    View* target = m_focusedView;
+    if (!target->pinned()
+        && !target->toplevel()->scheduled.fullscreen
+        && m_group != nullptr
+        && m_group->output() != nullptr) {
+      const wlr_box outputBox = m_group->output()->layoutBox();
+      const wlr_box focusedBox = target->presentedBox();
+      wlr_box focusedVisible{};
+      if (wlr_box_intersection(&focusedVisible, &focusedBox, &outputBox)) {
+        // A newly mapped window can own focus while an older fullscreen window
+        // still covers it from the higher fullscreen scene layer. In that
+        // state the action follows what the user can see: leave the obscuring
+        // fullscreen instead of fullscreening the hidden focused window.
+        wlr_scene_node* fullscreenNode = nullptr;
+        wl_list_for_each_reverse(fullscreenNode, &m_fullscreenTree->children, link) {
+          SceneNode* sceneNode = sceneNodeFrom(fullscreenNode->data);
+          if (sceneNode == nullptr || sceneNode->kind != SceneNodeKind::View) {
+            continue;
+          }
+          auto* candidate = static_cast<View*>(sceneNode);
+          if (candidate == target
+              || !candidate->mapped()
+              || !candidate->onActiveWorkspace()
+              || !candidate->toplevel()->scheduled.fullscreen) {
+            continue;
+          }
+          const wlr_scene_node& node = candidate->sceneTree()->node;
+          const wlr_box fullscreenBox{
+              .x = node.x,
+              .y = node.y + m_slideOffsetY,
+              .width = outputBox.width,
+              .height = outputBox.height,
+          };
+          wlr_box obscured{};
+          if (wlr_box_intersection(&obscured, &fullscreenBox, &focusedVisible)
+              && obscured.x == focusedVisible.x
+              && obscured.y == focusedVisible.y
+              && obscured.width == focusedVisible.width
+              && obscured.height == focusedVisible.height) {
+            target = candidate;
+            break;
+          }
+        }
+      }
+    }
+
+    target->toggleFullscreen();
     return true;
   }
 

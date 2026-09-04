@@ -417,6 +417,59 @@ UMBRIEL_TEST(horizontalResizeRecentersAnUnderfullStripImmediately) {
   );
 }
 
+UMBRIEL_TEST(leftwardResizeGrowsCurrentColumnAfterPreviousHitsMinimumWidth) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  fixture.layout.setConstraints([](const View* view) {
+    return LayoutConstraints{.minWidth = view == stub(0) ? 900 : 1};
+  });
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box previousBefore = fixture.layout.targetBox(stub(0));
+  const wlr_box currentBefore = fixture.layout.targetBox(stub(1));
+  const int currentRightBefore = currentBefore.x + currentBefore.width;
+  CHECK_EQ(previousBefore.width, 900);
+
+  auto resize = fixture.layout.beginResize(stub(1), WLR_EDGE_LEFT, kUsable);
+  CHECK(resize != nullptr);
+  resize->applyDelta(-100.0, 0.0, kUsable);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box previousAfter = fixture.layout.targetBox(stub(0));
+  const wlr_box currentAfter = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(previousAfter.width, previousBefore.width);
+  CHECK(currentAfter.x < currentBefore.x);
+  CHECK_EQ(currentAfter.x + currentAfter.width, currentRightBefore);
+  CHECK(currentAfter.width > currentBefore.width);
+}
+
+UMBRIEL_TEST(centeredUnderfullLeftwardResizeKeepsCurrentRightEdgeFixed) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  fixture.layout.setConstraints([](const View* view) {
+    return LayoutConstraints{.minWidth = view == stub(0) ? 189 : 1};
+  });
+  CHECK(fixture.layout.setWidthFraction(0, 0.15));
+  CHECK(fixture.layout.setWidthFraction(1, 0.25));
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box previousBefore = fixture.layout.targetBox(stub(0));
+  const wlr_box currentBefore = fixture.layout.targetBox(stub(1));
+  const int currentRightBefore = currentBefore.x + currentBefore.width;
+  CHECK_EQ(previousBefore.width, 189);
+
+  auto resize = fixture.layout.beginResize(stub(1), WLR_EDGE_LEFT, kUsable);
+  CHECK(resize != nullptr);
+  resize->applyDelta(-80.0, 0.0, kUsable);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box previousAfter = fixture.layout.targetBox(stub(0));
+  const wlr_box currentAfter = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(previousAfter.width, previousBefore.width);
+  CHECK_EQ(currentAfter.x + currentAfter.width, currentRightBefore);
+  CHECK_EQ(currentAfter.width, currentBefore.width + 80);
+}
+
 UMBRIEL_TEST(middleOfPartiallyOffscreenColumnGrabsNothing) {
   Fixture fixture;
   fixture.addColumns(2);

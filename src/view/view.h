@@ -154,6 +154,9 @@ namespace umbriel {
     void setDragPosition(int x, int y);
     // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
     void clampFloatingPosition();
+    // The same clamp for a size that has been requested but not committed yet. The origin animates, so it settles
+    // together with the presented size.
+    void clampFloatingPositionForSize(int width, int height);
     // Send a floating size configure; the pending request is the resize-action basis until committed.
     void requestFloatingSize(int width, int height);
     // The pending compositor request, else the committed geometry.
@@ -352,6 +355,9 @@ namespace umbriel {
     void finishFloatingResize();
     void syncFloatingResizePosition();
     void adoptFloatingClientSize();
+    // Where `origin` has to move so a float of `width` by `height` keeps its on-screen margin, or nullopt when the
+    // clamp does not apply or the origin already satisfies it.
+    [[nodiscard]] std::optional<FloatingPoint> floatingClampTarget(FloatingPoint origin, int width, int height);
     void placeInUsableArea(const std::optional<WindowPosition>& position = std::nullopt);
     void setPinned(bool pinned, bool focus);
     [[nodiscard]] View* transientParent() const;

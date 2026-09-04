@@ -1065,30 +1065,45 @@ namespace umbriel {
     return usable;
   }
 
-  void View::clampFloatingPosition() {
+  std::optional<FloatingPoint> View::floatingClampTarget(FloatingPoint origin, int width, int height) {
     if (m_tiled
         || !m_mapped
         || m_toplevel->scheduled.fullscreen
         || m_toplevel->scheduled.maximized
-        || sizeGrabActive()
-        || m_posX.animating()
-        || m_posY.animating()) {
-      return;
+        || sizeGrabActive()) {
+      return std::nullopt;
     }
     if (Cursor* cursor = m_server->cursor(); cursor != nullptr && cursor->isDraggingView(this)) {
-      return;
+      return std::nullopt;
     }
-
     const wlr_box usable = floatingUsableArea();
+    if (usable.width <= 0 || usable.height <= 0 || width <= 0 || height <= 0) {
+      return std::nullopt;
+    }
     const wlr_box& geo = m_toplevel->base->geometry;
-    if (usable.width <= 0 || usable.height <= 0 || geo.width <= 0 || geo.height <= 0) {
+    const wlr_box box{.x = geo.x, .y = geo.y, .width = width, .height = height};
+    const FloatingPoint clamped = clampFloatingOrigin(origin, box, usable);
+    if (clamped.x == origin.x && clamped.y == origin.y) {
+      return std::nullopt;
+    }
+    return clamped;
+  }
+
+  void View::clampFloatingPosition() {
+    if (m_posX.animating() || m_posY.animating()) {
       return;
     }
+    const wlr_box& geo = m_toplevel->base->geometry;
+    const FloatingPoint origin{.x = m_sceneTree->node.x, .y = m_sceneTree->node.y};
+    if (const auto clamped = floatingClampTarget(origin, geo.width, geo.height)) {
+      setPosition(clamped->x, clamped->y);
+    }
+  }
 
-    const FloatingPoint clamped =
-        clampFloatingOrigin({.x = m_sceneTree->node.x, .y = m_sceneTree->node.y}, geo, usable);
-    if (clamped.x != m_sceneTree->node.x || clamped.y != m_sceneTree->node.y) {
-      setPosition(clamped.x, clamped.y);
+  void View::clampFloatingPositionForSize(int width, int height) {
+    const FloatingPoint origin{.x = layoutTargetX(), .y = layoutTargetY()};
+    if (const auto clamped = floatingClampTarget(origin, width, height)) {
+      animateTo(clamped->x, clamped->y);
     }
   }
 

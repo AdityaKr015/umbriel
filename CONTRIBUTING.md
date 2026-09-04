@@ -108,6 +108,16 @@ Check names group by topic, and the leading number is the group: `0xx` session, 
 `2xx` workspaces, `3xx` overview, `4xx` drag, `5xx` input and seat, `6xx` output and display, `7xx` rendering. Numbers
 step by ten inside a group so a new check lands next to its relatives.
 
+A boot costs about 80ms and the pool runs checks side by side, so the suite's wall time is set by its longest check,
+not by their sum: three six-second siblings finish in six seconds, and folding them into one check makes the whole
+suite wait thirteen. Split a check that grows past a few seconds instead of merging relatives to save a boot.
+
+A harness check that asserts a value a unit test computes is coverage in the wrong tier: it costs a compositor to
+re-derive what `tests/unit` already pins, and it fails a second time for the same bug. Assert layout arithmetic,
+config resolution, and parse results in `tests/unit`, and keep the check for what only the live compositor shows:
+that a real client's first configure agrees with the arrangement, that a reload reaches a mapped workspace, that the
+pixels land where the geometry said.
+
 An instance has one output unless the check asks for more with a `# harness: outputs=N` directive in its header, which
 `620_output_disable`, `630_dpms`, and `650_two_output_containment` use. Output count is fixed when the compositor
 starts, so it cannot be a runtime config change. Single-output instances are what `610_output_actions` relies on to

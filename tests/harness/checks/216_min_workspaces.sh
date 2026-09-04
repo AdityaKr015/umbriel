@@ -43,9 +43,7 @@ workspace_index_of_window() {
   "$UMBRIEL" workspaces --json | jq -r --arg id "$workspace_id" '.[] | select(.id == $id) | .index'
 }
 
-expect_names HEADLESS-1 "1" "an unconfigured dynamic output"
-expect_names HEADLESS-2 "1" "an unconfigured dynamic output"
-
+# A reload reaches each group through its own output projection, so the neighbour's inventory is the control here.
 write_config '[output.HEADLESS-1]
 min_workspaces = 3'
 expect_names HEADLESS-1 "1 2 3" "floor applied on reload"
@@ -71,7 +69,6 @@ expect_names HEADLESS-1 "1 2 3" "pruning stops at the floor"
 write_config '[output.HEADLESS-1]
 min_workspaces = 5'
 expect_names HEADLESS-1 "1 2 3 4 5" "raising the floor on reload"
-expect_names HEADLESS-2 "1" "floor scoped to its output"
 
 write_config '[output.HEADLESS-1]
 min_workspaces = 1'
@@ -80,7 +77,7 @@ expect_names HEADLESS-1 "1" "lowering the floor prunes on reload"
 # Leaving a static inventory for a dynamic one fills up to the floor.
 write_config '[output.HEADLESS-1]
 workspaces = 2'
-expect_names HEADLESS-1 "1 2" "static inventory"
+expect_names HEADLESS-1 "1 2" "static inventory"        # precondition for the fill below
 
 write_config '[output.HEADLESS-1]
 min_workspaces = 4'

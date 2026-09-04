@@ -1042,6 +1042,14 @@ namespace umbriel {
     }
     m_cursor->resetMode();
     m_cursor->clearConstraint();
+    m_lockFocusOutput.clear();
+    if (View* focused = View::fromSurface(m_seat->wlr()->keyboard_state.focused_surface)) {
+      if (Workspace* workspace = focused->workspace(); workspace != nullptr && workspace->group() != nullptr) {
+        if (const Output* output = workspace->group()->output(); output != nullptr) {
+          m_lockFocusOutput = output->wlr()->name;
+        }
+      }
+    }
     clearNormalFocus();
     updateIdleInhibit();
     updateLockBlank();
@@ -1054,9 +1062,12 @@ namespace umbriel {
     m_sessionLocked = false;
     updateIdleInhibit();
     wlr_scene_node_set_enabled(&m_lockBlank->node, false);
-    if (View* recent = m_registry.mostRecent()) {
-      focusView(recent);
-    }
+    // The cursor need not sit on the output that had focus, so restore the
+    // remembered one. refocus() then keeps that output's active workspace, which
+    // is what makes unlocking on an empty workspace stay there.
+    Output* output = m_lockFocusOutput.empty() ? nullptr : outputFromName(m_lockFocusOutput);
+    m_lockFocusOutput.clear();
+    refocus(output);
   }
 
   void Server::removeSessionLock(SessionLock* lock) {

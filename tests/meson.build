@@ -231,6 +231,18 @@ idle_inhibit_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper that locks the session through ext-session-lock and unlocks it
+# on demand, so checks can compare compositor state across a real lock cycle.
+lock_client = executable(
+  'lock-client',
+  [
+    'harness/clients/lock_client.cpp',
+    ext_session_lock_client_h,
+    ext_session_lock_client_c,
+  ],
+  dependencies: [wayland_client_dep],
+)
+
 # Harness wrapper that runs another Wayland client through a committed
 # security-context listener.
 security_context_client = executable(
@@ -258,5 +270,6 @@ harness_client_targets = [
   subsurface_client,
   fractional_client,
   idle_inhibit_client,
+  lock_client,
   security_context_client,
 ]

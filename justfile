@@ -4,6 +4,10 @@ mode := "debug"
 build-dir := "build-" + mode
 prefix := "/usr/local"
 cpp-std := "c++23"
+# Defaults for asan mode. Leak detection is off: Mesa leaks its EGL setup on
+# every renderer teardown, which buries a real finding. A later key wins, so
+# ASAN_OPTIONS from the environment is appended and overrides these.
+asan-options := "abort_on_error=1:detect_leaks=0:halt_on_error=1"
 
 default:
     @just --list
@@ -59,7 +63,7 @@ run m=mode startup="": (build m)
     #!/usr/bin/env bash
     set -euo pipefail
     if [[ "{{m}}" == "asan" ]]; then
-        export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:detect_leaks=0:halt_on_error=1}"
+        export ASAN_OPTIONS="{{asan-options}}${ASAN_OPTIONS:+:${ASAN_OPTIONS}}"
     fi
     args=()
     if [[ -n "${2:-}" ]]; then
@@ -68,6 +72,11 @@ run m=mode startup="": (build m)
     exec ./build-{{m}}/umbriel "${args[@]}"
 
 test m=mode: (configure m)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "{{m}}" == "asan" ]]; then
+        export ASAN_OPTIONS="{{asan-options}}${ASAN_OPTIONS:+:${ASAN_OPTIONS}}"
+    fi
     meson compile -C build-{{m}} unit-tests
     meson test -C build-{{m}} --print-errorlogs
 
@@ -83,6 +92,9 @@ test-workflows:
 verify m=mode *filters: (_ensure-configured m)
     #!/usr/bin/env bash
     set -euo pipefail
+    if [[ "{{m}}" == "asan" ]]; then
+        export ASAN_OPTIONS="{{asan-options}}${ASAN_OPTIONS:+:${ASAN_OPTIONS}}"
+    fi
     if ! build_log=$(meson compile -C build-{{m}} umbriel harness-clients 2>&1); then
         printf '%s\n' "$build_log" >&2
         exit 1

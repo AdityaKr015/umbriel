@@ -45,7 +45,7 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 | Command | Purpose |
 |---------|---------|
 | `just configure <mode> [prefix]` | Create or reconfigure a build directory and symlink `compile_commands.json` to it |
-| `just asan` | Build with AddressSanitizer |
+| `just asan` | Build with AddressSanitizer (see [AddressSanitizer](#addresssanitizer)) |
 | `just run <mode> [startup]` | Build and run a nested session, optionally spawning a command |
 | `just test` | Run the Meson test suite |
 | `just verify <mode> [filter]` | Run the interactive/visual regression harness (`tests/harness/verify.sh`) against a headless build |
@@ -231,7 +231,39 @@ meson test -C build-release --suite umbrielfx
   release version and commit revision, which helps identify the exact binary
   behind a report.
 
-Run under AddressSanitizer with `just run asan`.
+### AddressSanitizer
+
+`just configure asan` creates `build-asan` as a debug build with `-Db_sanitize=address` and `-Dtests=enabled`, so
+every workflow runs there:
+
+```sh
+just asan                 # build the instrumented binary
+just run asan [startup]   # nested session under ASan
+just test asan            # unit tests plus the umbrielfx suites
+just verify asan [filter] # harness checks, one instrumented compositor per check
+```
+
+`b_sanitize` is a global Meson option, so umbrielfx's C sources are instrumented alongside the compositor and a report
+points into them with file and line. `just configure` also repoints the `compile_commands.json` symlink, so returning
+to unsanitized work needs `just configure debug`.
+
+In asan mode those recipes prepend `abort_on_error=1:detect_leaks=0:halt_on_error=1` to `ASAN_OPTIONS`. A later key
+wins, so `ASAN_OPTIONS=detect_leaks=1 just verify asan 310` overrides one default and keeps the others.
+
+Leak detection is off because Mesa leaks its EGL display setup on every renderer teardown, under `dri2_initialize`
+below `wlr_egl_create_with_drm_fd`: about 400 KB in 7900 allocations when the compositor exits, and 115 KB in the
+umbrielfx color tests. Left on, every harness check fails at teardown with `compositor exited with status 1` and the
+14 color tests abort. Enable it for the one scope you are chasing a leak in, and read past the `libEGL_mesa` frames.
+
+Reports go to stderr, which for `just run asan` is the parent terminal. Where stderr is not readable, as in a session
+started by a display manager, redirect them: `ASAN_OPTIONS=log_path=/var/tmp/umbriel-asan just run asan` writes
+`/var/tmp/umbriel-asan.<pid>` instead.
+
+An ASan build still links `jemalloc` when it is installed, since `-Djemalloc` is independent of `b_sanitize`, but
+`libasan` precedes it in the link order and services every allocation. The `jemalloc: narenas=...` startup record in
+an ASan build therefore describes an allocator nothing uses; configure with `-Djemalloc=disabled` to drop it.
+
+### Runtime inspection
 
 The CLI doubles as a runtime inspection and IPC surface against a running compositor:
 

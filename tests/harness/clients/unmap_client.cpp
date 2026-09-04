@@ -269,6 +269,7 @@ namespace {
     auto& window = *static_cast<AuxiliaryToplevel*>(data);
     xdg_surface_ack_configure(xdgSurface, serial);
     if (window.mapped) {
+      wl_surface_commit(window.surface);
       return;
     }
     window.mapped = true;

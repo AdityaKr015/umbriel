@@ -250,6 +250,7 @@ namespace umbriel {
     static void onRequestMaximize(wl_listener* listener, void* data);
     static void onAcceptClientMaximizeRequests(void* data);
     static void onRequestFullscreen(wl_listener* listener, void* data);
+    static void onSetParent(wl_listener* listener, void* data);
     static void onSetTitle(wl_listener* listener, void* data);
     static void onSetAppId(wl_listener* listener, void* data);
     static void onForeignActivate(wl_listener* listener, void* data);
@@ -273,6 +274,7 @@ namespace umbriel {
     void handleRequestMaximize();
     void setMaximized(bool maximized, bool animate = true);
     void handleRequestFullscreen();
+    void handleSetParent();
     void setFullscreen(bool fullscreen);
     void handleSetTitle();
     void handleSetAppId();
@@ -352,6 +354,9 @@ namespace umbriel {
     void adoptFloatingClientSize();
     void placeInUsableArea(const std::optional<WindowPosition>& position = std::nullopt);
     void setPinned(bool pinned, bool focus);
+    [[nodiscard]] View* transientParent() const;
+    void syncTransientSceneParent();
+    void raiseTransientTree();
     void updateForeignIdentity();
     void updateForeignState();
     void enterForeignOutput();
@@ -475,6 +480,7 @@ namespace umbriel {
     wl_listener m_requestResize{};
     wl_listener m_requestMaximize{};
     wl_listener m_requestFullscreen{};
+    wl_listener m_setParent{};
     wl_listener m_setTitle{};
     wl_listener m_setAppId{};
     wl_listener m_foreignActivate{};

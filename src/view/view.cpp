@@ -176,6 +176,8 @@ namespace umbriel {
     wl_signal_add(&m_toplevel->events.request_maximize, &m_requestMaximize);
     m_requestFullscreen.notify = onRequestFullscreen;
     wl_signal_add(&m_toplevel->events.request_fullscreen, &m_requestFullscreen);
+    m_setParent.notify = onSetParent;
+    wl_signal_add(&m_toplevel->events.set_parent, &m_setParent);
     m_setTitle.notify = onSetTitle;
     wl_signal_add(&m_toplevel->events.set_title, &m_setTitle);
     m_setAppId.notify = onSetAppId;
@@ -227,6 +229,7 @@ namespace umbriel {
       wl_list_remove(&m_requestResize.link);
       wl_list_remove(&m_requestMaximize.link);
       wl_list_remove(&m_requestFullscreen.link);
+      wl_list_remove(&m_setParent.link);
       wl_list_remove(&m_setTitle.link);
       wl_list_remove(&m_setAppId.link);
     }
@@ -382,8 +385,64 @@ namespace umbriel {
   }
 
   void View::raiseToTop() {
-    wlr_scene_node_raise_to_top(&m_sceneTree->node);
+    View* root = this;
+    while (View* parent = root->transientParent()) {
+      root = parent;
+    }
+    root->raiseTransientTree();
+  }
+
+  View* View::transientParent() const {
+    if (!m_mapped || m_workspace == nullptr || m_toplevel->parent == nullptr) {
+      return nullptr;
+    }
+    View* parent = fromSurface(m_toplevel->parent->base->surface);
+    if (parent == this || parent == nullptr || !parent->m_mapped || parent->m_workspace != m_workspace) {
+      return nullptr;
+    }
+    return parent;
+  }
+
+  void View::syncTransientSceneParent() {
+    if (!m_mapped || m_workspace == nullptr || m_pinned || m_server->cursor()->isDraggingView(this)) {
+      return;
+    }
+
+    wlr_scene_tree* target = homeTree();
+    if (View* parent = transientParent()) {
+      wlr_scene_tree* parentTree = parent->m_sceneTree->node.parent;
+      Output* output = currentOutput();
+      const bool parentElevated = parentTree == m_server->dragTree()
+          || parentTree == m_workspace->fullscreenTree()
+          || (output != nullptr && parentTree == output->pinnedRoot());
+      if (parentElevated) {
+        target = parentTree;
+      }
+    }
+
+    if (m_sceneTree->node.parent == target) {
+      return;
+    }
+    wlr_scene_node_reparent(&m_sceneTree->node, target);
+    if (target != homeTree()) {
+      reparentShadow(target);
+    } else {
+      reparentShadow(m_workspace->shadowLayer());
+    }
+  }
+
+  void View::raiseTransientTree() {
+    syncTransientSceneParent();
     m_decoration.raiseShadowToTop();
+    wlr_scene_node_raise_to_top(&m_sceneTree->node);
+
+    const auto views = m_server->registry().all();
+    for (auto it = views.rbegin(); it != views.rend(); ++it) {
+      View* child = it->get();
+      if (child != this && child->transientParent() == this) {
+        child->raiseTransientTree();
+      }
+    }
   }
 
   void View::setScratchpadBorder(bool scratchpad) {
@@ -967,6 +1026,11 @@ namespace umbriel {
   void View::onRequestFullscreen(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_requestFullscreen);
     self->handleRequestFullscreen();
+  }
+
+  void View::onSetParent(wl_listener* listener, void* /*data*/) {
+    View* self = wl_container_of(listener, self, m_setParent);
+    self->handleSetParent();
   }
 
   void View::onSetTitle(wl_listener* listener, void* /*data*/) {
@@ -1761,6 +1825,10 @@ namespace umbriel {
       setFullscreen(true);
     }
 
+    if (transientParent() != nullptr) {
+      raiseToTop();
+    }
+
     if (m_onActiveWorkspace) {
       const auto& animation = config().animation;
       const auto& open = animation.windowsIn;
@@ -2180,6 +2248,7 @@ namespace umbriel {
     wl_list_remove(&m_requestResize.link);
     wl_list_remove(&m_requestMaximize.link);
     wl_list_remove(&m_requestFullscreen.link);
+    wl_list_remove(&m_setParent.link);
     wl_list_remove(&m_setTitle.link);
     wl_list_remove(&m_setAppId.link);
     m_map.link.next = nullptr;
@@ -2190,6 +2259,7 @@ namespace umbriel {
     m_requestResize.link.next = nullptr;
     m_requestMaximize.link.next = nullptr;
     m_requestFullscreen.link.next = nullptr;
+    m_setParent.link.next = nullptr;
     m_setTitle.link.next = nullptr;
     m_setAppId.link.next = nullptr;
     m_sceneTree->node.data = nullptr;
@@ -2403,6 +2473,12 @@ namespace umbriel {
         m_workspace->snapVisible(this);
         m_workspace->markArrange(true);
       }
+    }
+  }
+
+  void View::handleSetParent() {
+    if (m_mapped) {
+      raiseToTop();
     }
   }
 
@@ -2725,7 +2801,7 @@ namespace umbriel {
     if (fullscreen) {
       // scheduled.fullscreen is set; reparent to fullscreen layer.
       wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
-      wlr_scene_node_raise_to_top(&m_sceneTree->node);
+      raiseToTop();
       // Snap scroll to the now viewport-wide column and reflow neighbors.
       if (m_workspace != nullptr) {
         m_workspace->snapVisible(this);
@@ -2740,6 +2816,8 @@ namespace umbriel {
       wlr_scene_node_reparent(&m_sceneTree->node, homeTree());
       if (!m_tiled && m_workspace != nullptr) {
         m_workspace->restackFloatingViews();
+      } else {
+        raiseToTop();
       }
       if (restoreFloating) {
         requestFloatingSize(m_fullscreenRestoreBox.width, m_fullscreenRestoreBox.height);

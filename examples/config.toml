@@ -192,7 +192,7 @@ offset_y = 2                                    # Vertical offset, -200 to 200
 
 [input]
 middle_click_paste = true                       # Primary-selection paste; applies on reload
-window_drag_toggle = "none"                      # "none", "floating", or "pinned"
+window_drag_toggle = "none"                     # Retarget a window drag: "none", "floating", or "pinned"
 
 [input.keyboard]
 # Physical keyboard XKB settings. Virtual keyboards provide their own keymaps.

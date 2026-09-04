@@ -161,6 +161,9 @@ namespace umbriel {
     void requestFloatingSize(int width, int height);
     // The pending compositor request, else the committed geometry.
     [[nodiscard]] std::array<int, 2> floatingSize() const;
+    // The size a float episode lands on: the remembered floating size, else the
+    // last size the client acked, was configured with, or was assigned.
+    [[nodiscard]] std::array<int, 2> floatingRestoreSize() const;
     // The home output's usable area.
     [[nodiscard]] wlr_box floatingUsableArea() const;
     // The usable area an opening window is sized against: the target output's,
@@ -207,7 +210,10 @@ namespace umbriel {
     // windows clear their full-width state through the layout.
     void dropMaximizedForResize();
     // Detach from the scrolling layout (float) or re-insert as a tiled column.
-    void setFloating(bool floating, bool focus = true);
+    // `Detached` re-tiles without inserting into the layout, for a caller that
+    // places the window itself (an interactive drag drops it at its own target).
+    enum class TilePlacement : uint8_t { Layout, Detached };
+    void setFloating(bool floating, bool focus = true, TilePlacement placement = TilePlacement::Layout);
     void toggleFloating();
     void togglePinned();
     // Restore the global pinned scene layer after temporary drag reparenting.
@@ -313,6 +319,11 @@ namespace umbriel {
     void clearViewSurfaceWatches();
     void beginCloseAnimation();
     void applyPresentedSize();
+    // Presentation for a window held by an interactive move: derived from the
+    // presented size at the node's current position, so a drag that changes the
+    // window's target size keeps its chrome and crop while the layout stays out
+    // of it.
+    void applyDragPresentation();
     // Scale-then-crop presentation of the primary buffer during a size
     // animation; surfaceClip is the visible presented region in surface coords.
     void applyPresentedCrop(const wlr_box& content, const wlr_box& surfaceClip);
@@ -333,6 +344,10 @@ namespace umbriel {
     // True while an interactive grab owns this view's size, so the layout must
     // not animate it (the drag tracks the pointer 1:1).
     [[nodiscard]] bool sizeGrabActive() const;
+    // True while that grab is a resize, which drives the size from the pointer
+    // itself. A move grab does not: it may retarget the size once, and the
+    // presented size animates there like any other size change.
+    [[nodiscard]] bool sizeGrabTracksPointer() const;
     // Cursor owns when a drag starts and ends; View owns the scene invariants
     // for the temporary global presentation and its resting presentation.
     void enterDragPresentation();
@@ -354,7 +369,6 @@ namespace umbriel {
     void resizeFloating(int width, int height);
     void finishFloatingResize();
     void syncFloatingResizePosition();
-    void presentFloatingResizeSize(int width, int height);
     void adoptFloatingClientSize();
     // Where `origin` has to move so a float of `width` by `height` keeps its on-screen margin, or nullopt when the
     // clamp does not apply or the origin already satisfies it.

@@ -31,19 +31,27 @@ namespace umbriel {
 
   class Cursor {
     struct PassthroughGrab {};
-    struct FloatingMoveGrab {
+    // What the drop does with the dragged window. A press of the free mouse
+    // button retargets it (input.window_drag_toggle). The window's own state is
+    // only changed at the drop, so a transition the window refuses (a
+    // fullscreen window cannot be pinned) cannot strand it outside the layout.
+    enum class DragTarget : uint8_t { Tiled, Floating, Pinned };
+    struct MoveGrab {
       View* view = nullptr;
       double offsetX = 0;
       double offsetY = 0;
-    };
-    struct TiledMoveGrab {
-      View* view = nullptr;
-      double offsetX = 0;
-      double offsetY = 0;
+      DragTarget target = DragTarget::Tiled;
+      // The window's state when the drag started, so a retarget knows what
+      // "unpinned" means for it.
+      DragTarget origin = DragTarget::Tiled;
+      // Layout bookkeeping for a drop back into the strip. It survives a
+      // retarget, so toggling out and back restores the source column width.
       Workspace* sourceWorkspace = nullptr;
       int sourceColumn = -1;
       std::optional<DropColumnWidth> sourceWidth;
       DropTarget drop;
+      // A tiled drag holds the window in the layout until the pointer clears
+      // the threshold. A floating drag is detached from the start.
       bool pending = true;
       double startX = 0;
       double startY = 0;
@@ -71,8 +79,7 @@ namespace umbriel {
       double lastX = 0;
       double lastY = 0;
     };
-    using GrabState = std::variant<
-        PassthroughGrab, FloatingMoveGrab, TiledMoveGrab, FloatingResizeGrab, TiledResizeGrab, ScrollDragGrab>;
+    using GrabState = std::variant<PassthroughGrab, MoveGrab, FloatingResizeGrab, TiledResizeGrab, ScrollDragGrab>;
 
     struct TabletToolState {
       Cursor* cursor = nullptr;
@@ -118,6 +125,10 @@ namespace umbriel {
     // True while `view` is under an interactive move and spans outputs
     // unclipped. Layout code must not re-clip it during the drag.
     [[nodiscard]] bool isDraggingView(const View* view) const;
+    // True while an interactive move will drop its window back into the tiled
+    // layout, so layout-directed input (wheel scrolling, insert hints) applies
+    // to the drag.
+    [[nodiscard]] bool isDraggingIntoLayout() const;
     // A tiled resize updates every view in its workspace without size
     // animations trailing the pointer.
     [[nodiscard]] bool isResizingWorkspace(const Workspace* workspace) const;
@@ -194,10 +205,22 @@ namespace umbriel {
     );
     void processMove();
     void presentGrabbedViewSpanning();
+    // Take the window out of the layout and into the drag presentation, once
+    // the pointer has committed to the drag.
+    void beginDrag(MoveGrab& grab);
     void updateDropTarget();
+    // Present the size the drop will land on, so the drag is already the right
+    // shape when it gets there.
+    void retargetDragSize(MoveGrab& grab);
+    void finishMove();
+    // Move the window to the drag's target state. Best effort: the window may
+    // refuse, and the drop places it by what it actually became.
+    void applyDragTarget(const MoveGrab& grab);
     void finishTileMove();
-    void finishFloatMove();
-    void toggleFloatingDuringMove(uint32_t button);
+    // `x`/`y` is where the drag left the window, captured before its state
+    // changed.
+    void finishFloatMove(int x, int y);
+    void toggleDragTarget(uint32_t button);
     void processResize();
     void processResizeTile();
     [[nodiscard]] uint32_t floatResizeEdges(View* view) const;

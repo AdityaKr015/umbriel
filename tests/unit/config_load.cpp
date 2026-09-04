@@ -18,6 +18,7 @@ using umbriel::LayoutMode;
 using umbriel::ModifierKey;
 using umbriel::TrackLayout;
 using umbriel::VrrMode;
+using umbriel::WindowDragToggle;
 
 namespace {
   bool containsDiagnostic(const ConfigStore& store, const std::string& text) {
@@ -754,6 +755,34 @@ UMBRIEL_TEST(middleClickPasteLoadsAndDefaultsEnabled) {
   file.write("[input]\n");
   CHECK(store.reload().success);
   CHECK(store.config().input.middleClickPaste);
+}
+
+UMBRIEL_TEST(windowDragToggleReadsItsVocabularyAndDefaultsOff) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[input]\nwindow_drag_toggle = \"floating\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::Floating);
+  CHECK(!containsDiagnostic(store, "unknown key input.window_drag_toggle"));
+
+  file.write("[input]\nwindow_drag_toggle = \"pinned\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::Pinned);
+
+  file.write("[input]\nwindow_drag_toggle = \"none\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::None);
+
+  file.write("[input]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::None);
+
+  file.write("[input]\nwindow_drag_toggle = \"maximized\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::None);
+  CHECK(containsDiagnostic(store, "ignoring input.window_drag_toggle"));
 }
 
 UMBRIEL_TEST(outputNamesDifferingOnlyByCaseAreRejectedAsDuplicates) {

@@ -35,6 +35,11 @@ revealing the selected column on the same frame and animation timeline as the
 zoom. The close therefore lands directly on the selected column instead of
 starting a second movement afterwards.
 
+Configured keybinds continue to dispatch during the closing zoom. A later focus
+or workspace selection replaces the card that initiated the close as the
+landing target. Workspace-row retargets use a separate animation value, so
+repeated navigation cannot extend the zoom deadline.
+
 Unmap is the one transition that cannot remain live because the client buffer
 may disappear immediately. Before removing an unmapped card, the overview
 freezes its already-scaled buffers and borders into a scene snapshot. That tree

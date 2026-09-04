@@ -8,6 +8,7 @@ readonly OUTPUT_H=720
 readonly BTN_LEFT=272
 readonly POINTER="${UMBRIEL_POINTER_CLIENT:-./build-debug/tests/pointer-client}"
 readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
+readonly OVERVIEW_EVENTS="$UMBRIEL_RUNTIME_DIR/overview-events.log"
 
 pointer() {
   "$POINTER" "$OUTPUT_W" "$OUTPUT_H" "$@"
@@ -27,6 +28,10 @@ selected_title() {
 
 active_workspace() {
   "$UMBRIEL" workspaces --json | jq -r '.[] | select(.active) | .name'
+}
+
+overview_closed_count() {
+  jq -s '[.[] | select(.event == "overview" and .data.open == false)] | length' "$OVERVIEW_EVENTS"
 }
 
 wait_for_count() {
@@ -83,6 +88,11 @@ shortcuts = false
 "Ctrl+X" = "window-close"
 EOF
 "$UMBRIEL" msg config-reload > /dev/null
+"$UMBRIEL" subscribe overview > "$OVERVIEW_EVENTS" &
+for _ in $(seq 40); do
+  [[ -s $OVERVIEW_EVENTS ]] && break
+  sleep 0.05
+done
 
 "$CLIENT" overview-vim-first 1200 700 > "$UMBRIEL_RUNTIME_DIR/overview-vim-first.log" 2>&1 &
 wait_for_count 1
@@ -202,12 +212,22 @@ pointer tap 103 # Up
 wait_for_focus "$top_title"
 wait_for_workspace 1
 
-# Directional actions are consumed once the closing zoom is no longer interactive, so a composite bind cannot change
-# the snapshotted landing workspace behind the animation.
-"$UMBRIEL" msg overview-close > /dev/null
-chord 49 # N
-wait_for_focus "$top_title"
-sleep 0.6
-wait_for_focus "$top_title"
+# Enter closes toward the selected card. Configured binds remain effective
+# during that close, and row retargeting must not restart the zoom timeline.
+closed_before=$(overview_closed_count)
+pointer tap 28 # Enter
+sleep 0.15
+chord 49 # N, focus the lower card
+wait_for_focus "$bottom_title"
+sleep 0.15
+chord 49 # N, switch to workspace 2
+wait_for_workspace 2
+sleep 0.3
+if (( $(overview_closed_count) <= closed_before )); then
+  echo "workspace binds extended the overview closing timeline"
+  exit 1
+fi
+wait_for_focus overview-vim-row
+wait_for_workspace 2
 
-echo "overview arrows navigate cards first and step workspace rows at the column edge"
+echo "overview arrows navigate cards and rows while configured binds remain active through the closing zoom"

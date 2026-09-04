@@ -235,6 +235,34 @@ UMBRIEL_TEST(workspaceInventoryResolvesStaticAndDynamicOutputs) {
     CHECK_EQ(dynamicSetWithEmptyAbove.workspaces[1].name, std::string{"2"});
   }
 }
+
+UMBRIEL_TEST(dynamicWorkspaceMinimumIsPerOutput) {
+  Config config;
+  OutputRule padded;
+  padded.name = "DP-1";
+  padded.minWorkspaces = 3;
+  config.outputs.push_back(std::move(padded));
+
+  CHECK_EQ(umbriel::resolveDynamicWorkspaceMinimum(config, identity("DP-1")), size_t{3});
+  CHECK_EQ(umbriel::resolveDynamicWorkspaceMinimum(config, identity("DP-2")), size_t{1});
+
+  const auto paddedSet = umbriel::resolveWorkspacesForOutput(config, identity("DP-1"));
+  CHECK(paddedSet.dynamic);
+  CHECK_EQ(paddedSet.workspaces.size(), size_t{3});
+  if (paddedSet.workspaces.size() == 3) {
+    CHECK_EQ(paddedSet.workspaces[0].name, std::string{"1"});
+    CHECK_EQ(paddedSet.workspaces[2].name, std::string{"3"});
+  }
+
+  const auto bareSet = umbriel::resolveWorkspacesForOutput(config, identity("DP-2"));
+  CHECK(bareSet.dynamic);
+  CHECK_EQ(bareSet.workspaces.size(), size_t{1});
+
+  // The leading empty is an extra entry only where it exceeds the minimum.
+  config.workspaces.emptyAbove = true;
+  CHECK_EQ(umbriel::resolveWorkspacesForOutput(config, identity("DP-1")).workspaces.size(), size_t{3});
+  CHECK_EQ(umbriel::resolveWorkspacesForOutput(config, identity("DP-2")).workspaces.size(), size_t{2});
+}
 UMBRIEL_TEST(workspaceRulesMatchConnectorAndDescriptorWithoutOutputSection) {
   Config config;
 

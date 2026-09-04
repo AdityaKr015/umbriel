@@ -1273,6 +1273,7 @@ namespace umbriel {
             scrolling.real("default_width_fraction", 0.1, 1.0, rule.layout.scrolling.defaultWidthFraction);
           });
         });
+        keys.integer("min_workspaces", 1, static_cast<int>(kMaxWorkspaces), rule.minWorkspaces);
         if (const toml::node* workspacesNode = keys.take("workspaces")) {
           if (const auto count = workspacesNode->value<std::int64_t>()) {
             if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {
@@ -1321,6 +1322,9 @@ namespace umbriel {
                 workspacesNode->source(), R"(output.{}.workspaces must be a count, a name array, or "dynamic")", name
             );
           }
+        }
+        if (const toml::node* minNode = keys.node("min_workspaces"); minNode != nullptr && rule.workspaces) {
+          errorAt(minNode->source(), "output.{}.min_workspaces requires dynamic workspaces", name);
         }
 
         if (const toml::node* modeNode = keys.take("mode")) {

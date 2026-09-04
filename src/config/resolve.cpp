@@ -359,12 +359,20 @@ namespace umbriel {
     return resolved;
   }
 
+  size_t resolveDynamicWorkspaceMinimum(const Config& config, const OutputIdentity& identity) {
+    const OutputRule* rule = matchingOutputRule(config, identity);
+    return rule != nullptr ? static_cast<size_t>(std::max(1, rule->minWorkspaces)) : 1;
+  }
+
   ResolvedWorkspaceSet resolveWorkspacesForOutput(const Config& config, const OutputIdentity& identity) {
     const auto names = workspaceNamesForIdentity(config, identity);
     ResolvedWorkspaceSet result;
     if (!names) {
       result.dynamic = true;
-      const size_t count = config.workspaces.emptyAbove ? 2 : 1;
+      // The optional leading empty is an extra entry only while it exceeds the
+      // configured minimum.
+      const size_t sentinels = config.workspaces.emptyAbove ? 2 : 1;
+      const size_t count = std::max(resolveDynamicWorkspaceMinimum(config, identity), sentinels);
       result.workspaces.reserve(count);
       for (size_t index = 0; index < count; ++index) {
         const std::string name = std::to_string(index + 1);

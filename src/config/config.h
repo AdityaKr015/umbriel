@@ -186,6 +186,9 @@ namespace umbriel {
     float sdrWhite = 203.0F;
     // Explicit workspace inventory. Omitted means dynamic workspaces.
     std::optional<std::vector<std::string>> workspaces;
+    // Smallest workspace count a dynamic output keeps. Rejected alongside an
+    // explicit inventory, which already states an exact count.
+    int minWorkspaces = 1;
     struct Layout {
       struct Scrolling {
         // Initial strip-axis extent inherited by workspaces on this output.

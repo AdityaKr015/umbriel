@@ -106,7 +106,7 @@ namespace umbriel {
       static const OutputRule defaults;
       const OutputRule& lhs = before != nullptr ? *before : defaults;
       const OutputRule& rhs = after != nullptr ? *after : defaults;
-      return lhs.workspaces == rhs.workspaces;
+      return lhs.workspaces == rhs.workspaces && lhs.minWorkspaces == rhs.minWorkspaces;
     }
 
   } // namespace
@@ -122,8 +122,9 @@ namespace umbriel {
         || !sameWindowTearingPolicy(before, after);
     const bool directScanoutPolicy =
         outputNamesChanged || outputProjectionChanged(before, after, sameOutputDirectScanoutPolicy);
-    const bool workspaceInventory =
-        outputNamesChanged || outputProjectionChanged(before, after, sameWorkspaceInventory);
+    const bool workspaceInventory = outputNamesChanged
+        || outputProjectionChanged(before, after, sameWorkspaceInventory)
+        || before.workspaces.emptyAbove != after.workspaces.emptyAbove;
     const bool outputLayout = outputNamesChanged || outputProjectionChanged(before, after, sameOutputLayout);
     const bool sceneBlur =
         before.appearance.blur != after.appearance.blur || before.optimizedBlurNeeded() != after.optimizedBlurNeeded();

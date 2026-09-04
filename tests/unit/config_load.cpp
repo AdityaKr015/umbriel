@@ -1125,6 +1125,35 @@ UMBRIEL_TEST(outputEnabledFlagParsesAndDefaultsTrue) {
   CHECK(containsDiagnostic(store, "ignoring output.DP-1.enabled"));
 }
 
+UMBRIEL_TEST(outputMinWorkspacesLoadsAndRequiresDynamicWorkspaces) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[output.DP-1]\nmin_workspaces = 4\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK_EQ(store.config().outputs[0].minWorkspaces, 4);
+
+  file.write("[output.DP-1]\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs[0].minWorkspaces, 1);
+
+  file.write("[output.DP-1]\nworkspaces = \"dynamic\"\nmin_workspaces = 3\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs[0].minWorkspaces, 3);
+
+  file.write("[output.DP-1]\nmin_workspaces = 99\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs[0].minWorkspaces, 64);
+  CHECK(containsDiagnostic(store, "output.DP-1.min_workspaces = 99 out of range, clamped to 64"));
+
+  file.write("[output.DP-1]\nworkspaces = [\"dev\", \"web\"]\nmin_workspaces = 3\n");
+  CHECK(!store.reload().success);
+  CHECK(containsDiagnostic(store, "output.DP-1.min_workspaces requires dynamic workspaces"));
+  CHECK(!containsDiagnostic(store, "unknown key output.DP-1.min_workspaces"));
+}
+
 UMBRIEL_TEST(semanticColorsLoadFromTheirOwnSection) {
   const TempConfig file;
   file.write(R"(

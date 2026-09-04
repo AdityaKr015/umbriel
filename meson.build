@@ -573,7 +573,7 @@ umbriel = executable(
   install: true,
 )
 
-# Unit tests and the harness clients the verify script drives.
+# Unit tests and the harness clients check.sh drives.
 if build_tests
   subdir('tests')
   alias_target('unit-tests', unit_test_targets)

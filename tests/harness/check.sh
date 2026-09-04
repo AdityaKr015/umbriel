@@ -5,26 +5,26 @@
 # for whatever runs next. Boot plus teardown measures about 80ms, under 4% of the suite, and it buys back the
 # config-restore reloads and window-drain loops that shared-instance checks had to carry.
 # Containment matters. A stock Umbriel start runs its built-in autostarts, and `dbus-update-activation-environment --systemd` would repoint the *caller's* session-wide WAYLAND_DISPLAY and UMBRIEL_SOCKET at this throwaway instance. Unsetting DBUS_SESSION_BUS_ADDRESS makes both autostarts fail harmlessly.
-# Usage: verify.sh <path-to-umbriel-binary> [name-fragment ...] [-v|--verbose] [-l|--list]
+# Usage: check.sh <path-to-umbriel-binary> [name-fragment ...] [-v|--verbose] [-l|--list]
 # Each name fragment selects every check whose name contains it, so several fragments run several checks. Without a
 # fragment the whole suite runs. A failing check keeps its runtime directory (compositor and client logs) and prints it.
 
 set -euo pipefail
 
-BINARY=${1:?usage: verify.sh <umbriel-binary> [name-fragment ...] [-v] [-l]}
+BINARY=${1:?usage: check.sh <umbriel-binary> [name-fragment ...] [-v] [-l]}
 shift
 
 FILTERS=()
-VERBOSE=${VERIFY_VERBOSE:-0}
+VERBOSE=${CHECK_VERBOSE:-0}
 LIST_ONLY=0
 for arg in "$@"; do
   case $arg in
     -v | --verbose) VERBOSE=1 ;;
     -l | --list) LIST_ONLY=1 ;;
-    # `just verify debug` forwards an empty filter; treat it as "no filter".
+    # An empty argument is no fragment at all, not a fragment that matches everything.
     '') ;;
     -*)
-      echo "verify: unknown option '$arg'" >&2
+      echo "check: unknown option '$arg'" >&2
       exit 2
       ;;
     *) FILTERS+=("$arg") ;;
@@ -35,7 +35,7 @@ HARNESS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # A check that never returns would otherwise hang the suite with no output. The
 # cap is per check and generous: the slowest checks drive two-second animations.
-CHECK_TIMEOUT=${VERIFY_TIMEOUT:-120}
+CHECK_TIMEOUT=${CHECK_TIMEOUT:-120}
 
 # Colour only for a terminal, so piped output and CI logs stay plain text.
 if [[ -t 1 && -z ${NO_COLOR:-} && ${TERM:-dumb} != dumb ]]; then
@@ -85,14 +85,14 @@ while read -r name; do
 done <<< "$(all_checks)"
 TOTAL=$(all_checks | wc -l)
 if ((${#SELECTED[@]} == 0)); then
-  echo "verify: no checks matched ${FILTERS[*]}" >&2
-  echo "verify: available checks:" >&2
+  echo "check: no checks matched ${FILTERS[*]}" >&2
+  echo "check: available checks:" >&2
   all_checks | sed 's/^/  /' >&2
   exit 1
 fi
 
 if [[ ! -x $BINARY ]]; then
-  echo "verify: '$BINARY' is not executable" >&2
+  echo "check: '$BINARY' is not executable" >&2
   exit 1
 fi
 BINARY=$(realpath "$BINARY")
@@ -199,7 +199,7 @@ cleanup() {
 trap cleanup EXIT
 
 header() {
-  printf '%s\n' "${C_BOLD}verify${C_OFF} ${C_DIM}·${C_OFF} $BINARY"
+  printf '%s\n' "${C_BOLD}check${C_OFF} ${C_DIM}·${C_OFF} $BINARY"
   local scope="${#SELECTED[@]} of $TOTAL checks"
   ((${#FILTERS[@]} > 0)) && scope+=" (filter: ${FILTERS[*]})"
   printf '%s\n' "       ${C_DIM}·${C_OFF} $scope, one compositor instance each"

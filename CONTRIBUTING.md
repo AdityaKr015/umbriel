@@ -47,8 +47,9 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 | `just configure <mode> [prefix]` | Create or reconfigure a build directory and symlink `compile_commands.json` to it |
 | `just asan` | Build with AddressSanitizer (see [AddressSanitizer](#addresssanitizer)) |
 | `just run <mode> [startup]` | Build and run a nested session, optionally spawning a command |
-| `just test` | Run the Meson test suite |
-| `just verify <mode> [filter]` | Run the interactive/visual regression harness (`tests/harness/verify.sh`) against a headless build |
+| `just test` | Run the Meson test suite: unit tests plus the umbrielfx suites |
+| `just check [filter ...]` | Run the headless compositor harness (`tests/harness/check.sh`), every check or the ones whose names contain a fragment: `just check 721`, `just check drag`, `just check 721 -v`. Another build directory is `mode=`, as in `just mode=asan check 721` |
+| `just check-names` | List every harness check name. Builds nothing |
 | `just lint` | Rebuild without compiler warnings and run clang-tidy |
 | `just format` | Format source and test files |
 | `just install` | Build a release binary and install it with `meson install` |
@@ -58,9 +59,9 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 Tests live in three places, and which one a change belongs in follows from what it can observe:
 
 ```
-tests/unit/            C++ unit tests, one binary per test, run by `just test`
-tests/meson.build      the unit test table and the harness client targets
-tests/harness/verify.sh the headless compositor harness, run by `just verify`
+tests/unit/             C++ unit tests, one binary per test, run by `just test`
+tests/meson.build       the unit test table and the harness client targets
+tests/harness/check.sh  the headless compositor harness, run by `just check`
 tests/harness/checks/   one script per behaviour it asserts
 tests/harness/clients/  Wayland helper clients the checks drive
 ```
@@ -72,16 +73,16 @@ seat grabs, live reloads. Every unit test gets `umbriel_pure_dep`, and one that 
 table is not built and will rot unnoticed.
 
 Test targets exist only where the `tests` feature option resolves to enabled. `just configure` passes
-`-Dtests=enabled` for every mode, so `just test` and `just verify` work in debug, asan, and release build directories.
+`-Dtests=enabled` for every mode, so `just test` and `just check` work in debug, asan, and release build directories.
 A build directory configured by hand without that option follows `auto`: unsanitized debug builds get the targets, a
 release build gets none. Test binaries land in the build directory's `tests` subdir.
 
-`verify.sh` runs every script in `tests/harness/checks/` against its own dedicated compositor: one contained headless
+`check.sh` runs every script in `tests/harness/checks/` against its own dedicated compositor: one contained headless
 instance is booted per check, the check runs in its own process group with `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`
 already pointing at that instance, and the harness kills the group and asserts the instance exited cleanly. Boot plus
 teardown costs about 80ms, so isolation is cheaper than the cleanup it replaces. Five rules follow:
 
-- A check must pass in a plain `just verify` run, with no environment overrides.
+- A check must pass in a plain `just check` run, with no environment overrides.
 - A check starts from a pristine instance (no windows, overview closed, workspace 1 focused, `$UMBRIEL_CONFIG` holding
   the harness default) and owes nothing to whatever runs next. It appends the config it needs, spawns what it needs,
   and asserts. It must not restore config, close the overview, return to workspace 1, or reap its clients at exit: the
@@ -108,7 +109,7 @@ starts, so it cannot be a runtime config change. Single-output instances are wha
 assert that directional output actions are rejected when there is nowhere to move.
 
 A check that stops making progress is killed after 120 seconds, so the suite reports instead of hanging. Set
-`VERIFY_TIMEOUT` to change the cap, and `VERIFY_VERBOSE=1` (or `-v`) to keep the full output of passing checks.
+`CHECK_TIMEOUT` to change the cap, and `CHECK_VERBOSE=1` (or `-v`) to keep the full output of passing checks.
 
 ## Code Style
 
@@ -237,10 +238,10 @@ meson test -C build-release --suite umbrielfx
 every workflow runs there:
 
 ```sh
-just asan                 # build the instrumented binary
-just run asan [startup]   # nested session under ASan
-just test asan            # unit tests plus the umbrielfx suites
-just verify asan [filter] # harness checks, one instrumented compositor per check
+just asan                     # build the instrumented binary
+just run asan [startup]       # nested session under ASan
+just test asan                # unit tests plus the umbrielfx suites
+just mode=asan check [filter] # harness checks, one instrumented compositor per check
 ```
 
 `b_sanitize` is a global Meson option, so umbrielfx's C sources are instrumented alongside the compositor and a report
@@ -248,7 +249,7 @@ points into them with file and line. `just configure` also repoints the `compile
 to unsanitized work needs `just configure debug`.
 
 In asan mode those recipes prepend `abort_on_error=1:detect_leaks=0:halt_on_error=1` to `ASAN_OPTIONS`. A later key
-wins, so `ASAN_OPTIONS=detect_leaks=1 just verify asan 310` overrides one default and keeps the others.
+wins, so `ASAN_OPTIONS=detect_leaks=1 just mode=asan check 310` overrides one default and keeps the others.
 
 Leak detection is off because Mesa leaks its EGL display setup on every renderer teardown, under `dri2_initialize`
 below `wlr_egl_create_with_drm_fd`: about 400 KB in 7900 allocations when the compositor exits, and 115 KB in the

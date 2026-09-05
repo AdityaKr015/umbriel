@@ -526,9 +526,8 @@ namespace umbriel {
     }
 
     bool tiledDragActive(Server& server) {
-      Cursor* cursor = server.cursor();
-      View* moving = cursor != nullptr ? cursor->grabbedView() : nullptr;
-      return moving != nullptr && moving->tiled() && cursor->isDraggingView(moving);
+      const Cursor* cursor = server.cursor();
+      return cursor != nullptr && cursor->isDraggingIntoLayout();
     }
 
     template <int Sign> void scrollActiveLayout(Server& server, int multiplier = 1) {

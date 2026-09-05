@@ -664,6 +664,12 @@ namespace umbriel {
   }
 
   void View::applyPresentedSize() {
+    // A dragged window is out of the layout's hands, so it derives its own
+    // presentation instead of going through the workspace below.
+    if (const Cursor* cursor = m_server->cursor(); cursor != nullptr && cursor->isDraggingView(this)) {
+      applyDragPresentation();
+      return;
+    }
     // Buffer scale + crop is derived in applyPresentation (applyPresentedCrop) via syncViewPresentation below, so the
     // animated size and the presented crop are always applied together instead of fighting over dest_size.
     const int width = m_presentation.width();
@@ -676,6 +682,15 @@ namespace umbriel {
     if (m_workspace != nullptr) {
       m_workspace->syncViewPresentation(this);
     }
+  }
+
+  void View::applyDragPresentation() {
+    applyPresentation({
+        .x = m_sceneTree->node.x,
+        .y = m_sceneTree->node.y,
+        .width = m_presentation.width(),
+        .height = m_presentation.height(),
+    });
   }
 
   void View::finishSizeAnimation() {
@@ -707,6 +722,11 @@ namespace umbriel {
     return cursor->grabbedView() == this || cursor->isResizingWorkspace(m_workspace);
   }
 
+  bool View::sizeGrabTracksPointer() const {
+    const Cursor* cursor = m_server->cursor();
+    return cursor != nullptr && sizeGrabActive() && !cursor->isDraggingView(this);
+  }
+
   void View::enterDragPresentation() {
     cancelPositionAnimation();
     m_dragOpacity = config().appearance.dragOpacity;
@@ -724,6 +744,9 @@ namespace umbriel {
   }
 
   void View::restoreHomePresentation() {
+    // The drag derived its own presented size and crop; drop them so the
+    // resting presentation below is re-applied through a real reconfigure.
+    resetPresentedSurface();
     m_dragOpacity = 1.0F;
     m_effectiveOpacityCommitPending = false;
     setFadeAlpha(m_fadeAlpha);
@@ -771,7 +794,7 @@ namespace umbriel {
     if (m_presentation.width() <= 0 || m_presentation.height() <= 0) {
       return;
     }
-    if (sizeGrabActive() || (width == m_presentation.width() && height == m_presentation.height())) {
+    if (sizeGrabTracksPointer() || (width == m_presentation.width() && height == m_presentation.height())) {
       return;
     }
     if (m_presentation.targeting(width, height)) {
@@ -875,7 +898,9 @@ namespace umbriel {
       }
       if (sizeAnimating()) {
         active = true;
-      } else {
+      } else if (cursor == nullptr || !cursor->isDraggingView(this)) {
+        // A drag keeps the size it retargeted to: settling on committed
+        // geometry here would snap the window back until the client acks.
         finishSizeAnimation();
       }
     }
@@ -1585,6 +1610,35 @@ namespace umbriel {
     const wlr_box& geo = m_toplevel->base->geometry;
     return {geo.width, geo.height};
   }
+
+  std::array<int, 2> View::floatingRestoreSize() const {
+    if (m_floating.size()) {
+      return *m_floating.size();
+    }
+    // First-time floats prefer the last acked or scheduled configure size,
+    // then fall back to the layout target and committed geometry.
+    int width = m_toplevel->current.width;
+    int height = m_toplevel->current.height;
+    if (width <= 0 || height <= 0) {
+      width = m_toplevel->scheduled.width;
+      height = m_toplevel->scheduled.height;
+    }
+    if ((width <= 0 || height <= 0) && m_workspace != nullptr) {
+      const wlr_box target = m_workspace->layout().targetBox(this);
+      if (target.width > 0 && target.height > 0) {
+        const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+        width = clampXdgWidth(target.width, hints);
+        height = clampXdgHeight(target.height, hints);
+      }
+    }
+    if (width <= 0 || height <= 0) {
+      const wlr_box& geo = m_toplevel->base->geometry;
+      width = geo.width;
+      height = geo.height;
+    }
+    return {width, height};
+  }
+
   void View::beginFloatingResize(uint32_t edges) {
     const wlr_box& geo = m_toplevel->base->geometry;
     m_floating.beginResize(
@@ -2578,7 +2632,7 @@ namespace umbriel {
     }
   }
 
-  void View::setFloating(bool floating, bool focus) {
+  void View::setFloating(bool floating, bool focus, TilePlacement placement) {
     if (!m_mapped || !m_toplevel->base->initialized) {
       return;
     }
@@ -2632,34 +2686,7 @@ namespace umbriel {
     m_refullscreenOnTile = floating && m_refullscreenOnTile;
 
     if (floating) {
-      int keepWidth = 0;
-      int keepHeight = 0;
-      if (m_floating.size()) {
-        keepWidth = (*m_floating.size())[0];
-        keepHeight = (*m_floating.size())[1];
-      } else {
-        // First-time floats prefer the last acked or scheduled configure size,
-        // then fall back to the layout target and committed geometry.
-        keepWidth = m_toplevel->current.width;
-        keepHeight = m_toplevel->current.height;
-        if (keepWidth <= 0 || keepHeight <= 0) {
-          keepWidth = m_toplevel->scheduled.width;
-          keepHeight = m_toplevel->scheduled.height;
-        }
-        if ((keepWidth <= 0 || keepHeight <= 0) && m_workspace != nullptr) {
-          const wlr_box target = m_workspace->layout().targetBox(this);
-          if (target.width > 0 && target.height > 0) {
-            const XdgSizeHints hints = xdgSizeHints(m_toplevel);
-            keepWidth = clampXdgWidth(target.width, hints);
-            keepHeight = clampXdgHeight(target.height, hints);
-          }
-        }
-        if (keepWidth <= 0 || keepHeight <= 0) {
-          const wlr_box& geo = m_toplevel->base->geometry;
-          keepWidth = geo.width;
-          keepHeight = geo.height;
-        }
-      }
+      const auto [keepWidth, keepHeight] = floatingRestoreSize();
       if (m_workspace != nullptr) {
         const int column = m_workspace->layout().columnOf(this);
         if (column >= 0 && m_workspace->layout().isFullWidth(column)) {
@@ -2738,7 +2765,7 @@ namespace umbriel {
     m_decoration.ensureBorders(m_sceneTree);
     m_decoration.setBordersEnabled(!wantFullscreen);
     updateBorderGeometry();
-    if (m_workspace != nullptr) {
+    if (m_workspace != nullptr && placement == TilePlacement::Layout) {
       m_workspace->layoutAttach(this);
     }
     applyCornerRadius();
@@ -2748,7 +2775,7 @@ namespace umbriel {
     }
     // setFullscreen(true) is not re-run on this path, so its scroll snap does not happen; without it the strip can rest
     // showing the neighbor column beside a viewport-wide fullscreen column.
-    if (wantFullscreen && m_workspace != nullptr) {
+    if (wantFullscreen && m_workspace != nullptr && placement == TilePlacement::Layout) {
       m_workspace->snapVisible(this);
       m_workspace->markArrange(false);
     }

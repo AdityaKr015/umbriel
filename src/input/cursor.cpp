@@ -392,10 +392,7 @@ namespace umbriel {
   bool Cursor::isPassthrough() const { return std::holds_alternative<PassthroughGrab>(m_grab); }
 
   View* Cursor::grabbedView() const {
-    if (const auto* grab = std::get_if<FloatingMoveGrab>(&m_grab)) {
-      return grab->view;
-    }
-    if (const auto* grab = std::get_if<TiledMoveGrab>(&m_grab)) {
+    if (const auto* grab = std::get_if<MoveGrab>(&m_grab)) {
       return grab->view;
     }
     if (const auto* grab = std::get_if<FloatingResizeGrab>(&m_grab)) {
@@ -411,13 +408,13 @@ namespace umbriel {
     if (view == nullptr) {
       return false;
     }
-    if (const auto* grab = std::get_if<FloatingMoveGrab>(&m_grab)) {
-      return grab->view == view;
-    }
-    if (const auto* grab = std::get_if<TiledMoveGrab>(&m_grab)) {
-      return grab->view == view && !grab->pending;
-    }
-    return false;
+    const auto* grab = std::get_if<MoveGrab>(&m_grab);
+    return grab != nullptr && grab->view == view && !grab->pending;
+  }
+
+  bool Cursor::isDraggingIntoLayout() const {
+    const auto* grab = std::get_if<MoveGrab>(&m_grab);
+    return grab != nullptr && !grab->pending && grab->target == DragTarget::Tiled;
   }
 
   bool Cursor::isResizingWorkspace(const Workspace* workspace) const {
@@ -444,38 +441,34 @@ namespace umbriel {
     }
 
     setActiveConstraint(nullptr);
-    const double offsetX = m_cursor->x - view->sceneTree()->node.x;
-    const double offsetY = m_cursor->y - view->sceneTree()->node.y;
-    if (!tiled) {
-      m_grab = FloatingMoveGrab{.view = view, .offsetX = offsetX, .offsetY = offsetY};
-      m_moveButton = button;
-      view->enterDragPresentation();
-      updateInteractiveCursor(view);
-      return;
-    }
-
-    TiledMoveGrab grab{
+    const DragTarget origin = tiled ? DragTarget::Tiled : (view->pinned() ? DragTarget::Pinned : DragTarget::Floating);
+    MoveGrab grab{
         .view = view,
-        .offsetX = offsetX,
-        .offsetY = offsetY,
-        .sourceWorkspace = view->workspace(),
+        .offsetX = m_cursor->x - view->sceneTree()->node.x,
+        .offsetY = m_cursor->y - view->sceneTree()->node.y,
+        .target = origin,
+        .origin = origin,
+        .sourceWorkspace = tiled ? view->workspace() : nullptr,
         .sourceColumn = -1,
         .sourceWidth = std::nullopt,
         .drop = {},
-        .pending = true,
+        .pending = tiled,
         .startX = m_cursor->x,
         .startY = m_cursor->y,
     };
-    grab.sourceColumn = grab.sourceWorkspace != nullptr ? grab.sourceWorkspace->layout().columnOf(view) : -1;
     if (grab.sourceWorkspace != nullptr) {
+      grab.sourceColumn = grab.sourceWorkspace->layout().columnOf(view);
       grab.sourceWidth = captureDropColumnWidth(*grab.sourceWorkspace, view);
+      grab.drop = {
+          .workspace = grab.sourceWorkspace,
+          .column = std::max(0, grab.sourceColumn),
+      };
     }
-    grab.drop = {
-        .workspace = grab.sourceWorkspace,
-        .column = std::max(0, grab.sourceColumn),
-    };
     m_grab = grab;
     m_moveButton = button;
+    if (!grab.pending) {
+      view->enterDragPresentation();
+    }
     updateInteractiveCursor(view);
   }
 
@@ -594,8 +587,7 @@ namespace umbriel {
     if (std::holds_alternative<ScrollDragGrab>(m_grab)) {
       m_server->gestures()->endPointerScroll(true, 0);
     }
-    const bool restoreDragPresentation = std::holds_alternative<FloatingMoveGrab>(m_grab)
-        || (std::get_if<TiledMoveGrab>(&m_grab) != nullptr && !std::get<TiledMoveGrab>(m_grab).pending);
+    const bool restoreDragPresentation = isDraggingView(view);
     if (std::holds_alternative<FloatingResizeGrab>(m_grab) && view != nullptr) {
       view->finishFloatingResize();
     }
@@ -787,6 +779,7 @@ namespace umbriel {
     if (m_moveButton != 0 && button != m_moveButton) {
       if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
         m_swallowedButtons.push_back(button);
+        toggleDragTarget(button);
       }
       return;
     }
@@ -833,16 +826,12 @@ namespace umbriel {
     }
 
     if (state == WL_POINTER_BUTTON_STATE_RELEASED) {
-      if (auto* grab = std::get_if<TiledMoveGrab>(&m_grab)) {
+      if (auto* grab = std::get_if<MoveGrab>(&m_grab)) {
         if (grab->pending) {
           resetMode();
         } else {
-          finishTileMove();
+          finishMove();
         }
-        return;
-      }
-      if (std::holds_alternative<FloatingMoveGrab>(m_grab)) {
-        finishFloatMove();
         return;
       }
       if (auto* grab = std::get_if<TiledResizeGrab>(&m_grab)) {
@@ -1209,15 +1198,7 @@ namespace umbriel {
       return;
     }
 
-    if (std::holds_alternative<FloatingMoveGrab>(m_grab)) {
-      if (m_server->sessionLocked()) {
-        resetMode();
-      } else {
-        processMove();
-        return;
-      }
-    }
-    if (auto* grab = std::get_if<TiledMoveGrab>(&m_grab)) {
+    if (auto* grab = std::get_if<MoveGrab>(&m_grab)) {
       if (m_server->sessionLocked()) {
         resetMode();
       } else {
@@ -1228,11 +1209,7 @@ namespace umbriel {
           if (dx * dx + dy * dy < kDragThreshold * kDragThreshold) {
             return;
           }
-          grab->pending = false;
-          if (grab->sourceWorkspace != nullptr) {
-            grab->sourceWorkspace->layoutDetach(grab->view);
-          }
-          grab->view->enterDragPresentation();
+          beginDrag(*grab);
         }
         processMove();
         updateDropTarget();
@@ -1650,23 +1627,14 @@ namespace umbriel {
   }
 
   void Cursor::processMove() {
-    View* view = nullptr;
-    double offsetX = 0;
-    double offsetY = 0;
-    if (const auto* grab = std::get_if<FloatingMoveGrab>(&m_grab)) {
-      view = grab->view;
-      offsetX = grab->offsetX;
-      offsetY = grab->offsetY;
-    } else if (const auto* grab = std::get_if<TiledMoveGrab>(&m_grab)) {
-      view = grab->view;
-      offsetX = grab->offsetX;
-      offsetY = grab->offsetY;
-    }
-    if (view == nullptr) {
+    const auto* grab = std::get_if<MoveGrab>(&m_grab);
+    if (grab == nullptr || grab->view == nullptr) {
       resetMode();
       return;
     }
-    view->setDragPosition(static_cast<int>(m_cursor->x - offsetX), static_cast<int>(m_cursor->y - offsetY));
+    grab->view->setDragPosition(
+        static_cast<int>(m_cursor->x - grab->offsetX), static_cast<int>(m_cursor->y - grab->offsetY)
+    );
     presentGrabbedViewSpanning();
   }
 
@@ -1678,12 +1646,24 @@ namespace umbriel {
     // A window dragged across a monitor boundary must span both outputs, not be
     // clipped to one. Native per-output rendering draws each half.
     view->setNodeEnabled(true);
-    view->resetSurfaceClip();
+    view->applyDragPresentation();
+  }
+
+  void Cursor::beginDrag(MoveGrab& grab) {
+    grab.pending = false;
+    if (grab.sourceWorkspace != nullptr) {
+      grab.sourceWorkspace->layoutDetach(grab.view);
+    }
+    grab.view->enterDragPresentation();
   }
 
   void Cursor::updateDropTarget() {
-    auto* grab = std::get_if<TiledMoveGrab>(&m_grab);
+    auto* grab = std::get_if<MoveGrab>(&m_grab);
     if (grab == nullptr || grab->view == nullptr || grab->pending) {
+      return;
+    }
+    // Only a drop back into the strip has a target to draw and choose.
+    if (grab->target != DragTarget::Tiled) {
       return;
     }
     wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
@@ -1718,15 +1698,66 @@ namespace umbriel {
     grab->view->raiseToTop();
   }
 
+  void Cursor::finishMove() {
+    auto* grab = std::get_if<MoveGrab>(&m_grab);
+    if (grab == nullptr || grab->view == nullptr || !grab->view->mapped()) {
+      resetMode();
+      return;
+    }
+    View* view = grab->view;
+    // Where the drag left the window. Read before the state change: becoming
+    // floating re-places the window at its remembered origin, immediately when
+    // position animations are off.
+    const int dropX = view->sceneTree()->node.x;
+    const int dropY = view->sceneTree()->node.y;
+    // State first, placement second: a window that refused the drag's target
+    // (a fullscreen window cannot be pinned) is still tiled here and drops back
+    // into the layout rather than staying detached.
+    applyDragTarget(*grab);
+    if (view->tiled()) {
+      finishTileMove();
+    } else {
+      finishFloatMove(dropX, dropY);
+    }
+  }
+
+  void Cursor::applyDragTarget(const MoveGrab& grab) {
+    View* view = grab.view;
+    switch (grab.target) {
+    case DragTarget::Tiled:
+      if (!view->tiled()) {
+        // finishTileMove inserts it at the drop target, so skip the layout
+        // placement setFloating would do on its own.
+        view->setFloating(false, false, View::TilePlacement::Detached);
+      }
+      break;
+    case DragTarget::Floating:
+      if (view->pinned()) {
+        view->setPinned(false, false);
+      }
+      if (view->tiled()) {
+        view->setFloating(true, false);
+      }
+      break;
+    case DragTarget::Pinned:
+      // Pinning a tiled window floats it and remembers to re-tile on unpin.
+      view->setPinned(true, false);
+      break;
+    }
+  }
+
   void Cursor::finishTileMove() {
     m_server->hideInsertHint();
-    auto* grab = std::get_if<TiledMoveGrab>(&m_grab);
+    auto* grab = std::get_if<MoveGrab>(&m_grab);
     if (grab == nullptr) {
       resetMode();
       return;
     }
     View* view = grab->view;
     Workspace* target = grab->drop.workspace != nullptr ? grab->drop.workspace : grab->sourceWorkspace;
+    if (target == nullptr && view != nullptr) {
+      target = view->workspace();
+    }
     if (view != nullptr && view->mapped() && target != nullptr) {
       applyDrop(
           *m_server, *view, *target, grab->drop, grab->sourceWidth.has_value() ? &*grab->sourceWidth : nullptr,
@@ -1736,15 +1767,13 @@ namespace umbriel {
     resetMode();
   }
 
-  void Cursor::finishFloatMove() {
+  void Cursor::finishFloatMove(int x, int y) {
     View* view = grabbedView();
     if (view == nullptr || !view->mapped()) {
       resetMode();
       return;
     }
 
-    const int x = view->sceneTree()->node.x;
-    const int y = view->sceneTree()->node.y;
     wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
     Output* output = m_server->outputFromWlr(wlrOutput);
     if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
@@ -1762,6 +1791,66 @@ namespace umbriel {
 
     resetMode();
     m_server->focusView(view, FocusReason::DragDrop);
+  }
+
+  void Cursor::toggleDragTarget(uint32_t button) {
+    // The drag owns its initiating button, so the other main button is the one
+    // free to retarget it.
+    const uint32_t toggleButton = m_moveButton == BTN_LEFT ? BTN_RIGHT : BTN_LEFT;
+    if (button != toggleButton) {
+      return;
+    }
+    const WindowDragToggle toggle = config().input.windowDragToggle;
+    if (toggle == WindowDragToggle::None) {
+      return;
+    }
+    auto* grab = std::get_if<MoveGrab>(&m_grab);
+    if (grab == nullptr || grab->view == nullptr || !grab->view->mapped()) {
+      return;
+    }
+    // A scratchpad window has no layout to be dropped into.
+    if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
+        scratchpad != nullptr && scratchpad->contains(grab->view)) {
+      return;
+    }
+    if (grab->pending) {
+      beginDrag(*grab);
+    }
+
+    const DragTarget unpinned = grab->origin == DragTarget::Tiled ? DragTarget::Tiled : DragTarget::Floating;
+    if (toggle == WindowDragToggle::Pinned) {
+      grab->target = grab->target == DragTarget::Pinned ? unpinned : DragTarget::Pinned;
+    } else {
+      grab->target = grab->target == DragTarget::Tiled ? DragTarget::Floating : DragTarget::Tiled;
+    }
+
+    if (grab->target == DragTarget::Tiled) {
+      processMove();
+      updateDropTarget();
+      return;
+    }
+    m_server->hideInsertHint();
+    retargetDragSize(*grab);
+  }
+
+  void Cursor::retargetDragSize(MoveGrab& grab) {
+    View* view = grab.view;
+    const auto [width, height] = view->floatingRestoreSize();
+    if (width <= 0 || height <= 0) {
+      processMove();
+      return;
+    }
+    // Keep the pointer's grip on the window: it stays over the same fraction of
+    // the window it grabbed, whatever the drop resizes it to.
+    const int presentedWidth = view->presentation().width();
+    const int presentedHeight = view->presentation().height();
+    if (presentedWidth > 0 && presentedHeight > 0) {
+      grab.offsetX *= static_cast<double>(width) / presentedWidth;
+      grab.offsetY *= static_cast<double>(height) / presentedHeight;
+    }
+    view->requestFloatingSize(width, height);
+    view->beginResizeAnimation(width, height);
+    processMove();
   }
 
   void Cursor::processResize() {
@@ -1945,7 +2034,7 @@ namespace umbriel {
       setCompositorCursor(name != nullptr ? name : "default");
       return;
     }
-    if (std::holds_alternative<FloatingMoveGrab>(m_grab) || std::holds_alternative<TiledMoveGrab>(m_grab)) {
+    if (std::holds_alternative<MoveGrab>(m_grab)) {
       setCompositorCursor("grabbing");
       return;
     }

@@ -551,6 +551,14 @@ namespace umbriel {
     return 0;
   }
 
+  int Server::onStartupRulesTimer(void* data) {
+    auto* self = static_cast<Server*>(data);
+    for (const auto& view : self->m_registry.all()) {
+      view->refreshStartupRuleEffects();
+    }
+    return 0;
+  }
+
   // Fires when the underlying GL context is invalidated (GPU reset, VRAM lost after suspend, driver-detected hang).
   // Without this, the renderer keeps issuing GL calls into a dead context: Mesa's context_lost_nop_handler no-ops each
   // one and spams "[GLES2] GL_CONTEXT_LOST in context lost" ~40k lines/sec, and the desktop never comes back. Rebuild
@@ -1078,6 +1086,14 @@ namespace umbriel {
     }
     m_cursor->resetMode();
     m_cursor->clearConstraint();
+    m_lockFocusOutput.clear();
+    if (View* focused = View::fromSurface(m_seat->wlr()->keyboard_state.focused_surface)) {
+      if (Workspace* workspace = focused->workspace(); workspace != nullptr && workspace->group() != nullptr) {
+        if (const Output* output = workspace->group()->output(); output != nullptr) {
+          m_lockFocusOutput = output->wlr()->name;
+        }
+      }
+    }
     clearNormalFocus();
     updateIdleInhibit();
     updateLockBlank();
@@ -1090,9 +1106,12 @@ namespace umbriel {
     m_sessionLocked = false;
     updateIdleInhibit();
     wlr_scene_node_set_enabled(&m_lockBlank->node, false);
-    if (View* recent = m_registry.mostRecent()) {
-      focusView(recent);
-    }
+    // The cursor need not sit on the output that had focus, so restore the
+    // remembered one. refocus() then keeps that output's active workspace, which
+    // is what makes unlocking on an empty workspace stay there.
+    Output* output = m_lockFocusOutput.empty() ? nullptr : outputFromName(m_lockFocusOutput);
+    m_lockFocusOutput.clear();
+    refocus(output);
   }
 
   void Server::removeSessionLock(SessionLock* lock) {

@@ -86,6 +86,16 @@ namespace umbriel {
       }
       if (value == "clickfinger") {
         return ClickMethod::ClickFinger;
+    std::optional<WindowDragToggle> readWindowDragToggle(const toml::node& node) {
+      const auto value = node.value<std::string>();
+      if (value == "none") {
+        return WindowDragToggle::None;
+      }
+      if (value == "floating") {
+        return WindowDragToggle::Floating;
+      }
+      if (value == "pinned") {
+        return WindowDragToggle::Pinned;
       }
       return std::nullopt;
     }
@@ -1182,6 +1192,13 @@ namespace umbriel {
       auto& in = loaded.input;
       root.sub("input", [&](Section& s) {
         s.boolean("middle_click_paste", in.middleClickPaste);
+        if (const toml::node* node = s.take("window_drag_toggle")) {
+          if (const auto value = readWindowDragToggle(*node)) {
+            in.windowDragToggle = *value;
+          } else {
+            warnAt(node->source(), R"(ignoring input.window_drag_toggle (expected "none", "floating", or "pinned"))");
+          }
+        }
         s.sub("keyboard", [&](Section& k) {
           k.text("layout", in.keyboard.layout)
               .text("variant", in.keyboard.variant)
@@ -1291,6 +1308,7 @@ namespace umbriel {
             scrolling.real("default_width_fraction", 0.1, 1.0, rule.layout.scrolling.defaultWidthFraction);
           });
         });
+        keys.integer("min_workspaces", 1, static_cast<int>(kMaxWorkspaces), rule.minWorkspaces);
         if (const toml::node* workspacesNode = keys.take("workspaces")) {
           if (const auto count = workspacesNode->value<std::int64_t>()) {
             if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {
@@ -1339,6 +1357,9 @@ namespace umbriel {
                 workspacesNode->source(), R"(output.{}.workspaces must be a count, a name array, or "dynamic")", name
             );
           }
+        }
+        if (const toml::node* minNode = keys.node("min_workspaces"); minNode != nullptr && rule.workspaces) {
+          errorAt(minNode->source(), "output.{}.min_workspaces requires dynamic workspaces", name);
         }
 
         if (const toml::node* modeNode = keys.take("mode")) {
@@ -1600,6 +1621,14 @@ namespace umbriel {
                 rule.matchFocused = focusedNode->value<bool>();
               } else {
                 warnAt(focusedNode->source(), "ignoring window_rule.match.is_focused (expected boolean)");
+                valid = false;
+              }
+            }
+            if (const toml::node* atStartupNode = matchKeys.take("at_startup")) {
+              if (atStartupNode->is_boolean()) {
+                rule.matchAtStartup = atStartupNode->value<bool>();
+              } else {
+                warnAt(atStartupNode->source(), "ignoring window_rule.match.at_startup (expected boolean)");
                 valid = false;
               }
             }

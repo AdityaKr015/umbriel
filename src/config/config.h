@@ -135,6 +135,13 @@ namespace umbriel {
     ButtonAreas,
     ClickFinger,
   };
+
+  enum class WindowDragToggle : uint8_t {
+    None,
+    Floating,
+    Pinned,
+  };
+
   enum class HdrMode {
     Off,
     On,
@@ -190,6 +197,9 @@ namespace umbriel {
     float sdrWhite = 203.0F;
     // Explicit workspace inventory. Omitted means dynamic workspaces.
     std::optional<std::vector<std::string>> workspaces;
+    // Smallest workspace count a dynamic output keeps. Rejected alongside an
+    // explicit inventory, which already states an exact count.
+    int minWorkspaces = 1;
     struct Layout {
       struct Scrolling {
         // Initial strip-axis extent inherited by workspaces on this output.
@@ -250,6 +260,7 @@ namespace umbriel {
     std::regex xdgTagRegex;
     std::optional<ContentType> matchContentType;
     std::optional<bool> matchFocused;
+    std::optional<bool> matchAtStartup;
     std::optional<std::string> defaultOutput;
     std::optional<bool> defaultFloating;
     std::optional<std::array<int, 2>> defaultSize; // [width, height]
@@ -284,6 +295,7 @@ namespace umbriel {
           && xdgTagPattern == other.xdgTagPattern
           && matchContentType == other.matchContentType
           && matchFocused == other.matchFocused
+          && matchAtStartup == other.matchAtStartup
           && defaultOutput == other.defaultOutput
           && defaultFloating == other.defaultFloating
           && defaultSize == other.defaultSize
@@ -634,6 +646,9 @@ namespace umbriel {
       // Advertise and accept the primary-selection clipboard used for
       // middle-click paste.
       bool middleClickPaste = true;
+      // Retarget an interactive window drag with the free mouse button: float
+      // it, pin it, or leave the drag alone.
+      WindowDragToggle windowDragToggle = WindowDragToggle::None;
 
       struct Keyboard {
         // Comma-separated XKB layout list ("us,de"); the first entry is active at startup. `options` carries XKB option

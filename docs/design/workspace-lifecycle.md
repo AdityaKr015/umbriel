@@ -12,7 +12,9 @@ A dynamic output maintains numbered workspaces with these invariants:
   workspace, including before the first view maps.
 - Outside a workspace slide or overview session, an occupied sentinel causes
   Umbriel to add a new empty workspace at that edge.
-- Other empty inactive workspaces are removed.
+- Other empty inactive workspaces are removed, except that the count never
+  drops below the output's `min_workspaces`. Pruning runs from the end, so the
+  surviving empties are the lowest-numbered ones.
 - Remaining workspaces are renamed and reindexed from `1` in their current
   order.
 - Workspace layout rules are resolved again after renumbering.
@@ -81,8 +83,9 @@ Empty static workspaces remain in the inventory.
 
 Switching from a static inventory to dynamic workspaces keeps every populated
 workspace and the active workspace. Other empty workspaces are removed. The
-survivors are renumbered, and Umbriel restores the trailing empty workspace plus
-the optional leading empty workspace.
+survivors are renumbered, and Umbriel appends empty workspaces until the count
+reaches `min_workspaces` and the inventory ends in an empty workspace. The
+optional leading empty workspace is restored on top of that.
 Switching to a static inventory follows the normal name-first, position-second
 matching process.
 
@@ -107,6 +110,8 @@ workspace selection is exercised by
 Leading and trailing dynamic sentinels, including renumbering after workspace
 movement, are covered by
 [`tests/harness/checks/215_empty_above.sh`](../../tests/harness/checks/215_empty_above.sh).
+The per-output dynamic floor is covered by
+[`tests/harness/checks/216_min_workspaces.sh`](../../tests/harness/checks/216_min_workspaces.sh).
 Pointer isolation during a wheel-triggered workspace transition is covered by
 [`tests/harness/checks/220_workspace_transition_focus.sh`](../../tests/harness/checks/220_workspace_transition_focus.sh).
 Hover focus after a window maps under the pointer and after returning to a

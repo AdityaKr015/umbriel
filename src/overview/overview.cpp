@@ -131,7 +131,8 @@ namespace umbriel {
 
   Overview::~Overview() {
     m_server->unregisterAnimatable(this);
-    m_anim.snap(0.0);
+    m_zoomAnim.snap(0.0);
+    m_rowAnim.snap(0.0);
     teardown();
   }
 
@@ -254,6 +255,13 @@ namespace umbriel {
       }
     }
 
+    // Every surface of the card rounds against the card's content box, the same rule the live window uses, so a
+    // client that draws its corners from a subsurface keeps them rounded in the thumbnail.
+    const auto roundToCardBox = [surfaceRadius, contentW, contentH](wlr_scene_buffer* buffer) {
+      const wlr_box cornerBox{-buffer->node.x, -buffer->node.y, contentW, contentH};
+      wlr_scene_buffer_set_corner_radii(buffer, corner_radii_all(surfaceRadius));
+      wlr_scene_buffer_set_corner_box(buffer, surfaceRadius > 0 ? &cornerBox : nullptr);
+    };
     const double fx = static_cast<double>(contentW) / geometry.width;
     const double fy = static_cast<double>(contentH) / geometry.height;
     bool blurUpdated = false;
@@ -275,6 +283,7 @@ namespace umbriel {
         wlr_scene_node_set_enabled(&entry->buffer->node, true);
         wlr_scene_node_set_position(&entry->buffer->node, sub.x - card.box.x, sub.y - card.box.y);
         wlr_scene_buffer_set_dest_size(entry->buffer, sub.width, sub.height);
+        roundToCardBox(entry->buffer);
         continue;
       }
       // Root surface: crop to the committed window geometry so CSD shadow padding never leaks into the thumbnail, then
@@ -302,7 +311,7 @@ namespace umbriel {
       wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
       wlr_scene_buffer_set_source_box(entry->buffer, &src);
       wlr_scene_buffer_set_dest_size(entry->buffer, contentW, contentH);
-      wlr_scene_buffer_set_corner_radii(entry->buffer, corner_radii_all(surfaceRadius));
+      roundToCardBox(entry->buffer);
       const wlr_box blurBox{0, 0, contentW, contentH};
       card.blur.setAlpha(1.0F);
       card.blur.update(
@@ -903,6 +912,7 @@ namespace umbriel {
       }
       wlr_scene_buffer_set_transform(copy, source->transform);
       wlr_scene_buffer_set_corner_radii(copy, source->corners);
+      wlr_scene_buffer_set_corner_box(copy, &source->corner_box);
       wlr_scene_buffer_set_opacity(copy, source->opacity);
       wlr_scene_buffer_set_transfer_function(copy, source->transfer_function);
       wlr_scene_buffer_set_primaries(copy, source->primaries);
@@ -1455,7 +1465,8 @@ namespace umbriel {
     if (!m_active) {
       return;
     }
-    m_anim.snap(0.0);
+    m_zoomAnim.snap(0.0);
+    m_rowAnim.snap(0.0);
     if (m_dragCard != nullptr) {
       endDrag(false);
     }
@@ -1471,7 +1482,8 @@ namespace umbriel {
     const auto& animation = config().animation;
     const auto& overview = animation.overview;
     if (!animation.enabled || !overview.enabled) {
-      m_anim.snap(1.0);
+      m_zoomAnim.snap(1.0);
+      m_rowAnim.snap(1.0);
       m_progress = target;
       for (const auto& state : m_outputs) {
         state->rowScroll = state->rowTo;
@@ -1479,36 +1491,58 @@ namespace umbriel {
       finishAnimation();
       return;
     }
-    m_anim.snap(0.0);
-    m_anim.retarget(1.0, overview.durationMs, overview.curve);
-    // Animations only tick from an output frame; kick one so the zoom starts on
-    // an idle desktop (the value itself clocks from its first tick).
+    m_zoomAnim.snap(0.0);
+    m_zoomAnim.retarget(1.0, overview.durationMs, overview.curve);
+    startRowAnimation();
+  }
+
+  void Overview::startRowAnimation() {
+    const auto& animation = config().animation;
+    const auto& overview = animation.overview;
+    if (!animation.enabled || !overview.enabled) {
+      m_rowAnim.snap(1.0);
+      for (const auto& state : m_outputs) {
+        state->rowScroll = state->rowTo;
+      }
+      applyProgress();
+      return;
+    }
+    m_rowAnim.snap(0.0);
+    m_rowAnim.retarget(1.0, overview.durationMs, overview.curve);
+    // Animations only tick from an output frame; kick one so an idle desktop
+    // starts both timelines from the same frame.
     scheduleFrames();
   }
 
   bool Overview::tickAnimations(uint64_t nowMsec) {
     bool active = m_dropHint != nullptr && m_dropHint->tickAnimations(nowMsec);
-    if (m_anim.tick(nowMsec)) {
-      const double value = m_anim.current();
+    const bool zoomTicked = m_zoomAnim.tick(nowMsec);
+    if (zoomTicked) {
+      const double value = m_zoomAnim.current();
       m_progress = m_progressFrom + (m_targetProgress - m_progressFrom) * value;
+    }
+    const bool rowTicked = m_rowAnim.tick(nowMsec);
+    if (rowTicked) {
+      const double value = m_rowAnim.current();
       for (const auto& state : m_outputs) {
         state->rowScroll = state->rowFrom + (state->rowTo - state->rowFrom) * value;
       }
-      applyProgress();
-      if (!m_anim.animating()) {
-        // May tear down m_outputs; safe now that the loop above is done.
-        finishAnimation();
-      }
-      active = m_anim.animating() || active;
-    } else if (m_cardPresentationDirty) {
+    }
+    if (zoomTicked || rowTicked || m_cardPresentationDirty) {
       applyProgress();
     }
     m_cardPresentationDirty = false;
+    if (zoomTicked && !m_zoomAnim.animating()) {
+      finishAnimation();
+    }
+    active = m_zoomAnim.animating() || m_rowAnim.animating() || active;
     return active;
   }
 
   bool Overview::hasActiveAnimations() const {
-    return m_anim.animating() || (m_dropHint != nullptr && m_dropHint->hasActiveAnimations());
+    return m_zoomAnim.animating()
+        || m_rowAnim.animating()
+        || (m_dropHint != nullptr && m_dropHint->hasActiveAnimations());
   }
 
   void Overview::finishAnimation() {
@@ -1536,6 +1570,7 @@ namespace umbriel {
   }
 
   void Overview::teardown() {
+    m_rowAnim.snap(0.0);
     clearMiddlePress();
     if (m_dropHint != nullptr) {
       m_dropHint->hideImmediate();
@@ -1599,7 +1634,8 @@ namespace umbriel {
       }
       m_gestureOpenedHere = true;
     }
-    m_anim.snap(0.0);
+    m_zoomAnim.snap(0.0);
+    m_rowAnim.snap(0.0);
     m_closing = false;
     m_progress = progress;
     m_targetProgress = progress;
@@ -1803,7 +1839,6 @@ namespace umbriel {
     moved->owner = target;
     wlr_scene_node_reparent(&moved->tree->node, target->tree);
     target->cards.push_back(std::move(moved));
-
     layoutOutput(*source);
     layoutOutput(*target);
     wlr_output_schedule_frame(source->output->wlr());
@@ -1812,7 +1847,7 @@ namespace umbriel {
   }
 
   void Overview::onWorkspaceActivated(WorkspaceGroup* group) {
-    if (!m_active || m_closing || group == nullptr || group->active() == nullptr) {
+    if (!m_active || group == nullptr || group->active() == nullptr) {
       return;
     }
     OutputState* target = stateFor(group->output());
@@ -1820,15 +1855,18 @@ namespace umbriel {
       return;
     }
     const auto row = static_cast<double>(group->active()->index());
-    if (std::abs(target->rowTo - row) < 0.001 && m_anim.animating()) {
+    if (std::abs(target->rowTo - row) < 0.001 && m_rowAnim.animating()) {
       return;
+    }
+    if (m_closing) {
+      m_pendingFocus = nullptr;
     }
     for (const auto& state : m_outputs) {
       state->rowFrom = state->rowScroll;
       state->rowTo = state->rowScroll;
     }
     target->rowTo = row;
-    startAnimation(m_targetProgress, false);
+    startRowAnimation();
     assignShortcuts();
   }
 
@@ -1865,9 +1903,13 @@ namespace umbriel {
   }
 
   void Overview::onFocusChanged() {
-    if (m_active) {
-      applyProgress();
+    if (!m_active) {
+      return;
     }
+    if (m_closing) {
+      m_pendingFocus = nullptr;
+    }
+    applyProgress();
   }
 
   void Overview::onViewPresentationChanged(View* view) {
@@ -2324,24 +2366,18 @@ namespace umbriel {
         || action == KeybindAction::WindowFocusOrWorkspaceDown
         || action == KeybindAction::WindowFocusOrOutputUp
         || action == KeybindAction::WindowFocusOrOutputDown;
-    if (!directional || !active()) {
-      return false;
+    const bool outputFocus = action == KeybindAction::OutputFocusLeft
+        || action == KeybindAction::OutputFocusRight
+        || action == KeybindAction::OutputFocusUp
+        || action == KeybindAction::OutputFocusDown;
+
+    if (m_closing && (directional || outputFocus)) {
+      m_pendingFocus = nullptr;
     }
 
-    // Once closing starts the filmstrip is no longer interactive. Consume a
-    // held or newly pressed navigation bind so it cannot mutate the hidden
-    // desktop during the zoom, while Server still applies its submapAfter.
-    if (!interactive()) {
-      return true;
-    }
-
-    if (!m_shortcutInput.empty()) {
+    if (directional && interactive() && !m_shortcutInput.empty()) {
       clearShortcutInput();
     }
-    // Directional actions retain their normal handlers while the overview is
-    // interactive. In particular, direct vertical focus keeps its layout
-    // semantics, while OrWorkspace and OrOutput actions keep their documented
-    // fallbacks.
     return false;
   }
 

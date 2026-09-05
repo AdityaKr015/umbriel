@@ -3,7 +3,7 @@
 #include "config/config.h"
 #include "output/identity.h"
 
-#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
@@ -18,9 +18,11 @@ namespace umbriel {
     return value != nullptr ? std::optional<std::string_view>(value) : std::nullopt;
   }
 
+  inline constexpr uint64_t kStartupWindowRuleDurationMs = 60'000;
+
   [[nodiscard]] ResolvedWindowRule resolveWindowRules(
       const Config& config, std::optional<std::string_view> appId, std::optional<std::string_view> title,
-      std::optional<std::string_view> xdgTag, ContentType contentType, bool focused
+      std::optional<std::string_view> xdgTag, ContentType contentType, bool focused, uint64_t uptimeMs
   );
   [[nodiscard]] ResolvedLayerRule
   resolveLayerRules(const Config& config, std::optional<std::string_view> layerNamespace);
@@ -38,5 +40,7 @@ namespace umbriel {
   [[nodiscard]] ResolvedLayoutConfig
   resolveWorkspaceLayout(const Config& config, const OutputIdentity& identity, std::string_view name, size_t index);
   [[nodiscard]] ResolvedWorkspaceSet resolveWorkspacesForOutput(const Config& config, const OutputIdentity& identity);
+  // Workspace count a dynamic output never shrinks below.
+  [[nodiscard]] size_t resolveDynamicWorkspaceMinimum(const Config& config, const OutputIdentity& identity);
 
 } // namespace umbriel

@@ -189,6 +189,7 @@ namespace umbriel {
     void unregisterAnimatable(Animatable* animatable);
     [[nodiscard]] HintRect& insertHint();
     void hideInsertHint();
+    [[nodiscard]] uint64_t uptimeMs() const;
     [[nodiscard]] SessionLock* sessionLock() const { return m_sessionLock.get(); }
     [[nodiscard]] bool sessionLocked() const { return m_sessionLocked; }
     [[nodiscard]] const std::string& activeSubmap() const {
@@ -387,6 +388,7 @@ namespace umbriel {
     static void onToplevelCaptureRequest(wl_listener* listener, void* data);
     static void onRendererLost(wl_listener* listener, void* data);
     static int onBackgroundFrameTimer(void* data);
+    static int onStartupRulesTimer(void* data);
     static int onTerminateSignal(int signal, void* data);
     static void onIpcWindowsIdle(void* data);
     static void onIpcWorkspacesIdle(void* data);
@@ -535,9 +537,14 @@ namespace umbriel {
     wlr_scene_rect* m_lockBlank = nullptr;
     wlr_scene_rect* m_backdrop = nullptr;
     bool m_sessionLocked = false;
+    // Name of the output that held keyboard focus when the session locked, so
+    // unlocking restores focus there instead of wherever the cursor rests.
+    // Empty when no window was focused or that output is gone.
+    std::string m_lockFocusOutput;
     std::vector<std::string> m_activeSubmaps;
     // Same-msec dedupe: several outputs can call tickAnimations per vblank.
     uint64_t m_lastAnimTickMsec = 0;
+    std::chrono::steady_clock::time_point m_startTime;
 
     // A fading copy of a closed window's scene tree. Owns that tree and destroys
     // it once the fade completes.
@@ -594,6 +601,8 @@ namespace umbriel {
 
     std::unique_ptr<XwaylandSupervisor> m_xwayland;
     wl_event_source* m_backgroundFrameTimer = nullptr;
+    // One-shot refresh when dynamic startup rules expire.
+    wl_event_source* m_startupRulesTimer = nullptr;
     // Non-null while a windows-event idle callback is pending. The idle source
     // removes itself when it runs, so a non-null pointer means "already queued".
     wl_event_source* m_ipcWindowsIdle = nullptr;

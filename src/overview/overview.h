@@ -67,7 +67,7 @@ namespace umbriel {
     void gestureEnd(bool commitOpen);
 
     [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Overlays; }
-    // Advances the zoom animation; returns true while it is still running.
+    // Advances the zoom and workspace-row animations; returns true while either is still running.
     bool tickAnimations(uint64_t nowMsec) override;
     [[nodiscard]] bool hasActiveAnimations() const override;
     // The overview zooms every output at once.
@@ -95,9 +95,8 @@ namespace umbriel {
     void handleMotion(double lx, double ly);
     bool handleAxisNotch(bool vertical, double direction, double lx, double ly);
     bool handleFallbackKey(uint32_t keysym);
-    // Clear pending badge input for directional focus, delegate to the regular
-    // action handler while interactive, and consume those actions once the
-    // closing animation starts.
+    // Clear pending badge input for directional focus while interactive. Configured
+    // actions retain their regular handlers throughout the closing animation.
     bool handleKeybindAction(KeybindAction action);
     // Step the active workspace `delta` rows down the filmstrip on `output` (null: wherever the pointer is). Returns
     // false at either end. The wheel, the middle-button drag and the three-finger swipe arrive here: while the
@@ -261,6 +260,7 @@ namespace umbriel {
     void updateShortcutAssignments();
 
     void startAnimation(double target, bool closing);
+    void startRowAnimation();
     void finishAnimation();
     void beginClose(View* focus);
     void teardown();
@@ -291,7 +291,8 @@ namespace umbriel {
     double m_progress = 0;
     double m_targetProgress = 0;
     double m_progressFrom = 0;
-    AnimatedValue m_anim;
+    AnimatedValue m_zoomAnim;
+    AnimatedValue m_rowAnim;
     View* m_pendingFocus = nullptr;
     bool m_cardPresentationDirty = false;
     bool m_gestureOpenedHere = false;

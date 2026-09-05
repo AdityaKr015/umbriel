@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # harness: outputs=1
-# Layout struts reserve signed logical space for normal tiled windows after a
+# Layout struts reserve logical space for normal tiled windows after a
 # real layer-shell exclusive zone. Floating windows, maximize-to-edges, and
 # fullscreen keep their own broader areas while the scrolling strip reserves the
 # strut band they bleed into, and reload removes struts from already mapped
@@ -35,7 +35,7 @@ mode = "dwindle"
 gap = 0
 
 [output.HEADLESS-1]
-workspaces = ["base", "override", "negative", "scroll-h", "scroll-v"]
+workspaces = ["base", "override", "scroll-h", "scroll-v"]
 
 [[workspace]]
 name = "scroll-h"
@@ -81,15 +81,6 @@ output = "HEADLESS-1"
 
 [workspace.layout.struts]
 right = 60
-
-[[workspace]]
-name = "negative"
-
-[workspace.layout.struts]
-left = -70
-right = 0
-top = -50
-bottom = 0
 EOF
   fi
 }
@@ -234,11 +225,6 @@ spawn_client strut-override
 focus_window strut-override
 assert_box strut-override 1170 646 50 45
 
-"$UMBRIEL" msg workspace-switch:negative > /dev/null
-spawn_client strut-negative
-focus_window strut-negative
-assert_box strut-negative 1350 730 -70 -10
-
 "$UMBRIEL" msg workspace-switch:scroll-h > /dev/null
 spawn_client strut-scroll-h
 focus_window strut-scroll-h
@@ -287,4 +273,4 @@ assert_box strut-override 1280 680 0 40
 assert_box strut-base 1280 680 0 40
 assert_box strut-float 200 100 0 40
 
-echo "layout struts covered layer zones, signed overrides, tiled states, scrolling directions, and reload"
+echo "layout struts covered layer zones, workspace overrides, tiled states, scrolling directions, and reload"

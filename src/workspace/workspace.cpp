@@ -1750,6 +1750,7 @@ namespace umbriel {
     // does not destroy the workspace the user is currently viewing; otherwise retain the existing trailing empty to
     // avoid replacing its protocol identity on every reconciliation.
     const bool emptyAbove = config().workspaces.emptyAbove;
+    const size_t minimum = resolveDynamicWorkspaceMinimum(config(), m_output->identity());
     Workspace* frontKeeper = nullptr;
     if (emptyAbove && !m_workspaces.empty() && !m_workspaces.front()->hasViews()) {
       frontKeeper = m_workspaces.front().get();
@@ -1769,6 +1770,11 @@ namespace umbriel {
     }
 
     for (size_t index = m_workspaces.size(); index-- > 0;) {
+      // min_workspaces is a floor on the count, not on a position. Pruning runs from the end, so it stops as soon as
+      // the group would shrink past the floor and the surviving empties are the lowest-numbered ones.
+      if (m_workspaces.size() <= minimum) {
+        break;
+      }
       Workspace* workspace = m_workspaces[index].get();
       if (!workspace->hasViews() && workspace != backKeeper && workspace != frontKeeper) {
         if (m_previous == workspace) {
@@ -1777,6 +1783,10 @@ namespace umbriel {
         m_workspaces.erase(m_workspaces.begin() + static_cast<std::ptrdiff_t>(index));
         m_server->scheduleIpcWorkspacesEvent();
       }
+    }
+    // Filling the floor appends empty workspaces, so the last of them is the trailing empty this group needs.
+    while (m_workspaces.size() < minimum) {
+      backKeeper = appendDynamicWorkspace();
     }
     if (backKeeper == nullptr) {
       appendDynamicWorkspace();

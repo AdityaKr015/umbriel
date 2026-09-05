@@ -235,6 +235,34 @@ UMBRIEL_TEST(workspaceInventoryResolvesStaticAndDynamicOutputs) {
     CHECK_EQ(dynamicSetWithEmptyAbove.workspaces[1].name, std::string{"2"});
   }
 }
+
+UMBRIEL_TEST(dynamicWorkspaceMinimumIsPerOutput) {
+  Config config;
+  OutputRule padded;
+  padded.name = "DP-1";
+  padded.minWorkspaces = 3;
+  config.outputs.push_back(std::move(padded));
+
+  CHECK_EQ(umbriel::resolveDynamicWorkspaceMinimum(config, identity("DP-1")), size_t{3});
+  CHECK_EQ(umbriel::resolveDynamicWorkspaceMinimum(config, identity("DP-2")), size_t{1});
+
+  const auto paddedSet = umbriel::resolveWorkspacesForOutput(config, identity("DP-1"));
+  CHECK(paddedSet.dynamic);
+  CHECK_EQ(paddedSet.workspaces.size(), size_t{3});
+  if (paddedSet.workspaces.size() == 3) {
+    CHECK_EQ(paddedSet.workspaces[0].name, std::string{"1"});
+    CHECK_EQ(paddedSet.workspaces[2].name, std::string{"3"});
+  }
+
+  const auto bareSet = umbriel::resolveWorkspacesForOutput(config, identity("DP-2"));
+  CHECK(bareSet.dynamic);
+  CHECK_EQ(bareSet.workspaces.size(), size_t{1});
+
+  // The leading empty is an extra entry only where it exceeds the minimum.
+  config.workspaces.emptyAbove = true;
+  CHECK_EQ(umbriel::resolveWorkspacesForOutput(config, identity("DP-1")).workspaces.size(), size_t{3});
+  CHECK_EQ(umbriel::resolveWorkspacesForOutput(config, identity("DP-2")).workspaces.size(), size_t{2});
+}
 UMBRIEL_TEST(workspaceRulesMatchConnectorAndDescriptorWithoutOutputSection) {
   Config config;
 
@@ -353,7 +381,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   config.windowRules.push_back(std::move(unfocused));
 
   const auto resolved =
-      umbriel::resolveWindowRules(config, "foot", "project shell", std::nullopt, ContentType::None, false);
+      umbriel::resolveWindowRules(config, "foot", "project shell", std::nullopt, ContentType::None, false, 0);
   CHECK(resolved.opacity && *resolved.opacity == 0.8);
   CHECK(resolved.blur && *resolved.blur);
   CHECK(resolved.defaultFloating && *resolved.defaultFloating);
@@ -370,7 +398,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK(resolved.allowTearing && *resolved.allowTearing);
   CHECK(resolved.hdr == umbriel::HdrMode::On);
 
-  const auto appOnly = umbriel::resolveWindowRules(config, "foot", "editor", std::nullopt, ContentType::None, false);
+  const auto appOnly = umbriel::resolveWindowRules(config, "foot", "editor", std::nullopt, ContentType::None, false, 0);
   CHECK(appOnly.defaultPinned && *appOnly.defaultPinned);
   CHECK(appOnly.defaultScrollingColumn && *appOnly.defaultScrollingColumn == "browser-stack");
   CHECK(appOnly.defaultScrollingColumnOrder && *appOnly.defaultScrollingColumnOrder == 20);
@@ -379,7 +407,7 @@ UMBRIEL_TEST(windowRulesMergeMatchingFieldsInOrder) {
   CHECK(appOnly.hdr == umbriel::HdrMode::Off);
 
   const auto focused =
-      umbriel::resolveWindowRules(config, "foot", "project shell", std::nullopt, ContentType::None, true);
+      umbriel::resolveWindowRules(config, "foot", "project shell", std::nullopt, ContentType::None, true, 0);
   CHECK(focused.opacity && *focused.opacity == 0.8);
   CHECK(!focused.defaultFloating);
   CHECK(umbriel::anyWindowRuleHasTitlePattern(config));
@@ -403,7 +431,7 @@ UMBRIEL_TEST(windowRulesMergeFractionSizingLastWriterWins) {
   config.windowRules.push_back(std::move(second));
 
   const auto resolved =
-      umbriel::resolveWindowRules(config, "utility", std::nullopt, std::nullopt, ContentType::None, false);
+      umbriel::resolveWindowRules(config, "utility", std::nullopt, std::nullopt, ContentType::None, false, 0);
   CHECK(resolved.defaultFloating && *resolved.defaultFloating);
   // Later rules overwrite only the fields they set.
   CHECK(resolved.defaultWidth && *resolved.defaultWidth == 0.75);
@@ -425,8 +453,15 @@ UMBRIEL_TEST(windowRulesMatchContentTypesAndComposeSelectors) {
   game.titleRegex = std::regex(game.titlePattern);
   game.matchContentType = ContentType::Game;
   game.matchFocused = false;
+  game.matchAtStartup = true;
   game.opacity = 0.75;
   config.windowRules.push_back(std::move(game));
+
+  WindowRule afterStartup;
+  afterStartup.matchContentType = ContentType::Game;
+  afterStartup.matchAtStartup = false;
+  afterStartup.defaultFloating = true;
+  config.windowRules.push_back(std::move(afterStartup));
 
   WindowRule none;
   none.matchContentType = ContentType::None;
@@ -434,28 +469,34 @@ UMBRIEL_TEST(windowRulesMatchContentTypesAndComposeSelectors) {
   config.windowRules.push_back(std::move(none));
 
   const auto matchingGame =
-      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, false, 0);
   CHECK(matchingGame.opacity && *matchingGame.opacity == 0.75);
+  CHECK(!matchingGame.defaultFloating);
 
   const auto wrongApp =
-      umbriel::resolveWindowRules(config, "launcher", "now playing", std::nullopt, ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "launcher", "now playing", std::nullopt, ContentType::Game, false, 0);
   CHECK(!wrongApp.opacity);
   const auto wrongTitle =
-      umbriel::resolveWindowRules(config, "runner", "paused", std::nullopt, ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "runner", "paused", std::nullopt, ContentType::Game, false, 0);
   CHECK(!wrongTitle.opacity);
   const auto wrongFocus =
-      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, true);
+      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, true, 0);
   CHECK(!wrongFocus.opacity);
+  const auto afterStartupRule = umbriel::resolveWindowRules(
+      config, "runner", "now playing", std::nullopt, ContentType::Game, false, umbriel::kStartupWindowRuleDurationMs
+  );
+  CHECK(!afterStartupRule.opacity);
+  CHECK(afterStartupRule.defaultFloating && *afterStartupRule.defaultFloating);
 
   const auto matchingPhoto =
-      umbriel::resolveWindowRules(config, "viewer", "photo", std::nullopt, ContentType::Photo, false);
+      umbriel::resolveWindowRules(config, "viewer", "photo", std::nullopt, ContentType::Photo, false, 0);
   CHECK(matchingPhoto.opacity && *matchingPhoto.opacity == 0.25);
 
   const auto matchingNone =
-      umbriel::resolveWindowRules(config, "terminal", "shell", std::nullopt, ContentType::None, false);
+      umbriel::resolveWindowRules(config, "terminal", "shell", std::nullopt, ContentType::None, false, 0);
   CHECK(matchingNone.defaultFloating && *matchingNone.defaultFloating);
 
-  const auto video = umbriel::resolveWindowRules(config, "viewer", "video", std::nullopt, ContentType::Video, false);
+  const auto video = umbriel::resolveWindowRules(config, "viewer", "video", std::nullopt, ContentType::Video, false, 0);
   CHECK(!video.opacity);
   CHECK(!video.defaultFloating);
 }
@@ -489,37 +530,37 @@ UMBRIEL_TEST(windowRulesMatchXdgTagsAndComposeSelectors) {
   config.windowRules.push_back(std::move(running));
 
   const auto matchingLauncher =
-      umbriel::resolveWindowRules(config, "runner", "now playing", "game-launcher", ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "runner", "now playing", "game-launcher", ContentType::Game, false, 0);
   CHECK(matchingLauncher.opacity && *matchingLauncher.opacity == 0.9);
   CHECK(matchingLauncher.defaultFloating && *matchingLauncher.defaultFloating);
 
   const auto matchingRunning =
-      umbriel::resolveWindowRules(config, "runner", "now playing", "game-running", ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "runner", "now playing", "game-running", ContentType::Game, false, 0);
   CHECK(matchingRunning.opacity && *matchingRunning.opacity == 0.5);
 
   const auto matchingSecondTag =
-      umbriel::resolveWindowRules(config, "runner", "now playing", "game-settings", ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "runner", "now playing", "game-settings", ContentType::Game, false, 0);
   CHECK(matchingSecondTag.opacity && *matchingSecondTag.opacity == 0.5);
 
   const auto wrongApp =
-      umbriel::resolveWindowRules(config, "launcher", "now playing", "game-running", ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "launcher", "now playing", "game-running", ContentType::Game, false, 0);
   CHECK(wrongApp.opacity && *wrongApp.opacity == 0.25);
   const auto wrongTitle =
-      umbriel::resolveWindowRules(config, "runner", "paused", "game-running", ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "runner", "paused", "game-running", ContentType::Game, false, 0);
   CHECK(wrongTitle.opacity && *wrongTitle.opacity == 0.25);
   const auto wrongContent =
-      umbriel::resolveWindowRules(config, "runner", "now playing", "game-running", ContentType::Video, false);
+      umbriel::resolveWindowRules(config, "runner", "now playing", "game-running", ContentType::Video, false, 0);
   CHECK(wrongContent.opacity && *wrongContent.opacity == 0.25);
   const auto wrongFocus =
-      umbriel::resolveWindowRules(config, "runner", "now playing", "game-running", ContentType::Game, true);
+      umbriel::resolveWindowRules(config, "runner", "now playing", "game-running", ContentType::Game, true, 0);
   CHECK(wrongFocus.opacity && *wrongFocus.opacity == 0.25);
 
   const auto missingTag =
-      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "runner", "now playing", std::nullopt, ContentType::Game, false, 0);
   CHECK(!missingTag.opacity);
   CHECK(!missingTag.defaultFloating);
   const auto unknownTag =
-      umbriel::resolveWindowRules(config, "runner", "now playing", "browser", ContentType::Game, false);
+      umbriel::resolveWindowRules(config, "runner", "now playing", "browser", ContentType::Game, false, 0);
   CHECK(!unknownTag.opacity);
   CHECK(!unknownTag.defaultFloating);
 }
@@ -546,21 +587,21 @@ UMBRIEL_TEST(windowRulesMatchEmptyIdentityOnlyWhenTheClientSetIt) {
   config.windowRules.push_back(std::move(blankTag));
 
   // A window whose title, app ID, and tag are all set to the empty string.
-  const auto allEmpty = umbriel::resolveWindowRules(config, "", "", "", ContentType::None, false);
+  const auto allEmpty = umbriel::resolveWindowRules(config, "", "", "", ContentType::None, false, 0);
   CHECK(allEmpty.defaultFloating && *allEmpty.defaultFloating);
   CHECK(allEmpty.opacity && *allEmpty.opacity == 0.5);
   CHECK(allEmpty.defaultMaximize && *allEmpty.defaultMaximize);
 
   // A window that never sent any of them matches nothing: an unset value is not an empty one.
   const auto allUnset =
-      umbriel::resolveWindowRules(config, std::nullopt, std::nullopt, std::nullopt, ContentType::None, false);
+      umbriel::resolveWindowRules(config, std::nullopt, std::nullopt, std::nullopt, ContentType::None, false, 0);
   CHECK(!allUnset.defaultFloating);
   CHECK(!allUnset.opacity);
   CHECK(!allUnset.defaultMaximize);
 
   // Selectors are independent: an empty title matches while a non-empty app ID and an unset tag do not.
   const auto emptyTitleOnly =
-      umbriel::resolveWindowRules(config, "firefox", "", std::nullopt, ContentType::None, false);
+      umbriel::resolveWindowRules(config, "firefox", "", std::nullopt, ContentType::None, false, 0);
   CHECK(emptyTitleOnly.defaultFloating && *emptyTitleOnly.defaultFloating);
   CHECK(!emptyTitleOnly.opacity);
   CHECK(!emptyTitleOnly.defaultMaximize);

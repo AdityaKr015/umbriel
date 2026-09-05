@@ -101,30 +101,30 @@ just debug
 ### Testing
 
 The development shell includes the clients and command-line tools used by the
-test suite. Run unit tests and the contained headless compositor harness with:
+test suite. Unit tests and the contained headless compositor harness are two
+commands:
 
 ```sh
 nix develop
-just test
-just verify
+just test                 # unit and umbrielfx suites, through Meson
+just check                # every harness check
 ```
 
-While iterating, `just check` runs single harness checks by name fragment on the
-default build, and `just checks` lists the available names:
+`just check` also takes name fragments, and `just check-names` lists them:
 
 ```sh
 just check 310            # one check
 just check 310 520        # several
 just check overview       # every check in a group
 just check 310 -v         # keep the full output of passing checks
+just mode=asan check 310  # the same check against build-asan
 ```
 
 Each check gets its own contained headless compositor, so a failure stays local
 and checks run in any order. Every passing check emits a concise completion
 message, summarized to a single dimmed line unless `-v` is enabled; failing
 checks print their whole output. A failing check keeps its runtime directory
-(compositor log, config, per-client logs) and prints the path. `just verify
-<mode> [fragment ...]` selects another build.
+(compositor log, config, per-client logs) and prints the path.
 
 ## Running
 

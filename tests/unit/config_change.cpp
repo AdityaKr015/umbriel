@@ -150,6 +150,16 @@ UMBRIEL_TEST(eachSectionIsReportedOnItsOwn) {
     const ConfigChange change = ConfigChange::between(before, after);
     CHECK(change.workspaces);
     CHECK(!change.workspaceRules);
+    CHECK(!ConfigEffects::between(before, after).workspaceInventory);
+  }
+  {
+    Config after;
+    after.workspaces.emptyAbove = !after.workspaces.emptyAbove;
+    const ConfigChange change = ConfigChange::between(before, after);
+    CHECK(change.workspaces);
+    const ConfigEffects effects = ConfigEffects::between(before, after);
+    CHECK(effects.workspaceInventory);
+    CHECK(effects.workspaceLayout);
   }
   {
     Config after;
@@ -434,6 +444,13 @@ UMBRIEL_TEST(outputStateAndWorkspaceInventoryAreIndependent) {
   CHECK(!inventoryEffects.outputState);
   CHECK(inventoryEffects.workspaceInventory);
   CHECK(inventoryEffects.workspaceLayout);
+
+  Config minimumChanged = before;
+  minimumChanged.outputs[0].minWorkspaces = 3;
+  const ConfigEffects minimumEffects = ConfigEffects::between(before, minimumChanged);
+  CHECK(!minimumEffects.outputState);
+  CHECK(minimumEffects.workspaceInventory);
+  CHECK(minimumEffects.workspaceLayout);
 
   Config disabled = before;
   disabled.outputs[0].enabled = false;

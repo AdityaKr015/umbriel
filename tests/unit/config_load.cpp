@@ -18,6 +18,7 @@ using umbriel::LayoutMode;
 using umbriel::ModifierKey;
 using umbriel::TrackLayout;
 using umbriel::VrrMode;
+using umbriel::WindowDragToggle;
 
 namespace {
   bool containsDiagnostic(const ConfigStore& store, const std::string& text) {
@@ -756,6 +757,34 @@ UMBRIEL_TEST(middleClickPasteLoadsAndDefaultsEnabled) {
   CHECK(store.config().input.middleClickPaste);
 }
 
+UMBRIEL_TEST(windowDragToggleReadsItsVocabularyAndDefaultsOff) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[input]\nwindow_drag_toggle = \"floating\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::Floating);
+  CHECK(!containsDiagnostic(store, "unknown key input.window_drag_toggle"));
+
+  file.write("[input]\nwindow_drag_toggle = \"pinned\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::Pinned);
+
+  file.write("[input]\nwindow_drag_toggle = \"none\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::None);
+
+  file.write("[input]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::None);
+
+  file.write("[input]\nwindow_drag_toggle = \"maximized\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowDragToggle == WindowDragToggle::None);
+  CHECK(containsDiagnostic(store, "ignoring input.window_drag_toggle"));
+}
+
 UMBRIEL_TEST(outputNamesDifferingOnlyByCaseAreRejectedAsDuplicates) {
   const TempConfig file;
   file.write(R"(
@@ -1015,6 +1044,30 @@ UMBRIEL_TEST(windowContentTypeMatcherLoadsFixedVocabulary) {
   CHECK(containsDiagnostic(store, "ignoring window_rule.match.content_type (expected none|photo|video|game)"));
 }
 
+UMBRIEL_TEST(windowStartupMatcherLoadsBoolean) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[[window_rule]]\nmatch.at_startup = true\nopacity = 0.9\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().windowRules.size(), size_t{1});
+  CHECK(store.config().windowRules[0].matchAtStartup == true);
+  CHECK(!containsDiagnostic(store, "unknown key window_rule.match.at_startup"));
+
+  file.write("[[window_rule]]\nmatch.at_startup = false\nopacity = 0.9\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().windowRules.size(), size_t{1});
+  CHECK(store.config().windowRules[0].matchAtStartup == false);
+
+  file.write("[[window_rule]]\nmatch.at_startup = \"yes\"\nmatch.is_focused = true\nopacity = 0.9\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().windowRules.empty());
+  CHECK(containsDiagnostic(store, "ignoring window_rule.match.at_startup (expected boolean)"));
+  CHECK(!containsDiagnostic(store, "unknown key window_rule.match.is_focused"));
+  CHECK(!containsDiagnostic(store, "unknown key window_rule.opacity"));
+}
+
 UMBRIEL_TEST(windowXdgTagMatcherLoadsRegexAndRejectsInvalidValues) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();
@@ -1123,6 +1176,35 @@ UMBRIEL_TEST(outputEnabledFlagParsesAndDefaultsTrue) {
   CHECK(store.reload().success);
   CHECK(store.config().outputs[0].enabled);
   CHECK(containsDiagnostic(store, "ignoring output.DP-1.enabled"));
+}
+
+UMBRIEL_TEST(outputMinWorkspacesLoadsAndRequiresDynamicWorkspaces) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[output.DP-1]\nmin_workspaces = 4\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK_EQ(store.config().outputs[0].minWorkspaces, 4);
+
+  file.write("[output.DP-1]\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs[0].minWorkspaces, 1);
+
+  file.write("[output.DP-1]\nworkspaces = \"dynamic\"\nmin_workspaces = 3\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs[0].minWorkspaces, 3);
+
+  file.write("[output.DP-1]\nmin_workspaces = 99\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs[0].minWorkspaces, 64);
+  CHECK(containsDiagnostic(store, "output.DP-1.min_workspaces = 99 out of range, clamped to 64"));
+
+  file.write("[output.DP-1]\nworkspaces = [\"dev\", \"web\"]\nmin_workspaces = 3\n");
+  CHECK(!store.reload().success);
+  CHECK(containsDiagnostic(store, "output.DP-1.min_workspaces requires dynamic workspaces"));
+  CHECK(!containsDiagnostic(store, "unknown key output.DP-1.min_workspaces"));
 }
 
 UMBRIEL_TEST(semanticColorsLoadFromTheirOwnSection) {

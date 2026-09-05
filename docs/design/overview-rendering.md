@@ -35,6 +35,11 @@ revealing the selected column on the same frame and animation timeline as the
 zoom. The close therefore lands directly on the selected column instead of
 starting a second movement afterwards.
 
+Configured keybinds continue to dispatch during the closing zoom. A later focus
+or workspace selection replaces the card that initiated the close as the
+landing target. Workspace-row retargets use a separate animation value, so
+repeated navigation cannot extend the zoom deadline.
+
 Unmap is the one transition that cannot remain live because the client buffer
 may disappear immediately. Before removing an unmapped card, the overview
 freezes its already-scaled buffers and borders into a scene snapshot. That tree
@@ -45,7 +50,9 @@ only the projection into card coordinates, not a separate close timeline.
 ## Decoration and clipping
 
 Cards carry the same inner border, outer border, and corner radius as their
-windows. These values scale with the card.
+windows. These values scale with the card. Every surface of a card rounds
+against the card's content box, the rule live windows use, so a client that
+draws its corners from a subsurface keeps them rounded in the thumbnail.
 
 Each output's overview tree carries a `wlr_scene_tree_set_clip` of that
 output's logical bounds, the same primitive windows use. A workspace row that

@@ -333,6 +333,19 @@ ext_idle_notify_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+ext_session_lock_client_h = custom_target(
+  'ext-session-lock-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-session-lock/ext-session-lock-v1.xml',
+  output: 'ext-session-lock-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+ext_session_lock_client_c = custom_target(
+  'ext-session-lock-v1-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-session-lock/ext-session-lock-v1.xml',
+  output: 'ext-session-lock-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 security_context_client_h = custom_target(
   'security-context-v1-client-protocol.h',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/security-context/security-context-v1.xml',
@@ -560,7 +573,7 @@ umbriel = executable(
   install: true,
 )
 
-# Unit tests and the harness clients the verify script drives.
+# Unit tests and the harness clients check.sh drives.
 if build_tests
   subdir('tests')
   alias_target('unit-tests', unit_test_targets)

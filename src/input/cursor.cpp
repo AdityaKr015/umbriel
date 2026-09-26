@@ -1302,6 +1302,7 @@ namespace umbriel {
     auto* event = static_cast<wlr_touch_down_event*>(data);
     m_server->notifyInputActivity();
     m_server->cancelModifierTap();
+    m_server->remapTouches();
 
     double lx = 0;
     double ly = 0;

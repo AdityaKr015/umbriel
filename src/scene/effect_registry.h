@@ -1,6 +1,5 @@
 #pragma once
 
-#include "config/animation_event.h"
 #include "config/effects.h"
 #include "core/animation.h"
 #include "scene/effect_ledger.h"

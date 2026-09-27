@@ -16,6 +16,23 @@ namespace umbriel {
 
   enum class EffectKind : std::uint8_t { Animation, Border, Window, Screen, Cursor };
 
+  // Stable inner-to-outer composition order for effects sharing a target. Values equal the FX_SLOT_* indices.
+  enum class AnimationEvent : unsigned {
+    Window,
+    Overlay,
+    BorderEffect,
+    Border,
+    DimUnfocused,
+    WindowsMove,
+    Drag,
+    WindowsIn,
+    WindowsOut,
+    Scratchpad,
+    Layers,
+    Workspaces,
+    Overview
+  };
+
   [[nodiscard]] std::optional<EffectKind> parseEffectKind(std::string_view text);
   [[nodiscard]] std::string_view effectKindName(EffectKind kind);
 

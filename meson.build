@@ -34,12 +34,12 @@ else
 endif
 
 umbriel_data_dir = get_option('prefix') / get_option('datadir')
-umbriel_build_config = configuration_data()
-umbriel_build_config.set_quoted('UMBRIEL_DATA_DIR', umbriel_data_dir)
+umbriel_data_dir_config = configuration_data()
+umbriel_data_dir_config.set_quoted('UMBRIEL_DATA_DIR', umbriel_data_dir)
 configure_file(
-  input: 'src/config/build_config.h.in',
-  output: 'umbriel_build_config.h',
-  configuration: umbriel_build_config,
+  input: 'src/config/data_dir.h.in',
+  output: 'umbriel_data_dir.h',
+  configuration: umbriel_data_dir_config,
 )
 add_project_arguments(
   '-DWLR_USE_UNSTABLE',
@@ -571,6 +571,16 @@ core_sources = files(
   'src/core/fdlimit.cpp',
   'src/core/log.cpp',
   'src/config/config.cpp',
+  'src/config/fields.cpp',
+  'src/config/fields_animation.cpp',
+  'src/config/fields_drm.cpp',
+  'src/config/fields_effects.cpp',
+  'src/config/fields_general.cpp',
+  'src/config/fields_input.cpp',
+  'src/config/fields_keybinds.cpp',
+  'src/config/fields_layout.cpp',
+  'src/config/fields_output.cpp',
+  'src/config/fields_rules.cpp',
   'src/config/store.cpp',
   'src/config/config_merge.cpp',
   'src/config/config_watcher.cpp',

@@ -26,8 +26,10 @@ namespace umbriel {
     // What one load shares across tables.
     struct ReadContext {
       // The config being loaded. Tables read earlier are already in it, such as the scratchpads an action may name.
-      const Config& loaded;
+      Config& loaded;
       std::vector<EffectReference>& effectReferences;
+      // Set by a field to drop the rule entry being read.
+      bool entryRejected = false;
     };
 
   } // namespace registry

@@ -80,11 +80,6 @@ namespace umbriel {
     m_diagnostics.push_back(std::move(diag));
   }
 
-  Section& Section::custom(std::string_view key) {
-    m_seen.emplace_back(key);
-    return *this;
-  }
-
   Section& Section::freeform() {
     m_freeform = true;
     return *this;

@@ -57,52 +57,33 @@ namespace umbriel {
       return lowered;
     }
 
-    std::optional<VrrMode> readVrrMode(const toml::node& node) {
-      const auto value = node.value<std::string>();
-      if (value == "disabled") {
-        return VrrMode::Disabled;
-      }
-      if (value == "always") {
-        return VrrMode::Always;
-      }
-      if (value == "fullscreen") {
-        return VrrMode::Fullscreen;
-      }
-      return std::nullopt;
+    const registry::Choices<VrrMode>& vrrModes() {
+      static const registry::Choices<VrrMode> choices{
+          {.name = "disabled", .value = VrrMode::Disabled},
+          {.name = "always", .value = VrrMode::Always},
+          {.name = "fullscreen", .value = VrrMode::Fullscreen},
+      };
+      return choices;
     }
 
-    std::optional<HdrMode> readHdrMode(const toml::node& node) {
-      const auto value = node.value<std::string>();
-      if (value == "off") {
-        return HdrMode::Off;
-      }
-      if (value == "on") {
-        return HdrMode::On;
-      }
-      if (value == "auto") {
-        return HdrMode::Auto;
-      }
-      if (value == "fullscreen") {
-        return HdrMode::Fullscreen;
-      }
-      return std::nullopt;
+    const registry::Choices<HdrMode>& hdrModes() {
+      static const registry::Choices<HdrMode> choices{
+          {.name = "off", .value = HdrMode::Off},
+          {.name = "on", .value = HdrMode::On},
+          {.name = "auto", .value = HdrMode::Auto},
+          {.name = "fullscreen", .value = HdrMode::Fullscreen},
+      };
+      return choices;
     }
 
-    std::optional<ContentType> readContentType(const toml::node& node) {
-      const auto value = node.value<std::string>();
-      if (value == "none") {
-        return ContentType::None;
-      }
-      if (value == "photo") {
-        return ContentType::Photo;
-      }
-      if (value == "video") {
-        return ContentType::Video;
-      }
-      if (value == "game") {
-        return ContentType::Game;
-      }
-      return std::nullopt;
+    const registry::Choices<ContentType>& contentTypes() {
+      static const registry::Choices<ContentType> choices{
+          {.name = "none", .value = ContentType::None},
+          {.name = "photo", .value = ContentType::Photo},
+          {.name = "video", .value = ContentType::Video},
+          {.name = "game", .value = ContentType::Game},
+      };
+      return choices;
     }
 
     void emitDiag(ConfigDiagnostic::Severity severity, const toml::source_region* src, std::string msg) {
@@ -619,75 +600,49 @@ namespace umbriel {
       return fields;
     }
 
-    void readWorkspaceLayoutOverrides(
-        const toml::table& section, std::string_view context, WorkspaceLayoutOverrides& overrides,
-        registry::ReadContext& read
-    ) {
-      const std::string layoutContext = std::string(context) + ".layout";
-      readSection(
-          section, "layout", configStore().mutableDiagnostics(),
-          [&](Section& s) { registry::readFields(s, layoutFields<WorkspaceLayoutOverrides>(), overrides, read); },
-          layoutContext
-      );
+    const registry::Fields<ScratchpadConfig>& scratchpadFields() {
+      static const registry::Fields<ScratchpadConfig> fields{
+          registry::custom<ScratchpadConfig>(
+              "name", registry::KeyDescription("string"),
+              [](const toml::node& node, const std::string& path, ScratchpadConfig& target,
+                 registry::ReadContext& context) {
+                const auto name = node.value<std::string>();
+                if (!name) {
+                  errorAt(node.source(), "{} must be a string", path);
+                } else if (name->empty()) {
+                  errorAt(node.source(), "{} must not be empty", path);
+                } else if (*name == "default") {
+                  errorAt(node.source(), "{} 'default' is reserved for the implicit scratchpad", path);
+                } else {
+                  target.name = *name;
+                  return;
+                }
+                context.entryRejected = true;
+              }
+          ),
+      };
+      return fields;
     }
 
-    void readScratchpads(Section& root, Config& loaded) {
-      const toml::node* node = root.take("scratchpad");
-      if (node == nullptr) {
-        return;
+    bool acceptScratchpad(
+        Section& keys, const toml::node& entry, ScratchpadConfig& scratchpad, Config& loaded,
+        registry::ReadContext& context
+    ) {
+      if (context.entryRejected) {
+        return false;
       }
-      const auto* scratchpads = node->as_array();
-      if (scratchpads == nullptr) {
-        errorAt(node->source(), "scratchpad must be a [[scratchpad]] array of tables");
-        return;
+      const toml::node* nameNode = keys.node("name");
+      if (nameNode == nullptr) {
+        errorAt(entry.source(), "{} must set name", keys.name());
+        return false;
       }
-
-      int entryIndex = 0;
-      for (const auto& entry : *scratchpads) {
-        const auto* table = entry.as_table();
-        if (table == nullptr) {
-          errorAt(entry.source(), "scratchpad[{}] must be a table", entryIndex);
-          ++entryIndex;
-          continue;
-        }
-
-        const std::string context = std::format("scratchpad[{}]", entryIndex);
-        Section keys(*table, context, configStore().mutableDiagnostics());
-        const toml::node* nameNode = keys.take("name");
-        if (nameNode == nullptr) {
-          errorAt(entry.source(), "{} must set name", context);
-          ++entryIndex;
-          continue;
-        }
-        const auto name = nameNode->value<std::string>();
-        if (!name) {
-          errorAt(nameNode->source(), "{}.name must be a string", context);
-          ++entryIndex;
-          continue;
-        }
-        if (name->empty()) {
-          errorAt(nameNode->source(), "{}.name must not be empty", context);
-          ++entryIndex;
-          continue;
-        }
-        if (*name == "default") {
-          errorAt(nameNode->source(), "{}.name 'default' is reserved for the implicit scratchpad", context);
-          ++entryIndex;
-          continue;
-        }
-
-        const auto duplicate = std::ranges::find_if(loaded.scratchpads, [&](const ScratchpadConfig& scratchpad) {
-          return scratchpad.name == *name;
-        });
-        if (duplicate != loaded.scratchpads.end()) {
-          errorAt(nameNode->source(), "{}.name duplicates scratchpad name '{}'", context, *name);
-          ++entryIndex;
-          continue;
-        }
-
-        loaded.scratchpads.push_back({.name = *name});
-        ++entryIndex;
+      if (std::ranges::any_of(loaded.scratchpads, [&](const ScratchpadConfig& existing) {
+            return existing.name == scratchpad.name;
+          })) {
+        errorAt(nameNode->source(), "{}.name duplicates scratchpad name '{}'", keys.name(), scratchpad.name);
+        return false;
       }
+      return true;
     }
 
     std::optional<std::string> scratchpadSelectorError(const Config& loaded, const Keybind& binding) {
@@ -723,47 +678,42 @@ namespace umbriel {
       return configured ? std::nullopt : std::optional{std::format("unknown scratchpad '{}'", name)};
     }
 
-    WorkspaceConfig
-    parseWorkspaceEntry(const toml::table& section, std::string_view context, registry::ReadContext& read) {
-      WorkspaceConfig ws;
-      Section keys(section, std::string(context), configStore().mutableDiagnostics());
-      // `layout` is read by readWorkspaceLayoutOverrides below, which takes the
-      // raw table rather than this reader.
-      keys.custom("layout");
-
-      if (const toml::node* nameNode = keys.take("name")) {
-        if (const auto value = nameNode->value<std::string>()) {
-          if (value->empty()) {
-            errorAt(nameNode->source(), "{}.name must not be empty", context);
-          } else {
-            ws.name = *value;
+    // A non-empty string a workspace rule selects by; anything else is an error.
+    registry::Field<WorkspaceConfig> workspaceSelector(std::string_view key, std::string WorkspaceConfig::* member) {
+      return registry::custom<WorkspaceConfig>(
+          key, registry::KeyDescription("string"),
+          [member](const toml::node& node, const std::string& path, WorkspaceConfig& target, registry::ReadContext&) {
+            if (const auto value = node.value<std::string>()) {
+              if (value->empty()) {
+                errorAt(node.source(), "{} must not be empty", path);
+              } else {
+                target.*member = *value;
+              }
+            } else {
+              errorAt(node.source(), "{} must be a string", path);
+            }
           }
-        } else {
-          errorAt(nameNode->source(), "{}.name must be a string", context);
-        }
-      }
-      if (const toml::node* outputNode = keys.take("output")) {
-        if (const auto value = outputNode->value<std::string>()) {
-          if (value->empty()) {
-            errorAt(outputNode->source(), "{}.output must not be empty", context);
-          } else {
-            ws.output = *value;
-          }
-        } else {
-          errorAt(outputNode->source(), "{}.output must be a string", context);
-        }
-      }
-      if (const toml::node* indexNode = keys.take("index")) {
-        const auto value = indexNode->value<std::int64_t>();
-        if (!value || *value < 1 || *value > static_cast<std::int64_t>(kMaxWorkspaces)) {
-          errorAt(indexNode->source(), "{}.index must be an integer from 1 to {}", context, kMaxWorkspaces);
-        } else {
-          ws.index = static_cast<int>(*value);
-        }
-      }
+      );
+    }
 
-      readWorkspaceLayoutOverrides(section, context, ws.layout, read);
-      return ws;
+    const registry::Fields<WorkspaceConfig>& workspaceFields() {
+      static const registry::Fields<WorkspaceConfig> fields{
+          workspaceSelector("name", &WorkspaceConfig::name),
+          workspaceSelector("output", &WorkspaceConfig::output),
+          registry::custom<WorkspaceConfig>(
+              "index", registry::KeyDescription("int").withRange(1, kMaxWorkspaces),
+              [](const toml::node& node, const std::string& path, WorkspaceConfig& target, registry::ReadContext&) {
+                const auto value = node.value<std::int64_t>();
+                if (!value || *value < 1 || *value > static_cast<std::int64_t>(kMaxWorkspaces)) {
+                  errorAt(node.source(), "{} must be an integer from 1 to {}", path, kMaxWorkspaces);
+                } else {
+                  target.index = static_cast<int>(*value);
+                }
+              }
+          ),
+          registry::table("layout", &WorkspaceConfig::layout, layoutFields<WorkspaceLayoutOverrides>()),
+      };
+      return fields;
     }
 
     void readWorkspaces(Section& root, Config& loaded, registry::ReadContext& read) {
@@ -795,7 +745,11 @@ namespace umbriel {
         }
 
         const std::string context = std::format("workspace[{}]", entryIndex);
-        WorkspaceConfig ws = parseWorkspaceEntry(*section, context, read);
+        WorkspaceConfig ws;
+        {
+          Section keys(*section, context, configStore().mutableDiagnostics());
+          registry::readFields(keys, workspaceFields(), ws, read);
+        }
         const bool hasName = !ws.name.empty();
         const bool hasIndex = ws.index.has_value();
         if (hasName == hasIndex) {
@@ -1645,9 +1599,10 @@ namespace umbriel {
     // A device rule is kept once it names a device no earlier rule names. Its XKB keys are checked merged over the
     // session keyboard they override, and dropped together when that fails.
     bool acceptDevice(
-        const toml::node& entry, const std::string& context, Config::Input::Device& device, const Config::Input& input,
+        Section& keys, const toml::node& entry, Config::Input::Device& device, Config::Input& input,
         registry::ReadContext&
     ) {
+      const std::string& context = keys.name();
       if (entry.as_table()->get("name") == nullptr) {
         errorAt(entry.source(), "{} must set name", context);
         return false;
@@ -1819,7 +1774,7 @@ namespace umbriel {
           ),
           table(
               "keyboard", &In::keyboard, keyboard,
-              [](const toml::node& node, In::Keyboard& target) {
+              [](const toml::node& node, In::Keyboard& target, registry::ReadContext&) {
                 if (!validateKeyboardInput(target, node.source(), "input.keyboard")) {
                   target.layout.clear();
                   target.variant.clear();
@@ -1833,7 +1788,7 @@ namespace umbriel {
           table("touch", &In::touch, touch),
           table("cursor", &In::cursor, cursor),
           table("focus", &In::focus, focus),
-          registry::rules("device", &In::devices, device, acceptDevice),
+          registry::rules("device", &In::devices, device, registry::Shape::Error, acceptDevice),
       };
       return fields;
     }
@@ -1845,228 +1800,237 @@ namespace umbriel {
       return it != loaded.outputs.end() ? &*it : nullptr;
     }
 
-    void readOutputs(Section& root, Config& loaded, std::vector<EffectReference>& references) {
-      const toml::node* node = root.take("output");
-      if (node == nullptr) {
+    // An effect preset selector on a rule. It is recorded by the rule's accept step, once the rule's place in its
+    // array is known.
+    template <typename T>
+    registry::Field<T> optionalEffectField(std::string_view key, std::optional<std::string> T::* member) {
+      return registry::custom<T>(
+          key, registry::KeyDescription("string").withFormat("effect"),
+          [member](const toml::node& node, const std::string& path, T& target, registry::ReadContext&) {
+            if (!node.is_string()) {
+              warnAt(node.source(), "ignoring {} (expected string)", path);
+              return;
+            }
+            target.*member = node.value<std::string>();
+          }
+      );
+    }
+
+    void recordRuleEffect(
+        registry::ReadContext& context, Section& keys, std::string_view key, EffectKind kind,
+        std::function<void()> clear
+    ) {
+      const toml::node* node = keys.node(key);
+      if (node == nullptr || !node->is_string()) {
         return;
       }
-      const auto* outputs = node->as_table();
-      if (outputs == nullptr) {
-        warnAt(node->source(), "ignoring output (expected table)");
+      addEffectReference(
+          context.effectReferences, keys.qualified(key), {*node->value<std::string>(), node->source()}, kind, true,
+          std::move(clear)
+      );
+    }
+
+    // A count, a list of names, or "dynamic".
+    void parseOutputWorkspaces(const toml::node& node, const std::string& path, OutputRule& rule) {
+      if (const auto count = node.value<std::int64_t>()) {
+        if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {
+          errorAt(node.source(), "{} must be an integer from 1 to {}", path, kMaxWorkspaces);
+        } else {
+          rule.workspaces = static_cast<size_t>(*count);
+        }
         return;
       }
-
-      for (const auto& [key, entry] : *outputs) {
-        const std::string name(key.str());
-        const auto* section = entry.as_table();
-        if (section == nullptr) {
-          warnAt(entry.source(), "ignoring output.{} (expected table)", name);
-          continue;
+      if (const auto* names = node.as_array()) {
+        bool valid = true;
+        if (names->empty() || names->size() > kMaxWorkspaces) {
+          errorAt(node.source(), "{} must contain 1 to {} names", path, kMaxWorkspaces);
+          valid = false;
         }
-        Section keys(*section, "output." + name, configStore().mutableDiagnostics());
-
-        if (std::ranges::any_of(loaded.outputs, [&](const OutputRule& rule) {
-              return outputNamesEqual(rule.name, name);
-            })) {
-          warnAt(key.source(), "duplicate output section '{}'", name);
-          // Drop the discarded section's references so they cannot clear the surviving rule's value by name.
-          std::erase_if(references, [&](const EffectReference& reference) {
-            return std::ranges::any_of(loaded.outputs, [&](const OutputRule& rule) {
-              return outputNamesEqual(rule.name, name) && reference.context == "output." + rule.name + ".screen_effect";
-            });
-          });
-          std::erase_if(loaded.outputs, [&](const OutputRule& rule) { return outputNamesEqual(rule.name, name); });
-        }
-        OutputRule rule;
-        rule.name = name;
-        keys.boolean("enabled", rule.enabled)
-            .boolean("tearing", rule.allowTearing)
-            .boolean("direct_scanout", rule.directScanout);
-        const auto screenEffect = takeEffectSelector(keys, "screen_effect");
-        if (screenEffect) {
-          rule.screenEffect = screenEffect->first;
-        }
-        keys.sub("layout", [&](Section& layout) {
-          layout.sub("scrolling", [&](Section& scrolling) {
-            scrolling.real("default_extent_fraction", 0.1, 1.0, rule.layout.scrolling.defaultExtentFraction);
-          });
-        });
-        keys.integer("min_workspaces", 1, static_cast<int>(kMaxWorkspaces), rule.minWorkspaces)
-            .boolean("cyclic_workspaces", rule.cyclicWorkspaces);
-        if (const toml::node* axisNode = keys.take("workspace_axis")) {
-          const auto value = axisNode->value<std::string>();
-          if (value == "vertical") {
-            rule.workspaceAxis = WorkspaceAxis::Vertical;
-          } else if (value == "horizontal") {
-            rule.workspaceAxis = WorkspaceAxis::Horizontal;
-          } else {
-            warnAt(axisNode->source(), "ignoring output.{}.workspace_axis (expected vertical|horizontal)", name);
+        std::vector<std::string> parsed;
+        parsed.reserve(names->size());
+        for (const auto& item : *names) {
+          const auto value = item.value<std::string>();
+          if (!value || value->empty()) {
+            errorAt(item.source(), "{} entries must be non-empty strings", path);
+            valid = false;
+            continue;
           }
-        }
-        if (const toml::node* workspacesNode = keys.take("workspaces")) {
-          if (const auto count = workspacesNode->value<std::int64_t>()) {
-            if (*count < 1 || *count > static_cast<std::int64_t>(kMaxWorkspaces)) {
-              errorAt(
-                  workspacesNode->source(), "output.{}.workspaces must be an integer from 1 to {}", name, kMaxWorkspaces
-              );
-            } else {
-              rule.workspaces = static_cast<size_t>(*count);
-            }
-          } else if (const auto* names = workspacesNode->as_array()) {
-            bool valid = true;
-            if (names->empty() || names->size() > kMaxWorkspaces) {
-              errorAt(
-                  workspacesNode->source(), "output.{}.workspaces must contain 1 to {} names", name, kMaxWorkspaces
-              );
-              valid = false;
-            }
-
-            std::vector<std::string> parsed;
-            parsed.reserve(names->size());
-            for (const auto& item : *names) {
-              const auto value = item.value<std::string>();
-              if (!value || value->empty()) {
-                errorAt(item.source(), "output.{}.workspaces entries must be non-empty strings", name);
-                valid = false;
-                continue;
-              }
-              if (std::ranges::find(parsed, *value) != parsed.end()) {
-                errorAt(item.source(), "output.{}.workspaces contains duplicate name '{}'", name, *value);
-                valid = false;
-                continue;
-              }
-              parsed.push_back(*value);
-            }
-            if (valid) {
-              rule.workspaces = std::move(parsed);
-            }
-          } else if (const auto value = workspacesNode->value<std::string>()) {
-            if (*value != "dynamic") {
-              errorAt(
-                  workspacesNode->source(), R"(output.{}.workspaces must be a count, a name array, or "dynamic")", name
-              );
-            }
-          } else {
-            errorAt(
-                workspacesNode->source(), R"(output.{}.workspaces must be a count, a name array, or "dynamic")", name
-            );
+          if (std::ranges::find(parsed, *value) != parsed.end()) {
+            errorAt(item.source(), "{} contains duplicate name '{}'", path, *value);
+            valid = false;
+            continue;
           }
+          parsed.push_back(*value);
         }
-        if (const toml::node* minNode = keys.node("min_workspaces"); minNode != nullptr && rule.workspaces) {
-          errorAt(minNode->source(), "output.{}.min_workspaces requires dynamic workspaces", name);
+        if (valid) {
+          rule.workspaces = std::move(parsed);
         }
-
-        if (const toml::node* modeNode = keys.take("mode")) {
-          const auto value = modeNode->value<std::string>();
-          OutputMode mode;
-          if (!value || !parseOutputMode(*value, mode)) {
-            warnAt(
-                modeNode->source(), R"(ignoring output.{}.mode (expected "WIDTHxHEIGHT" or "WIDTHxHEIGHT@HZ"))", name
-            );
-          } else {
-            rule.mode = mode;
-          }
-        }
-
-        if (const toml::node* positionNode = keys.take("position")) {
-          const auto* position = positionNode->as_array();
-          bool valid = position != nullptr && position->size() == 2;
-          std::array<int, 2> parsed{};
-          if (valid) {
-            for (size_t index = 0; index < parsed.size(); ++index) {
-              const auto value = (*position)[index].value<std::int64_t>();
-              if (!value) {
-                valid = false;
-                break;
-              }
-              parsed[index] = static_cast<int>(
-                  std::clamp(*value, static_cast<std::int64_t>(-100000), static_cast<std::int64_t>(100000))
-              );
-            }
-          }
-          if (!valid) {
-            warnAt(positionNode->source(), "ignoring output.{}.position (expected [x, y] integers)", name);
-          } else {
-            rule.position = parsed;
-          }
-        }
-
-        keys.real("scale", 0.25, 4.0, rule.scale);
-
-        if (const toml::node* vrrNode = keys.take("vrr")) {
-          if (const auto value = readVrrMode(*vrrNode)) {
-            rule.vrr = *value;
-          } else {
-            warnAt(vrrNode->source(), "ignoring output.{}.vrr (expected disabled|always|fullscreen)", name);
-          }
-        }
-
-        if (const toml::node* hdrNode = keys.take("hdr")) {
-          if (const auto value = readHdrMode(*hdrNode)) {
-            rule.hdr = *value;
-          } else {
-            warnAt(hdrNode->source(), "ignoring output.{}.hdr (expected off|on|auto|fullscreen)", name);
-          }
-        }
-        double sdrWhite = rule.sdrWhite;
-        keys.real("sdr_white", 80.0, 1000.0, sdrWhite);
-        rule.sdrWhite = static_cast<float>(sdrWhite);
-
-        if (const toml::node* bitDepthNode = keys.take("bit_depth")) {
-          const auto value = bitDepthNode->value<std::int64_t>();
-          if (value && (*value == 8 || *value == 10)) {
-            rule.bitDepth = static_cast<int>(*value);
-          } else {
-            warnAt(bitDepthNode->source(), "ignoring output.{}.bit_depth (expected 8 or 10)", name);
-          }
-        }
-
-        if (const toml::node* transformNode = keys.take("transform")) {
-          const auto value = transformNode->value<std::string>();
-          static constexpr std::pair<std::string_view, int> transforms[] = {
-              {"normal", 0},  {"90", 1},         {"180", 2},         {"270", 3},
-              {"flipped", 4}, {"flipped-90", 5}, {"flipped-180", 6}, {"flipped-270", 7},
-          };
-          const auto match = value
-              ? std::ranges::find_if(transforms, [&](const auto& candidate) { return candidate.first == *value; })
-              : std::end(transforms);
-          if (match == std::end(transforms)) {
-            warnAt(
-                transformNode->source(),
-                "ignoring output.{}.transform (expected "
-                "normal|90|180|270|flipped|flipped-90|flipped-180|flipped-270)",
-                name
-            );
-          } else {
-            rule.transform = match->second;
-          }
-        }
-
-        loaded.outputs.push_back(std::move(rule));
-        if (screenEffect) {
-          addEffectReference(
-              references, "output." + name + ".screen_effect", *screenEffect, EffectKind::Screen, true,
-              [&loaded, name] {
-                if (OutputRule* rule = findOutputRuleMutable(loaded, name)) {
-                  rule->screenEffect.reset();
-                }
-              }
-          );
-        }
+        return;
+      }
+      if (node.value<std::string>() != "dynamic") {
+        errorAt(node.source(), R"({} must be a count, a name array, or "dynamic")", path);
       }
     }
 
-    void readKeybinds(Section& root, Config& loaded) {
-      const toml::node* node = root.take("keybinds");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* section = node->as_table();
-      if (section == nullptr) {
-        warnAt(node->source(), "ignoring keybinds (expected table)");
-        return;
-      }
+    const registry::Fields<OutputRule>& outputFields() {
+      using registry::boolean;
+      using registry::custom;
+      using registry::KeyDescription;
+      using O = OutputRule;
+      static const registry::Fields<O::Layout::Scrolling> scrolling{
+          registry::real("default_extent_fraction", 0.1, 1.0, &O::Layout::Scrolling::defaultExtentFraction),
+      };
+      static const registry::Fields<O::Layout> layout{
+          registry::table("scrolling", &O::Layout::scrolling, scrolling),
+      };
+      static const registry::Fields<O> fields{
+          boolean("enabled", &O::enabled),
+          boolean("tearing", &O::allowTearing),
+          boolean("direct_scanout", &O::directScanout),
+          optionalEffectField("screen_effect", &O::screenEffect),
+          registry::table("layout", &O::layout, layout),
+          registry::integer("min_workspaces", 1, static_cast<int>(kMaxWorkspaces), &O::minWorkspaces),
+          boolean("cyclic_workspaces", &O::cyclicWorkspaces),
+          registry::choice(
+              "workspace_axis", &O::workspaceAxis,
+              {{.name = "vertical", .value = WorkspaceAxis::Vertical},
+               {.name = "horizontal", .value = WorkspaceAxis::Horizontal}}
+          ),
+          custom<O>(
+              "workspaces", KeyDescription("int_or_string_array").withValues({"dynamic"}).withRange(1, kMaxWorkspaces),
+              [](const toml::node& node, const std::string& path, O& target, registry::ReadContext&) {
+                parseOutputWorkspaces(node, path, target);
+              },
+              [](const O&) { return nlohmann::ordered_json("dynamic"); }
+          ),
+          custom<O>(
+              "mode", KeyDescription("string").withFormat("output_mode"),
+              [](const toml::node& node, const std::string& path, O& target, registry::ReadContext&) {
+                const auto value = node.value<std::string>();
+                OutputMode mode;
+                if (!value || !parseOutputMode(*value, mode)) {
+                  warnAt(node.source(), R"(ignoring {} (expected "WIDTHxHEIGHT" or "WIDTHxHEIGHT@HZ"))", path);
+                } else {
+                  target.mode = mode;
+                }
+              }
+          ),
+          custom<O>(
+              "position", KeyDescription("int_array").withRange(-100000, 100000),
+              [](const toml::node& node, const std::string& path, O& target, registry::ReadContext&) {
+                const auto* position = node.as_array();
+                bool valid = position != nullptr && position->size() == 2;
+                std::array<int, 2> parsed{};
+                for (size_t index = 0; valid && index < parsed.size(); ++index) {
+                  const auto value = (*position)[index].value<std::int64_t>();
+                  valid = value.has_value();
+                  if (valid) {
+                    parsed[index] = static_cast<int>(
+                        std::clamp(*value, static_cast<std::int64_t>(-100000), static_cast<std::int64_t>(100000))
+                    );
+                  }
+                }
+                if (!valid) {
+                  warnAt(node.source(), "ignoring {} (expected [x, y] integers)", path);
+                } else {
+                  target.position = parsed;
+                }
+              }
+          ),
+          registry::real("scale", 0.25, 4.0, &O::scale),
+          registry::choice("vrr", &O::vrr, vrrModes()),
+          registry::choice("hdr", &O::hdr, hdrModes()),
+          registry::real("sdr_white", 80.0, 1000.0, &O::sdrWhite),
+          custom<O>(
+              "bit_depth", KeyDescription("int").withRange(8, 10),
+              [](const toml::node& node, const std::string& path, O& target, registry::ReadContext&) {
+                const auto value = node.value<std::int64_t>();
+                if (value && (*value == 8 || *value == 10)) {
+                  target.bitDepth = static_cast<int>(*value);
+                } else {
+                  warnAt(node.source(), "ignoring {} (expected 8 or 10)", path);
+                }
+              },
+              [](const O& defaults) { return nlohmann::ordered_json(defaults.bitDepth); }
+          ),
+          registry::choice(
+              "transform", &O::transform,
+              {{.name = "normal", .value = 0},
+               {.name = "90", .value = 1},
+               {.name = "180", .value = 2},
+               {.name = "270", .value = 3},
+               {.name = "flipped", .value = 4},
+               {.name = "flipped-90", .value = 5},
+               {.name = "flipped-180", .value = 6},
+               {.name = "flipped-270", .value = 7}}
+          ),
+      };
+      return fields;
+    }
 
+    // A later section for the same output replaces an earlier one.
+    void acceptOutput(
+        const toml::key& key, Section& keys, const toml::node&, OutputRule& rule, Config& loaded,
+        registry::ReadContext& context
+    ) {
+      const std::string name(key.str());
+      rule.name = name;
+      if (std::ranges::any_of(loaded.outputs, [&](const OutputRule& existing) {
+            return outputNamesEqual(existing.name, name);
+          })) {
+        warnAt(key.source(), "duplicate output section '{}'", name);
+        // Drop the discarded section's references so they cannot clear the surviving rule's value by name.
+        std::erase_if(context.effectReferences, [&](const EffectReference& reference) {
+          return std::ranges::any_of(loaded.outputs, [&](const OutputRule& existing) {
+            return outputNamesEqual(existing.name, name)
+                && reference.context == "output." + existing.name + ".screen_effect";
+          });
+        });
+        std::erase_if(loaded.outputs, [&](const OutputRule& existing) {
+          return outputNamesEqual(existing.name, name);
+        });
+      }
+      if (const toml::node* minNode = keys.node("min_workspaces"); minNode != nullptr && rule.workspaces) {
+        errorAt(minNode->source(), "{} requires dynamic workspaces", keys.qualified("min_workspaces"));
+      }
+      loaded.outputs.push_back(std::move(rule));
+      recordRuleEffect(context, keys, "screen_effect", EffectKind::Screen, [&loaded, name] {
+        if (OutputRule* output = findOutputRuleMutable(loaded, name)) {
+          output->screenEffect.reset();
+        }
+      });
+    }
+
+    // The keys a keybind written as a table takes besides its chord.
+    struct KeybindOptions {
+      std::optional<std::string> action;
+      bool repeat = true;
+      bool allowWhenLocked = false;
+      bool allowWhenInhibited = false;
+      int cooldownMs = 0;
+      std::string submap;
+    };
+
+    const registry::Fields<KeybindOptions>& keybindFields() {
+      using K = KeybindOptions;
+      static const registry::Fields<K> fields{
+          // A missing or non-string action is reported against the whole bind.
+          registry::custom<K>(
+              "action", registry::KeyDescription("string").withFormat("action"),
+              [](const toml::node& node, const std::string&, K& target, registry::ReadContext&) {
+                target.action = node.value<std::string>();
+              }
+          ),
+          registry::boolean("repeat", &K::repeat),
+          registry::boolean("allow_when_locked", &K::allowWhenLocked),
+          registry::boolean("allow_when_inhibited", &K::allowWhenInhibited),
+          registry::integer("cooldown_ms", 0, 3600000, &K::cooldownMs),
+          registry::text("submap", &K::submap),
+      };
+      return fields;
+    }
+
+    void readKeybinds(Section& section, Config& loaded, registry::ReadContext& context) {
       std::vector<Keybind> configured;
       auto sameChord = [](const Keybind& left, const Keybind& right) {
         return left.submap == right.submap
@@ -2077,48 +2041,29 @@ namespace umbriel {
             && left.wheel == right.wheel
             && left.mouseButton == right.mouseButton;
       };
-      for (const auto& [key, entry] : *section) {
+      for (const auto& [key, entry] : section.table()) {
         const std::string chord(key.str());
-        std::string actionStr;
-        std::string submapAfter;
+        KeybindOptions options;
         bool hasSubmapAfter = false;
-        bool repeatBind = true;
-        bool allowWhenLocked = false;
-        bool allowWhenInhibited = false;
-        int cooldownMs = 0;
 
         if (const auto* tbl = entry.as_table()) {
           Section bind(*tbl, "keybinds." + chord, configStore().mutableDiagnostics());
-          // Read `repeat` before validating the action: an entry rejected for a
-          // bad action must not also be told its `repeat` key is unknown.
-          bind.boolean("repeat", repeatBind);
-          bind.boolean("allow_when_locked", allowWhenLocked);
-          bind.boolean("allow_when_inhibited", allowWhenInhibited);
-          bind.integer("cooldown_ms", 0, 3600000, cooldownMs);
+          registry::readFields(bind, keybindFields(), options, context);
           const toml::node* submapNode = bind.node("submap");
           hasSubmapAfter = submapNode != nullptr && submapNode->is_string();
-          bind.text("submap", submapAfter);
-          const toml::node* actionNode = bind.take("action");
-          if (actionNode == nullptr) {
+          if (!options.action) {
             warnAt(entry.source(), "ignoring keybind '{}' (table needs an 'action' string)", chord);
             continue;
           }
-          const auto actionVal = actionNode->value<std::string>();
-          if (!actionVal) {
-            warnAt(entry.source(), "ignoring keybind '{}' (table needs an 'action' string)", chord);
-            continue;
-          }
-          actionStr = *actionVal;
         } else {
-          const auto value = entry.value<std::string>();
-          if (!value) {
+          options.action = entry.value<std::string>();
+          if (!options.action) {
             warnAt(entry.source(), "ignoring keybind '{}' (expected string or table)", chord);
             continue;
           }
-          actionStr = *value;
         }
 
-        if (hasSubmapAfter && !validSubmapName(submapAfter)) {
+        if (hasSubmapAfter && !validSubmapName(options.submap)) {
           warnAt(
               entry.source(),
               "ignoring keybind '{}' (submap must be a non-empty name without ']' and may not be 'disable')", chord
@@ -2136,14 +2081,14 @@ namespace umbriel {
           continue;
         }
         if (hasSubmapAfter) {
-          binding.submapAfter = SubmapArg{.name = std::move(submapAfter)};
+          binding.submapAfter = SubmapArg{.name = std::move(options.submap)};
         }
-        binding.repeat = repeatBind && !binding.modifierOnly && !binding.submapAfter.has_value();
-        binding.allowWhenLocked = allowWhenLocked;
-        binding.allowWhenInhibited = allowWhenInhibited;
-        binding.cooldownMs = cooldownMs;
-        if (!parseAction(actionStr, binding)) {
-          warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, actionStr);
+        binding.repeat = options.repeat && !binding.modifierOnly && !binding.submapAfter.has_value();
+        binding.allowWhenLocked = options.allowWhenLocked;
+        binding.allowWhenInhibited = options.allowWhenInhibited;
+        binding.cooldownMs = options.cooldownMs;
+        if (!parseAction(*options.action, binding)) {
+          warnAt(key.source(), "ignoring keybind '{}' (unknown action '{}')", chord, *options.action);
           continue;
         }
 
@@ -2184,486 +2129,319 @@ namespace umbriel {
       }
     }
 
-    void readWindowRules(Section& root, Config& loaded, std::vector<EffectReference>& references) {
-      const toml::node* node = root.take("window_rule");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* rules = node->as_array();
-      if (rules == nullptr) {
-        warnAt(node->source(), "ignoring window_rule (expected [[window_rule]] array of tables)");
-        return;
-      }
+    // A regex pattern a rule matches with. One that does not compile rejects the rule.
+    template <typename T>
+    registry::Field<T> regexField(std::string_view key, std::string T::* pattern, std::regex T::* regex) {
+      return registry::custom<T>(
+          key, registry::KeyDescription("string").withFormat("regex"),
+          [pattern, regex](const toml::node& node, const std::string& path, T& target, registry::ReadContext& context) {
+            const auto value = node.value<std::string>();
+            if (!value) {
+              warnAt(node.source(), "ignoring {} (expected string)", path);
+              return;
+            }
+            target.*pattern = *value;
+            try {
+              target.*regex = std::regex(*value);
+            } catch (const std::regex_error& error) {
+              warnAt(node.source(), "invalid regex in {}: {}", path, error.what());
+              context.entryRejected = true;
+            }
+          }
+      );
+    }
 
-      for (const auto& entry : *rules) {
-        const auto* section = entry.as_table();
-        if (section == nullptr) {
-          warnAt(entry.source(), "ignoring window_rule entry (expected table)");
-          continue;
-        }
-        Section keys(*section, "window_rule", configStore().mutableDiagnostics());
-
-        WindowRule rule;
-        bool valid = true;
-
-        if (const toml::node* matchNode = keys.take("match")) {
-          if (const auto* match = matchNode->as_table()) {
-            Section matchKeys(*match, "window_rule.match", configStore().mutableDiagnostics());
-            if (const toml::node* appIdNode = matchKeys.take("app_id")) {
-              if (const auto value = appIdNode->value<std::string>()) {
-                rule.appIdPattern = *value;
-                try {
-                  rule.appIdRegex = std::regex(rule.appIdPattern);
-                } catch (const std::regex_error& error) {
-                  warnAt(appIdNode->source(), "invalid regex in window_rule.match.app_id: {}", error.what());
-                  valid = false;
-                }
-              } else {
-                warnAt(appIdNode->source(), "ignoring window_rule.match.app_id (expected string)");
-                valid = false;
-              }
-            }
-            if (const toml::node* titleNode = matchKeys.take("title")) {
-              if (const auto value = titleNode->value<std::string>()) {
-                rule.titlePattern = *value;
-                try {
-                  rule.titleRegex = std::regex(rule.titlePattern);
-                } catch (const std::regex_error& error) {
-                  warnAt(titleNode->source(), "invalid regex in window_rule.match.title: {}", error.what());
-                  valid = false;
-                }
-              } else {
-                warnAt(titleNode->source(), "ignoring window_rule.match.title (expected string)");
-                valid = false;
-              }
-            }
-            if (const toml::node* xdgTagNode = matchKeys.take("xdg_tag")) {
-              if (const auto value = xdgTagNode->value<std::string>()) {
-                rule.xdgTagPattern = *value;
-                try {
-                  rule.xdgTagRegex = std::regex(rule.xdgTagPattern);
-                } catch (const std::regex_error& error) {
-                  warnAt(xdgTagNode->source(), "invalid regex in window_rule.match.xdg_tag: {}", error.what());
-                  valid = false;
-                }
-              } else {
-                warnAt(xdgTagNode->source(), "ignoring window_rule.match.xdg_tag (expected string)");
-                valid = false;
-              }
-            }
-            if (const toml::node* contentTypeNode = matchKeys.take("content_type")) {
-              if (const auto value = readContentType(*contentTypeNode)) {
-                rule.matchContentType = value;
-              } else {
-                warnAt(
-                    contentTypeNode->source(),
-                    "ignoring window_rule.match.content_type (expected none|photo|video|game)"
-                );
-                valid = false;
-              }
-            }
-            if (const toml::node* focusedNode = matchKeys.take("is_focused")) {
-              if (focusedNode->is_boolean()) {
-                rule.matchFocused = focusedNode->value<bool>();
-              } else {
-                warnAt(focusedNode->source(), "ignoring window_rule.match.is_focused (expected boolean)");
-                valid = false;
-              }
-            }
-            if (const toml::node* floatingNode = matchKeys.take("is_floating")) {
-              if (floatingNode->is_boolean()) {
-                rule.matchFloating = floatingNode->value<bool>();
-              } else {
-                warnAt(floatingNode->source(), "ignoring window_rule.match.is_floating (expected boolean)");
-                valid = false;
-              }
-            }
-            if (const toml::node* pinnedNode = matchKeys.take("is_pinned")) {
-              if (pinnedNode->is_boolean()) {
-                rule.matchPinned = pinnedNode->value<bool>();
-              } else {
-                warnAt(pinnedNode->source(), "ignoring window_rule.match.is_pinned (expected boolean)");
-                valid = false;
-              }
-            }
-            if (const toml::node* scratchpadNode = matchKeys.take("is_scratchpad")) {
-              if (scratchpadNode->is_boolean()) {
-                rule.matchScratchpad = scratchpadNode->value<bool>();
-              } else {
-                warnAt(scratchpadNode->source(), "ignoring window_rule.match.is_scratchpad (expected boolean)");
-                valid = false;
-              }
-            }
-            if (const toml::node* aloneNode = matchKeys.take("is_alone")) {
-              if (aloneNode->is_boolean()) {
-                rule.matchAlone = aloneNode->value<bool>();
-              } else {
-                warnAt(aloneNode->source(), "ignoring window_rule.match.is_alone (expected boolean)");
-                valid = false;
-              }
-            }
-            if (const toml::node* atStartupNode = matchKeys.take("at_startup")) {
-              if (atStartupNode->is_boolean()) {
-                rule.matchAtStartup = atStartupNode->value<bool>();
-              } else {
-                warnAt(atStartupNode->source(), "ignoring window_rule.match.at_startup (expected boolean)");
-                valid = false;
-              }
-            }
-          } else {
-            warnAt(matchNode->source(), "ignoring window_rule.match (expected table)");
-            valid = false;
-          }
-        }
-
-        keys.boolean("default_floating", rule.defaultFloating)
-            .boolean("default_fullscreen", rule.defaultFullscreen)
-            .boolean("default_maximize_to_edges", rule.defaultMaximizeToEdges)
-            .boolean("default_maximize", rule.defaultMaximize)
-            .boolean("default_focused", rule.defaultFocused)
-            .boolean("default_pinned", rule.defaultPinned)
-            .boolean("focus_on_activate", rule.focusOnActivate)
-            .boolean("tearing", rule.allowTearing)
-            .boolean("blur", rule.blur)
-            .boolean("blur_popups", rule.blurPopups)
-            .boolean("blur_optimized", rule.blurOptimized)
-            .real("opacity", 0.0, 1.0, rule.opacity)
-            .real("blur_ignore_alpha", 0.0, 1.0, rule.blurIgnoreAlpha)
-            .color("border_color_focused", rule.borderColorFocused)
-            .color("border_color_unfocused", rule.borderColorUnfocused)
-            .color("border_color_outer", rule.borderColorOuter)
-            .integer("border_width", 0, 100, rule.borderWidth)
-            .integer("outer_border_width", 0, 100, rule.outerBorderWidth)
-            .integer("corner_radius", 0, 100, rule.cornerRadius)
-            .boolean("shadow", rule.shadow);
-        const auto borderEffect = takeEffectSelector(keys, "border_effect");
-        if (borderEffect) {
-          rule.borderEffect = borderEffect->first;
-        }
-        const auto windowEffect = takeEffectSelector(keys, "window_effect");
-        if (windowEffect) {
-          rule.windowEffect = windowEffect->first;
-        }
-        if (const toml::node* n = keys.take("default_floating_size")) {
-          const auto* table = n->as_table();
-          if (table == nullptr) {
-            warnAt(
-                n->source(),
-                "ignoring window_rule.default_floating_size "
-                "(expected {{ width = number, height = number }})"
-            );
-          } else {
-            Section size(*table, "window_rule.default_floating_size", configStore().mutableDiagnostics());
-            size.real("width", 0.1, 1.0, rule.defaultFloatingWidth)
-                .real("height", 0.1, 1.0, rule.defaultFloatingHeight);
-          }
-        }
-        if (const toml::node* n = keys.take("default_floating_size_px")) {
-          const auto* table = n->as_table();
-          if (table == nullptr) {
-            warnAt(
-                n->source(),
-                "ignoring window_rule.default_floating_size_px "
-                "(expected {{ width = integer, height = integer }})"
-            );
-          } else {
-            Section size(*table, "window_rule.default_floating_size_px", configStore().mutableDiagnostics());
-            size.integer("width", 1, 100000, rule.defaultFloatingWidthPx)
-                .integer("height", 1, 100000, rule.defaultFloatingHeightPx);
-          }
-        }
-        if (const toml::node* vrrNode = keys.take("vrr")) {
-          if (const auto value = readVrrMode(*vrrNode)) {
-            rule.vrr = value;
-          } else {
-            warnAt(vrrNode->source(), "ignoring window_rule.vrr (expected disabled|always|fullscreen)");
-          }
-        }
-        if (const toml::node* hdrNode = keys.take("hdr")) {
-          if (const auto value = readHdrMode(*hdrNode)) {
-            rule.hdr = value;
-          } else {
-            warnAt(hdrNode->source(), "ignoring window_rule.hdr (expected off|on|auto|fullscreen)");
-          }
-        }
-        if (const toml::node* n = keys.take("default_output")) {
-          if (const auto value = n->value<std::string>()) {
-            rule.defaultOutput = *value;
-          } else {
-            warnAt(n->source(), "ignoring window_rule.default_output (expected string)");
-          }
-        }
-
-        if (const toml::node* n = keys.take("default_position")) {
-          const auto* table = n->as_table();
-          if (table == nullptr) {
-            warnAt(
-                n->source(),
-                "ignoring window_rule.default_position (expected {{ x = integer, y = integer, anchor = string }})"
-            );
-          } else {
-            Section position(*table, "window_rule.default_position", configStore().mutableDiagnostics());
-            std::optional<int> x;
-            std::optional<int> y;
-            position.integer("x", -100000, 100000, x).integer("y", -100000, 100000, y);
-
-            WindowPositionAnchor anchor = WindowPositionAnchor::Center;
-            bool validAnchor = true;
-            if (const toml::node* anchorNode = position.take("anchor")) {
-              const auto configuredAnchor = anchorNode->value<std::string>();
-              if (!configuredAnchor) {
-                warnAt(anchorNode->source(), "window_rule.default_position.anchor must be a string");
-                validAnchor = false;
-              } else {
-                const std::string value = lowercase(*configuredAnchor);
-                if (value == "top_left") {
-                  anchor = WindowPositionAnchor::TopLeft;
-                } else if (value == "top_right") {
-                  anchor = WindowPositionAnchor::TopRight;
-                } else if (value == "bottom_left") {
-                  anchor = WindowPositionAnchor::BottomLeft;
-                } else if (value == "bottom_right") {
-                  anchor = WindowPositionAnchor::BottomRight;
-                } else if (value == "top") {
-                  anchor = WindowPositionAnchor::Top;
-                } else if (value == "bottom") {
-                  anchor = WindowPositionAnchor::Bottom;
-                } else if (value == "left") {
-                  anchor = WindowPositionAnchor::Left;
-                } else if (value == "right") {
-                  anchor = WindowPositionAnchor::Right;
-                } else if (value == "center") {
-                  anchor = WindowPositionAnchor::Center;
-                } else {
-                  warnAt(
-                      anchorNode->source(), R"(unknown window_rule.default_position.anchor "{}")", *configuredAnchor
-                  );
-                  validAnchor = false;
-                }
-              }
-            }
-            if (!x || !y) {
-              warnAt(n->source(), "ignoring window_rule.default_position (x and y are required integers)");
-            } else if (validAnchor) {
-              rule.defaultPosition = WindowPosition{.x = *x, .y = *y, .anchor = anchor};
-            }
-          }
-        }
-
-        keys.integer("default_scrolling_extent_px", 1, 100000, rule.defaultScrollingExtentPx)
-            .real("default_scrolling_extent", 0.1, 1.0, rule.defaultScrollingExtent);
-
-        if (const toml::node* n = keys.take("default_workspace")) {
-          if (const auto value = n->value<std::int64_t>()) {
-            if (*value < 1 || *value > static_cast<std::int64_t>(kMaxWorkspaces)) {
-              warnAt(
-                  n->source(), "ignoring window_rule.default_workspace (expected integer 1-{} or non-empty string)",
-                  kMaxWorkspaces
-              );
-            } else {
-              rule.defaultWorkspace = WorkspaceReference{WorkspaceIndex{static_cast<size_t>(*value)}};
-            }
-          } else if (const auto value = n->value<std::string>(); value && !value->empty()) {
-            rule.defaultWorkspace = WorkspaceReference{WorkspaceName{*value}};
-          } else {
-            warnAt(
-                n->source(), "ignoring window_rule.default_workspace (expected integer 1-{} or non-empty string)",
-                kMaxWorkspaces
-            );
-          }
-        }
-
-        if (const toml::node* n = keys.take("default_scratchpad")) {
-          const auto value = n->value<std::string>();
-          if (!value || value->empty()) {
-            warnAt(n->source(), "ignoring window_rule.default_scratchpad (expected non-empty string)");
-          } else if (const auto invalid = scratchpadTargetError(loaded, *value)) {
-            warnAt(n->source(), "ignoring window_rule.default_scratchpad ({})", *invalid);
-          } else {
-            rule.defaultScratchpad = *value;
-          }
-        }
-
-        if (const toml::node* n = keys.take("default_scrolling_column")) {
-          const auto value = n->value<std::string>();
-          if (!value || value->empty()) {
-            warnAt(n->source(), "ignoring window_rule.default_scrolling_column (expected non-empty string)");
-          } else {
-            rule.defaultScrollingColumn = *value;
-          }
-        }
-        keys.integer(
-            "default_scrolling_column_order", std::numeric_limits<int>::min(), std::numeric_limits<int>::max(),
-            rule.defaultScrollingColumnOrder
-        );
-
-        if (valid) {
-          loaded.windowRules.push_back(std::move(rule));
-          const size_t index = loaded.windowRules.size() - 1;
-          if (borderEffect) {
-            addEffectReference(
-                references, "window_rule.border_effect", *borderEffect, EffectKind::Border, true,
-                [&loaded, index] { loaded.windowRules[index].borderEffect.reset(); }
-            );
-          }
-          if (windowEffect) {
-            addEffectReference(
-                references, "window_rule.window_effect", *windowEffect, EffectKind::Window, true,
-                [&loaded, index] { loaded.windowRules[index].windowEffect.reset(); }
-            );
-          }
-        }
+    // A match table that is not a table leaves its rule selecting nothing it meant to, so the rule is dropped.
+    template <typename T> void rejectUnlessTable(const toml::node& node, T&, registry::ReadContext& context) {
+      if (!node.is_table()) {
+        context.entryRejected = true;
       }
     }
 
-    void readLayerRules(Section& root, Config& loaded) {
-      const toml::node* node = root.take("layer_rule");
-      if (node == nullptr) {
+    // `{ x, y, anchor }`, placed only when both coordinates are set and the anchor is valid.
+    void parseDefaultPosition(const toml::node& node, const std::string& path, WindowRule& rule) {
+      const auto* table = node.as_table();
+      if (table == nullptr) {
+        warnAt(node.source(), "ignoring {} (expected table)", path);
         return;
       }
-      const auto* rules = node->as_array();
-      if (rules == nullptr) {
-        warnAt(node->source(), "ignoring layer_rule (expected [[layer_rule]] array of tables)");
-        return;
-      }
-
-      for (const auto& entry : *rules) {
-        const auto* section = entry.as_table();
-        if (section == nullptr) {
-          warnAt(entry.source(), "ignoring layer_rule entry (expected table)");
-          continue;
-        }
-        Section keys(*section, "layer_rule", configStore().mutableDiagnostics());
-
-        LayerRule rule;
-
-        if (const toml::node* matchNode = keys.take("match")) {
-          if (const auto* match = matchNode->as_table()) {
-            Section matchKeys(*match, "layer_rule.match", configStore().mutableDiagnostics());
-            if (const toml::node* namespaceNode = matchKeys.take("namespace")) {
-              if (const auto value = namespaceNode->value<std::string>()) {
-                rule.namespacePattern = *value;
-                try {
-                  rule.namespaceRegex = std::regex(rule.namespacePattern);
-                } catch (const std::regex_error& error) {
-                  warnAt(namespaceNode->source(), "invalid regex in layer_rule.match.namespace: {}", error.what());
-                  continue;
-                }
-              } else {
-                warnAt(namespaceNode->source(), "ignoring layer_rule.match.namespace (expected string)");
-              }
-            }
-          } else {
-            warnAt(matchNode->source(), "ignoring layer_rule.match (expected table)");
-          }
-        }
-
-        keys.boolean("blur", rule.blur)
-            .boolean("blur_popups", rule.blurPopups)
-            .real("blur_ignore_alpha", 0.0, 1.0, rule.ignoreAlpha)
-            .boolean("blur_optimized", rule.optimized);
-
-        loaded.layerRules.push_back(std::move(rule));
-      }
-    }
-
-    // Any mistake rejects the whole entry: a rule missing its selector would
-    // apply to every restricted client.
-    void readSecurityContextRules(Section& root, Config& loaded) {
-      const toml::node* node = root.take("security_context_rule");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* rules = node->as_array();
-      if (rules == nullptr) {
-        warnAt(node->source(), "ignoring security_context_rule (expected [[security_context_rule]] array of tables)");
-        return;
-      }
-
-      for (const auto& entry : *rules) {
-        const auto* section = entry.as_table();
-        if (section == nullptr) {
-          warnAt(entry.source(), "ignoring security_context_rule entry (expected table)");
-          continue;
-        }
-        Section keys(*section, "security_context_rule", configStore().mutableDiagnostics());
-
-        SecurityContextRule rule;
-        bool valid = true;
-
-        const auto readPattern = [&](Section& match, std::string_view key, std::string& pattern, std::regex& regex) {
-          const toml::node* patternNode = match.take(key);
-          if (patternNode == nullptr) {
-            return;
-          }
-          const auto value = patternNode->value<std::string>();
-          if (!value || value->empty()) {
-            warnAt(patternNode->source(), "ignoring security_context_rule (match.{} must be a non-empty string)", key);
-            valid = false;
-            return;
-          }
-          pattern = *value;
-          try {
-            regex = std::regex(pattern);
-          } catch (const std::regex_error& error) {
-            warnAt(patternNode->source(), "invalid regex in security_context_rule.match.{}: {}", key, error.what());
-            valid = false;
-          }
-        };
-
-        if (const toml::node* matchNode = keys.take("match")) {
-          if (const auto* match = matchNode->as_table()) {
-            Section matchKeys(*match, "security_context_rule.match", configStore().mutableDiagnostics());
-            readPattern(matchKeys, "sandbox_engine", rule.sandboxEnginePattern, rule.sandboxEngineRegex);
-            readPattern(matchKeys, "app_id", rule.appIdPattern, rule.appIdRegex);
-            if (!matchKeys.allKeysKnown()) {
-              warnAt(matchNode->source(), "ignoring security_context_rule (unknown key in match)");
-              valid = false;
-            }
-          } else {
-            warnAt(matchNode->source(), "ignoring security_context_rule.match (expected table)");
-            valid = false;
-          }
-        }
-
-        keys.strings("allow_globals", rule.allowGlobals);
-        // The filter refuses this global regardless; warning here tells the user why.
-        if (std::erase(rule.allowGlobals, "wp_security_context_manager_v1") > 0) {
-          warnAt(
-              entry.source(),
-              "ignoring wp_security_context_manager_v1 in security_context_rule.allow_globals (nested contexts stay "
-              "blocked)"
-          );
-        }
-        if (rule.allowGlobals.empty()) {
-          warnAt(entry.source(), "ignoring security_context_rule (allow_globals is empty)");
-          valid = false;
-        }
-        if (!keys.allKeysKnown()) {
-          warnAt(entry.source(), "ignoring security_context_rule (unknown key)");
-          valid = false;
-        }
-
-        if (!valid) {
-          continue;
-        }
-        loaded.securityContextRules.push_back(std::move(rule));
-      }
-    }
-
-    // A section still read by hand: it is read in its place, but declares no keys.
-    registry::Field<Config>
-    unregistered(std::string_view key, std::function<void(Section&, Config&, registry::ReadContext&)> read) {
-      return {
-          .key = key,
-          .read = std::move(read),
-          .describe = [](const Config&, const std::string&, registry::Descriptions&) {},
+      static const registry::Choices<WindowPositionAnchor> anchors{
+          {.name = "top_left", .value = WindowPositionAnchor::TopLeft},
+          {.name = "top_right", .value = WindowPositionAnchor::TopRight},
+          {.name = "bottom_left", .value = WindowPositionAnchor::BottomLeft},
+          {.name = "bottom_right", .value = WindowPositionAnchor::BottomRight},
+          {.name = "top", .value = WindowPositionAnchor::Top},
+          {.name = "bottom", .value = WindowPositionAnchor::Bottom},
+          {.name = "left", .value = WindowPositionAnchor::Left},
+          {.name = "right", .value = WindowPositionAnchor::Right},
+          {.name = "center", .value = WindowPositionAnchor::Center},
       };
+      Section position(*table, path, configStore().mutableDiagnostics());
+      std::optional<int> x;
+      std::optional<int> y;
+      position.integer("x", -100000, 100000, x).integer("y", -100000, 100000, y);
+      std::optional<WindowPositionAnchor> anchor = WindowPositionAnchor::Center;
+      if (const toml::node* anchorNode = position.take("anchor")) {
+        anchor =
+            registry::readChoice(position, *anchorNode, position.qualified("anchor"), anchors, registry::Case::Fold);
+      }
+      if (!x || !y) {
+        warnAt(node.source(), "ignoring {} (x and y are required integers)", path);
+      } else if (anchor) {
+        rule.defaultPosition = WindowPosition{.x = *x, .y = *y, .anchor = *anchor};
+      }
+    }
+
+    // A string that must not be empty.
+    template <typename T>
+    registry::Field<T> nonEmptyText(std::string_view key, std::optional<std::string> T::* member) {
+      return registry::custom<T>(
+          key, registry::KeyDescription("string"),
+          [member](const toml::node& node, const std::string& path, T& target, registry::ReadContext&) {
+            const auto value = node.value<std::string>();
+            if (!value || value->empty()) {
+              warnAt(node.source(), "ignoring {} (expected non-empty string)", path);
+            } else {
+              target.*member = *value;
+            }
+          }
+      );
+    }
+
+    const registry::Fields<WindowRule>& windowRuleFields() {
+      using registry::boolean;
+      using registry::color;
+      using registry::custom;
+      using registry::integer;
+      using registry::KeyDescription;
+      using registry::real;
+      using registry::strict;
+      using W = WindowRule;
+      const auto self = [](auto& rule) -> auto& { return rule; };
+      // Any mistake in the match rejects the rule: one that selects less than it says would restyle other windows.
+      static const registry::Fields<W> match{
+          strict(regexField("app_id", &W::appIdPattern, &W::appIdRegex)),
+          strict(regexField("title", &W::titlePattern, &W::titleRegex)),
+          strict(regexField("xdg_tag", &W::xdgTagPattern, &W::xdgTagRegex)),
+          strict(registry::choice("content_type", &W::matchContentType, contentTypes())),
+          strict(boolean("is_focused", &W::matchFocused)),
+          strict(boolean("is_floating", &W::matchFloating)),
+          strict(boolean("is_pinned", &W::matchPinned)),
+          strict(boolean("is_scratchpad", &W::matchScratchpad)),
+          strict(boolean("is_alone", &W::matchAlone)),
+          strict(boolean("at_startup", &W::matchAtStartup)),
+      };
+      static const registry::Fields<W> floatingSize{
+          real("width", 0.1, 1.0, &W::defaultFloatingWidth),
+          real("height", 0.1, 1.0, &W::defaultFloatingHeight),
+      };
+      static const registry::Fields<W> floatingSizePx{
+          integer("width", 1, 100000, &W::defaultFloatingWidthPx),
+          integer("height", 1, 100000, &W::defaultFloatingHeightPx),
+      };
+      static const registry::Fields<W> fields{
+          registry::table<W>("match", self, match, rejectUnlessTable<W>),
+          boolean("default_floating", &W::defaultFloating),
+          boolean("default_fullscreen", &W::defaultFullscreen),
+          boolean("default_maximize_to_edges", &W::defaultMaximizeToEdges),
+          boolean("default_maximize", &W::defaultMaximize),
+          boolean("default_focused", &W::defaultFocused),
+          boolean("default_pinned", &W::defaultPinned),
+          boolean("focus_on_activate", &W::focusOnActivate),
+          boolean("tearing", &W::allowTearing),
+          boolean("blur", &W::blur),
+          boolean("blur_popups", &W::blurPopups),
+          boolean("blur_optimized", &W::blurOptimized),
+          real("opacity", 0.0, 1.0, &W::opacity),
+          real("blur_ignore_alpha", 0.0, 1.0, &W::blurIgnoreAlpha),
+          color("border_color_focused", &W::borderColorFocused),
+          color("border_color_unfocused", &W::borderColorUnfocused),
+          color("border_color_outer", &W::borderColorOuter),
+          integer("border_width", 0, 100, &W::borderWidth),
+          integer("outer_border_width", 0, 100, &W::outerBorderWidth),
+          integer("corner_radius", 0, 100, &W::cornerRadius),
+          boolean("shadow", &W::shadow),
+          optionalEffectField("border_effect", &W::borderEffect),
+          optionalEffectField("window_effect", &W::windowEffect),
+          registry::table<W>("default_floating_size", self, floatingSize),
+          registry::table<W>("default_floating_size_px", self, floatingSizePx),
+          registry::choice("vrr", &W::vrr, vrrModes()),
+          registry::choice("hdr", &W::hdr, hdrModes()),
+          registry::text("default_output", &W::defaultOutput),
+          custom<W>(
+              "default_position", KeyDescription("table"),
+              [](const toml::node& node, const std::string& path, W& target, registry::ReadContext&) {
+                parseDefaultPosition(node, path, target);
+              },
+              nullptr,
+              [] {
+                registry::Descriptions keys{
+                    KeyDescription("int").withRange(-100000, 100000),
+                    KeyDescription("int").withRange(-100000, 100000),
+                    KeyDescription("enum").withValues(
+                        {"top_left", "top_right", "bottom_left", "bottom_right", "top", "bottom", "left", "right",
+                         "center"}
+                    ),
+                };
+                keys[0].path = "x";
+                keys[1].path = "y";
+                keys[2].path = "anchor";
+                keys[2].defaultValue = "center";
+                return keys;
+              }()
+          ),
+          integer("default_scrolling_extent_px", 1, 100000, &W::defaultScrollingExtentPx),
+          real("default_scrolling_extent", 0.1, 1.0, &W::defaultScrollingExtent),
+          custom<W>(
+              "default_workspace", KeyDescription("int_or_string").withRange(1, kMaxWorkspaces),
+              [](const toml::node& node, const std::string& path, W& target, registry::ReadContext&) {
+                if (const auto value = node.value<std::int64_t>()) {
+                  if (*value >= 1 && *value <= static_cast<std::int64_t>(kMaxWorkspaces)) {
+                    target.defaultWorkspace = WorkspaceReference{WorkspaceIndex{static_cast<size_t>(*value)}};
+                    return;
+                  }
+                } else if (const auto name = node.value<std::string>(); name && !name->empty()) {
+                  target.defaultWorkspace = WorkspaceReference{WorkspaceName{*name}};
+                  return;
+                }
+                warnAt(node.source(), "ignoring {} (expected integer 1-{} or non-empty string)", path, kMaxWorkspaces);
+              }
+          ),
+          custom<W>(
+              "default_scratchpad", KeyDescription("string"),
+              [](const toml::node& node, const std::string& path, W& target, registry::ReadContext& context) {
+                const auto value = node.value<std::string>();
+                if (!value || value->empty()) {
+                  warnAt(node.source(), "ignoring {} (expected non-empty string)", path);
+                } else if (const auto invalid = scratchpadTargetError(context.loaded, *value)) {
+                  warnAt(node.source(), "ignoring {} ({})", path, *invalid);
+                } else {
+                  target.defaultScratchpad = *value;
+                }
+              }
+          ),
+          nonEmptyText("default_scrolling_column", &W::defaultScrollingColumn),
+          integer(
+              "default_scrolling_column_order", std::numeric_limits<int>::min(), std::numeric_limits<int>::max(),
+              &W::defaultScrollingColumnOrder
+          ),
+      };
+      return fields;
+    }
+
+    // The rule's effects are recorded once its place in the array is known.
+    bool
+    acceptWindowRule(Section& keys, const toml::node&, WindowRule&, Config& loaded, registry::ReadContext& context) {
+      if (context.entryRejected) {
+        return false;
+      }
+      const size_t index = loaded.windowRules.size();
+      recordRuleEffect(context, keys, "border_effect", EffectKind::Border, [&loaded, index] {
+        loaded.windowRules[index].borderEffect.reset();
+      });
+      recordRuleEffect(context, keys, "window_effect", EffectKind::Window, [&loaded, index] {
+        loaded.windowRules[index].windowEffect.reset();
+      });
+      return true;
+    }
+
+    const registry::Fields<LayerRule>& layerRuleFields() {
+      using L = LayerRule;
+      static const registry::Fields<L> match{
+          regexField("namespace", &L::namespacePattern, &L::namespaceRegex),
+      };
+      static const registry::Fields<L> fields{
+          registry::table<L>(
+              "match", [](auto& rule) -> auto& { return rule; }, match
+          ),
+          registry::boolean("blur", &L::blur),
+          registry::boolean("blur_popups", &L::blurPopups),
+          registry::real("blur_ignore_alpha", 0.0, 1.0, &L::ignoreAlpha),
+          registry::boolean("blur_optimized", &L::optimized),
+      };
+      return fields;
+    }
+
+    // A security-context selector: a non-empty pattern that compiles, or the rule is dropped.
+    registry::Field<SecurityContextRule> securityPattern(
+        std::string_view key, std::string SecurityContextRule::* pattern, std::regex SecurityContextRule::* regex
+    ) {
+      return registry::custom<SecurityContextRule>(
+          key, registry::KeyDescription("string").withFormat("regex"),
+          [pattern, regex](
+              const toml::node& node, const std::string& path, SecurityContextRule& target,
+              registry::ReadContext& context
+          ) {
+            const auto value = node.value<std::string>();
+            if (!value || value->empty()) {
+              warnAt(node.source(), "ignoring {} (expected non-empty string)", path);
+              context.entryRejected = true;
+              return;
+            }
+            target.*pattern = *value;
+            try {
+              target.*regex = std::regex(*value);
+            } catch (const std::regex_error& error) {
+              warnAt(node.source(), "invalid regex in {}: {}", path, error.what());
+              context.entryRejected = true;
+            }
+          }
+      );
+    }
+
+    // Any mistake rejects the whole entry: a rule missing its selector would apply to every restricted client.
+    const registry::Fields<SecurityContextRule>& securityContextRuleFields() {
+      using S = SecurityContextRule;
+      static const registry::Fields<S> match{
+          securityPattern("sandbox_engine", &S::sandboxEnginePattern, &S::sandboxEngineRegex),
+          securityPattern("app_id", &S::appIdPattern, &S::appIdRegex),
+      };
+      static const registry::Fields<S> fields{
+          registry::table<S>(
+              "match", [](auto& rule) -> auto& { return rule; }, match,
+              [](const toml::node& node, S&, registry::ReadContext& context) {
+                const toml::table* table = node.as_table();
+                if (table == nullptr) {
+                  context.entryRejected = true;
+                } else if (!registry::declaresAll(match, *table)) {
+                  warnAt(node.source(), "ignoring security_context_rule (unknown key in match)");
+                  context.entryRejected = true;
+                }
+              }
+          ),
+          registry::strings("allow_globals", &S::allowGlobals),
+      };
+      return fields;
+    }
+
+    bool acceptSecurityContextRule(
+        Section& keys, const toml::node& entry, SecurityContextRule& rule, Config&, registry::ReadContext&
+    ) {
+      // The filter refuses this global regardless; warning here tells the user why.
+      if (std::erase(rule.allowGlobals, "wp_security_context_manager_v1") > 0) {
+        warnAt(
+            entry.source(),
+            "ignoring wp_security_context_manager_v1 in security_context_rule.allow_globals (nested contexts stay "
+            "blocked)"
+        );
+      }
+      bool valid = true;
+      if (rule.allowGlobals.empty()) {
+        warnAt(entry.source(), "ignoring security_context_rule (allow_globals is empty)");
+        valid = false;
+      }
+      if (!keys.allKeysKnown()) {
+        warnAt(entry.source(), "ignoring security_context_rule (unknown key)");
+        valid = false;
+      }
+      return valid;
     }
 
     // Every top-level table, in reading order: a table may depend on one read before it, as hot corner actions
     // depend on the scratchpads they name.
     const registry::Fields<Config>& configFields() {
+      using registry::KeyDescription;
+      using registry::Shape;
       using registry::table;
       static const registry::Fields<Config> fields{
           table("colors", &Config::colors, colorFields()),
@@ -2671,13 +2449,26 @@ namespace umbriel {
           table("animation", &Config::animation, animationFields()),
           table("appearance", &Config::appearance, appearanceFields()),
           table("overview", &Config::overview, overviewFields()),
-          unregistered("scratchpad", [](Section& s, Config& c, registry::ReadContext&) { readScratchpads(s, c); }),
+          registry::rules("scratchpad", &Config::scratchpads, scratchpadFields(), Shape::Error, acceptScratchpad),
           table("hot_corners", &Config::hotCorners, hotCornerFields()),
           table("layout", &Config::layout, layoutFields<Config::Layout>()),
           table("general", &Config::general, generalFields()),
-          unregistered("drm", [](Section& s, Config& c, registry::ReadContext&) { readDrm(s, c); }),
+          // Unknown keys here are errors, not warnings: a misspelled exclusion must not silently claim a GPU.
+          registry::handRead<Config>(
+              "drm", KeyDescription("table"),
+              [] {
+                registry::Descriptions keys{
+                    KeyDescription("string_array").withFormat("path"),
+                    KeyDescription("string_array").withFormat("pci_address"),
+                };
+                keys[0].path = ".ignored_devices";
+                keys[1].path = ".ignored_pci_addresses";
+                return keys;
+              }(),
+              [](Section& s, Config& c, registry::ReadContext&) { readDrm(s, c); }
+          ),
           registry::map<Config>(
-              "environment", registry::KeyDescription("string"),
+              "environment", KeyDescription("string"),
               [](Section& s, Config& c, registry::ReadContext&) { readEnvironmentVariables(s, c.environment); }, {},
               "table"
           ),
@@ -2685,20 +2476,46 @@ namespace umbriel {
           table("workspaces", &Config::workspaces, workspaceSettingFields()),
           table("screencast", &Config::screenCast, screenCastFields()),
           table("input", &Config::input, inputFields()),
-          unregistered(
-              "output", [](Section& s, Config& c, registry::ReadContext& r) { readOutputs(s, c, r.effectReferences); }
+          registry::namedTables<Config>("output", outputFields(), acceptOutput),
+          registry::map<Config>(
+              "keybinds", KeyDescription("string_or_table").withFormat("action"), readKeybinds,
+              [] {
+                registry::Descriptions keys;
+                registry::describeFields(keybindFields(), KeybindOptions{}, "", keys);
+                return keys;
+              }()
           ),
-          unregistered("keybinds", [](Section& s, Config& c, registry::ReadContext&) { readKeybinds(s, c); }),
-          unregistered(
-              "window_rule",
-              [](Section& s, Config& c, registry::ReadContext& r) { readWindowRules(s, c, r.effectReferences); }
+          registry::rules("window_rule", &Config::windowRules, windowRuleFields(), Shape::Warning, acceptWindowRule),
+          registry::rules("layer_rule", &Config::layerRules, layerRuleFields(), Shape::Warning),
+          registry::rules(
+              "security_context_rule", &Config::securityContextRules, securityContextRuleFields(), Shape::Warning,
+              acceptSecurityContextRule
           ),
-          unregistered("layer_rule", [](Section& s, Config& c, registry::ReadContext&) { readLayerRules(s, c); }),
-          unregistered(
-              "security_context_rule",
-              [](Section& s, Config& c, registry::ReadContext&) { readSecurityContextRules(s, c); }
+          registry::handRead<Config>(
+              "workspace", KeyDescription("array_of_tables"),
+              [] {
+                registry::Descriptions keys;
+                registry::describeFields(workspaceFields(), WorkspaceConfig{}, "[]", keys);
+                return keys;
+              }(),
+              readWorkspaces
           ),
-          unregistered("workspace", [](Section& s, Config& c, registry::ReadContext& r) { readWorkspaces(s, c, r); }),
+          // Read before any table, by the include merge; declared here so the schema lists it.
+          registry::handRead<Config>(
+              "include", KeyDescription("table"),
+              [] {
+                registry::Descriptions keys{
+                    KeyDescription("string_array").withFormat("path"),
+                    KeyDescription("table"),
+                    KeyDescription("string_array").withFormat("path"),
+                };
+                keys[0].path = ".files";
+                keys[1].path = ".optional";
+                keys[2].path = ".optional.files";
+                return keys;
+              }(),
+              [](Section&, Config&, registry::ReadContext&) {}
+          ),
       };
       return fields;
     }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config/read_context.h"
 #include "config/section.h"
 
 #include <algorithm>
@@ -19,10 +20,6 @@
 // Declared config keys. Each table of the config file is a list of Fields over the struct it fills. Reading walks the
 // list through Section; describing walks the same list, so the schema is the parser's own declaration.
 namespace umbriel::registry {
-
-  // State one load shares across tables, such as effect references resolved once every table is read. Defined by the
-  // loader; fields only pass it through to the parsers that need it.
-  struct ReadContext;
 
   // One key as `umbriel config schema` reports it.
   struct KeyDescription {
@@ -130,7 +127,16 @@ namespace umbriel::registry {
   template <typename T, typename V> Field<T> real(std::string_view key, double minimum, double maximum, V T::* member) {
     return {
         .key = key,
-        .read = [=](Section& s, T& target, ReadContext&) { s.real(key, minimum, maximum, target.*member); },
+        .read =
+            [=](Section& s, T& target, ReadContext&) {
+              if constexpr (std::is_same_v<V, float>) {
+                double value = target.*member;
+                s.real(key, minimum, maximum, value);
+                target.*member = static_cast<float>(value);
+              } else {
+                s.real(key, minimum, maximum, target.*member);
+              }
+            },
         .describe = detail::leaf<T>(KeyDescription("float").withRange(minimum, maximum), [=](const T& d) {
           return detail::toJson(d.*member);
         }),
@@ -331,13 +337,15 @@ namespace umbriel::registry {
   }
 
   // A nested table reached through `project`, which maps the parent (const or not) to it. `after` runs once the table
-  // is read, when the key is present, for checks across its keys.
+  // is read, when the key is present, for checks across its keys. Projecting the parent onto itself lays a table's
+  // keys out flat in the parent's struct.
   template <typename T, typename Project>
   Field<T> table(
       std::string_view key, Project project,
       const Fields<std::remove_cvref_t<decltype(std::declval<Project>()(std::declval<T&>()))>>& fields,
-      std::type_identity_t<std::function<
-          void(const toml::node&, std::remove_cvref_t<decltype(std::declval<Project>()(std::declval<T&>()))>&)>>
+      std::type_identity_t<std::function<void(
+          const toml::node&, std::remove_cvref_t<decltype(std::declval<Project>()(std::declval<T&>()))>&, ReadContext&
+      )>>
           after = nullptr
   ) {
     return {
@@ -347,7 +355,7 @@ namespace umbriel::registry {
               s.sub(key, [&](Section& child) { readFields(child, fields, project(target), context); });
               if (after) {
                 if (const toml::node* node = s.node(key)) {
-                  after(*node, project(target));
+                  after(*node, project(target), context);
                 }
               }
             },
@@ -362,7 +370,7 @@ namespace umbriel::registry {
   template <typename T, typename C>
   Field<T> table(
       std::string_view key, C T::* member, const Fields<C>& fields,
-      std::type_identity_t<std::function<void(const toml::node&, C&)>> after = nullptr
+      std::type_identity_t<std::function<void(const toml::node&, C&, ReadContext&)>> after = nullptr
   ) {
     return table<T>(key, [member](auto& parent) -> auto& { return parent.*member; }, fields, std::move(after));
   }
@@ -396,14 +404,22 @@ namespace umbriel::registry {
     };
   }
 
-  // An array of tables, one entry per rule. `accept` sees each read entry with the parent it lands in, whose array
-  // holds the entries kept so far, and decides whether it is kept; it reports its own reasons.
+  // How an array of tables reports being malformed. Entries that are not tables are skipped either way; an Error also
+  // rejects the whole config.
+  enum class Shape : std::uint8_t { Warning, Error };
+
+  // Decides whether a read entry is kept. It sees the entry's Section, still open, and the parent the entry lands in,
+  // whose array holds the entries kept so far; it reports its own reasons. It runs even for an entry a field already
+  // rejected (`context.entryRejected`), so every mistake in the entry is reported at once.
+  template <typename T, typename C>
+  using Accept = std::function<bool(Section& keys, const toml::node& entry, C&, T& parent, ReadContext&)>;
+
+  // An array of tables, one entry per rule. An entry is dropped when a field it holds rejects it (see `strict`) or
+  // `accept` refuses it.
   template <typename T, typename C>
   Field<T> rules(
-      std::string_view key, std::vector<C> T::* member, const Fields<C>& fields,
-      std::type_identity_t<
-          std::function<bool(const toml::node& entry, const std::string& context, C&, const T& parent, ReadContext&)>>
-          accept
+      std::string_view key, std::vector<C> T::* member, const Fields<C>& fields, Shape shape,
+      std::type_identity_t<Accept<T, C>> accept = nullptr
   ) {
     return {
         .key = key,
@@ -416,7 +432,11 @@ namespace umbriel::registry {
               const std::string path = s.qualified(key);
               const toml::array* entries = node->as_array();
               if (entries == nullptr) {
-                s.error(*node, std::format("{} must be a [[{}]] array of tables", path, path));
+                if (shape == Shape::Error) {
+                  s.error(*node, std::format("{} must be a [[{}]] array of tables", path, path));
+                } else {
+                  s.warn(*node, std::format("ignoring {} (expected [[{}]] array of tables)", path, path));
+                }
                 return;
               }
               size_t index = 0;
@@ -424,15 +444,21 @@ namespace umbriel::registry {
                 const std::string entryPath = std::format("{}[{}]", path, index++);
                 const toml::table* entryTable = entry.as_table();
                 if (entryTable == nullptr) {
-                  s.error(entry, std::format("{} must be a table", entryPath));
+                  if (shape == Shape::Error) {
+                    s.error(entry, std::format("{} must be a table", entryPath));
+                  } else {
+                    s.warn(entry, std::format("ignoring {} (expected table)", entryPath));
+                  }
                   continue;
                 }
                 C rule;
-                {
-                  Section keys(*entryTable, entryPath, s.diagnostics());
-                  readFields(keys, fields, rule, context);
-                }
-                if (accept(entry, entryPath, rule, target, context)) {
+                context.entryRejected = false;
+                Section keys(*entryTable, entryPath, s.diagnostics());
+                readFields(keys, fields, rule, context);
+                const bool accepted = !accept || accept(keys, entry, rule, target, context);
+                const bool kept = accepted && !context.entryRejected;
+                context.entryRejected = false;
+                if (kept) {
                   (target.*member).push_back(std::move(rule));
                 }
               }
@@ -442,6 +468,83 @@ namespace umbriel::registry {
               detail::push(out, KeyDescription("array_of_tables"), path);
               describeFields(fields, C{}, path + "[]", out);
             },
+    };
+  }
+
+  // Whether every key of `table` is one of `fields`.
+  template <typename C> [[nodiscard]] bool declaresAll(const Fields<C>& fields, const toml::table& table) {
+    return std::ranges::all_of(table, [&](const auto& entry) {
+      return std::ranges::any_of(fields, [&](const Field<C>& field) { return field.key == entry.first.str(); });
+    });
+  }
+
+  // Any warning or error `field` draws rejects the rule entry holding it.
+  template <typename T> Field<T> strict(Field<T> field) {
+    field.read = [read = std::move(field.read)](Section& s, T& target, ReadContext& context) {
+      const size_t before = s.diagnostics().size();
+      read(s, target, context);
+      if (s.diagnostics().size() != before) {
+        context.entryRejected = true;
+      }
+    };
+    return field;
+  }
+
+  // A table of tables keyed by names the user picks, such as outputs. Each entry is read through `fields` and handed,
+  // with its name, to `accept`.
+  template <typename T, typename C>
+  Field<T> namedTables(
+      std::string_view key, const Fields<C>& fields,
+      std::type_identity_t<std::function<
+          void(const toml::key& name, Section& keys, const toml::node& entry, C&, T& parent, ReadContext&)>>
+          accept
+  ) {
+    return {
+        .key = key,
+        .read =
+            [=, &fields](Section& s, T& target, ReadContext& context) {
+              s.sub(key, [&](Section& entries) {
+                entries.freeform();
+                for (const auto& [name, entry] : entries.table()) {
+                  const std::string path = entries.qualified(name.str());
+                  const toml::table* entryTable = entry.as_table();
+                  if (entryTable == nullptr) {
+                    s.warn(entry, std::format("ignoring {} (expected table)", path));
+                    continue;
+                  }
+                  C value;
+                  Section keys(*entryTable, path, s.diagnostics());
+                  readFields(keys, fields, value, context);
+                  accept(name, keys, entry, value, target, context);
+                }
+              });
+            },
+        .describe =
+            [&fields](const T&, const std::string& path, Descriptions& out) {
+              detail::push(out, KeyDescription("map"), path);
+              detail::push(out, KeyDescription("table"), path + ".<name>");
+              describeFields(fields, C{}, path + ".<name>", out);
+            },
+    };
+  }
+
+  // A table read by hand, outside any Section, such as one whose unknown keys are errors. `keys` describes what it
+  // holds, each path appended to the table's own.
+  template <typename T>
+  Field<T> handRead(
+      std::string_view key, KeyDescription container, Descriptions keys,
+      std::type_identity_t<std::function<void(Section&, T&, ReadContext&)>> read
+  ) {
+    return {
+        .key = key,
+        .read = std::move(read),
+        .describe = [container = std::move(container),
+                     keys = std::move(keys)](const T&, const std::string& path, Descriptions& out) {
+          detail::push(out, container, path);
+          for (const KeyDescription& child : keys) {
+            detail::push(out, child, path + child.path);
+          }
+        },
     };
   }
 

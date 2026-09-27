@@ -3,6 +3,7 @@
 #include "config/config_diag.h"
 #include "config/config_merge.h"
 #include "config/keybind_parse.h"
+#include "config/read_context.h"
 #include "config/registry.h"
 #include "config/resolve.h"
 #include "config/section.h"
@@ -306,106 +307,69 @@ namespace umbriel {
       return selection;
     }
 
-    std::optional<LayoutMode> readLayoutMode(Section& section, std::string_view context) {
-      const toml::node* node = section.take("mode");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* value = node->as_string();
-      if (value == nullptr) {
-        warnAt(node->source(), R"({}.mode must be a string ("scrolling", "dwindle", or "master"))", context);
-        return std::nullopt;
-      }
-      const std::string_view mode = value->get();
-      if (mode == "dwindle") {
-        return LayoutMode::Dwindle;
-      }
-      if (mode == "master") {
-        return LayoutMode::Master;
-      }
-      if (mode == "scrolling") {
-        return LayoutMode::Scrolling;
-      }
-      warnAt(node->source(), R"(unknown {}.mode "{}" (expected "scrolling", "dwindle", or "master"))", context, mode);
-      return std::nullopt;
+    const registry::Choices<LayoutMode>& layoutModes() {
+      static const registry::Choices<LayoutMode> choices{
+          {.name = "scrolling", .value = LayoutMode::Scrolling},
+          {.name = "dwindle", .value = LayoutMode::Dwindle},
+          {.name = "master", .value = LayoutMode::Master},
+      };
+      return choices;
     }
 
-    std::optional<MasterPosition> readMasterPosition(Section& section, std::string_view context) {
-      const toml::node* node = section.take("position");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* value = node->as_string();
-      if (value == nullptr) {
-        warnAt(node->source(), R"({}.position must be a string ("left", "right", or "center"))", context);
-        return std::nullopt;
-      }
-      const std::string_view position = value->get();
-      if (position == "left") {
-        return MasterPosition::Left;
-      }
-      if (position == "right") {
-        return MasterPosition::Right;
-      }
-      if (position == "center") {
-        return MasterPosition::Center;
-      }
-      warnAt(node->source(), R"(unknown {}.position "{}" (expected "left", "right", or "center"))", context, position);
-      return std::nullopt;
+    const registry::Choices<MasterPosition>& masterPositions() {
+      static const registry::Choices<MasterPosition> choices{
+          {.name = "left", .value = MasterPosition::Left},
+          {.name = "right", .value = MasterPosition::Right},
+          {.name = "center", .value = MasterPosition::Center},
+      };
+      return choices;
     }
 
-    constexpr std::string_view kFullscreenExitScopeValues = R"("tiled", "floating", "pinned", or "all")";
+    const registry::Choices<CenterFocusedColumn>& centerFocusedModes() {
+      static const registry::Choices<CenterFocusedColumn> choices{
+          {.name = "never", .value = CenterFocusedColumn::Never},
+          {.name = "always", .value = CenterFocusedColumn::Always},
+          {.name = "on_overflow", .value = CenterFocusedColumn::OnOverflow},
+      };
+      return choices;
+    }
 
-    std::optional<FullscreenExitScope> parseFullscreenExitScope(std::string_view token) {
-      if (token == "tiled") {
-        return FullscreenExitScope::Tiled;
-      }
-      if (token == "floating") {
-        return FullscreenExitScope::Floating;
-      }
-      if (token == "pinned") {
-        return FullscreenExitScope::Pinned;
-      }
-      if (token == "all") {
-        return FullscreenExitScope::All;
-      }
-      return std::nullopt;
+    const registry::Choices<FullscreenExitScope>& fullscreenExitScopes() {
+      static const registry::Choices<FullscreenExitScope> choices{
+          {.name = "tiled", .value = FullscreenExitScope::Tiled},
+          {.name = "floating", .value = FullscreenExitScope::Floating},
+          {.name = "pinned", .value = FullscreenExitScope::Pinned},
+          {.name = "all", .value = FullscreenExitScope::All},
+      };
+      return choices;
     }
 
     // A string names one scope; an array combines several, and an empty array disables the behavior.
-    std::optional<FullscreenExitScope> readFullscreenExitScope(Section& section, std::string_view context) {
-      const toml::node* node = section.take("new_exits_fullscreen");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      if (const auto* value = node->as_string()) {
-        const std::optional<FullscreenExitScope> scope = parseFullscreenExitScope(value->get());
+    std::optional<FullscreenExitScope> parseFullscreenExitScope(const toml::node& node, const std::string& path) {
+      const std::string expected = registry::quotedList(registry::choiceNames(fullscreenExitScopes()));
+      const auto find = [](std::string_view token) -> std::optional<FullscreenExitScope> {
+        const auto& choices = fullscreenExitScopes();
+        const auto found = std::ranges::find(choices, token, &registry::Choice<FullscreenExitScope>::name);
+        return found == choices.end() ? std::nullopt : std::optional(found->value);
+      };
+      if (const auto* value = node.as_string()) {
+        const std::optional<FullscreenExitScope> scope = find(value->get());
         if (!scope) {
-          warnAt(
-              node->source(), R"(ignoring {}.new_exits_fullscreen "{}" (expected {}))", context, value->get(),
-              kFullscreenExitScopeValues
-          );
+          warnAt(node.source(), R"(ignoring {} "{}" (expected {}))", path, value->get(), expected);
         }
         return scope;
       }
-      const auto* array = node->as_array();
+      const auto* array = node.as_array();
       if (array == nullptr) {
-        warnAt(
-            node->source(), "ignoring {}.new_exits_fullscreen (expected a string or an array of strings, each {})",
-            context, kFullscreenExitScopeValues
-        );
+        warnAt(node.source(), "ignoring {} (expected a string or an array of strings, each {})", path, expected);
         return std::nullopt;
       }
       auto combined = static_cast<uint8_t>(FullscreenExitScope::None);
       for (const toml::node& entry : *array) {
         const auto* value = entry.as_string();
-        const std::optional<FullscreenExitScope> scope =
-            value != nullptr ? parseFullscreenExitScope(value->get()) : std::nullopt;
+        const std::optional<FullscreenExitScope> scope = value != nullptr ? find(value->get()) : std::nullopt;
         if (!scope) {
-          warnAt(
-              entry.source(), "ignoring {}.new_exits_fullscreen entry (expected {})", context,
-              kFullscreenExitScopeValues
-          );
+          warnAt(entry.source(), "ignoring {} entry (expected {})", path, expected);
           continue;
         }
         combined |= static_cast<uint8_t>(*scope);
@@ -413,31 +377,20 @@ namespace umbriel {
       return static_cast<FullscreenExitScope>(combined);
     }
 
-    std::optional<CenterFocusedColumn> readCenterFocused(Section& section, std::string_view context) {
-      const toml::node* node = section.take("center_focused");
-      if (node == nullptr) {
-        return std::nullopt;
+    // The scope as it is written: `all` when it covers every scope, otherwise each scope it names.
+    nlohmann::ordered_json fullscreenExitScopeJson(FullscreenExitScope scope) {
+      nlohmann::ordered_json names = nlohmann::ordered_json::array();
+      if (scope == FullscreenExitScope::All) {
+        names.push_back("all");
+        return names;
       }
-      const auto* value = node->as_string();
-      if (value == nullptr) {
-        warnAt(node->source(), R"({}.center_focused must be a string ("never", "always", or "on_overflow"))", context);
-        return std::nullopt;
+      for (const auto& option : fullscreenExitScopes()) {
+        if (option.value != FullscreenExitScope::All
+            && (static_cast<uint8_t>(scope) & static_cast<uint8_t>(option.value)) != 0) {
+          names.push_back(option.name);
+        }
       }
-      const std::string_view mode = value->get();
-      if (mode == "never") {
-        return CenterFocusedColumn::Never;
-      }
-      if (mode == "always") {
-        return CenterFocusedColumn::Always;
-      }
-      if (mode == "on_overflow") {
-        return CenterFocusedColumn::OnOverflow;
-      }
-      warnAt(
-          node->source(), R"(unknown {}.center_focused "{}" (expected "never", "always", or "on_overflow"))", context,
-          mode
-      );
-      return std::nullopt;
+      return names;
     }
 
     std::vector<std::string_view> splitWhitespace(std::string_view text) {
@@ -517,7 +470,7 @@ namespace umbriel {
       return registry::custom<T>(
           "accel_profile",
           registry::KeyDescription("string").withValues({"flat", "adaptive"}).withFormat("accel_profile"),
-          [member](const toml::node& node, const std::string& path, T& target) {
+          [member](const toml::node& node, const std::string& path, T& target, registry::ReadContext&) {
             if (auto profile = parseAccelProfile(node, path)) {
               target.*member = std::move(profile);
             }
@@ -535,11 +488,11 @@ namespace umbriel {
     }
 
     std::optional<Config::Input::Touchpad::ScrollFactor>
-    parseScrollFactor(const toml::node& node, const std::string& path) {
+    parseScrollFactor(const toml::node& node, const std::string& path, registry::ReadContext& context) {
       Config::Input::Touchpad::ScrollFactor factor;
       if (const toml::table* table = node.as_table()) {
         Section axes(*table, path, configStore().mutableDiagnostics());
-        registry::readFields(axes, scrollFactorAxes(), factor);
+        registry::readFields(axes, scrollFactorAxes(), factor, context);
         return factor;
       }
       const auto value = node.value<double>();
@@ -572,14 +525,10 @@ namespace umbriel {
       return matrix;
     }
 
-    std::optional<std::vector<double>> readExtentPresets(Section& section, std::string_view context) {
-      const toml::node* node = section.take("extent_presets");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* array = node->as_array();
+    std::optional<std::vector<double>> parseExtentPresets(const toml::node& node, const std::string& path) {
+      const auto* array = node.as_array();
       if (array == nullptr || array->empty()) {
-        warnAt(node->source(), "ignoring {}.extent_presets (expected non-empty array of numbers)", context);
+        warnAt(node.source(), "ignoring {} (expected non-empty array of numbers)", path);
         return std::nullopt;
       }
 
@@ -588,61 +537,96 @@ namespace umbriel {
       for (const auto& entry : *array) {
         const auto value = entry.value<double>();
         if (!value || std::isnan(*value)) {
-          warnAt(node->source(), "ignoring {}.extent_presets (expected non-empty array of numbers)", context);
+          warnAt(node.source(), "ignoring {} (expected non-empty array of numbers)", path);
           return std::nullopt;
         }
         const double used = std::clamp(*value, 0.1, 1.0);
         if (used != *value) {
-          warnAt(entry.source(), "{}.extent_presets = {} out of range, clamped to {}", context, *value, used);
+          warnAt(entry.source(), "{} = {} out of range, clamped to {}", path, *value, used);
         }
         parsed.push_back(used);
       }
       return parsed;
     }
 
-    template <typename Struts> void readLayoutStruts(Section& section, Struts& struts) {
+    // The global `[layout]` and a workspace's `layout` override share their keys; `L` is Config::Layout or
+    // WorkspaceLayoutOverrides, whose members are the same, optional in the override.
+    template <typename L> const registry::Fields<L>& layoutFields() {
+      using registry::boolean;
+      using registry::choice;
+      using registry::custom;
+      using registry::Fields;
+      using registry::integer;
+      using registry::real;
+      using registry::table;
+      using Struts = decltype(L::struts);
+      using Scrolling = decltype(L::scrolling);
+      using Dwindle = decltype(L::dwindle);
+      using Master = decltype(L::master);
       constexpr int kStrutLimit = 65535;
-      section.integer("left", -kStrutLimit, kStrutLimit, struts.left)
-          .integer("right", -kStrutLimit, kStrutLimit, struts.right)
-          .integer("top", -kStrutLimit, kStrutLimit, struts.top)
-          .integer("bottom", -kStrutLimit, kStrutLimit, struts.bottom);
+
+      static const Fields<Struts> struts{
+          integer("left", -kStrutLimit, kStrutLimit, &Struts::left),
+          integer("right", -kStrutLimit, kStrutLimit, &Struts::right),
+          integer("top", -kStrutLimit, kStrutLimit, &Struts::top),
+          integer("bottom", -kStrutLimit, kStrutLimit, &Struts::bottom),
+      };
+      static const Fields<Scrolling> scrolling{
+          real("default_extent_fraction", 0.1, 1.0, &Scrolling::defaultExtentFraction),
+          boolean("center_underfull_strip", &Scrolling::centerUnderfullStrip),
+          choice("center_focused", &Scrolling::centerFocused, centerFocusedModes()),
+      };
+      static const Fields<Dwindle> dwindle{
+          boolean("preserve_split", &Dwindle::preserveSplit),
+      };
+      static const Fields<Master> master{
+          choice("position", &Master::position, masterPositions()),
+          real("default_width_fraction", 0.1, 0.9, &Master::defaultWidthFraction),
+          boolean("new_on_top", &Master::newOnTop),
+          boolean("new_becomes_master", &Master::newBecomesMaster),
+      };
+      static const Fields<L> fields{
+          choice("mode", &L::mode, layoutModes()),
+          integer("gap", 0, 500, &L::gap),
+          table("struts", &L::struts, struts),
+          custom<L>(
+              "extent_presets", registry::KeyDescription("float_array").withRange(0.1, 1.0),
+              [](const toml::node& node, const std::string& path, L& target, registry::ReadContext&) {
+                if (auto presets = parseExtentPresets(node, path)) {
+                  target.extentPresets = std::move(*presets);
+                }
+              },
+              [](const L& defaults) { return registry::detail::toJson(defaults.extentPresets); }
+          ),
+          custom<L>(
+              "new_exits_fullscreen",
+              registry::KeyDescription("enum_or_array").withValues(registry::choiceNames(fullscreenExitScopes())),
+              [](const toml::node& node, const std::string& path, L& target, registry::ReadContext&) {
+                registry::assign(target.newExitsFullscreen, parseFullscreenExitScope(node, path));
+              },
+              [](const L& defaults) -> nlohmann::ordered_json {
+                if constexpr (std::is_same_v<L, Config::Layout>) {
+                  return fullscreenExitScopeJson(defaults.newExitsFullscreen);
+                } else {
+                  return defaults.newExitsFullscreen ? fullscreenExitScopeJson(*defaults.newExitsFullscreen) : nullptr;
+                }
+              }
+          ),
+          table("scrolling", &L::scrolling, scrolling),
+          table("dwindle", &L::dwindle, dwindle),
+          table("master", &L::master, master),
+      };
+      return fields;
     }
 
     void readWorkspaceLayoutOverrides(
-        const toml::table& section, std::string_view context, WorkspaceLayoutOverrides& overrides
+        const toml::table& section, std::string_view context, WorkspaceLayoutOverrides& overrides,
+        registry::ReadContext& read
     ) {
       const std::string layoutContext = std::string(context) + ".layout";
       readSection(
           section, "layout", configStore().mutableDiagnostics(),
-          [&](Section& s) {
-            if (const auto mode = readLayoutMode(s, layoutContext)) {
-              overrides.mode = mode;
-            }
-            s.integer("gap", 0, 500, overrides.gap);
-            s.sub("struts", [&](Section& struts) { readLayoutStruts(struts, overrides.struts); });
-            if (auto presets = readExtentPresets(s, layoutContext)) {
-              overrides.extentPresets = std::move(*presets);
-            }
-            if (const auto scope = readFullscreenExitScope(s, layoutContext)) {
-              overrides.newExitsFullscreen = scope;
-            }
-            s.sub("scrolling", [&](Section& sc) {
-              sc.real("default_extent_fraction", 0.1, 1.0, overrides.scrolling.defaultExtentFraction)
-                  .boolean("center_underfull_strip", overrides.scrolling.centerUnderfullStrip);
-              if (const auto centerFocused = readCenterFocused(sc, layoutContext + ".scrolling")) {
-                overrides.scrolling.centerFocused = centerFocused;
-              }
-            });
-            s.sub("dwindle", [&](Section& sd) { sd.boolean("preserve_split", overrides.dwindle.preserveSplit); });
-            s.sub("master", [&](Section& sm) {
-              if (const auto position = readMasterPosition(sm, layoutContext + ".master")) {
-                overrides.master.position = position;
-              }
-              sm.real("default_width_fraction", 0.1, 0.9, overrides.master.defaultWidthFraction)
-                  .boolean("new_on_top", overrides.master.newOnTop)
-                  .boolean("new_becomes_master", overrides.master.newBecomesMaster);
-            });
-          },
+          [&](Section& s) { registry::readFields(s, layoutFields<WorkspaceLayoutOverrides>(), overrides, read); },
           layoutContext
       );
     }
@@ -739,7 +723,8 @@ namespace umbriel {
       return configured ? std::nullopt : std::optional{std::format("unknown scratchpad '{}'", name)};
     }
 
-    WorkspaceConfig parseWorkspaceEntry(const toml::table& section, std::string_view context) {
+    WorkspaceConfig
+    parseWorkspaceEntry(const toml::table& section, std::string_view context, registry::ReadContext& read) {
       WorkspaceConfig ws;
       Section keys(section, std::string(context), configStore().mutableDiagnostics());
       // `layout` is read by readWorkspaceLayoutOverrides below, which takes the
@@ -777,11 +762,11 @@ namespace umbriel {
         }
       }
 
-      readWorkspaceLayoutOverrides(section, context, ws.layout);
+      readWorkspaceLayoutOverrides(section, context, ws.layout, read);
       return ws;
     }
 
-    void readWorkspaces(Section& root, Config& loaded) {
+    void readWorkspaces(Section& root, Config& loaded, registry::ReadContext& read) {
       const toml::node* node = root.take("workspace");
       if (node == nullptr) {
         return;
@@ -810,7 +795,7 @@ namespace umbriel {
         }
 
         const std::string context = std::format("workspace[{}]", entryIndex);
-        WorkspaceConfig ws = parseWorkspaceEntry(*section, context);
+        WorkspaceConfig ws = parseWorkspaceEntry(*section, context, read);
         const bool hasName = !ws.name.empty();
         const bool hasIndex = ws.index.has_value();
         if (hasName == hasIndex) {
@@ -914,32 +899,34 @@ namespace umbriel {
       }
     }
 
-    void readColors(Section& root, Config& loaded) {
-      auto& colors = loaded.colors;
-      root.sub("colors", [&](Section& s) {
-        s.color("background", colors.background)
-            .color("text_primary", colors.textPrimary)
-            .color("text_muted", colors.textMuted)
-            .color("accent_primary", colors.accentPrimary)
-            .color("accent_secondary", colors.accentSecondary)
-            .color("warning", colors.warning)
-            .color("error", colors.error)
-            .color("insert_hint", colors.insertHint)
-            .color("backdrop", colors.backdrop)
-            .color("shadow", colors.shadow);
-
-        s.sub("border", [&](Section& border) {
-          border.color("focused", colors.border.focused)
-              .color("unfocused", colors.border.unfocused)
-              .color("outer", colors.border.outer);
-        });
-
-        s.sub("overview", [&](Section& overview) {
-          overview.color("background_tint", colors.overview.backgroundTint)
-              .color("workspace_background", colors.overview.workspaceBackground)
-              .color("badge", colors.overview.badge);
-        });
-      });
+    const registry::Fields<Config::Colors>& colorFields() {
+      using registry::color;
+      using C = Config::Colors;
+      static const registry::Fields<C::Border> border{
+          color("focused", &C::Border::focused),
+          color("unfocused", &C::Border::unfocused),
+          color("outer", &C::Border::outer),
+      };
+      static const registry::Fields<C::Overview> overview{
+          color("background_tint", &C::Overview::backgroundTint),
+          color("workspace_background", &C::Overview::workspaceBackground),
+          color("badge", &C::Overview::badge),
+      };
+      static const registry::Fields<C> fields{
+          color("background", &C::background),
+          color("text_primary", &C::textPrimary),
+          color("text_muted", &C::textMuted),
+          color("accent_primary", &C::accentPrimary),
+          color("accent_secondary", &C::accentSecondary),
+          color("warning", &C::warning),
+          color("error", &C::error),
+          color("insert_hint", &C::insertHint),
+          color("backdrop", &C::backdrop),
+          color("shadow", &C::shadow),
+          registry::table("border", &C::border, border),
+          registry::table("overview", &C::overview, overview),
+      };
+      return fields;
     }
 
     std::optional<BezierCurve> parseBezier(const toml::node& node) {
@@ -1031,18 +1018,6 @@ namespace umbriel {
       warnAt(node->source(), R"(invalid curve "{}" in {})", value->get(), context);
       return std::nullopt;
     }
-
-    // A selector recorded while parsing and checked once every section is
-    // read, so forward and cross-include references resolve.
-    struct EffectReference {
-      std::string context;
-      std::string name;
-      EffectKind kind;
-      bool allowOff;
-      toml::source_region source;
-      std::function<void()> clear;
-    };
-
     // Reads a string selector under `key`, reporting the section's own "(expected string)" warning through
     // Section::text so every caller shares one wording. Returns the value and its source location, or nullopt when
     // the key was absent or not a string.
@@ -1438,163 +1413,154 @@ namespace umbriel {
       return fields;
     }
 
-    void readOverview(Section& root, Config& loaded) {
-      root.sub("overview", [&](Section& s) {
-        s.real("zoom", 0.1, 0.75, loaded.overview.zoom)
-            .real("scroll_factor_horizontal", 0.1, 10.0, loaded.overview.scrollFactorHorizontal)
-            .real("scroll_factor_vertical", 0.1, 10.0, loaded.overview.scrollFactorVertical)
-            .boolean("background_blur", loaded.overview.backgroundBlur)
-            .boolean("workspace_wallpaper", loaded.overview.workspaceWallpaper)
-            .boolean("shortcuts", loaded.overview.shortcuts);
+    // Overview badge keys: printable ASCII, unique ignoring case.
+    std::optional<std::string> parseShortcutKeys(const toml::node& node, const std::string& path) {
+      const auto value = node.value<std::string>();
+      if (!value) {
+        warnAt(node.source(), "ignoring {} (expected string)", path);
+        return std::nullopt;
+      }
+      if (value->size() < 2) {
+        warnAt(node.source(), "ignoring {} (expected at least 2 characters)", path);
+        return std::nullopt;
+      }
 
-        const toml::node* node = s.take("shortcut_keys");
-        if (node == nullptr) {
-          return;
+      std::string normalized;
+      normalized.reserve(value->size());
+      for (const unsigned char character : *value) {
+        if (character < 0x21 || character > 0x7E) {
+          warnAt(node.source(), "ignoring {} (invalid character 0x{:02X})", path, static_cast<unsigned int>(character));
+          return std::nullopt;
         }
-        const auto value = node->value<std::string>();
-        if (!value) {
-          warnAt(node->source(), "ignoring overview.shortcut_keys (expected string)");
-          return;
+        const char lowered =
+            character >= 'A' && character <= 'Z' ? static_cast<char>(character - 'A' + 'a') : character;
+        if (normalized.contains(lowered)) {
+          warnAt(
+              node.source(), R"(ignoring {} (duplicate key "{}" ignoring ASCII case))", path,
+              static_cast<char>(character)
+          );
+          return std::nullopt;
         }
-        if (value->size() < 2) {
-          warnAt(node->source(), "ignoring overview.shortcut_keys (expected at least 2 characters)");
-          return;
-        }
-
-        std::string normalized;
-        normalized.reserve(value->size());
-        for (const unsigned char character : *value) {
-          if (character < 0x21 || character > 0x7E) {
-            warnAt(
-                node->source(), "ignoring overview.shortcut_keys (invalid character 0x{:02X})",
-                static_cast<unsigned int>(character)
-            );
-            return;
-          }
-          const char lowered =
-              character >= 'A' && character <= 'Z' ? static_cast<char>(character - 'A' + 'a') : character;
-          if (normalized.contains(lowered)) {
-            warnAt(
-                node->source(), R"(ignoring overview.shortcut_keys (duplicate key "{}" ignoring ASCII case))",
-                static_cast<char>(character)
-            );
-            return;
-          }
-          normalized.push_back(lowered);
-        }
-        loaded.overview.shortcutKeys = *value;
-      });
+        normalized.push_back(lowered);
+      }
+      return value;
     }
 
-    void readHotCorners(Section& root, Config& loaded) {
-      root.sub("hot_corners", [&](Section& s) {
-        const auto readCorner = [&](Section& cornerSection, Config::HotCorner& corner, std::string_view name) {
-          cornerSection.boolean("enabled", corner.enabled).integer("delay_ms", 0, 10000, corner.delayMs);
-          const toml::node* node = cornerSection.take("action");
-          if (node == nullptr) {
-            return;
-          }
-          const auto value = node->value<std::string>();
-          if (!value) {
-            warnAt(node->source(), "hot_corners.{}.action must be a string", name);
-            return;
-          }
-          Keybind bind;
-          if (!parseAction(*value, bind)) {
-            warnAt(node->source(), R"(invalid hot_corners.{}.action "{}")", name, *value);
-            return;
-          }
-          if (const auto invalid = scratchpadSelectorError(loaded, bind)) {
-            warnAt(node->source(), "ignoring hot_corners.{}.action ({})", name, *invalid);
-            return;
-          }
-          corner.action = std::move(bind);
-        };
-
-        s.sub("top_left", [&](Section& corner) { readCorner(corner, loaded.hotCorners.corners[0], "top_left"); });
-        s.sub("top_right", [&](Section& corner) { readCorner(corner, loaded.hotCorners.corners[1], "top_right"); });
-        s.sub("bottom_left", [&](Section& corner) { readCorner(corner, loaded.hotCorners.corners[2], "bottom_left"); });
-        s.sub("bottom_right", [&](Section& corner) {
-          readCorner(corner, loaded.hotCorners.corners[3], "bottom_right");
-        });
-      });
+    const registry::Fields<Config::Overview>& overviewFields() {
+      using registry::boolean;
+      using registry::real;
+      using O = Config::Overview;
+      static const registry::Fields<O> fields{
+          real("zoom", 0.1, 0.75, &O::zoom),
+          real("scroll_factor_horizontal", 0.1, 10.0, &O::scrollFactorHorizontal),
+          real("scroll_factor_vertical", 0.1, 10.0, &O::scrollFactorVertical),
+          boolean("background_blur", &O::backgroundBlur),
+          boolean("workspace_wallpaper", &O::workspaceWallpaper),
+          boolean("shortcuts", &O::shortcuts),
+          registry::custom<O>(
+              "shortcut_keys", registry::KeyDescription("string"),
+              [](const toml::node& node, const std::string& path, O& target, registry::ReadContext&) {
+                if (auto keys = parseShortcutKeys(node, path)) {
+                  target.shortcutKeys = std::move(*keys);
+                }
+              },
+              [](const O& defaults) { return nlohmann::ordered_json(defaults.shortcutKeys); }
+          ),
+      };
+      return fields;
     }
 
-    void readLayout(Section& root, Config& loaded) {
-      root.sub("layout", [&](Section& s) {
-        if (const auto mode = readLayoutMode(s, "layout")) {
-          loaded.layout.mode = *mode;
-        }
-        s.integer("gap", 0, 500, loaded.layout.gap);
-        s.sub("struts", [&](Section& struts) { readLayoutStruts(struts, loaded.layout.struts); });
-        if (auto presets = readExtentPresets(s, "layout")) {
-          loaded.layout.extentPresets = std::move(*presets);
-        }
-        if (const auto scope = readFullscreenExitScope(s, "layout")) {
-          loaded.layout.newExitsFullscreen = *scope;
-        }
-        s.sub("scrolling", [&](Section& sc) {
-          sc.real("default_extent_fraction", 0.1, 1.0, loaded.layout.scrolling.defaultExtentFraction)
-              .boolean("center_underfull_strip", loaded.layout.scrolling.centerUnderfullStrip);
-          if (const auto centerFocused = readCenterFocused(sc, "layout.scrolling")) {
-            loaded.layout.scrolling.centerFocused = *centerFocused;
-          }
-        });
-        s.sub("dwindle", [&](Section& sd) { sd.boolean("preserve_split", loaded.layout.dwindle.preserveSplit); });
-        s.sub("master", [&](Section& sm) {
-          if (const auto position = readMasterPosition(sm, "layout.master")) {
-            loaded.layout.master.position = *position;
-          }
-          sm.real("default_width_fraction", 0.1, 0.9, loaded.layout.master.defaultWidthFraction)
-              .boolean("new_on_top", loaded.layout.master.newOnTop)
-              .boolean("new_becomes_master", loaded.layout.master.newBecomesMaster);
-        });
-      });
+    // A compositor action, as a keybind names it. Scratchpads it names must already be declared.
+    std::optional<Keybind> parseActionKey(const toml::node& node, const std::string& path, const Config& loaded) {
+      const auto value = node.value<std::string>();
+      if (!value) {
+        warnAt(node.source(), "{} must be a string", path);
+        return std::nullopt;
+      }
+      Keybind bind;
+      if (!parseAction(*value, bind)) {
+        warnAt(node.source(), R"(invalid {} "{}")", path, *value);
+        return std::nullopt;
+      }
+      if (const auto invalid = scratchpadSelectorError(loaded, bind)) {
+        warnAt(node.source(), "ignoring {} ({})", path, *invalid);
+        return std::nullopt;
+      }
+      return bind;
     }
 
-    void readWorkspaceSettings(Section& root, Config& loaded) {
-      root.sub("workspaces", [&](Section& s) {
-        s.boolean("back_and_forth", loaded.workspaces.backAndForth)
-            .boolean("empty_above", loaded.workspaces.emptyAbove);
-      });
+    const registry::Fields<Config::HotCorners>& hotCornerFields() {
+      using Corners = Config::HotCorners;
+      using Corner = Config::HotCorner;
+      static const registry::Fields<Corner> corner{
+          registry::boolean("enabled", &Corner::enabled),
+          registry::integer("delay_ms", 0, 10000, &Corner::delayMs),
+          registry::custom<Corner>(
+              "action", registry::KeyDescription("string").withFormat("action"),
+              [](const toml::node& node, const std::string& path, Corner& target, registry::ReadContext& context) {
+                if (auto bind = parseActionKey(node, path, context.loaded)) {
+                  target.action = std::move(*bind);
+                }
+              }
+          ),
+      };
+      // Corners are ordered top-left, top-right, bottom-left, bottom-right.
+      static const registry::Fields<Corners> fields{
+          registry::table<Corners>(
+              "top_left", [](auto& c) -> auto& { return c.corners[0]; }, corner
+          ),
+          registry::table<Corners>(
+              "top_right", [](auto& c) -> auto& { return c.corners[1]; }, corner
+          ),
+          registry::table<Corners>(
+              "bottom_left", [](auto& c) -> auto& { return c.corners[2]; }, corner
+          ),
+          registry::table<Corners>("bottom_right", [](auto& c) -> auto& { return c.corners[3]; }, corner),
+      };
+      return fields;
     }
 
-    void readScreenCast(Section& root, Config& loaded) {
-      root.sub("screencast", [&](Section& s) {
-        s.boolean("disable_dynamic_confirmation", loaded.screenCast.disableDynamicConfirmation);
-      });
+    const registry::Fields<Config::Workspaces>& workspaceSettingFields() {
+      using W = Config::Workspaces;
+      static const registry::Fields<W> fields{
+          registry::boolean("back_and_forth", &W::backAndForth),
+          registry::boolean("empty_above", &W::emptyAbove),
+      };
+      return fields;
     }
 
-    void readGeneral(Section& root, Config& loaded) {
-      root.sub("general", [&](Section& s) {
-        if (const toml::node* node = s.take("mod_key")) {
-          const auto value = node->value<std::string>();
-          if (!value) {
-            warnAt(node->source(), "general.mod_key must be a string");
-          } else {
-            const std::string modifier = lowercase(*value);
-            if (modifier == "super" || modifier == "logo" || modifier == "win") {
-              loaded.general.modKey = ModifierKey::Super;
-            } else if (modifier == "alt") {
-              loaded.general.modKey = ModifierKey::Alt;
-            } else if (modifier == "ctrl" || modifier == "control") {
-              loaded.general.modKey = ModifierKey::Control;
-            } else if (modifier == "shift") {
-              loaded.general.modKey = ModifierKey::Shift;
-            } else {
-              warnAt(
-                  node->source(), R"(unknown general.mod_key "{}" (expected "Super", "Alt", "Ctrl", or "Shift"))",
-                  *value
-              );
-            }
-          }
-        }
-        s.boolean("xwayland", loaded.general.xwayland)
-            .boolean("show_cheatsheet", loaded.general.showCheatsheet)
-            .boolean("focus_on_activate", loaded.general.focusOnActivate)
-            .boolean("honor_restored_maximize", loaded.general.honorRestoredMaximize)
-            .strings("autostart", loaded.general.autostart);
-      });
+    const registry::Fields<Config::ScreenCast>& screenCastFields() {
+      using S = Config::ScreenCast;
+      static const registry::Fields<S> fields{
+          registry::boolean("disable_dynamic_confirmation", &S::disableDynamicConfirmation),
+      };
+      return fields;
+    }
+
+    const registry::Fields<Config::General>& generalFields() {
+      using registry::boolean;
+      using G = Config::General;
+      static const registry::Fields<G> fields{
+          registry::choice(
+              "mod_key", &G::modKey,
+              {
+                  {.name = "Super", .value = ModifierKey::Super},
+                  {.name = "Logo", .value = ModifierKey::Super, .alias = true},
+                  {.name = "Win", .value = ModifierKey::Super, .alias = true},
+                  {.name = "Alt", .value = ModifierKey::Alt},
+                  {.name = "Ctrl", .value = ModifierKey::Control},
+                  {.name = "Control", .value = ModifierKey::Control, .alias = true},
+                  {.name = "Shift", .value = ModifierKey::Shift},
+              },
+              registry::Case::Fold
+          ),
+          boolean("xwayland", &G::xwayland),
+          boolean("show_cheatsheet", &G::showCheatsheet),
+          boolean("focus_on_activate", &G::focusOnActivate),
+          boolean("honor_restored_maximize", &G::honorRestoredMaximize),
+          registry::strings("autostart", &G::autostart),
+      };
+      return fields;
     }
 
     void readDrm(Section& root, Config& loaded) {
@@ -1619,39 +1585,39 @@ namespace umbriel {
       }
     }
 
-    void readEnvironment(Section& root, Config& loaded) {
-      root.sub("environment", [&](Section& s) {
-        s.freeform();
-        std::vector<std::pair<std::string, std::string>> parsed;
-        parsed.reserve(s.table().size());
-        for (const auto& [key, value] : s.table()) {
-          const auto entry = value.value<std::string>();
-          if (!entry) {
-            warnAt(value.source(), "ignoring environment.{} (expected string)", key.str());
-            continue;
-          }
-          if (!isEnvironmentVariableName(key.str())) {
-            warnAt(key.source(), R"(ignoring environment key "{}" (expected [A-Za-z_][A-Za-z0-9_]*))", key.str());
-            continue;
-          }
-          if (std::ranges::find(kReservedEnvironmentNames, key.str()) != kReservedEnvironmentNames.end()) {
-            warnAt(key.source(), "ignoring environment.{} (reserved by Umbriel)", key.str());
-            continue;
-          }
-          if (entry->contains('\0')) {
-            warnAt(value.source(), "ignoring environment.{} (value contains NUL)", key.str());
-            continue;
-          }
-          parsed.emplace_back(std::string(key.str()), *entry);
+    void readEnvironmentVariables(Section& s, Config::Environment& environment) {
+      std::vector<std::pair<std::string, std::string>> parsed;
+      parsed.reserve(s.table().size());
+      for (const auto& [key, value] : s.table()) {
+        const auto entry = value.value<std::string>();
+        if (!entry) {
+          warnAt(value.source(), "ignoring environment.{} (expected string)", key.str());
+          continue;
         }
-        loaded.environment.variables = std::move(parsed);
-      });
+        if (!isEnvironmentVariableName(key.str())) {
+          warnAt(key.source(), R"(ignoring environment key "{}" (expected [A-Za-z_][A-Za-z0-9_]*))", key.str());
+          continue;
+        }
+        if (std::ranges::find(kReservedEnvironmentNames, key.str()) != kReservedEnvironmentNames.end()) {
+          warnAt(key.source(), "ignoring environment.{} (reserved by Umbriel)", key.str());
+          continue;
+        }
+        if (entry->contains('\0')) {
+          warnAt(value.source(), "ignoring environment.{} (value contains NUL)", key.str());
+          continue;
+        }
+        parsed.emplace_back(std::string(key.str()), *entry);
+      }
+      environment.variables = std::move(parsed);
     }
 
-    void readEvents(Section& root, Config& loaded) {
-      root.sub("events", [&](Section& s) {
-        s.text("lid_close", loaded.events.lidClose).text("lid_open", loaded.events.lidOpen);
-      });
+    const registry::Fields<Config::Events>& eventFields() {
+      using E = Config::Events;
+      static const registry::Fields<E> fields{
+          registry::text("lid_close", &E::lidClose),
+          registry::text("lid_open", &E::lidOpen),
+      };
+      return fields;
     }
 
     bool validateKeyboardInput(
@@ -1689,7 +1655,8 @@ namespace umbriel {
     // A device rule is kept once it names a device no earlier rule names. Its XKB keys are checked merged over the
     // session keyboard they override, and dropped together when that fails.
     bool acceptDevice(
-        const toml::node& entry, const std::string& context, Config::Input::Device& device, const Config::Input& input
+        const toml::node& entry, const std::string& context, Config::Input::Device& device, const Config::Input& input,
+        registry::ReadContext&
     ) {
       if (entry.as_table()->get("name") == nullptr) {
         errorAt(entry.source(), "{} must set name", context);
@@ -1764,11 +1731,13 @@ namespace umbriel {
           boolean("disable_on_external_mouse", &In::Touchpad::disableOnExternalMouse),
           custom<In::Touchpad>(
               "scroll_factor", registry::KeyDescription("float_or_table").withRange(0.1, 10.0),
-              [](const toml::node& node, const std::string& path, In::Touchpad& target) {
-                if (auto factor = parseScrollFactor(node, path)) {
+              [](const toml::node& node, const std::string& path, In::Touchpad& target,
+                 registry::ReadContext& context) {
+                if (auto factor = parseScrollFactor(node, path, context)) {
                   target.scrollFactor = factor;
                 }
               },
+              nullptr,
               [] {
                 registry::Descriptions axes;
                 registry::describeFields(scrollFactorAxes(), {}, "", axes);
@@ -1796,7 +1765,7 @@ namespace umbriel {
           boolean("left_handed", &In::Tablet::leftHanded),
           custom<In::Tablet>(
               "calibration_matrix", registry::KeyDescription("float_array"),
-              [](const toml::node& node, const std::string& path, In::Tablet& target) {
+              [](const toml::node& node, const std::string& path, In::Tablet& target, registry::ReadContext&) {
                 if (auto matrix = parseCalibrationMatrix(node, path)) {
                   target.calibrationMatrix = matrix;
                 }
@@ -1825,7 +1794,7 @@ namespace umbriel {
       static const Fields<In::Device> device{
           custom<In::Device>(
               "name", registry::KeyDescription("string"),
-              [](const toml::node& node, const std::string& path, In::Device& target) {
+              [](const toml::node& node, const std::string& path, In::Device& target, registry::ReadContext&) {
                 if (const auto name = node.value<std::string>(); name && !name->empty()) {
                   target.name = *name;
                 } else {
@@ -1875,15 +1844,6 @@ namespace umbriel {
           table("cursor", &In::cursor, cursor),
           table("focus", &In::focus, focus),
           registry::rules("device", &In::devices, device, acceptDevice),
-      };
-      return fields;
-    }
-
-    // The sections declared through the registry.
-    const registry::Fields<Config>& configFields() {
-      static const registry::Fields<Config> fields{
-          registry::table("appearance", &Config::appearance, appearanceFields()),
-          registry::table("input", &Config::input, inputFields()),
       };
       return fields;
     }
@@ -2701,6 +2661,63 @@ namespace umbriel {
       }
     }
 
+    // A section still read by hand: it is read in its place, but declares no keys.
+    registry::Field<Config>
+    unregistered(std::string_view key, std::function<void(Section&, Config&, registry::ReadContext&)> read) {
+      return {
+          .key = key,
+          .read = std::move(read),
+          .describe = [](const Config&, const std::string&, registry::Descriptions&) {},
+      };
+    }
+
+    // Every top-level table, in reading order: a table may depend on one read before it, as hot corner actions
+    // depend on the scratchpads they name.
+    const registry::Fields<Config>& configFields() {
+      using registry::table;
+      static const registry::Fields<Config> fields{
+          table("colors", &Config::colors, colorFields()),
+          unregistered(
+              "effects", [](Section& s, Config& c, registry::ReadContext& r) { readEffects(s, c, r.effectReferences); }
+          ),
+          unregistered(
+              "animation",
+              [](Section& s, Config& c, registry::ReadContext& r) { readAnimation(s, c, r.effectReferences); }
+          ),
+          table("appearance", &Config::appearance, appearanceFields()),
+          table("overview", &Config::overview, overviewFields()),
+          unregistered("scratchpad", [](Section& s, Config& c, registry::ReadContext&) { readScratchpads(s, c); }),
+          table("hot_corners", &Config::hotCorners, hotCornerFields()),
+          table("layout", &Config::layout, layoutFields<Config::Layout>()),
+          table("general", &Config::general, generalFields()),
+          unregistered("drm", [](Section& s, Config& c, registry::ReadContext&) { readDrm(s, c); }),
+          registry::map<Config>(
+              "environment", registry::KeyDescription("string"),
+              [](Section& s, Config& c, registry::ReadContext&) { readEnvironmentVariables(s, c.environment); }, {},
+              "table"
+          ),
+          table("events", &Config::events, eventFields()),
+          table("workspaces", &Config::workspaces, workspaceSettingFields()),
+          table("screencast", &Config::screenCast, screenCastFields()),
+          table("input", &Config::input, inputFields()),
+          unregistered(
+              "output", [](Section& s, Config& c, registry::ReadContext& r) { readOutputs(s, c, r.effectReferences); }
+          ),
+          unregistered("keybinds", [](Section& s, Config& c, registry::ReadContext&) { readKeybinds(s, c); }),
+          unregistered(
+              "window_rule",
+              [](Section& s, Config& c, registry::ReadContext& r) { readWindowRules(s, c, r.effectReferences); }
+          ),
+          unregistered("layer_rule", [](Section& s, Config& c, registry::ReadContext&) { readLayerRules(s, c); }),
+          unregistered(
+              "security_context_rule",
+              [](Section& s, Config& c, registry::ReadContext&) { readSecurityContextRules(s, c); }
+          ),
+          unregistered("workspace", [](Section& s, Config& c, registry::ReadContext& r) { readWorkspaces(s, c, r); }),
+      };
+      return fields;
+    }
+
     enum class ConfigParseOutcome : uint8_t {
       Loaded,
       Missing,
@@ -2763,26 +2780,8 @@ namespace umbriel {
         std::vector<EffectReference> effectReferences;
         {
           Section root(result.merged, "", store.mutableDiagnostics());
-          readColors(root, loaded);
-          readEffects(root, loaded, effectReferences);
-          readAnimation(root, loaded, effectReferences);
-          registry::readFields(root, configFields(), loaded);
-          readOverview(root, loaded);
-          readScratchpads(root, loaded);
-          readHotCorners(root, loaded);
-          readLayout(root, loaded);
-          readGeneral(root, loaded);
-          readDrm(root, loaded);
-          readEnvironment(root, loaded);
-          readEvents(root, loaded);
-          readWorkspaceSettings(root, loaded);
-          readScreenCast(root, loaded);
-          readOutputs(root, loaded, effectReferences);
-          readKeybinds(root, loaded);
-          readWindowRules(root, loaded, effectReferences);
-          readLayerRules(root, loaded);
-          readSecurityContextRules(root, loaded);
-          readWorkspaces(root, loaded);
+          registry::ReadContext context{.loaded = loaded, .effectReferences = effectReferences};
+          registry::readFields(root, configFields(), loaded, context);
           warnScrollButtonBinds(loaded);
           validateEffectReferences(loaded, effectReferences);
         }

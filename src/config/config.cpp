@@ -1190,7 +1190,17 @@ namespace umbriel {
           registry::boolean("enabled", &E::enabled),
       };
       std::ranges::move(extra, std::back_inserter(fields));
-      fields.push_back(registry::integer("duration_ms", 1, 10000, &E::durationMs));
+      registry::Field<E> duration = registry::integer("duration_ms", 1, 10000, &E::durationMs);
+      duration.describe = [describe = std::move(duration.describe)](
+                              const E& defaults, const std::string& path, registry::Descriptions& out
+                          ) {
+        describe(defaults, path, out);
+        // A built-in spring derives its own length, so its duration is not a value to write.
+        if (defaults.curve.easing == Easing::Spring) {
+          out.back().defaultValue = nullptr;
+        }
+      };
+      fields.push_back(std::move(duration));
       fields.push_back(curveField("curve", &E::curve));
       fields.push_back(registry::step<E>([](Section& s, E& event, registry::ReadContext&) {
         if (registry::configuredInteger(s, "duration_ms") && event.curve.easing == Easing::Spring) {
@@ -2612,9 +2622,9 @@ namespace umbriel {
     return found == devices.end() ? nullptr : &*found;
   }
 
-  registry::Descriptions registry::describeConfig() {
+  registry::Descriptions registry::describeConfig(const Config& values) {
     Descriptions keys;
-    describeFields(configFields(), Config{}, "", keys);
+    describeFields(configFields(), values, "", keys);
     return keys;
   }
 

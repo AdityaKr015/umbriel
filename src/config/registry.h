@@ -73,8 +73,8 @@ namespace umbriel::registry {
     }
   }
 
-  // Every declared key, with the built-in values as defaults.
-  [[nodiscard]] Descriptions describeConfig();
+  // Every declared key, reporting `values` as its defaults: the built-in ones when given `Config{}`.
+  [[nodiscard]] Descriptions describeConfig(const Config& values);
 
   namespace detail {
 

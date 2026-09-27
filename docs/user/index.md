@@ -18,7 +18,7 @@ to integrate with Umbriel.
 5. Use [window rules](window-rules.md) for application-specific behavior.
 
 Umbriel reloads most configuration changes when you save the file. Errors and
-warnings appear on screen, and `umbriel validate` can check a configuration
+warnings appear on screen, and `umbriel config validate` can check a configuration
 without a running session.
 
 ## Features

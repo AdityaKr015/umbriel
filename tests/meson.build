@@ -40,6 +40,7 @@ unit_tests = [
   ['deferred-unfullscreen', ['unit/deferred_unfullscreen.cpp'], []],
   ['config-section', ['unit/config_section.cpp'], []],
   ['config-change', ['unit/config_change.cpp'], []],
+  ['config-schema', ['unit/config_schema.cpp'], [umbriel_core_dep]],
   [
     'config-load',
     ['unit/config_load.cpp'],

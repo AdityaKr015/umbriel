@@ -1,7 +1,7 @@
 # Umbriel starting configuration
 #
 # Copy this file to ~/.config/umbriel/config.toml. Most changes apply when the
-# file is saved. Check edits with `umbriel validate`.
+# file is saved. Check edits with `umbriel config validate`.
 #
 # Complete reference: https://docs.noctalia.dev/umbriel/
 #

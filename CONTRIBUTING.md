@@ -395,7 +395,8 @@ The CLI doubles as a runtime inspection and IPC surface against a running compos
 
 ```sh
 umbriel -v | --version            # print the release version and commit revision
-umbriel validate [-c <config>]   # check a config file without starting
+umbriel config validate [-c <config>]  # check a config file without starting
+umbriel config schema [--json]  # list every config key with its type and default
 umbriel outputs                  # list connectors and modes
 umbriel windows                  # list windows (focused *, urgent !)
 umbriel workspaces               # list workspaces and their layouts

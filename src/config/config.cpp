@@ -3,6 +3,7 @@
 #include "config/config_diag.h"
 #include "config/config_merge.h"
 #include "config/keybind_parse.h"
+#include "config/registry.h"
 #include "config/resolve.h"
 #include "config/section.h"
 #include "config/store.h"
@@ -65,31 +66,6 @@ namespace umbriel {
       }
       if (value == "fullscreen") {
         return VrrMode::Fullscreen;
-      }
-      return std::nullopt;
-    }
-
-    std::optional<TrackLayout> readTrackLayout(const toml::node& node) {
-      const auto value = node.value<std::string>();
-      if (value == "global") {
-        return TrackLayout::Global;
-      }
-      if (value == "window") {
-        return TrackLayout::Window;
-      }
-      return std::nullopt;
-    }
-
-    std::optional<WindowDragToggle> readWindowDragToggle(const toml::node& node) {
-      const auto value = node.value<std::string>();
-      if (value == "none") {
-        return WindowDragToggle::None;
-      }
-      if (value == "floating") {
-        return WindowDragToggle::Floating;
-      }
-      if (value == "pinned") {
-        return WindowDragToggle::Pinned;
       }
       return std::nullopt;
     }
@@ -482,19 +458,15 @@ namespace umbriel {
       return tokens;
     }
 
-    std::optional<AccelProfile> readAccelProfile(Section& section, std::string_view key, std::string_view context) {
-      const toml::node* node = section.take(key);
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* value = node->as_string();
+    std::optional<AccelProfile> parseAccelProfile(const toml::node& node, const std::string& path) {
+      const auto* value = node.as_string();
       if (value == nullptr) {
-        warnAt(node->source(), R"({}.{} must be a string)", context, key);
+        warnAt(node.source(), "{} must be a string", path);
         return std::nullopt;
       }
       const std::vector<std::string_view> tokens = splitWhitespace(value->get());
       if (tokens.empty()) {
-        warnAt(node->source(), "{}.{} cannot be empty", context, key);
+        warnAt(node.source(), "{} cannot be empty", path);
         return std::nullopt;
       }
       const std::string profile = lowercase(tokens.front());
@@ -507,8 +479,8 @@ namespace umbriel {
       }
       if (profile != "custom" || tokens.size() < 4) {
         warnAt(
-            node->source(), R"(invalid {}.{} "{}" (expected "flat", "adaptive", or "custom <step> <points...>"))",
-            context, key, value->get()
+            node.source(), R"(invalid {} "{}" (expected "flat", "adaptive", or "custom <step> <points...>"))", path,
+            value->get()
         );
         return std::nullopt;
       }
@@ -520,17 +492,17 @@ namespace umbriel {
         double number = 0.0;
         const auto [end, error] = std::from_chars(token.data(), token.data() + token.size(), number);
         if (error != std::errc{} || end != token.data() + token.size() || !std::isfinite(number)) {
-          warnAt(node->source(), R"(invalid number "{}" in {}.{})", token, context, key);
+          warnAt(node.source(), R"(invalid number "{}" in {})", token, path);
           return std::nullopt;
         }
         values.push_back(number);
       }
       if (values.front() <= 0.0) {
-        warnAt(node->source(), "{}.{} custom step must be greater than zero", context, key);
+        warnAt(node.source(), "{} custom step must be greater than zero", path);
         return std::nullopt;
       }
       if (std::ranges::any_of(values.begin() + 1, values.end(), [](double point) { return point < 0.0; })) {
-        warnAt(node->source(), "{}.{} custom points must be non-negative", context, key);
+        warnAt(node.source(), "{} custom points must be non-negative", path);
         return std::nullopt;
       }
       return AccelProfile{
@@ -540,114 +512,59 @@ namespace umbriel {
       };
     }
 
-    std::optional<Config::Input::Touchpad::ScrollFactor> readScrollFactor(Section& section) {
-      const toml::node* node = section.take("scroll_factor");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
+    // `accel_profile` on any device class whose struct has an `accelProfile` member.
+    template <typename T> registry::Field<T> accelProfileField(std::optional<AccelProfile> T::* member) {
+      return registry::custom<T>(
+          "accel_profile",
+          registry::KeyDescription("string").withValues({"flat", "adaptive"}).withFormat("accel_profile"),
+          [member](const toml::node& node, const std::string& path, T& target) {
+            if (auto profile = parseAccelProfile(node, path)) {
+              target.*member = std::move(profile);
+            }
+          }
+      );
+    }
+
+    const registry::Fields<Config::Input::Touchpad::ScrollFactor>& scrollFactorAxes() {
+      using Axes = Config::Input::Touchpad::ScrollFactor;
+      static const registry::Fields<Axes> fields{
+          registry::real("horizontal", 0.1, 10.0, &Axes::horizontal),
+          registry::real("vertical", 0.1, 10.0, &Axes::vertical),
+      };
+      return fields;
+    }
+
+    std::optional<Config::Input::Touchpad::ScrollFactor>
+    parseScrollFactor(const toml::node& node, const std::string& path) {
       Config::Input::Touchpad::ScrollFactor factor;
-      if (const toml::table* table = node->as_table()) {
-        Section axes(*table, "input.touchpad.scroll_factor", configStore().mutableDiagnostics());
-        axes.real("horizontal", 0.1, 10.0, factor.horizontal);
-        axes.real("vertical", 0.1, 10.0, factor.vertical);
+      if (const toml::table* table = node.as_table()) {
+        Section axes(*table, path, configStore().mutableDiagnostics());
+        registry::readFields(axes, scrollFactorAxes(), factor);
         return factor;
       }
-      const auto value = node->value<double>();
+      const auto value = node.value<double>();
       if (!value || std::isnan(*value)) {
-        warnAt(node->source(), "ignoring input.touchpad.scroll_factor (expected number or table)");
+        warnAt(node.source(), "ignoring {} (expected number or table)", path);
         return std::nullopt;
       }
       const double used = std::clamp(*value, 0.1, 10.0);
       if (used != *value) {
-        warnAt(node->source(), "input.touchpad.scroll_factor = {} out of range, clamped to {}", *value, used);
+        warnAt(node.source(), "{} = {} out of range, clamped to {}", path, *value, used);
       }
       return Config::Input::Touchpad::ScrollFactor{.horizontal = used, .vertical = used};
     }
 
-    std::optional<ClickMethod> readClickMethod(Section& section, std::string_view context) {
-      const toml::node* node = section.take("click_method");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* value = node->as_string();
-      if (value == nullptr) {
-        warnAt(node->source(), "{}.click_method must be a string", context);
-        return std::nullopt;
-      }
-      const std::string method = lowercase(value->get());
-      if (method == "button_areas") {
-        return ClickMethod::ButtonAreas;
-      }
-      if (method == "clickfinger") {
-        return ClickMethod::ClickFinger;
-      }
-      warnAt(
-          node->source(), R"(invalid {}.click_method "{}" (expected "button_areas" or "clickfinger"))", context,
-          value->get()
-      );
-      return std::nullopt;
-    }
-
-    std::optional<TapButtonMap> readTapButtonMap(Section& section, std::string_view context) {
-      const toml::node* node = section.take("tap_button_map");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* value = node->as_string();
-      if (value == nullptr) {
-        warnAt(node->source(), "{}.tap_button_map must be a string", context);
-        return std::nullopt;
-      }
-      const std::string map = lowercase(value->get());
-      if (map == "left_right_middle") {
-        return TapButtonMap::LeftRightMiddle;
-      }
-      if (map == "left_middle_right") {
-        return TapButtonMap::LeftMiddleRight;
-      }
-      warnAt(
-          node->source(), R"(invalid {}.tap_button_map "{}" (expected "left_right_middle" or "left_middle_right"))",
-          context, value->get()
-      );
-      return std::nullopt;
-    }
-
-    std::optional<uint32_t> readScrollButton(Section& section, std::string_view context) {
-      const toml::node* node = section.take("scroll_button");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* value = node->as_string();
-      if (value == nullptr) {
-        warnAt(node->source(), "{}.scroll_button must be a string", context);
-        return std::nullopt;
-      }
-      if (const uint32_t button = mouseButtonFromName(value->get()); button != 0) {
-        return button;
-      }
-      warnAt(
-          node->source(),
-          R"(invalid {}.scroll_button "{}" (expected "MouseLeft", "MouseRight", "MouseMiddle", "MouseBack", or "MouseForward"))",
-          context, value->get()
-      );
-      return std::nullopt;
-    }
-
-    std::optional<std::array<float, 6>> readCalibrationMatrix(Section& section, std::string_view context) {
-      const toml::node* node = section.take("calibration_matrix");
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* array = node->as_array();
+    std::optional<std::array<float, 6>> parseCalibrationMatrix(const toml::node& node, const std::string& path) {
+      const auto* array = node.as_array();
       if (array == nullptr || array->size() != 6) {
-        warnAt(node->source(), "{}.calibration_matrix must be an array of 6 finite numbers", context);
+        warnAt(node.source(), "{} must be an array of 6 finite numbers", path);
         return std::nullopt;
       }
       std::array<float, 6> matrix{};
       for (size_t index = 0; index < 6; ++index) {
         const auto value = (*array)[index].value<double>();
         if (!value || !std::isfinite(*value)) {
-          warnAt(node->source(), "{}.calibration_matrix must be an array of 6 finite numbers", context);
+          warnAt(node.source(), "{} must be an array of 6 finite numbers", path);
           return std::nullopt;
         }
         matrix[index] = static_cast<float>(*value);
@@ -1491,33 +1408,34 @@ namespace umbriel {
       root.sub("animation", [&](Section& section) { parseAnimationSection(section, loaded.animation, references); });
     }
 
-    void readAppearance(Section& root, Config& loaded) {
-      auto& appearance = loaded.appearance;
-      root.sub("appearance", [&](Section& s) {
-        s.integer("border_width", 0, 100, appearance.borderWidth)
-            .integer("outer_border_width", 0, 100, appearance.outerBorderWidth)
-            .integer("corner_radius", 0, 100, appearance.cornerRadius)
-            .real("drag_opacity", 0.0, 1.0, appearance.dragOpacity)
-            .boolean("prefer_no_csd", appearance.preferNoCsd)
-            .boolean("opaque_fullscreen", appearance.opaqueFullscreen);
-
-        s.sub("blur", [&](Section& blur) {
-          blur.boolean("enabled", appearance.blur.enabled)
-              .boolean("optimized", appearance.blur.optimized)
-              .integer("passes", 0, 8, appearance.blur.passes)
-              .integer("radius", 0, 100, appearance.blur.radius)
-              .real("noise", 0.0, 1.0, appearance.blur.noise)
-              .real("brightness", 0.0, 2.0, appearance.blur.brightness)
-              .real("contrast", 0.0, 2.0, appearance.blur.contrast)
-              .real("saturation", 0.0, 2.0, appearance.blur.saturation);
-        });
-        s.sub("shadow", [&](Section& shadow) {
-          shadow.boolean("enabled", appearance.shadow.enabled)
-              .integer("softness", 0, 200, appearance.shadow.softness)
-              .integer("offset_x", -200, 200, appearance.shadow.offsetX)
-              .integer("offset_y", -200, 200, appearance.shadow.offsetY);
-        });
-      });
+    const registry::Fields<Config::Appearance>& appearanceFields() {
+      using registry::boolean;
+      using registry::integer;
+      using registry::real;
+      using A = Config::Appearance;
+      static const registry::Fields<A::Blur> blur{
+          boolean("enabled", &A::Blur::enabled),          boolean("optimized", &A::Blur::optimized),
+          integer("passes", 0, 8, &A::Blur::passes),      integer("radius", 0, 100, &A::Blur::radius),
+          real("noise", 0.0, 1.0, &A::Blur::noise),       real("brightness", 0.0, 2.0, &A::Blur::brightness),
+          real("contrast", 0.0, 2.0, &A::Blur::contrast), real("saturation", 0.0, 2.0, &A::Blur::saturation),
+      };
+      static const registry::Fields<A::Shadow> shadow{
+          boolean("enabled", &A::Shadow::enabled),
+          integer("softness", 0, 200, &A::Shadow::softness),
+          integer("offset_x", -200, 200, &A::Shadow::offsetX),
+          integer("offset_y", -200, 200, &A::Shadow::offsetY),
+      };
+      static const registry::Fields<A> fields{
+          integer("border_width", 0, 100, &A::borderWidth),
+          integer("outer_border_width", 0, 100, &A::outerBorderWidth),
+          integer("corner_radius", 0, 100, &A::cornerRadius),
+          real("drag_opacity", 0.0, 1.0, &A::dragOpacity),
+          boolean("prefer_no_csd", &A::preferNoCsd),
+          boolean("opaque_fullscreen", &A::opaqueFullscreen),
+          registry::table("blur", &A::blur, blur),
+          registry::table("shadow", &A::shadow, shadow),
+      };
+      return fields;
     }
 
     void readOverview(Section& root, Config& loaded) {
@@ -1768,185 +1686,206 @@ namespace umbriel {
       return true;
     }
 
-    void readOptionalText(
-        Section& section, std::string_view key, std::optional<std::string>& target, std::string_view context
+    // A device rule is kept once it names a device no earlier rule names. Its XKB keys are checked merged over the
+    // session keyboard they override, and dropped together when that fails.
+    bool acceptDevice(
+        const toml::node& entry, const std::string& context, Config::Input::Device& device, const Config::Input& input
     ) {
-      const toml::node* node = section.take(key);
-      if (node == nullptr) {
-        return;
+      if (entry.as_table()->get("name") == nullptr) {
+        errorAt(entry.source(), "{} must set name", context);
+        return false;
       }
-      if (const auto value = node->value<std::string>()) {
-        target = *value;
-      } else {
-        warnAt(node->source(), "ignoring {}.{} (expected string)", context, key);
+      if (device.name.empty()) {
+        return false;
       }
+      if (input.findDevice(device.name) != nullptr) {
+        errorAt(entry.source(), "{} duplicates device '{}'", context, device.name);
+        return false;
+      }
+      if (device.layout || device.variant || device.options) {
+        Config::Input::Keyboard keyboard = input.keyboard;
+        keyboard.layout = device.layout.value_or(keyboard.layout);
+        keyboard.variant = device.variant.value_or(keyboard.variant);
+        keyboard.options = device.options.value_or(keyboard.options);
+        if (!validateKeyboardInput(keyboard, entry.source(), context)) {
+          device.layout.reset();
+          device.variant.reset();
+          device.options.reset();
+        }
+      }
+      return true;
     }
 
-    void readInputDevices(Section& input, Config::Input& configured) {
-      const toml::node* node = input.take("device");
-      if (node == nullptr) {
-        return;
-      }
-      const auto* devices = node->as_array();
-      if (devices == nullptr) {
-        errorAt(node->source(), "input.device must be a [[input.device]] array of tables");
-        return;
-      }
+    const registry::Fields<Config::Input>& inputFields() {
+      using registry::boolean;
+      using registry::Case;
+      using registry::choice;
+      using registry::Choice;
+      using registry::custom;
+      using registry::Fields;
+      using registry::integer;
+      using registry::real;
+      using registry::table;
+      using registry::text;
+      using In = Config::Input;
 
-      size_t index = 0;
-      for (const auto& entry : *devices) {
-        const std::string context = std::format("input.device[{}]", index++);
-        const auto* table = entry.as_table();
-        if (table == nullptr) {
-          errorAt(entry.source(), "{} must be a table", context);
-          continue;
-        }
+      static const std::vector<Choice<ClickMethod>> clickMethods{
+          {.name = "button_areas", .value = ClickMethod::ButtonAreas},
+          {.name = "clickfinger", .value = ClickMethod::ClickFinger},
+      };
+      static const std::vector<Choice<TapButtonMap>> tapButtonMaps{
+          {.name = "left_right_middle", .value = TapButtonMap::LeftRightMiddle},
+          {.name = "left_middle_right", .value = TapButtonMap::LeftMiddleRight},
+      };
+      static const std::vector<Choice<uint32_t>> scrollButtons{
+          {.name = "MouseLeft", .value = BTN_LEFT},     {.name = "MouseRight", .value = BTN_RIGHT},
+          {.name = "MouseMiddle", .value = BTN_MIDDLE}, {.name = "MouseBack", .value = BTN_SIDE},
+          {.name = "MouseForward", .value = BTN_EXTRA},
+      };
 
-        Config::Input::Device device;
-        Section keys(*table, context, configStore().mutableDiagnostics());
-        bool validName = false;
-        if (const toml::node* nameNode = keys.take("name")) {
-          if (const auto name = nameNode->value<std::string>(); name && !name->empty()) {
-            device.name = *name;
-            validName = true;
-          } else {
-            errorAt(nameNode->source(), "{}.name must be a non-empty string", context);
-          }
-        } else {
-          errorAt(entry.source(), "{} must set name", context);
-        }
-
-        readOptionalText(keys, "layout", device.layout, context);
-        readOptionalText(keys, "variant", device.variant, context);
-        readOptionalText(keys, "options", device.options, context);
-        keys.integer("repeat_rate", 0, 1000, device.repeatRate)
-            .integer("repeat_delay", 0, 10000, device.repeatDelay)
-            .boolean("tap", device.tap)
-            .boolean("natural_scroll", device.naturalScroll)
-            .boolean("left_handed", device.leftHanded)
-            .real("sensitivity", -1.0, 1.0, device.sensitivity)
-            .boolean("disable_while_typing", device.disableWhileTyping)
-            .boolean("scroll_button_lock", device.scrollButtonLock);
-        device.accelProfile = readAccelProfile(keys, "accel_profile", "input.device");
-        device.clickMethod = readClickMethod(keys, "input.device");
-        device.tapButtonMap = readTapButtonMap(keys, "input.device");
-        device.scrollButton = readScrollButton(keys, "input.device");
-
-        if (!validName) {
-          continue;
-        }
-        if (std::ranges::any_of(configured.devices, [&](const Config::Input::Device& existing) {
-              return existing.name == device.name;
-            })) {
-          errorAt(entry.source(), "{} duplicates device '{}'", context, device.name);
-          continue;
-        }
-
-        if (device.layout || device.variant || device.options) {
-          Config::Input::Keyboard keyboard = configured.keyboard;
-          if (device.layout) {
-            keyboard.layout = *device.layout;
-          }
-          if (device.variant) {
-            keyboard.variant = *device.variant;
-          }
-          if (device.options) {
-            keyboard.options = *device.options;
-          }
-          if (!validateKeyboardInput(keyboard, entry.source(), context)) {
-            device.layout.reset();
-            device.variant.reset();
-            device.options.reset();
-          }
-        }
-        configured.devices.push_back(std::move(device));
-      }
+      static const Fields<In::Keyboard> keyboard{
+          text("layout", &In::Keyboard::layout),
+          text("variant", &In::Keyboard::variant),
+          text("options", &In::Keyboard::options),
+          integer("repeat_rate", 0, 1000, &In::Keyboard::repeatRate),
+          integer("repeat_delay", 0, 10000, &In::Keyboard::repeatDelay),
+          boolean("numlock_toggle", &In::Keyboard::numlockToggle),
+          choice(
+              "track_layout", &In::Keyboard::trackLayout,
+              {{.name = "global", .value = TrackLayout::Global}, {.name = "window", .value = TrackLayout::Window}}
+          ),
+      };
+      static const Fields<In::Touchpad> touchpad{
+          boolean("tap", &In::Touchpad::tap),
+          boolean("natural_scroll", &In::Touchpad::naturalScroll),
+          boolean("left_handed", &In::Touchpad::leftHanded),
+          real("sensitivity", -1.0, 1.0, &In::Touchpad::sensitivity),
+          boolean("disable_while_typing", &In::Touchpad::disableWhileTyping),
+          boolean("disable_on_external_mouse", &In::Touchpad::disableOnExternalMouse),
+          custom<In::Touchpad>(
+              "scroll_factor", registry::KeyDescription("float_or_table").withRange(0.1, 10.0),
+              [](const toml::node& node, const std::string& path, In::Touchpad& target) {
+                if (auto factor = parseScrollFactor(node, path)) {
+                  target.scrollFactor = factor;
+                }
+              },
+              [] {
+                registry::Descriptions axes;
+                registry::describeFields(scrollFactorAxes(), {}, "", axes);
+                return axes;
+              }()
+          ),
+          accelProfileField(&In::Touchpad::accelProfile),
+          choice("click_method", &In::Touchpad::clickMethod, clickMethods, Case::Fold),
+          choice("tap_button_map", &In::Touchpad::tapButtonMap, tapButtonMaps, Case::Fold),
+      };
+      static const Fields<In::Mouse> mouse{
+          boolean("natural_scroll", &In::Mouse::naturalScroll),
+          boolean("left_handed", &In::Mouse::leftHanded),
+          real("sensitivity", -1.0, 1.0, &In::Mouse::sensitivity),
+          integer("scroll_wheel_step", 1, 1000, &In::Mouse::scrollWheelStep),
+          boolean("scroll_button_lock", &In::Mouse::scrollButtonLock),
+          accelProfileField(&In::Mouse::accelProfile),
+          choice("scroll_button", &In::Mouse::scrollButton, scrollButtons, Case::Fold),
+      };
+      static const Fields<In::Tablet> tablet{
+          boolean("enabled", &In::Tablet::enabled),
+          text("map_to_output", &In::Tablet::mapToOutput),
+          boolean("map_to_focused_output", &In::Tablet::mapToFocusedOutput),
+          boolean("map_to_focused_window", &In::Tablet::mapToFocusedWindow),
+          boolean("left_handed", &In::Tablet::leftHanded),
+          custom<In::Tablet>(
+              "calibration_matrix", registry::KeyDescription("float_array"),
+              [](const toml::node& node, const std::string& path, In::Tablet& target) {
+                if (auto matrix = parseCalibrationMatrix(node, path)) {
+                  target.calibrationMatrix = matrix;
+                }
+              }
+          ),
+      };
+      static const Fields<In::Touch> touch{
+          boolean("enabled", &In::Touch::enabled),
+          text("map_to_output", &In::Touch::mapToOutput),
+      };
+      static const Fields<In::Cursor> cursor{
+          text("theme", &In::Cursor::theme),
+          integer("size", 1, 512, &In::Cursor::size),
+          boolean("hardware_cursor", &In::Cursor::hardwareCursor),
+          boolean("follows_focus", &In::Cursor::followsFocus),
+          boolean("hide_when_typing", &In::Cursor::hideWhenTyping),
+          integer("hide_timeout_ms", 0, 3600000, &In::Cursor::hideTimeoutMs),
+      };
+      // The limit is measured in viewport widths and the quantity it is compared against is unbounded: revealing a
+      // column three screens away is 3.0. The upper bound here is a nonsense-catcher, not a ceiling. Below zero would
+      // refuse focus even for a window already fully visible, which disables hover focus rather than limiting it.
+      static const Fields<In::Focus> focus{
+          boolean("follows_mouse", &In::Focus::followsMouse),
+          real("follows_mouse_max_scroll", 0.0, kMaxFollowsMouseScroll, &In::Focus::followsMouseMaxScroll),
+      };
+      static const Fields<In::Device> device{
+          custom<In::Device>(
+              "name", registry::KeyDescription("string"),
+              [](const toml::node& node, const std::string& path, In::Device& target) {
+                if (const auto name = node.value<std::string>(); name && !name->empty()) {
+                  target.name = *name;
+                } else {
+                  errorAt(node.source(), "{} must be a non-empty string", path);
+                }
+              }
+          ),
+          text("layout", &In::Device::layout),
+          text("variant", &In::Device::variant),
+          text("options", &In::Device::options),
+          integer("repeat_rate", 0, 1000, &In::Device::repeatRate),
+          integer("repeat_delay", 0, 10000, &In::Device::repeatDelay),
+          boolean("tap", &In::Device::tap),
+          boolean("natural_scroll", &In::Device::naturalScroll),
+          boolean("left_handed", &In::Device::leftHanded),
+          real("sensitivity", -1.0, 1.0, &In::Device::sensitivity),
+          boolean("disable_while_typing", &In::Device::disableWhileTyping),
+          boolean("scroll_button_lock", &In::Device::scrollButtonLock),
+          accelProfileField(&In::Device::accelProfile),
+          choice("click_method", &In::Device::clickMethod, clickMethods, Case::Fold),
+          choice("tap_button_map", &In::Device::tapButtonMap, tapButtonMaps, Case::Fold),
+          choice("scroll_button", &In::Device::scrollButton, scrollButtons, Case::Fold),
+      };
+      static const Fields<In> fields{
+          boolean("middle_click_paste", &In::middleClickPaste),
+          boolean("client_window_drag", &In::clientWindowDrag),
+          choice(
+              "window_drag_toggle", &In::windowDragToggle,
+              {{.name = "none", .value = WindowDragToggle::None},
+               {.name = "floating", .value = WindowDragToggle::Floating},
+               {.name = "pinned", .value = WindowDragToggle::Pinned}}
+          ),
+          table(
+              "keyboard", &In::keyboard, keyboard,
+              [](const toml::node& node, In::Keyboard& target) {
+                if (!validateKeyboardInput(target, node.source(), "input.keyboard")) {
+                  target.layout.clear();
+                  target.variant.clear();
+                  target.options.clear();
+                }
+              }
+          ),
+          table("touchpad", &In::touchpad, touchpad),
+          table("mouse", &In::mouse, mouse),
+          table("tablet", &In::tablet, tablet),
+          table("touch", &In::touch, touch),
+          table("cursor", &In::cursor, cursor),
+          table("focus", &In::focus, focus),
+          registry::rules("device", &In::devices, device, acceptDevice),
+      };
+      return fields;
     }
 
-    void readInput(Section& root, Config& loaded) {
-      auto& in = loaded.input;
-      root.sub("input", [&](Section& s) {
-        s.boolean("middle_click_paste", in.middleClickPaste).boolean("client_window_drag", in.clientWindowDrag);
-        if (const toml::node* node = s.take("window_drag_toggle")) {
-          if (const auto value = readWindowDragToggle(*node)) {
-            in.windowDragToggle = *value;
-          } else {
-            warnAt(node->source(), R"(ignoring input.window_drag_toggle (expected "none", "floating", or "pinned"))");
-          }
-        }
-        s.sub("keyboard", [&](Section& k) {
-          k.text("layout", in.keyboard.layout)
-              .text("variant", in.keyboard.variant)
-              .text("options", in.keyboard.options)
-              .integer("repeat_rate", 0, 1000, in.keyboard.repeatRate)
-              .integer("repeat_delay", 0, 10000, in.keyboard.repeatDelay)
-              .boolean("numlock_toggle", in.keyboard.numlockToggle);
-          if (const toml::node* trackNode = k.take("track_layout")) {
-            if (const auto value = readTrackLayout(*trackNode)) {
-              in.keyboard.trackLayout = *value;
-            } else {
-              warnAt(trackNode->source(), "ignoring input.keyboard.track_layout (expected global|window)");
-            }
-          }
-        });
-        if (const toml::node* keyboardNode = s.node("keyboard");
-            keyboardNode != nullptr && !validateKeyboardInput(in.keyboard, keyboardNode->source(), "input.keyboard")) {
-          in.keyboard.layout.clear();
-          in.keyboard.variant.clear();
-          in.keyboard.options.clear();
-        }
-        s.sub("touchpad", [&](Section& t) {
-          t.boolean("tap", in.touchpad.tap)
-              .boolean("natural_scroll", in.touchpad.naturalScroll)
-              .boolean("left_handed", in.touchpad.leftHanded)
-              .real("sensitivity", -1.0, 1.0, in.touchpad.sensitivity)
-              .boolean("disable_while_typing", in.touchpad.disableWhileTyping)
-              .boolean("disable_on_external_mouse", in.touchpad.disableOnExternalMouse);
-          in.touchpad.scrollFactor = readScrollFactor(t);
-          in.touchpad.accelProfile = readAccelProfile(t, "accel_profile", "input.touchpad");
-          in.touchpad.clickMethod = readClickMethod(t, "input.touchpad");
-          in.touchpad.tapButtonMap = readTapButtonMap(t, "input.touchpad");
-        });
-        s.sub("mouse", [&](Section& m) {
-          m.boolean("natural_scroll", in.mouse.naturalScroll)
-              .boolean("left_handed", in.mouse.leftHanded)
-              .real("sensitivity", -1.0, 1.0, in.mouse.sensitivity)
-              .integer("scroll_wheel_step", 1, 1000, in.mouse.scrollWheelStep)
-              .boolean("scroll_button_lock", in.mouse.scrollButtonLock);
-          if (const auto profile = readAccelProfile(m, "accel_profile", "input.mouse")) {
-            in.mouse.accelProfile = *profile;
-          }
-          in.mouse.scrollButton = readScrollButton(m, "input.mouse");
-        });
-        s.sub("tablet", [&](Section& t) {
-          t.boolean("enabled", in.tablet.enabled)
-              .text("map_to_output", in.tablet.mapToOutput)
-              .boolean("map_to_focused_output", in.tablet.mapToFocusedOutput)
-              .boolean("map_to_focused_window", in.tablet.mapToFocusedWindow)
-              .boolean("left_handed", in.tablet.leftHanded);
-          in.tablet.calibrationMatrix = readCalibrationMatrix(t, "input.tablet");
-        });
-        s.sub("touch", [&](Section& t) {
-          t.boolean("enabled", in.touch.enabled).text("map_to_output", in.touch.mapToOutput);
-        });
-        s.sub("cursor", [&](Section& c) {
-          c.text("theme", in.cursor.theme)
-              .integer("size", 1, 512, in.cursor.size)
-              .boolean("hardware_cursor", in.cursor.hardwareCursor)
-              .boolean("follows_focus", in.cursor.followsFocus)
-              .boolean("hide_when_typing", in.cursor.hideWhenTyping)
-              .integer("hide_timeout_ms", 0, 3600000, in.cursor.hideTimeoutMs);
-        });
-        s.sub("focus", [&](Section& f) {
-          // The limit is measured in viewport widths and the quantity it is compared against is unbounded: revealing a
-          // column three screens away is 3.0. The upper bound here is a nonsense-catcher, not a ceiling. Below zero
-          // would refuse focus even for a window already fully visible, which disables hover focus rather than limiting
-          // it.
-          f.boolean("follows_mouse", in.focus.followsMouse)
-              .real("follows_mouse_max_scroll", 0.0, kMaxFollowsMouseScroll, in.focus.followsMouseMaxScroll);
-        });
-        readInputDevices(s, in);
-      });
+    // The sections declared through the registry.
+    const registry::Fields<Config>& configFields() {
+      static const registry::Fields<Config> fields{
+          registry::table("appearance", &Config::appearance, appearanceFields()),
+          registry::table("input", &Config::input, inputFields()),
+      };
+      return fields;
     }
 
     OutputRule* findOutputRuleMutable(Config& loaded, const std::string& name) {
@@ -2827,7 +2766,7 @@ namespace umbriel {
           readColors(root, loaded);
           readEffects(root, loaded, effectReferences);
           readAnimation(root, loaded, effectReferences);
-          readAppearance(root, loaded);
+          registry::readFields(root, configFields(), loaded);
           readOverview(root, loaded);
           readScratchpads(root, loaded);
           readHotCorners(root, loaded);
@@ -2838,7 +2777,6 @@ namespace umbriel {
           readEvents(root, loaded);
           readWorkspaceSettings(root, loaded);
           readScreenCast(root, loaded);
-          readInput(root, loaded);
           readOutputs(root, loaded, effectReferences);
           readKeybinds(root, loaded);
           readWindowRules(root, loaded, effectReferences);
@@ -2871,6 +2809,12 @@ namespace umbriel {
   const Config::Input::Device* Config::Input::findDevice(std::string_view name) const {
     const auto found = std::ranges::find_if(devices, [name](const Device& device) { return device.name == name; });
     return found == devices.end() ? nullptr : &*found;
+  }
+
+  registry::Descriptions registry::describeConfig() {
+    Descriptions keys;
+    describeFields(configFields(), Config{}, "", keys);
+    return keys;
   }
 
   ConfigStore& configStore() {

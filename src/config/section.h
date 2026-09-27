@@ -35,6 +35,7 @@ namespace umbriel {
     Section& real(std::string_view key, double minimum, double maximum, double& target);
     Section& real(std::string_view key, double minimum, double maximum, std::optional<double>& target);
     Section& text(std::string_view key, std::string& target);
+    Section& text(std::string_view key, std::optional<std::string>& target);
     Section& boolean(std::string_view key, bool& target);
     Section& boolean(std::string_view key, std::optional<bool>& target);
     Section& color(std::string_view key, std::array<float, 4>& target);
@@ -73,11 +74,17 @@ namespace umbriel {
     // an entry on a stray key instead of only warning.
     [[nodiscard]] bool allKeysKnown() const;
 
-  private:
+    // `key` as diagnostics name it, qualified by this table's path.
     [[nodiscard]] std::string qualified(std::string_view key) const;
+    // Report against `node` into this table's diagnostics, for readers built on top of this class.
+    void warn(const toml::node& node, std::string message);
+    void error(const toml::node& node, std::string message);
+    [[nodiscard]] std::vector<ConfigDiagnostic>& diagnostics() const { return m_diagnostics; }
+
+  private:
     const toml::node* claim(std::string_view key);
     [[nodiscard]] const toml::table* nestedTable(std::string_view key);
-    void warn(const toml::node& node, std::string message);
+    void report(ConfigDiagnostic::Severity severity, const toml::node& node, std::string message);
 
     const toml::table& m_table;
     std::string m_name;

@@ -5,8 +5,8 @@
 
 #include "config/config.h"
 #include "config/config_diag.h"
+#include "config/config_registry.h"
 #include "config/effects.h"
-#include "config/registry.h"
 #include "config/section.h"
 
 #include <filesystem>

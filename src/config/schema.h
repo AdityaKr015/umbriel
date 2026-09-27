@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config/registry.h"
+#include "config/config_registry.h"
 
 #include <optional>
 #include <string>

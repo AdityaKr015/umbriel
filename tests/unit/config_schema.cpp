@@ -3,7 +3,7 @@
 
 #include "check.h"
 #include "config/config.h"
-#include "config/registry.h"
+#include "config/config_registry.h"
 #include "config/schema.h"
 #include "core/log.h"
 

@@ -3,8 +3,8 @@
 #include "config/config.h"
 
 #include "config/config_merge.h"
+#include "config/config_registry.h"
 #include "config/fields.h"
-#include "config/registry.h"
 #include "config/section.h"
 #include "config/store.h"
 

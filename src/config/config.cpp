@@ -602,10 +602,9 @@ namespace umbriel {
 
     const registry::Fields<ScratchpadConfig>& scratchpadFields() {
       static const registry::Fields<ScratchpadConfig> fields{
-          registry::custom<ScratchpadConfig>(
+          registry::checked<ScratchpadConfig>(
               "name", registry::KeyDescription("string"),
-              [](const toml::node& node, const std::string& path, ScratchpadConfig& target,
-                 registry::ReadContext& context) {
+              [](const toml::node& node, const std::string& path, ScratchpadConfig& target, registry::ReadContext&) {
                 const auto name = node.value<std::string>();
                 if (!name) {
                   errorAt(node.source(), "{} must be a string", path);
@@ -615,9 +614,9 @@ namespace umbriel {
                   errorAt(node.source(), "{} 'default' is reserved for the implicit scratchpad", path);
                 } else {
                   target.name = *name;
-                  return;
+                  return true;
                 }
-                context.entryRejected = true;
+                return false;
               }
           ),
       };
@@ -625,10 +624,10 @@ namespace umbriel {
     }
 
     bool acceptScratchpad(
-        Section& keys, const toml::node& entry, ScratchpadConfig& scratchpad, Config& loaded,
-        registry::ReadContext& context
+        Section& keys, const toml::node& entry, ScratchpadConfig& scratchpad, Config& loaded, registry::ReadContext&,
+        bool fieldsAccepted
     ) {
-      if (context.entryRejected) {
+      if (!fieldsAccepted) {
         return false;
       }
       const toml::node* nameNode = keys.node("name");
@@ -1610,14 +1609,14 @@ namespace umbriel {
     // session keyboard they override, and dropped together when that fails.
     bool acceptDevice(
         Section& keys, const toml::node& entry, Config::Input::Device& device, Config::Input& input,
-        registry::ReadContext&
+        registry::ReadContext&, bool fieldsAccepted
     ) {
       const std::string& context = keys.name();
       if (entry.as_table()->get("name") == nullptr) {
         errorAt(entry.source(), "{} must set name", context);
         return false;
       }
-      if (device.name.empty()) {
+      if (!fieldsAccepted || device.name.empty()) {
         return false;
       }
       if (input.findDevice(device.name) != nullptr) {
@@ -1790,6 +1789,7 @@ namespace umbriel {
                   target.variant.clear();
                   target.options.clear();
                 }
+                return true;
               }
           ),
           table("touchpad", &In::touchpad, touchpad),
@@ -2142,30 +2142,29 @@ namespace umbriel {
     // A regex pattern a rule matches with. One that does not compile rejects the rule.
     template <typename T>
     registry::Field<T> regexField(std::string_view key, std::string T::* pattern, std::regex T::* regex) {
-      return registry::custom<T>(
+      return registry::checked<T>(
           key, registry::KeyDescription("string").withFormat("regex"),
-          [pattern, regex](const toml::node& node, const std::string& path, T& target, registry::ReadContext& context) {
+          [pattern, regex](const toml::node& node, const std::string& path, T& target, registry::ReadContext&) {
             const auto value = node.value<std::string>();
             if (!value) {
               warnAt(node.source(), "ignoring {} (expected string)", path);
-              return;
+              return true;
             }
             target.*pattern = *value;
             try {
               target.*regex = std::regex(*value);
             } catch (const std::regex_error& error) {
               warnAt(node.source(), "invalid regex in {}: {}", path, error.what());
-              context.entryRejected = true;
+              return false;
             }
+            return true;
           }
       );
     }
 
     // A match table that is not a table leaves its rule selecting nothing it meant to, so the rule is dropped.
-    template <typename T> void rejectUnlessTable(const toml::node& node, T&, registry::ReadContext& context) {
-      if (!node.is_table()) {
-        context.entryRejected = true;
-      }
+    template <typename T> bool rejectUnlessTable(const toml::node& node, T&, registry::ReadContext&) {
+      return node.is_table();
     }
 
     // `{ x, y, anchor }`, placed only when both coordinates are set and the anchor is valid.
@@ -2340,9 +2339,11 @@ namespace umbriel {
     }
 
     // The rule's effects are recorded once its place in the array is known.
-    bool
-    acceptWindowRule(Section& keys, const toml::node&, WindowRule&, Config& loaded, registry::ReadContext& context) {
-      if (context.entryRejected) {
+    bool acceptWindowRule(
+        Section& keys, const toml::node&, WindowRule&, Config& loaded, registry::ReadContext& context,
+        bool fieldsAccepted
+    ) {
+      if (!fieldsAccepted) {
         return false;
       }
       const size_t index = loaded.windowRules.size();
@@ -2376,25 +2377,24 @@ namespace umbriel {
     registry::Field<SecurityContextRule> securityPattern(
         std::string_view key, std::string SecurityContextRule::* pattern, std::regex SecurityContextRule::* regex
     ) {
-      return registry::custom<SecurityContextRule>(
+      return registry::checked<SecurityContextRule>(
           key, registry::KeyDescription("string").withFormat("regex"),
           [pattern, regex](
-              const toml::node& node, const std::string& path, SecurityContextRule& target,
-              registry::ReadContext& context
+              const toml::node& node, const std::string& path, SecurityContextRule& target, registry::ReadContext&
           ) {
             const auto value = node.value<std::string>();
             if (!value || value->empty()) {
               warnAt(node.source(), "ignoring {} (expected non-empty string)", path);
-              context.entryRejected = true;
-              return;
+              return false;
             }
             target.*pattern = *value;
             try {
               target.*regex = std::regex(*value);
             } catch (const std::regex_error& error) {
               warnAt(node.source(), "invalid regex in {}: {}", path, error.what());
-              context.entryRejected = true;
+              return false;
             }
+            return true;
           }
       );
     }
@@ -2409,14 +2409,16 @@ namespace umbriel {
       static const registry::Fields<S> fields{
           registry::table<S>(
               "match", [](auto& rule) -> auto& { return rule; }, match,
-              [](const toml::node& node, S&, registry::ReadContext& context) {
+              [](const toml::node& node, S&, registry::ReadContext&) {
                 const toml::table* table = node.as_table();
                 if (table == nullptr) {
-                  context.entryRejected = true;
-                } else if (!registry::declaresAll(match, *table)) {
-                  warnAt(node.source(), "ignoring security_context_rule (unknown key in match)");
-                  context.entryRejected = true;
+                  return false;
                 }
+                if (!registry::declaresAll(match, *table)) {
+                  warnAt(node.source(), "ignoring security_context_rule (unknown key in match)");
+                  return false;
+                }
+                return true;
               }
           ),
           registry::strings("allow_globals", &S::allowGlobals),
@@ -2425,7 +2427,8 @@ namespace umbriel {
     }
 
     bool acceptSecurityContextRule(
-        Section& keys, const toml::node& entry, SecurityContextRule& rule, Config&, registry::ReadContext&
+        Section& keys, const toml::node& entry, SecurityContextRule& rule, Config&, registry::ReadContext&,
+        bool fieldsAccepted
     ) {
       // The filter refuses this global regardless; warning here tells the user why.
       if (std::erase(rule.allowGlobals, "wp_security_context_manager_v1") > 0) {
@@ -2435,7 +2438,7 @@ namespace umbriel {
             "blocked)"
         );
       }
-      bool valid = true;
+      bool valid = fieldsAccepted;
       if (rule.allowGlobals.empty()) {
         warnAt(entry.source(), "ignoring security_context_rule (allow_globals is empty)");
         valid = false;

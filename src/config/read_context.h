@@ -28,8 +28,6 @@ namespace umbriel {
       // The config being loaded. Tables read earlier are already in it, such as the scratchpads an action may name.
       Config& loaded;
       std::vector<EffectReference>& effectReferences;
-      // Set by a field to drop the rule entry being read.
-      bool entryRejected = false;
     };
 
   } // namespace registry

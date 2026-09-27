@@ -53,17 +53,21 @@ namespace umbriel::registry {
 
   template <typename T> struct Field {
     std::string_view key;
-    std::function<void(Section&, T&, ReadContext&)> read;
+    // Returns false when the value rejects the rule entry holding it; a rule array then drops the entry.
+    std::function<bool(Section&, T&, ReadContext&)> read;
     // Appends this key, and any keys beneath it, as found in `defaults`.
     std::function<void(const T& defaults, const std::string& path, Descriptions&)> describe;
   };
 
   template <typename T> using Fields = std::vector<Field<T>>;
 
-  template <typename T> void readFields(Section& section, const Fields<T>& fields, T& target, ReadContext& context) {
+  // Reads every field, so each mistake is reported, and returns whether none rejected the entry.
+  template <typename T> bool readFields(Section& section, const Fields<T>& fields, T& target, ReadContext& context) {
+    bool kept = true;
     for (const Field<T>& field : fields) {
-      field.read(section, target, context);
+      kept = field.read(section, target, context) && kept;
     }
+    return kept;
   }
 
   template <typename T>
@@ -117,7 +121,11 @@ namespace umbriel::registry {
   template <typename T, typename V> Field<T> integer(std::string_view key, int minimum, int maximum, V T::* member) {
     return {
         .key = key,
-        .read = [=](Section& s, T& target, ReadContext&) { s.integer(key, minimum, maximum, target.*member); },
+        .read =
+            [=](Section& s, T& target, ReadContext&) {
+              s.integer(key, minimum, maximum, target.*member);
+              return true;
+            },
         .describe = detail::leaf<T>(KeyDescription("int").withRange(minimum, maximum), [=](const T& d) {
           return detail::toJson(d.*member);
         }),
@@ -136,6 +144,7 @@ namespace umbriel::registry {
               } else {
                 s.real(key, minimum, maximum, target.*member);
               }
+              return true;
             },
         .describe = detail::leaf<T>(KeyDescription("float").withRange(minimum, maximum), [=](const T& d) {
           return detail::toJson(d.*member);
@@ -146,7 +155,11 @@ namespace umbriel::registry {
   template <typename T, typename V> Field<T> boolean(std::string_view key, V T::* member) {
     return {
         .key = key,
-        .read = [=](Section& s, T& target, ReadContext&) { s.boolean(key, target.*member); },
+        .read =
+            [=](Section& s, T& target, ReadContext&) {
+              s.boolean(key, target.*member);
+              return true;
+            },
         .describe = detail::leaf<T>(KeyDescription("bool"), [=](const T& d) { return detail::toJson(d.*member); }),
     };
   }
@@ -154,7 +167,11 @@ namespace umbriel::registry {
   template <typename T, typename V> Field<T> text(std::string_view key, V T::* member) {
     return {
         .key = key,
-        .read = [=](Section& s, T& target, ReadContext&) { s.text(key, target.*member); },
+        .read =
+            [=](Section& s, T& target, ReadContext&) {
+              s.text(key, target.*member);
+              return true;
+            },
         .describe = detail::leaf<T>(KeyDescription("string"), [=](const T& d) { return detail::toJson(d.*member); }),
     };
   }
@@ -162,7 +179,11 @@ namespace umbriel::registry {
   template <typename T> Field<T> strings(std::string_view key, std::vector<std::string> T::* member) {
     return {
         .key = key,
-        .read = [=](Section& s, T& target, ReadContext&) { s.strings(key, target.*member); },
+        .read =
+            [=](Section& s, T& target, ReadContext&) {
+              s.strings(key, target.*member);
+              return true;
+            },
         .describe = detail::leaf<T>(KeyDescription("string_array"), [=](const T& d) {
           return nlohmann::ordered_json(d.*member);
         }),
@@ -181,7 +202,11 @@ namespace umbriel::registry {
   template <typename T, typename V> Field<T> color(std::string_view key, V T::* member) {
     return {
         .key = key,
-        .read = [=](Section& s, T& target, ReadContext&) { s.color(key, target.*member); },
+        .read =
+            [=](Section& s, T& target, ReadContext&) {
+              s.color(key, target.*member);
+              return true;
+            },
         .describe = detail::leaf<T>(KeyDescription("color"), [=](const T& d) -> nlohmann::ordered_json {
           if constexpr (std::is_same_v<V, std::array<float, 4>>) {
             return formatColor(d.*member);
@@ -276,6 +301,7 @@ namespace umbriel::registry {
               if (const toml::node* node = s.take(key)) {
                 assign(target.*member, readChoice(s, *node, s.qualified(key), choices, match));
               }
+              return true;
             },
         .describe = detail::leaf<T>(std::move(shape), [=](const T& d) -> nlohmann::ordered_json {
           if constexpr (std::is_same_v<V, E>) {
@@ -291,7 +317,11 @@ namespace umbriel::registry {
   template <typename T> Field<T> step(std::function<void(Section&, T&, ReadContext&)> check) {
     return {
         .key = {},
-        .read = std::move(check),
+        .read =
+            [check = std::move(check)](Section& s, T& target, ReadContext& context) {
+              check(s, target, context);
+              return true;
+            },
         .describe = [](const T&, const std::string&, Descriptions&) {},
     };
   }
@@ -304,22 +334,23 @@ namespace umbriel::registry {
   }
 
   template <typename T> using Parse = std::function<void(const toml::node&, const std::string& path, T&, ReadContext&)>;
+  // A parse that decides, too, whether the value leaves its rule entry acceptable.
+  template <typename T>
+  using CheckedParse = std::function<bool(const toml::node&, const std::string& path, T&, ReadContext&)>;
   template <typename T> using Current = std::function<nlohmann::ordered_json(const T&)>;
 
-  // A key whose parsing is its own: `parse` gets the node and the key's full path for its diagnostics. `current`
-  // reports the built-in value, when there is one; `extra` lists keys beneath it, such as a number-or-table's axes.
+  // A key whose parsing is its own and may reject the rule entry holding it. See `custom`.
   template <typename T>
-  Field<T> custom(
-      std::string_view key, KeyDescription shape, std::type_identity_t<Parse<T>> parse,
+  Field<T> checked(
+      std::string_view key, KeyDescription shape, std::type_identity_t<CheckedParse<T>> parse,
       std::type_identity_t<Current<T>> current = nullptr, Descriptions extra = {}
   ) {
     return {
         .key = key,
         .read =
             [=](Section& s, T& target, ReadContext& context) {
-              if (const toml::node* node = s.take(key)) {
-                parse(*node, s.qualified(key), target, context);
-              }
+              const toml::node* node = s.take(key);
+              return node == nullptr || parse(*node, s.qualified(key), target, context);
             },
         .describe =
             [shape = std::move(shape), current = std::move(current),
@@ -336,14 +367,32 @@ namespace umbriel::registry {
     };
   }
 
+  // A key whose parsing is its own: `parse` gets the node and the key's full path for its diagnostics. `current`
+  // reports the built-in value, when there is one; `extra` lists keys beneath it, such as a number-or-table's axes.
+  template <typename T>
+  Field<T> custom(
+      std::string_view key, KeyDescription shape, std::type_identity_t<Parse<T>> parse,
+      std::type_identity_t<Current<T>> current = nullptr, Descriptions extra = {}
+  ) {
+    return checked<T>(
+        key, std::move(shape),
+        [parse = std::move(parse)](const toml::node& node, const std::string& path, T& target, ReadContext& context) {
+          parse(node, path, target, context);
+          return true;
+        },
+        std::move(current), std::move(extra)
+    );
+  }
+
   // A nested table reached through `project`, which maps the parent (const or not) to it. `after` runs once the table
-  // is read, when the key is present, for checks across its keys. Projecting the parent onto itself lays a table's
+  // is read, when the key is present, for checks across its keys, and returns whether the rule entry holding the table
+  // stays acceptable. Projecting the parent onto itself lays a table's
   // keys out flat in the parent's struct.
   template <typename T, typename Project>
   Field<T> table(
       std::string_view key, Project project,
       const Fields<std::remove_cvref_t<decltype(std::declval<Project>()(std::declval<T&>()))>>& fields,
-      std::type_identity_t<std::function<void(
+      std::type_identity_t<std::function<bool(
           const toml::node&, std::remove_cvref_t<decltype(std::declval<Project>()(std::declval<T&>()))>&, ReadContext&
       )>>
           after = nullptr
@@ -352,12 +401,14 @@ namespace umbriel::registry {
         .key = key,
         .read =
             [=, &fields](Section& s, T& target, ReadContext& context) {
-              s.sub(key, [&](Section& child) { readFields(child, fields, project(target), context); });
+              bool kept = true;
+              s.sub(key, [&](Section& child) { kept = readFields(child, fields, project(target), context); });
               if (after) {
                 if (const toml::node* node = s.node(key)) {
-                  after(*node, project(target), context);
+                  kept = after(*node, project(target), context) && kept;
                 }
               }
+              return kept;
             },
         .describe =
             [=, &fields](const T& defaults, const std::string& path, Descriptions& out) {
@@ -370,7 +421,7 @@ namespace umbriel::registry {
   template <typename T, typename C>
   Field<T> table(
       std::string_view key, C T::* member, const Fields<C>& fields,
-      std::type_identity_t<std::function<void(const toml::node&, C&, ReadContext&)>> after = nullptr
+      std::type_identity_t<std::function<bool(const toml::node&, C&, ReadContext&)>> after = nullptr
   ) {
     return table<T>(key, [member](auto& parent) -> auto& { return parent.*member; }, fields, std::move(after));
   }
@@ -390,6 +441,7 @@ namespace umbriel::registry {
                 child.freeform();
                 read(child, target, context);
               });
+              return true;
             },
         .describe =
             [entry = std::move(entry), entryKeys = std::move(entryKeys),
@@ -408,14 +460,15 @@ namespace umbriel::registry {
   // rejects the whole config.
   enum class Shape : std::uint8_t { Warning, Error };
 
-  // Decides whether a read entry is kept. It sees the entry's Section, still open, and the parent the entry lands in,
-  // whose array holds the entries kept so far; it reports its own reasons. It runs even for an entry a field already
-  // rejected (`context.entryRejected`), so every mistake in the entry is reported at once.
+  // Decides whether a read entry is kept. It sees the entry's Section, still open, the parent the entry lands in, whose
+  // array holds the entries kept so far, and whether the entry's fields accepted it; it reports its own reasons. It
+  // runs even for an entry its fields rejected, so every mistake in the entry is reported at once.
   template <typename T, typename C>
-  using Accept = std::function<bool(Section& keys, const toml::node& entry, C&, T& parent, ReadContext&)>;
+  using Accept =
+      std::function<bool(Section& keys, const toml::node& entry, C&, T& parent, ReadContext&, bool fieldsAccepted)>;
 
-  // An array of tables, one entry per rule. An entry is dropped when a field it holds rejects it (see `strict`) or
-  // `accept` refuses it.
+  // An array of tables, one entry per rule. An entry is dropped when a field it holds rejects it (see `strict`), or
+  // `accept`, when given, refuses it.
   template <typename T, typename C>
   Field<T> rules(
       std::string_view key, std::vector<C> T::* member, const Fields<C>& fields, Shape shape,
@@ -427,7 +480,7 @@ namespace umbriel::registry {
             [=, &fields](Section& s, T& target, ReadContext& context) {
               const toml::node* node = s.take(key);
               if (node == nullptr) {
-                return;
+                return true;
               }
               const std::string path = s.qualified(key);
               const toml::array* entries = node->as_array();
@@ -437,7 +490,7 @@ namespace umbriel::registry {
                 } else {
                   s.warn(*node, std::format("ignoring {} (expected [[{}]] array of tables)", path, path));
                 }
-                return;
+                return true;
               }
               size_t index = 0;
               for (const toml::node& entry : *entries) {
@@ -452,16 +505,13 @@ namespace umbriel::registry {
                   continue;
                 }
                 C rule;
-                context.entryRejected = false;
                 Section keys(*entryTable, entryPath, s.diagnostics());
-                readFields(keys, fields, rule, context);
-                const bool accepted = !accept || accept(keys, entry, rule, target, context);
-                const bool kept = accepted && !context.entryRejected;
-                context.entryRejected = false;
-                if (kept) {
+                const bool fieldsAccepted = readFields(keys, fields, rule, context);
+                if (accept ? accept(keys, entry, rule, target, context, fieldsAccepted) : fieldsAccepted) {
                   (target.*member).push_back(std::move(rule));
                 }
               }
+              return true;
             },
         .describe =
             [&fields](const T&, const std::string& path, Descriptions& out) {
@@ -482,10 +532,8 @@ namespace umbriel::registry {
   template <typename T> Field<T> strict(Field<T> field) {
     field.read = [read = std::move(field.read)](Section& s, T& target, ReadContext& context) {
       const size_t before = s.diagnostics().size();
-      read(s, target, context);
-      if (s.diagnostics().size() != before) {
-        context.entryRejected = true;
-      }
+      const bool kept = read(s, target, context);
+      return kept && s.diagnostics().size() == before;
     };
     return field;
   }
@@ -518,6 +566,7 @@ namespace umbriel::registry {
                   accept(name, keys, entry, value, target, context);
                 }
               });
+              return true;
             },
         .describe =
             [&fields](const T&, const std::string& path, Descriptions& out) {
@@ -537,14 +586,19 @@ namespace umbriel::registry {
   ) {
     return {
         .key = key,
-        .read = std::move(read),
-        .describe = [container = std::move(container),
-                     keys = std::move(keys)](const T&, const std::string& path, Descriptions& out) {
-          detail::push(out, container, path);
-          for (const KeyDescription& child : keys) {
-            detail::push(out, child, path + child.path);
-          }
-        },
+        .read =
+            [read = std::move(read)](Section& s, T& target, ReadContext& context) {
+              read(s, target, context);
+              return true;
+            },
+        .describe =
+            [container = std::move(container),
+             keys = std::move(keys)](const T&, const std::string& path, Descriptions& out) {
+              detail::push(out, container, path);
+              for (const KeyDescription& child : keys) {
+                detail::push(out, child, path + child.path);
+              }
+            },
     };
   }
 

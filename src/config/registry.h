@@ -281,6 +281,22 @@ namespace umbriel::registry {
     };
   }
 
+  // Runs `check` at its place in the table, for a rule across keys read before it. It declares no key.
+  template <typename T> Field<T> step(std::function<void(Section&, T&, ReadContext&)> check) {
+    return {
+        .key = {},
+        .read = std::move(check),
+        .describe = [](const T&, const std::string&, Descriptions&) {},
+    };
+  }
+
+  // Whether `key` is present and holds a value `Section::integer` accepts, so a rule can follow a key only when it
+  // was configured.
+  [[nodiscard]] inline bool configuredInteger(const Section& s, std::string_view key) {
+    const toml::node* node = s.node(key);
+    return node != nullptr && node->value<std::int64_t>().has_value();
+  }
+
   template <typename T> using Parse = std::function<void(const toml::node&, const std::string& path, T&, ReadContext&)>;
   template <typename T> using Current = std::function<nlohmann::ordered_json(const T&)>;
 

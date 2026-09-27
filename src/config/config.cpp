@@ -1000,24 +1000,22 @@ namespace umbriel {
       return CurveRegistry::parse(str);
     }
 
-    std::optional<AnimationCurve> readCurveNode(
-        const toml::node* node, std::string_view context, const std::map<std::string, BezierCurve>& beziers = {},
-        const std::map<std::string, SpringConfig>& springs = {}
+    std::optional<AnimationCurve> parseCurve(
+        const toml::node& node, const std::string& path, const std::map<std::string, BezierCurve>& beziers,
+        const std::map<std::string, SpringConfig>& springs
     ) {
-      if (node == nullptr) {
-        return std::nullopt;
-      }
-      const auto* value = node->as_string();
+      const auto* value = node.as_string();
       if (value == nullptr) {
-        warnAt(node->source(), "{}.curve must be a string", context);
+        warnAt(node.source(), "{} must be a string", path);
         return std::nullopt;
       }
       if (auto curve = parseAnimationCurve(value->get(), beziers, springs)) {
         return curve;
       }
-      warnAt(node->source(), R"(invalid curve "{}" in {})", value->get(), context);
+      warnAt(node.source(), R"(invalid curve "{}" in {})", value->get(), path);
       return std::nullopt;
     }
+
     // Reads a string selector under `key`, reporting the section's own "(expected string)" warning through
     // Section::text so every caller shares one wording. Returns the value and its source location, or nullopt when
     // the key was absent or not a string.
@@ -1049,116 +1047,148 @@ namespace umbriel {
       });
     }
 
-    // Reads a string selector into `target` and records it for validation.
-    void readEffectSelector(
-        Section& keys, std::string_view key, std::string_view context, EffectKind kind, bool allowOff,
-        std::string& target, std::vector<EffectReference>& references
-    ) {
-      const auto selector = takeEffectSelector(keys, key);
-      if (!selector) {
-        return;
-      }
-      target = selector->first;
-      addEffectReference(references, std::string(context), *selector, kind, allowOff, [&target] { target.clear(); });
+    // An effect preset selector, checked against the presets once every table is read.
+    template <typename T>
+    registry::Field<T> effectField(std::string_view key, std::string T::* member, EffectKind kind) {
+      return registry::custom<T>(
+          key, registry::KeyDescription("string").withFormat("effect"),
+          [member, kind](const toml::node& node, const std::string& path, T& target, registry::ReadContext& context) {
+            const auto value = node.value<std::string>();
+            if (!node.is_string() || !value) {
+              warnAt(node.source(), "ignoring {} (expected string)", path);
+              return;
+            }
+            std::string& selected = target.*member;
+            selected = *value;
+            addEffectReference(context.effectReferences, path, {*value, node.source()}, kind, false, [&selected] {
+              selected.clear();
+            });
+          },
+          [member](const T& defaults) { return nlohmann::ordered_json(defaults.*member); }
+      );
     }
 
-    void readEffects(Section& root, Config& loaded, std::vector<EffectReference>& references) {
-      root.sub("effects", [&](Section& s) {
-        Effects& effects = loaded.effects;
-        s.integer("max_fps", 0, 240, effects.maxFps).boolean("in_capture", effects.inCapture);
-        readEffectSelector(s, "border", "effects.border", EffectKind::Border, false, effects.border, references);
-        readEffectSelector(s, "window", "effects.window", EffectKind::Window, false, effects.window, references);
-        readEffectSelector(s, "screen", "effects.screen", EffectKind::Screen, false, effects.screen, references);
-        readEffectSelector(s, "cursor", "effects.cursor", EffectKind::Cursor, false, effects.cursor, references);
-        const toml::node* node = s.take("preset");
-        if (node == nullptr) {
-          return;
+    // Presets are named by the user, and which keys one takes depends on its kind.
+    void readEffectPresets(Section& presets, Effects& effects, registry::ReadContext& context) {
+      for (const auto& [key, entry] : presets.table()) {
+        const std::string name(key.str());
+        const std::string path = "effects.preset." + name;
+        const auto* table = entry.as_table();
+        if (table == nullptr) {
+          warnAt(entry.source(), "ignoring {} (expected table)", path);
+          continue;
         }
-        const auto* presets = node->as_table();
-        if (presets == nullptr) {
-          warnAt(node->source(), "ignoring effects.preset (expected table)");
-          return;
+        if (name == kEffectOff) {
+          warnAt(key.source(), "ignoring {} ('off' is reserved)", path);
+          continue;
         }
-        for (const auto& [key, entry] : *presets) {
-          const std::string name(key.str());
-          const std::string context = "effects.preset." + name;
-          const auto* table = entry.as_table();
-          if (table == nullptr) {
-            warnAt(entry.source(), "ignoring {} (expected table)", context);
-            continue;
-          }
-          if (name == kEffectOff) {
-            warnAt(key.source(), "ignoring {} ('off' is reserved)", context);
-            continue;
-          }
-          Section keys(*table, context, configStore().mutableDiagnostics());
-          const toml::node* kindNode = keys.take("kind");
-          const std::optional<EffectKind> kind =
-              kindNode != nullptr ? parseEffectKind(kindNode->value<std::string>().value_or("")) : std::nullopt;
-          if (!kind) {
-            warnAt(
-                kindNode != nullptr ? kindNode->source() : key.source(),
-                "ignoring {} (kind must be animation|border|window|screen|cursor)", context
-            );
-            keys.freeform();
-            continue;
-          }
-          EffectPreset preset;
-          preset.name = name;
-          preset.kind = *kind;
-          auto shader = readShaderSource(keys, "shader", configStore().mutableDiagnostics());
-          for (auto& path : shader.watchPaths) {
-            configStore().addWatchPath(std::move(path));
-          }
-          if (shader.source) {
-            preset.shader = std::move(*shader.source);
-          } else if (keys.node("shader") == nullptr) {
-            warnAt(key.source(), "{} has no shader; the preset is inert", context);
-          }
-          keys.boolean("palette", preset.palette);
-          // The preset moves into the vector; register the overlay reference by index after the push.
-          std::optional<std::pair<std::string, toml::source_region>> overlay;
-          switch (*kind) {
-          case EffectKind::Border: {
-            double speed = preset.speed;
-            keys.integer("padding", 0, 1024, preset.padding)
-                .real("speed", 0.0, 10.0, speed)
-                .boolean("animated", preset.animated);
-            preset.speed = static_cast<float>(speed);
-            overlay = takeEffectSelector(keys, "overlay");
-            if (overlay) {
-              preset.overlay = overlay->first;
-            }
-            keys.sub("light", [&](Section& light) {
-              BorderLight settings;
-              double intensity = settings.intensity;
-              double threshold = settings.threshold;
-              light.integer("spread", 1, 256, settings.spread)
-                  .real("intensity", 0.0, 4.0, intensity)
-                  .real("threshold", 0.0, 1.0, threshold);
-              settings.intensity = static_cast<float>(intensity);
-              settings.threshold = static_cast<float>(threshold);
-              preset.light = settings;
-            });
-            break;
-          }
-          case EffectKind::Cursor:
-            keys.integer("radius", 0, 4096, preset.radius);
-            break;
-          case EffectKind::Animation:
-          case EffectKind::Window:
-          case EffectKind::Screen:
-            break;
-          }
-          loaded.effects.presets.push_back(std::move(preset));
+        Section keys(*table, path, configStore().mutableDiagnostics());
+        const toml::node* kindNode = keys.take("kind");
+        const std::optional<EffectKind> kind =
+            kindNode != nullptr ? parseEffectKind(kindNode->value<std::string>().value_or("")) : std::nullopt;
+        if (!kind) {
+          warnAt(
+              kindNode != nullptr ? kindNode->source() : key.source(),
+              "ignoring {} (kind must be animation|border|window|screen|cursor)", path
+          );
+          keys.freeform();
+          continue;
+        }
+        EffectPreset preset;
+        preset.name = name;
+        preset.kind = *kind;
+        auto shader = readShaderSource(keys, "shader", configStore().mutableDiagnostics());
+        for (auto& watched : shader.watchPaths) {
+          configStore().addWatchPath(std::move(watched));
+        }
+        if (shader.source) {
+          preset.shader = std::move(*shader.source);
+        } else if (keys.node("shader") == nullptr) {
+          warnAt(key.source(), "{} has no shader; the preset is inert", path);
+        }
+        keys.boolean("palette", preset.palette);
+        // The preset moves into the vector; register the overlay reference by index after the push.
+        std::optional<std::pair<std::string, toml::source_region>> overlay;
+        switch (*kind) {
+        case EffectKind::Border: {
+          double speed = preset.speed;
+          keys.integer("padding", 0, 1024, preset.padding)
+              .real("speed", 0.0, 10.0, speed)
+              .boolean("animated", preset.animated);
+          preset.speed = static_cast<float>(speed);
+          overlay = takeEffectSelector(keys, "overlay");
           if (overlay) {
-            const size_t index = loaded.effects.presets.size() - 1;
-            addEffectReference(references, context + ".overlay", *overlay, EffectKind::Window, false, [&loaded, index] {
-              loaded.effects.presets[index].overlay.clear();
-            });
+            preset.overlay = overlay->first;
           }
+          keys.sub("light", [&](Section& light) {
+            BorderLight settings;
+            double intensity = settings.intensity;
+            double threshold = settings.threshold;
+            light.integer("spread", 1, 256, settings.spread)
+                .real("intensity", 0.0, 4.0, intensity)
+                .real("threshold", 0.0, 1.0, threshold);
+            settings.intensity = static_cast<float>(intensity);
+            settings.threshold = static_cast<float>(threshold);
+            preset.light = settings;
+          });
+          break;
         }
-      });
+        case EffectKind::Cursor:
+          keys.integer("radius", 0, 4096, preset.radius);
+          break;
+        case EffectKind::Animation:
+        case EffectKind::Window:
+        case EffectKind::Screen:
+          break;
+        }
+        effects.presets.push_back(std::move(preset));
+        if (overlay) {
+          const size_t index = effects.presets.size() - 1;
+          addEffectReference(
+              context.effectReferences, path + ".overlay", *overlay, EffectKind::Window, false,
+              [&effects, index] { effects.presets[index].overlay.clear(); }
+          );
+        }
+      }
+    }
+
+    const registry::Fields<Effects>& effectsFields() {
+      using registry::KeyDescription;
+      static const registry::Fields<Effects> fields{
+          registry::integer("max_fps", 0, 240, &Effects::maxFps),
+          registry::boolean("in_capture", &Effects::inCapture),
+          effectField("border", &Effects::border, EffectKind::Border),
+          effectField("window", &Effects::window, EffectKind::Window),
+          effectField("screen", &Effects::screen, EffectKind::Screen),
+          effectField("cursor", &Effects::cursor, EffectKind::Cursor),
+          registry::map<Effects>(
+              "preset", KeyDescription("table"),
+              [](Section& presets, Effects& effects, registry::ReadContext& context) {
+                readEffectPresets(presets, effects, context);
+              },
+              [] {
+                registry::Descriptions keys;
+                const auto add = [&keys](std::string_view key, KeyDescription description) {
+                  description.path = key;
+                  keys.push_back(std::move(description));
+                };
+                add("kind", KeyDescription("enum").withValues({"animation", "border", "window", "screen", "cursor"}));
+                add("shader", KeyDescription("string").withFormat("path"));
+                add("palette", KeyDescription("bool"));
+                add("padding", KeyDescription("int").withRange(0, 1024));
+                add("speed", KeyDescription("float").withRange(0.0, 10.0));
+                add("animated", KeyDescription("bool"));
+                add("overlay", KeyDescription("string").withFormat("effect"));
+                add("light", KeyDescription("table"));
+                add("light.spread", KeyDescription("int").withRange(1, 256));
+                add("light.intensity", KeyDescription("float").withRange(0.0, 4.0));
+                add("light.threshold", KeyDescription("float").withRange(0.0, 1.0));
+                add("radius", KeyDescription("int").withRange(0, 4096));
+                return keys;
+              }()
+          ),
+      };
+      return fields;
     }
 
     // Every recorded reference is checked against the final preset table. `clear` mutates `loaded` through
@@ -1173,214 +1203,174 @@ namespace umbriel {
       }
     }
 
-    void parseAnimationSection(Section& s, Config::Animation& animation, std::vector<EffectReference>& references) {
-      s.boolean("enabled", animation.enabled);
-
-      if (const toml::node* node = s.take("beziers")) {
-        if (const auto* table = node->as_table()) {
-          for (const auto& [name, value] : *table) {
-            if (auto bezier = parseBezier(value)) {
-              animation.beziers[std::string(name.str())] = *bezier;
-            } else {
-              warnAt(value.source(), "invalid bezier curve '{}'", name.str());
-            }
-          }
-        } else {
-          warnAt(node->source(), "animation.beziers must be a table");
-        }
-      }
-
-      if (const toml::node* node = s.take("springs")) {
-        if (const auto* table = node->as_table()) {
-          for (const auto& [name, value] : *table) {
-            if (auto spring = parseSpring(value)) {
-              animation.springs[std::string(name.str())] = *spring;
-            } else {
-              warnAt(value.source(), "invalid spring config '{}'", name.str());
-            }
-          }
-        } else {
-          warnAt(node->source(), "animation.springs must be a table");
-        }
-      }
-
-      std::optional<int> defaultDuration;
-      s.integer("duration_ms", 1, 10000, defaultDuration);
-      if (defaultDuration) {
-        animation.durationMs = *defaultDuration;
-        animation.windowsIn.durationMs = *defaultDuration;
-        animation.windowsOut.durationMs = *defaultDuration;
-        animation.windowsMove.durationMs = *defaultDuration;
-        animation.workspaces.durationMs = *defaultDuration;
-        animation.overview.durationMs = *defaultDuration;
-        animation.scratchpad.durationMs = *defaultDuration;
-        animation.border.durationMs = *defaultDuration;
-        animation.dimUnfocused.durationMs = *defaultDuration;
-        animation.layers.durationMs = *defaultDuration;
-      }
-
-      if (const toml::node* node = s.take("curve")) {
-        if (auto curve = readCurveNode(node, "animation", animation.beziers, animation.springs)) {
-          animation.curve = *curve;
-          animation.windowsIn.curve = *curve;
-          animation.windowsOut.curve = *curve;
-          animation.windowsMove.curve = *curve;
-          animation.workspaces.curve = *curve;
-          animation.overview.curve = *curve;
-          animation.scratchpad.curve = *curve;
-          animation.border.curve = *curve;
-          animation.dimUnfocused.curve = *curve;
-          animation.layers.curve = *curve;
-        }
-      }
-
-      const auto readCurveKey = [&](Section& section, std::string_view key, std::string_view context,
-                                    AnimationCurve& target) {
-        if (const toml::node* node = section.take(key)) {
-          if (auto curve = readCurveNode(node, context, animation.beziers, animation.springs)) {
-            target = *curve;
-          }
-        }
-      };
-      const auto readCurve = [&](Section& section, std::string_view context, AnimationCurve& target) {
-        readCurveKey(section, "curve", context, target);
-      };
-      // duration_ms and curve resolve together, because a spring derives its own length: a duration configured
-      // beside one reaches nothing and has to say so rather than look honoured.
-      const auto readTimeline = [&](Section& section, std::string_view context, int& duration, AnimationCurve& curve) {
-        std::optional<int> configured;
-        section.integer("duration_ms", 1, 10000, configured);
-        readCurve(section, context, curve);
-        if (!configured) {
-          return;
-        }
-        duration = *configured;
-        if (curve.easing != Easing::Spring) {
-          return;
-        }
-        if (const toml::node* node = section.node("duration_ms")) {
-          warnAt(node->source(), "{}.duration_ms has no effect: its spring curve sets its own length", context);
-        }
-      };
-      const auto readStyle = [](Section& section, std::string& target,
-                                std::initializer_list<std::string_view> allowed) {
-        std::string parsed = target;
-        section.text("style", parsed);
-        const toml::node* node = section.node("style");
-        if (node == nullptr || !node->is_string()) {
-          return;
-        }
-        if (std::ranges::find(allowed, std::string_view(parsed)) != allowed.end()) {
-          target = std::move(parsed);
-          return;
-        }
-        warnAt(node->source(), R"(invalid animation style "{}")", parsed);
-      };
-
-      s.sub("windows_in", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.windows_in.effect", EffectKind::Animation, false, animation.windowsIn.effect,
-            references
-        );
-        section.boolean("enabled", animation.windowsIn.enabled).real("scale", 0.1, 1.0, animation.windowsIn.scale);
-        readStyle(section, animation.windowsIn.style, {"popin", "zoom", "slide", "fade", "none"});
-        readTimeline(section, "animation.windows_in", animation.windowsIn.durationMs, animation.windowsIn.curve);
-      });
-      s.sub("windows_out", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.windows_out.effect", EffectKind::Animation, false,
-            animation.windowsOut.effect, references
-        );
-        section.boolean("enabled", animation.windowsOut.enabled).real("scale", 0.1, 1.0, animation.windowsOut.scale);
-        readStyle(section, animation.windowsOut.style, {"fade", "slide", "popin", "zoom"});
-        readTimeline(section, "animation.windows_out", animation.windowsOut.durationMs, animation.windowsOut.curve);
-      });
-      s.sub("windows_move", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.windows_move.effect", EffectKind::Animation, false,
-            animation.windowsMove.effect, references
-        );
-        section.boolean("enabled", animation.windowsMove.enabled);
-        readTimeline(section, "animation.windows_move", animation.windowsMove.durationMs, animation.windowsMove.curve);
-      });
-      s.sub("workspaces", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.workspaces.effect", EffectKind::Animation, false, animation.workspaces.effect,
-            references
-        );
-        section.boolean("enabled", animation.workspaces.enabled);
-        readTimeline(section, "animation.workspaces", animation.workspaces.durationMs, animation.workspaces.curve);
-      });
-      s.sub("overview", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.overview.effect", EffectKind::Animation, false, animation.overview.effect,
-            references
-        );
-        section.boolean("enabled", animation.overview.enabled);
-        readTimeline(section, "animation.overview", animation.overview.durationMs, animation.overview.curve);
-        readCurveKey(
-            section, "workspace_curve", "animation.overview.workspace_curve", animation.overview.workspaceCurve
-        );
-      });
-      s.sub("scratchpad", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.scratchpad.effect", EffectKind::Animation, false, animation.scratchpad.effect,
-            references
-        );
-        section.boolean("enabled", animation.scratchpad.enabled)
-            .real("dim", 0.0, 1.0, animation.scratchpad.dim)
-            .boolean("blur", animation.scratchpad.blur)
-            .real("scale", 0.0, 1.0, animation.scratchpad.scale)
-            .boolean("maximize", animation.scratchpad.maximize)
-            .boolean("fullscreen", animation.scratchpad.fullscreen);
-        readTimeline(section, "animation.scratchpad", animation.scratchpad.durationMs, animation.scratchpad.curve);
-      });
-      s.sub("border", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.border.effect", EffectKind::Animation, false, animation.border.effect,
-            references
-        );
-        section.boolean("enabled", animation.border.enabled);
-        readTimeline(section, "animation.border", animation.border.durationMs, animation.border.curve);
-      });
-      s.sub("dim_unfocused", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.dim_unfocused.effect", EffectKind::Animation, false,
-            animation.dimUnfocused.effect, references
-        );
-        section.boolean("enabled", animation.dimUnfocused.enabled).real("dim", 0.0, 1.0, animation.dimUnfocused.dim);
-        readTimeline(
-            section, "animation.dim_unfocused", animation.dimUnfocused.durationMs, animation.dimUnfocused.curve
-        );
-      });
-      s.sub("layers", [&](Section& section) {
-        readEffectSelector(
-            section, "effect", "animation.layers.effect", EffectKind::Animation, false, animation.layers.effect,
-            references
-        );
-        section.boolean("enabled", animation.layers.enabled);
-        readTimeline(section, "animation.layers", animation.layers.durationMs, animation.layers.curve);
-      });
-      s.sub("windows_drag", [&](Section& section) { section.boolean("physics", animation.windowsDrag.physics); });
-
-      // The shared duration reaches nothing once every timeline it feeds derives its own length.
-      if (defaultDuration) {
-        const std::array timelines{animation.windowsIn.curve.easing,    animation.windowsOut.curve.easing,
-                                   animation.windowsMove.curve.easing,  animation.workspaces.curve.easing,
-                                   animation.overview.curve.easing,     animation.overview.workspaceCurve.easing,
-                                   animation.scratchpad.curve.easing,   animation.border.curve.easing,
-                                   animation.dimUnfocused.curve.easing, animation.layers.curve.easing};
-        const bool allSprings = std::ranges::all_of(timelines, [](Easing easing) { return easing == Easing::Spring; });
-        if (allSprings) {
-          if (const toml::node* node = s.node("duration_ms")) {
-            warnAt(node->source(), "animation.duration_ms has no effect: every animation curve is a spring");
-          }
-        }
-      }
+    // Every timeline under [animation], each fed by the shared duration and curve.
+    template <typename F> void forEachTimeline(Config::Animation& animation, F&& apply) {
+      apply(animation.windowsIn.durationMs, animation.windowsIn.curve);
+      apply(animation.windowsOut.durationMs, animation.windowsOut.curve);
+      apply(animation.windowsMove.durationMs, animation.windowsMove.curve);
+      apply(animation.workspaces.durationMs, animation.workspaces.curve);
+      apply(animation.overview.durationMs, animation.overview.curve);
+      apply(animation.scratchpad.durationMs, animation.scratchpad.curve);
+      apply(animation.border.durationMs, animation.border.curve);
+      apply(animation.dimUnfocused.durationMs, animation.dimUnfocused.curve);
+      apply(animation.layers.durationMs, animation.layers.curve);
     }
 
-    void readAnimation(Section& root, Config& loaded, std::vector<EffectReference>& references) {
-      root.sub("animation", [&](Section& section) { parseAnimationSection(section, loaded.animation, references); });
+    // A curve key: a built-in easing, or one of the [animation.beziers] and [animation.springs] read before it.
+    template <typename T> registry::Field<T> curveField(std::string_view key, AnimationCurve T::* member) {
+      return registry::custom<T>(
+          key, registry::KeyDescription("string").withFormat("curve"),
+          [member](const toml::node& node, const std::string& path, T& target, registry::ReadContext& context) {
+            const Config::Animation& animation = context.loaded.animation;
+            registry::assign(target.*member, parseCurve(node, path, animation.beziers, animation.springs));
+          }
+      );
+    }
+
+    // One animation event: its effect, whether it runs, `extra` keys of its own, and its timeline. duration_ms and
+    // curve resolve together, because a spring derives its own length: a duration configured beside one reaches
+    // nothing and has to say so rather than look honoured.
+    template <typename E> registry::Fields<E> eventFields(registry::Fields<E> extra) {
+      registry::Fields<E> fields{
+          effectField("effect", &E::effect, EffectKind::Animation),
+          registry::boolean("enabled", &E::enabled),
+      };
+      std::ranges::move(extra, std::back_inserter(fields));
+      fields.push_back(registry::integer("duration_ms", 1, 10000, &E::durationMs));
+      fields.push_back(curveField("curve", &E::curve));
+      fields.push_back(registry::step<E>([](Section& s, E& event, registry::ReadContext&) {
+        if (registry::configuredInteger(s, "duration_ms") && event.curve.easing == Easing::Spring) {
+          warnAt(
+              s.node("duration_ms")->source(), "{} has no effect: its spring curve sets its own length",
+              s.qualified("duration_ms")
+          );
+        }
+      }));
+      return fields;
+    }
+
+    template <typename E> registry::Field<E> styleField(std::initializer_list<std::string_view> styles) {
+      registry::Choices<std::string> choices;
+      for (const std::string_view style : styles) {
+        choices.push_back({.name = style, .value = std::string(style)});
+      }
+      return registry::choice("style", &E::style, std::move(choices));
+    }
+
+    const registry::Fields<Config::Animation>& animationFields() {
+      using registry::boolean;
+      using registry::real;
+      using registry::table;
+      using A = Config::Animation;
+      static const registry::Fields<A::WindowsIn> windowsIn = eventFields<A::WindowsIn>({
+          real("scale", 0.1, 1.0, &A::WindowsIn::scale),
+          styleField<A::WindowsIn>({"popin", "zoom", "slide", "fade", "none"}),
+      });
+      static const registry::Fields<A::WindowsOut> windowsOut = eventFields<A::WindowsOut>({
+          real("scale", 0.1, 1.0, &A::WindowsOut::scale),
+          styleField<A::WindowsOut>({"fade", "slide", "popin", "zoom"}),
+      });
+      static const registry::Fields<A::WindowsMove> windowsMove = eventFields<A::WindowsMove>({});
+      static const registry::Fields<A::Workspaces> workspaces = eventFields<A::Workspaces>({});
+      static const registry::Fields<A::Overview> overview = [] {
+        auto fields = eventFields<A::Overview>({});
+        fields.push_back(curveField("workspace_curve", &A::Overview::workspaceCurve));
+        return fields;
+      }();
+      static const registry::Fields<A::Scratchpad> scratchpad = eventFields<A::Scratchpad>({
+          real("dim", 0.0, 1.0, &A::Scratchpad::dim),
+          boolean("blur", &A::Scratchpad::blur),
+          real("scale", 0.0, 1.0, &A::Scratchpad::scale),
+          boolean("maximize", &A::Scratchpad::maximize),
+          boolean("fullscreen", &A::Scratchpad::fullscreen),
+      });
+      static const registry::Fields<A::Border> border = eventFields<A::Border>({});
+      static const registry::Fields<A::DimUnfocused> dimUnfocused = eventFields<A::DimUnfocused>({
+          real("dim", 0.0, 1.0, &A::DimUnfocused::dim),
+      });
+      static const registry::Fields<A::Layers> layers = eventFields<A::Layers>({});
+      static const registry::Fields<A::WindowsDrag> windowsDrag{
+          boolean("physics", &A::WindowsDrag::physics),
+      };
+      static const registry::Fields<A> fields{
+          boolean("enabled", &A::enabled),
+          registry::map<A>(
+              "beziers", registry::KeyDescription("float_array").withFormat("bezier"),
+              [](Section& s, A& animation, registry::ReadContext&) {
+                for (const auto& [name, value] : s.table()) {
+                  if (auto bezier = parseBezier(value)) {
+                    animation.beziers[std::string(name.str())] = *bezier;
+                  } else {
+                    warnAt(value.source(), "invalid bezier curve '{}'", name.str());
+                  }
+                }
+              }
+          ),
+          registry::map<A>(
+              "springs", registry::KeyDescription("table"),
+              [](Section& s, A& animation, registry::ReadContext&) {
+                for (const auto& [name, value] : s.table()) {
+                  if (auto spring = parseSpring(value)) {
+                    animation.springs[std::string(name.str())] = *spring;
+                  } else {
+                    warnAt(value.source(), "invalid spring config '{}'", name.str());
+                  }
+                }
+              },
+              [] {
+                registry::Descriptions keys{
+                    registry::KeyDescription("float").withRange(0.01, 5.0),
+                    registry::KeyDescription("float").withRange(1.0, 10000.0),
+                };
+                keys[0].path = "damping";
+                keys[1].path = "stiffness";
+                return keys;
+              }()
+          ),
+          registry::integer("duration_ms", 1, 10000, &A::durationMs),
+          registry::step<A>([](Section& s, A& animation, registry::ReadContext&) {
+            if (registry::configuredInteger(s, "duration_ms")) {
+              forEachTimeline(animation, [&](int& duration, AnimationCurve&) { duration = animation.durationMs; });
+            }
+          }),
+          registry::custom<A>(
+              "curve", registry::KeyDescription("string").withFormat("curve"),
+              [](const toml::node& node, const std::string& path, A& animation, registry::ReadContext&) {
+                if (auto curve = parseCurve(node, path, animation.beziers, animation.springs)) {
+                  animation.curve = *curve;
+                  forEachTimeline(animation, [&](int&, AnimationCurve& target) { target = *curve; });
+                }
+              }
+          ),
+          table("windows_in", &A::windowsIn, windowsIn),
+          table("windows_out", &A::windowsOut, windowsOut),
+          table("windows_move", &A::windowsMove, windowsMove),
+          table("workspaces", &A::workspaces, workspaces),
+          table("overview", &A::overview, overview),
+          table("scratchpad", &A::scratchpad, scratchpad),
+          table("border", &A::border, border),
+          table("dim_unfocused", &A::dimUnfocused, dimUnfocused),
+          table("layers", &A::layers, layers),
+          table("windows_drag", &A::windowsDrag, windowsDrag),
+          // The shared duration reaches nothing once every timeline it feeds derives its own length.
+          registry::step<A>([](Section& s, A& animation, registry::ReadContext&) {
+            if (!registry::configuredInteger(s, "duration_ms")
+                || animation.overview.workspaceCurve.easing != Easing::Spring) {
+              return;
+            }
+            bool allSprings = true;
+            forEachTimeline(animation, [&](int&, AnimationCurve& curve) {
+              allSprings = allSprings && curve.easing == Easing::Spring;
+            });
+            if (allSprings) {
+              warnAt(
+                  s.node("duration_ms")->source(),
+                  "animation.duration_ms has no effect: every animation curve is a spring"
+              );
+            }
+          }),
+      };
+      return fields;
     }
 
     const registry::Fields<Config::Appearance>& appearanceFields() {
@@ -2677,13 +2667,8 @@ namespace umbriel {
       using registry::table;
       static const registry::Fields<Config> fields{
           table("colors", &Config::colors, colorFields()),
-          unregistered(
-              "effects", [](Section& s, Config& c, registry::ReadContext& r) { readEffects(s, c, r.effectReferences); }
-          ),
-          unregistered(
-              "animation",
-              [](Section& s, Config& c, registry::ReadContext& r) { readAnimation(s, c, r.effectReferences); }
-          ),
+          table("effects", &Config::effects, effectsFields()),
+          table("animation", &Config::animation, animationFields()),
           table("appearance", &Config::appearance, appearanceFields()),
           table("overview", &Config::overview, overviewFields()),
           unregistered("scratchpad", [](Section& s, Config& c, registry::ReadContext&) { readScratchpads(s, c); }),

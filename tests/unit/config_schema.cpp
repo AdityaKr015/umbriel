@@ -4,6 +4,7 @@
 #include "check.h"
 #include "config/config.h"
 #include "config/registry.h"
+#include "config/schema.h"
 #include "core/log.h"
 
 #include <filesystem>
@@ -167,6 +168,39 @@ UMBRIEL_TEST(statedDefaultsLoadAsTheBuiltInValues) {
   const umbriel::Config empty = load(toml::table{}).config;
   withDefaults.colors = empty.colors;
   CHECK(withDefaults == empty);
+}
+
+// The JSON a tool caches by revision: fixed root keys, one entry per path in sorted order, integer bounds for integer
+// keys, and no default where a key has none.
+UMBRIEL_TEST(jsonIsSortedAndTyped) {
+  const auto json = nlohmann::ordered_json::parse(
+      umbriel::configSchemaJson(umbriel::registry::describeConfig(umbriel::Config{}), "0.1.0", std::nullopt)
+  );
+  std::vector<std::string> roots;
+  for (const auto& [key, value] : json.items()) {
+    roots.push_back(key);
+  }
+  CHECK(roots == std::vector<std::string>({"version", "revision", "options"}));
+  CHECK(json["revision"].is_null());
+  std::string previous;
+  bool sawUnsetKey = false;
+  for (const auto& option : json["options"]) {
+    const std::string path = option["path"];
+    if (!(previous < path)) {
+      umbriel::test::reportFailure(__FILE__, __LINE__, std::format("{} is out of order or repeated", path));
+    }
+    previous = path;
+    for (const char* bound : {"min", "max"}) {
+      if (option["type"] == "int" && option.contains(bound) && !option[bound].is_number_integer()) {
+        umbriel::test::reportFailure(__FILE__, __LINE__, std::format("{} has a non-integer {}", path, bound));
+      }
+    }
+    if (path == "input.touchpad.natural_scroll") {
+      sawUnsetKey = true;
+      CHECK(!option.contains("default"));
+    }
+  }
+  CHECK(sawUnsetKey);
 }
 
 // Every value a key lists is one its reader accepts without complaint.

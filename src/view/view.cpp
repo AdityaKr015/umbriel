@@ -4624,6 +4624,7 @@ namespace umbriel {
         restoreTiled = !*rule.defaultFloating;
       }
       if (targetOutput != nullptr) {
+        const bool wasActivated = m_activated;
         assignedScratchpad = scratchpadManager->assignByWindowRule(
             this, *scratchpadTarget, targetOutput,
             ScratchpadManager::AutomaticAdmission{
@@ -4634,6 +4635,13 @@ namespace umbriel {
                 .updateRestoreLocation = !wasInScratchpad || placementChanged,
             }
         );
+        if (assignedScratchpad
+            && scratchpadChanged
+            && rule.defaultFocused.value_or(false)
+            && scratchpadManager->summon(*scratchpadTarget, targetOutput)
+            && wasActivated) {
+          m_server->focusView(this);
+        }
       }
     }
     const bool inScratchpad = wasInScratchpad || assignedScratchpad;

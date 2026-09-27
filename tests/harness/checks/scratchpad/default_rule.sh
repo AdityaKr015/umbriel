@@ -3,9 +3,10 @@
 # A default_scratchpad window rule stores a matching window without showing or
 # focusing it, preserves its opening floating position, and lets the ordinary
 # scratchpad action summon it afterwards. With default_focused = true the rule
-# summons the scratchpad and focuses the window instead. Toggling an empty
-# scratchpad runs its spawn_when_empty command and shows the arriving window,
-# unless a second toggle hid the pending launch first.
+# summons the scratchpad and focuses the window instead, also when a late title
+# selects the rule after map. Toggling an empty scratchpad runs its
+# spawn_when_empty command and shows the arriving window, unless a second toggle
+# hid the pending launch first.
 set -euo pipefail
 
 readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
@@ -102,6 +103,9 @@ spawn_when_empty = "while [ ! -e '$UMBRIEL_RUNTIME_DIR/late-release' ]; do sleep
 [[scratchpad]]
 name = "summoned"
 
+[[scratchpad]]
+name = "retitled"
+
 [[window_rule]]
 match.app_id = "^scratchpad-terminal$"
 default_scratchpad = "term"
@@ -120,6 +124,11 @@ default_scratchpad = "late"
 [[window_rule]]
 match.title = "^scratchpad-summoned$"
 default_scratchpad = "summoned"
+default_focused = true
+
+[[window_rule]]
+match.title = "^scratchpad-retitled$"
+default_scratchpad = "retitled"
 default_focused = true
 EOF
 "$UMBRIEL" msg config-reload > /dev/null
@@ -155,6 +164,15 @@ wait_for_window scratchpad-late late true
 
 "$CLIENT" scratchpad-summoned 480 300 > "$UMBRIEL_RUNTIME_DIR/scratchpad-summoned.log" 2>&1 &
 wait_for_window scratchpad-summoned summoned true
+
+readonly RETITLE_FIFO="$UMBRIEL_RUNTIME_DIR/retitle.fifo"
+mkfifo "$RETITLE_FIFO"
+exec {retitle_fd}<>"$RETITLE_FIFO"
+TITLE_AFTER_MAP=scratchpad-retitled "$CLIENT" scratchpad-placeholder 480 300 <&"$retitle_fd" \
+  > "$UMBRIEL_RUNTIME_DIR/scratchpad-retitled.log" 2>&1 &
+wait_for_window scratchpad-placeholder "" true
+printf 'u' >&"$retitle_fd"
+wait_for_window scratchpad-retitled retitled true
 
 echo "default scratchpad rule and spawn_when_empty verified"
 

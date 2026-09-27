@@ -2,9 +2,10 @@
 # harness: outputs=1
 # A default_scratchpad window rule stores a matching window without showing or
 # focusing it, preserves its opening floating position, and lets the ordinary
-# scratchpad action summon it afterwards. Toggling an empty scratchpad runs its
-# spawn_when_empty command and shows the arriving window, unless a second toggle
-# hid the pending launch first.
+# scratchpad action summon it afterwards. With default_focused = true the rule
+# summons the scratchpad and focuses the window instead. Toggling an empty
+# scratchpad runs its spawn_when_empty command and shows the arriving window,
+# unless a second toggle hid the pending launch first.
 set -euo pipefail
 
 readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
@@ -98,6 +99,9 @@ spawn_when_empty = "sh -c '(\"$CLIENT\" scratchpad-spawned 480 300 &)' > '$UMBRI
 name = "late"
 spawn_when_empty = "while [ ! -e '$UMBRIEL_RUNTIME_DIR/late-release' ]; do sleep 0.05; done; exec '$CLIENT' scratchpad-late 480 300 > '$UMBRIEL_RUNTIME_DIR/scratchpad-late.log' 2>&1"
 
+[[scratchpad]]
+name = "summoned"
+
 [[window_rule]]
 match.app_id = "^scratchpad-terminal$"
 default_scratchpad = "term"
@@ -112,6 +116,11 @@ default_scratchpad = "spawned"
 [[window_rule]]
 match.title = "^scratchpad-late$"
 default_scratchpad = "late"
+
+[[window_rule]]
+match.title = "^scratchpad-summoned$"
+default_scratchpad = "summoned"
+default_focused = true
 EOF
 "$UMBRIEL" msg config-reload > /dev/null
 
@@ -143,6 +152,9 @@ wait_for_window scratchpad-late late false
 
 "$UMBRIEL" msg scratchpad-toggle:late > /dev/null
 wait_for_window scratchpad-late late true
+
+"$CLIENT" scratchpad-summoned 480 300 > "$UMBRIEL_RUNTIME_DIR/scratchpad-summoned.log" 2>&1 &
+wait_for_window scratchpad-summoned summoned true
 
 echo "default scratchpad rule and spawn_when_empty verified"
 

@@ -3019,6 +3019,9 @@ namespace umbriel {
                 .updateRestoreLocation = true,
             }
         );
+        if (assignedScratchpad && rule.defaultFocused.value_or(false)) {
+          scratchpad->summon(*rule.defaultScratchpad, restoreOutput);
+        }
       }
     }
     if (!assignedScratchpad) {

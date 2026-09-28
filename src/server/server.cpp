@@ -770,6 +770,31 @@ namespace umbriel {
     m_layerSurfaces.clear();
     m_registry.clear();
     m_keyboards.clear();
+    // The backend destroys physical input devices below, after the seat and cursor; detach their watchers first.
+    for (const auto& pointer : m_pointers) {
+      wl_list_remove(&pointer->destroy.link);
+    }
+    m_pointers.clear();
+    for (const auto& touch : m_touchDevices) {
+      wl_list_remove(&touch->destroy.link);
+    }
+    m_touchDevices.clear();
+    for (const auto& pad : m_tabletPads) {
+      wl_list_remove(&pad->destroy.link);
+      wl_list_remove(&pad->button.link);
+      wl_list_remove(&pad->ring.link);
+      wl_list_remove(&pad->strip.link);
+    }
+    m_tabletPads.clear();
+    for (const auto& tablet : m_tabletDevices) {
+      wl_list_remove(&tablet->destroy.link);
+    }
+    m_tabletDevices.clear();
+    for (const auto& entry : m_switchDevices) {
+      wl_list_remove(&entry->destroy.link);
+      wl_list_remove(&entry->toggle.link);
+    }
+    m_switchDevices.clear();
     m_outputs.clear();
     m_inputMethodRelay.reset();
     m_seat.reset();

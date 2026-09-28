@@ -9,7 +9,7 @@ unit_tests = [
   ['scene-clip', ['unit/scene_clip.cpp'], [wayland_server_dep]],
   ['presentation', ['unit/presentation.cpp'], [umbriel_core_dep]],
   ['animation', ['unit/animation.cpp'], [umbriel_core_dep]],
-  ['application-scope', ['unit/application_scope.cpp'], [umbriel_core_dep], [], ['-Wl,--wrap=close_range']],
+  ['application-scope', ['unit/application_scope.cpp'], [umbriel_core_dep], [], ['-Wl,--wrap=umbrielCloseRange']],
   ['shader-source', ['unit/shader_source.cpp'], []],
   ['effects', ['unit/effects.cpp'], []],
   ['window-opacity-blur', ['unit/window_opacity_blur.cpp'], [umbriel_core_dep]],

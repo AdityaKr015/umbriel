@@ -611,6 +611,7 @@ core_sources = files(
   'src/server/focus.cpp',
   'src/xwayland/supervisor.cpp',
   'src/core/process.cpp',
+  'src/core/process_syscall.cpp',
   'src/view/view_foreign.cpp',
   'src/view/popup.cpp',
   'src/layer/layer_surface.cpp',

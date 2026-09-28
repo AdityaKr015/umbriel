@@ -15,6 +15,8 @@ unit_tests = [
   ['window-opacity-blur', ['unit/window_opacity_blur.cpp'], [umbriel_core_dep]],
   ['value-parse', ['unit/value_parse.cpp'], []],
   ['keybind-parse', ['unit/keybind_parse.cpp'], []],
+  ['lid-state', ['unit/lid_state.cpp'], []],
+  ['output-enable-overrides', ['unit/output_enable_overrides.cpp'], []],
   ['modifier-tap', ['unit/modifier_tap.cpp'], []],
   ['keyboard-layout', ['unit/keyboard_layout.cpp'], []],
   ['surface-layouts', ['unit/surface_layouts.cpp'], []],

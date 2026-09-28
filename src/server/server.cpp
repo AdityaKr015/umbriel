@@ -720,6 +720,10 @@ namespace umbriel {
 
   Server::~Server() {
     m_stopping = true;
+    if (m_lidStateReconcileIdle != nullptr) {
+      wl_event_source_remove(m_lidStateReconcileIdle);
+      m_lidStateReconcileIdle = nullptr;
+    }
     if (m_rendererRecoveryIdle != nullptr) {
       wl_event_source_remove(m_rendererRecoveryIdle);
       m_rendererRecoveryIdle = nullptr;
@@ -939,6 +943,12 @@ namespace umbriel {
       spawnCommand(command.c_str(), "session environment synchronization", false, SpawnClass::SessionHelper);
     }
     applyConfiguredEnvironment();
+
+    // Initial libinput switch events are dispatched synchronously inside
+    // wlr_backend_start(). Publish their settled aggregate only after IPC and
+    // the configured child environment are ready.
+    m_lidState.setReady();
+    reconcileLidState();
 
     m_startTime = std::chrono::steady_clock::now();
     m_startupRulesTimer = wl_event_loop_add_timer(loop, onStartupRulesTimer, this);

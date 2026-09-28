@@ -80,7 +80,7 @@ namespace umbriel {
     // Effect instances on this output that need frames of their own.
     [[nodiscard]] unsigned effectEligible() const;
     void onGammaChanged(wlr_gamma_control_v1* control);
-    void applyOutputState();
+    [[nodiscard]] bool applyOutputState();
     // Adopt a successfully committed wlr-output-management state in two
     // phases. Logical state changes first so callbacks cannot revive a
     // disabled output, then layout membership changes after transient UI has

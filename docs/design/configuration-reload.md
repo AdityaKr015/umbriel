@@ -49,6 +49,10 @@ last valid configuration and never enters the implicit lookup chain.
 Output state and workspace inventory are independent effects.
 
 - Changing mode, scale, transform, or position reapplies output state.
+- Reapplying output state clears session-scoped output-management enablement,
+  including state retained for a disconnected monitor, before the file is
+  applied. An identical reload keeps that runtime state because it has no
+  output-state effect.
 - Focus reconciliation after runtime effects preserves the exact focused
   surface when its mapped view or keyboard-interactive layer remains usable on
   an enabled output. This includes popup grabs. Explicit focus actions still
@@ -108,6 +112,9 @@ The relevant regression coverage is in:
   startup.
 - [`tests/unit/config_change.cpp`](../../tests/unit/config_change.cpp), which checks
   change classification and runtime effects.
+- [`tests/unit/output_enable_overrides.cpp`](../../tests/unit/output_enable_overrides.cpp),
+  which checks connector and display-identity matching for session-scoped
+  output enablement.
 - [`tests/harness/checks/session/config_reload.sh`](../../tests/harness/checks/session/config_reload.sh),
   which checks inert reloads, selective layout updates, border dependencies,
   and recovery after an included file fails to parse.
@@ -126,5 +133,8 @@ The relevant regression coverage is in:
 - [`tests/harness/checks/output/scratchpad_reposition.sh`](../../tests/harness/checks/output/scratchpad_reposition.sh),
   which checks scratchpad geometry, backdrop, and focus across live output
   changes.
+- [`tests/harness/checks/output/enable_actions.sh`](../../tests/harness/checks/output/enable_actions.sh),
+  which checks config override boundaries, output object recreation, and
+  restoration after no output objects remain.
 - [`tests/harness/checks/session/environment.sh`](../../tests/harness/checks/session/environment.sh),
   which checks that environment changes remain unapplied until restart.

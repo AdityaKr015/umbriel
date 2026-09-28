@@ -78,8 +78,12 @@ namespace umbriel {
         wl_event_loop_add_timer(wl_display_get_event_loop(m_server->display()), onFrameRetryTimer, this);
 
     applyCursorConfig();
-    m_desktopEnabled = configuredEnabled();
-    (void)applyConfiguredState();
+    m_desktopEnabled = m_server->initialOutputEnabled(*this);
+    if (!applyConfiguredState()) {
+      // Do not advertise a logical output whose initial backend enable failed.
+      // Keeping it disabled lets a later output-enable action retry the commit.
+      m_desktopEnabled = false;
+    }
     m_sceneOutput = wlr_scene_output_create(m_server->scene(), m_output);
     wlr_scene_output_set_direct_scanout_enabled(m_sceneOutput, configuredDirectScanoutEnabled());
     updateSceneSdrWhite();
@@ -723,7 +727,7 @@ namespace umbriel {
     return wlr_output_layout_add_auto(m_server->outputLayout(), m_output);
   }
 
-  void Output::applyOutputState() {
+  bool Output::applyOutputState() {
     const bool previousDesktopEnabled = m_desktopEnabled;
     const bool previousDpmsOff = m_dpmsOff;
     m_desktopEnabled = configuredEnabled();
@@ -748,7 +752,7 @@ namespace umbriel {
     if (!applyConfiguredState()) {
       m_desktopEnabled = previousDesktopEnabled;
       m_dpmsOff = previousDpmsOff;
-      return;
+      return false;
     }
     if (desktopEnabled()) {
       wlr_output_layout_output* layoutOutput = addToLayout();
@@ -767,6 +771,7 @@ namespace umbriel {
       lock->handleOutputStateChanged(*this);
     }
     wlr_output_schedule_frame(m_output);
+    return true;
   }
 
   void Output::adoptOutputManagerEnabled(bool enabled) {

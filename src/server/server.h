@@ -2,8 +2,10 @@
 #include "core/animation.h"
 #include "core/application_scope.h"
 #include "core/dirty.h"
+#include "input/lid_state.h"
 #include "input/modifier_tap.h"
 #include "input/surface_layouts.h"
+#include "output/enable_overrides.h"
 #include "scene/border_rect.h"
 #include "scene/effect_registry.h"
 #include "scene/surface_shadow.h"
@@ -427,6 +429,8 @@ namespace umbriel {
     [[nodiscard]] bool closeSnapshotAlive(CloseSnapshotId id) const;
 
   private:
+    friend class Output;
+
     enum class SpawnClass { Application, SessionHelper };
 
     bool requestScreenCastCommand(ScreenCastCommandKind kind, std::string value, std::string* error);
@@ -523,10 +527,14 @@ namespace umbriel {
     struct SwitchDevice {
       Server* server = nullptr;
       wlr_input_device* device = nullptr;
+      std::optional<LidStateCoordinator::SourceId> lidSource;
       wl_listener destroy{};
       wl_listener toggle{};
     };
     void addSwitch(wlr_input_device* device);
+    void scheduleLidStateReconcile();
+    void reconcileLidState();
+    static void onLidStateReconcileIdle(void* data);
     void applyTabletConfig(TabletDevice& tablet);
     void applyTabletPadConfig(TabletPadDevice& pad);
     void pairTabletPads();
@@ -544,6 +552,8 @@ namespace umbriel {
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     bool applyOutputManagerConfig(wlr_output_configuration_v1* config, bool testOnly);
     bool commitOutputEnabled(Output& output, bool enabled);
+    [[nodiscard]] bool initialOutputEnabled(const Output& output);
+    void rememberOutputEnableOverride(const Output& output, bool enabled);
     void restoreDisplacedViews();
     [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 
@@ -767,6 +777,7 @@ namespace umbriel {
     // removes itself when it runs, so a non-null pointer means "already queued".
     wl_event_source* m_ipcWindowsIdle = nullptr;
     wl_event_source* m_ipcWorkspacesIdle = nullptr;
+    wl_event_source* m_lidStateReconcileIdle = nullptr;
     wl_event_source* m_displacedRestoreIdle = nullptr;
     // Coalesces renderer-loss notifications until their signal dispatch and
     // active render calls have unwound.
@@ -822,8 +833,14 @@ namespace umbriel {
     std::vector<std::unique_ptr<TouchDevice>> m_touchDevices;
     std::vector<std::unique_ptr<TabletDevice>> m_tabletDevices;
     std::vector<std::unique_ptr<TabletPadDevice>> m_tabletPads;
+    LidStateCoordinator m_lidState;
     std::vector<std::unique_ptr<SwitchDevice>> m_switchDevices;
     std::vector<std::unique_ptr<VirtualPointerDevice>> m_virtualPointers;
+    // Output-management choices are session state. Preserve them across
+    // backend object recreation, without transferring a choice between
+    // different identified monitors. An output-policy config reload clears
+    // them.
+    OutputEnableOverrides m_outputEnableOverrides;
     Dirty m_dirty = Dirty::None;
     ViewRegistry m_registry;
     FocusManager m_focus{*this};

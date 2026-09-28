@@ -31,6 +31,7 @@
 #include <span>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace umbriel {
@@ -634,9 +635,13 @@ namespace umbriel {
       markDirty(Dirty::Cheatsheet);
     }
     if (effects.outputState) {
+      // A successful output-policy reload is the explicit boundary for
+      // temporary output-management choices, including overrides retained for
+      // a currently disconnected monitor.
+      m_outputEnableOverrides.clear();
       m_deferOutputManagerConfig = true;
       for (const auto& output : m_outputs) {
-        output->applyOutputState();
+        (void)output->applyOutputState();
       }
       m_deferOutputManagerConfig = false;
       for (const auto& output : m_outputs) {
@@ -1702,11 +1707,24 @@ namespace umbriel {
     auto entry = std::make_unique<SwitchDevice>();
     entry->server = this;
     entry->device = device;
+    if (wlr_input_device_is_libinput(device) != 0) {
+      if (libinput_device* handle = wlr_libinput_get_device_handle(device);
+          handle != nullptr && libinput_device_switch_has_switch(handle, LIBINPUT_SWITCH_LID) == 1) {
+        // libinput defines OFF as the initial logical state and emits no event
+        // to confirm it. Its queued initial ON event, when present, is handled
+        // before the event loop reaches the reconciliation idle callback.
+        entry->lidSource = m_lidState.addSource(LidState::Open);
+      }
+    }
     entry->destroy.notify = onSwitchDestroy;
     wl_signal_add(&device->events.destroy, &entry->destroy);
     entry->toggle.notify = onSwitchToggle;
     wl_signal_add(&wlr_switch_from_input_device(device)->events.toggle, &entry->toggle);
+    const bool tracksLid = entry->lidSource.has_value();
     m_switchDevices.push_back(std::move(entry));
+    if (tracksLid) {
+      scheduleLidStateReconcile();
+    }
     kLog.info("input: added switch device '{}'", deviceName(device));
   }
 
@@ -1716,6 +1734,10 @@ namespace umbriel {
     Server* server = watch->server;
     wl_list_remove(&watch->destroy.link);
     wl_list_remove(&watch->toggle.link);
+    if (watch->lidSource) {
+      server->m_lidState.removeSource(*watch->lidSource);
+      server->scheduleLidStateReconcile();
+    }
     std::erase_if(server->m_switchDevices, [watch](const std::unique_ptr<SwitchDevice>& entry) {
       return entry.get() == watch;
     });
@@ -1729,15 +1751,48 @@ namespace umbriel {
       return;
     }
     Server* server = watch->server;
-    if (event->switch_state == WLR_SWITCH_STATE_ON) {
+    const LidState state = event->switch_state == WLR_SWITCH_STATE_ON ? LidState::Closed : LidState::Open;
+    if (watch->lidSource) {
+      server->m_lidState.updateSource(*watch->lidSource, state);
+    } else {
+      // Non-libinput switch devices have no capability query. Their first LID
+      // event proves that they are a logical lid source.
+      watch->lidSource = server->m_lidState.addSource(state);
+    }
+    server->scheduleLidStateReconcile();
+  }
+
+  void Server::scheduleLidStateReconcile() {
+    if (m_stopping || m_lidStateReconcileIdle != nullptr) {
+      return;
+    }
+    m_lidStateReconcileIdle =
+        wl_event_loop_add_idle(wl_display_get_event_loop(m_display), onLidStateReconcileIdle, this);
+    if (m_lidStateReconcileIdle == nullptr) {
+      kLog.error("failed to register lid-state reconciliation idle source");
+    }
+  }
+
+  void Server::onLidStateReconcileIdle(void* data) {
+    auto* server = static_cast<Server*>(data);
+    server->m_lidStateReconcileIdle = nullptr;
+    server->reconcileLidState();
+  }
+
+  void Server::reconcileLidState() {
+    const std::optional<LidState> transition = m_lidState.takeTransition();
+    if (!transition) {
+      return;
+    }
+    if (*transition == LidState::Closed) {
       kLog.info("lid closed");
       if (!config().events.lidClose.empty()) {
-        server->spawn(config().events.lidClose.c_str(), "events.lid_close");
+        spawn(config().events.lidClose.c_str(), "events.lid_close");
       }
     } else {
       kLog.info("lid opened");
       if (!config().events.lidOpen.empty()) {
-        server->spawn(config().events.lidOpen.c_str(), "events.lid_open");
+        spawn(config().events.lidOpen.c_str(), "events.lid_open");
       }
     }
   }
@@ -2843,6 +2898,17 @@ namespace umbriel {
     wlr_output_manager_v1_set_configuration(m_outputManager, cfg);
   }
 
+  bool Server::initialOutputEnabled(const Output& output) {
+    if (const std::optional<bool> override = m_outputEnableOverrides.resolve(output.identity())) {
+      return *override;
+    }
+    return output.configuredEnabled();
+  }
+
+  void Server::rememberOutputEnableOverride(const Output& output, bool enabled) {
+    m_outputEnableOverrides.remember(output.identity(), enabled);
+  }
+
   bool Server::commitOutputEnabled(Output& target, bool enabled) {
     wlr_output_configuration_v1* config = wlr_output_configuration_v1_create();
     for (const auto& output : m_outputs) {
@@ -3097,6 +3163,7 @@ namespace umbriel {
       // Make logical enablement authoritative before any callback can refresh
       // configured output policy and accidentally revive a disabled head.
       for (const RequestedHead& entry : requested) {
+        rememberOutputEnableOverride(*entry.output, entry.head->state.enabled);
         entry.output->adoptOutputManagerEnabled(entry.head->state.enabled);
       }
 

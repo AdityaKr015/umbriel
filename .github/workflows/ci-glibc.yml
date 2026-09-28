@@ -58,11 +58,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare unprivileged build user
+        run: |
+          useradd --create-home ci
+          chown -R ci:ci "$GITHUB_WORKSPACE"
+
       - name: Build
-        run: just build
+        run: runuser --user ci -- env HOME=/home/ci just build
 
       - name: Run unit tests
-        run: just test
+        run: runuser --user ci -- env HOME=/home/ci just test
 
   lint:
     name: Lint
@@ -84,10 +89,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare unprivileged build user
+        run: |
+          useradd --create-home ci
+          chown -R ci:ci "$GITHUB_WORKSPACE"
+
       - name: Prepare compile database and generated sources
         run: |
-          just configure
-          meson compile -C build-debug umbriel unit-tests harness-clients
+          runuser --user ci -- env HOME=/home/ci just configure
+          runuser --user ci -- env HOME=/home/ci meson compile -C build-debug umbriel unit-tests harness-clients
 
       - name: Run clang-tidy
-        run: just lint
+        run: runuser --user ci -- env HOME=/home/ci just lint

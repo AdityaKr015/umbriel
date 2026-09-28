@@ -200,10 +200,10 @@ static inline struct wlr_buffer *fixture_render_scene(struct fixture *fixture,
 	return rendered;
 }
 
-// 8-bit ARGB pixel readback of a rendered buffer at (x, y); returns false when unreadable.
+// 8-bit ARGB pixel readback of a rendered buffer at (x, y); reports and returns false when unreadable.
 static inline bool fixture_read_pixel(struct fixture *fixture, struct wlr_buffer *buffer, int x, int y, uint8_t out[4]) {
 	uint8_t pixels[TEST_WIDTH * TEST_HEIGHT * 4];
-	if (!read_buffer(fixture, buffer, DRM_FORMAT_ARGB8888, TEST_WIDTH * 4, pixels)) {
+	if (!check(read_buffer(fixture, buffer, DRM_FORMAT_ARGB8888, TEST_WIDTH * 4, pixels), "pixel readback")) {
 		return false;
 	}
 	memcpy(out, &pixels[(y * TEST_WIDTH + x) * 4], 4);   // B G R A byte order
@@ -216,7 +216,7 @@ static inline bool fixture_read_pixel(struct fixture *fixture, struct wlr_buffer
 static inline bool fixture_read_display_pixel(struct fixture *fixture, struct wlr_buffer *buffer, int x, int y, uint8_t out[4]) {
 	struct fx_renderer *renderer = fx_get_renderer(fixture->renderer);
 	struct wlr_egl_context previous;
-	if (!wlr_egl_make_current(renderer->egl, &previous)) {
+	if (!check(wlr_egl_make_current(renderer->egl, &previous), "display pixel readback")) {
 		return false;
 	}
 	GLuint fbo = fx_renderer_get_buffer_fbo(fixture->renderer, buffer);
@@ -231,6 +231,6 @@ static inline bool fixture_read_display_pixel(struct fixture *fixture, struct wl
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 	wlr_egl_restore_context(&previous);
-	return ok;
+	return check(ok, "display pixel readback");
 }
 #endif

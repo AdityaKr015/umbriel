@@ -69,7 +69,7 @@ static bool render_animation(struct fixture *fixture, struct fx_effect_shader *s
 		.box = box, .color = { .r = 1, .g = 0, .b = 1, .a = 1 }, .blend_mode = WLR_RENDER_BLEND_MODE_NONE });
 	fx_render_pass_end_animation(fx_pass, shader, parameters, &box, &box, WL_OUTPUT_TRANSFORM_NORMAL, NULL, expand);
 	ok &= check(wlr_render_pass_submit(pass), "submit");
-	ok &= check(fixture_read_pixel(fixture, target, 8, 8, out), "read centre");
+	ok &= fixture_read_pixel(fixture, target, 8, 8, out);
 	wlr_buffer_drop(target);
 	return ok;
 }
@@ -168,8 +168,8 @@ static bool test_uniforms(struct fixture *fixture) {
 	tint->floats[0] = 1.0f; tint->floats[1] = 0.0f; tint->floats[2] = 0.0f;
 	steps->ints[0] = 2;
 	uint8_t pixel[4];
-	ok &= render_animation(fixture, shader, &parameters, 0, pixel);
-	ok &= check(pixel[2] > 250 && pixel[1] < 5 && pixel[0] < 5, "float, vec3 and int uniforms bind by name");
+	ok &= render_animation(fixture, shader, &parameters, 0, pixel)
+		&& check(pixel[2] > 250 && pixel[1] < 5 && pixel[0] < 5, "float, vec3 and int uniforms bind by name");
 
 	// A type mismatch is skipped: the uniform keeps its previous value on this
 	// program, so `gain` stays 0.5 from the draw above and only `tint` changes.
@@ -177,14 +177,14 @@ static bool test_uniforms(struct fixture *fixture) {
 	mismatch.uniforms[0].type = FX_UNIFORM_INT;   // gain declared float
 	mismatch.uniforms[0].ints[0] = 9;
 	mismatch.uniforms[1].floats[0] = 0.0f; mismatch.uniforms[1].floats[2] = 1.0f;   // blue tint
-	ok &= render_animation(fixture, shader, &mismatch, 0, pixel);
-	ok &= check(pixel[0] > 250 && pixel[2] < 5, "a mismatched uniform is skipped while the others still bind");
+	ok &= render_animation(fixture, shader, &mismatch, 0, pixel)
+		&& check(pixel[0] > 250 && pixel[2] < 5, "a mismatched uniform is skipped while the others still bind");
 
 	// Unknown names are ignored without failing the draw.
 	struct fx_animation_parameters unknown = parameters;
 	fx_parameters_add_uniform(&unknown, "missing", FX_UNIFORM_FLOAT, 1);
-	ok &= render_animation(fixture, shader, &unknown, 0, pixel);
-	ok &= check(pixel[2] > 250, "an unknown uniform name is ignored");
+	ok &= render_animation(fixture, shader, &unknown, 0, pixel)
+		&& check(pixel[2] > 250, "an unknown uniform name is ignored");
 	fx_effect_shader_unref(shader);
 
 	// The palette preamble: umbriel_palette_at wraps over the supplied entries and is transparent black without any.
@@ -198,12 +198,12 @@ static bool test_uniforms(struct fixture *fixture) {
 	const float table[16] = { 1, 0, 0, 1,  0, 1, 0, 1,  0, 0, 1, 1,  1, 1, 0, 1 };
 	memcpy(entries->floats, table, sizeof(table));
 	count->ints[0] = 4;
-	ok &= render_animation(fixture, palette, &colours, 0, pixel);
 	// t = 1.25 wraps to 0.25 -> entry 1 (green).
-	ok &= check(pixel[1] > 250 && pixel[2] < 5, "umbriel_palette_at wraps into the palette");
+	ok &= render_animation(fixture, palette, &colours, 0, pixel)
+		&& check(pixel[1] > 250 && pixel[2] < 5, "umbriel_palette_at wraps into the palette");
 	struct fx_animation_parameters none = { .progress = 1, .linear_progress = 1, .direction = 1 };
-	ok &= render_animation(fixture, palette, &none, 0, pixel);
-	ok &= check(pixel[3] < 5, "without a palette the lookup is transparent black");
+	ok &= render_animation(fixture, palette, &none, 0, pixel)
+		&& check(pixel[3] < 5, "without a palette the lookup is transparent black");
 	fx_effect_shader_unref(palette);
 
 	// A count above the program's active array size binds the active elements and is logged once per program and name.
@@ -216,8 +216,8 @@ static bool test_uniforms(struct fixture *fixture) {
 	if (pal_exact != NULL) {
 		pal_exact->floats[0] = 1.0f; pal_exact->floats[3] = 1.0f; // red
 	}
-	ok &= render_animation(fixture, oversized, &exact, 0, pixel);
-	ok &= check(pixel[2] > 250 && pixel[0] < 5, "pal[0] and pal[1] bind when count matches the declared array size");
+	ok &= render_animation(fixture, oversized, &exact, 0, pixel)
+		&& check(pixel[2] > 250 && pixel[0] < 5, "pal[0] and pal[1] bind when count matches the declared array size");
 	struct fx_animation_parameters over = { .progress = 1, .linear_progress = 1, .direction = 1 };
 	struct fx_uniform *pal_over = fx_parameters_add_uniform(&over, "pal", FX_UNIFORM_VEC4, 4);
 	ok &= check(pal_over != NULL, "a count larger than the declared array size still fits fx_uniform storage");
@@ -227,8 +227,8 @@ static bool test_uniforms(struct fixture *fixture) {
 	}
 	clamp_logs = 0;
 	wlr_log_init(WLR_DEBUG, count_clamp_logs);
-	ok &= render_animation(fixture, oversized, &over, 0, pixel);
-	ok &= check(pixel[2] > 250 && pixel[0] > 250 && pixel[1] < 5, "an oversized count binds pal[0] and pal[1] from its first two values");
+	ok &= render_animation(fixture, oversized, &over, 0, pixel)
+		&& check(pixel[2] > 250 && pixel[0] > 250 && pixel[1] < 5, "an oversized count binds pal[0] and pal[1] from its first two values");
 	ok &= render_animation(fixture, oversized, &over, 0, pixel);
 	wlr_log_init(WLR_ERROR, NULL);
 	ok &= check(clamp_logs == 1, "an oversized count is logged once per program and name");
@@ -245,8 +245,8 @@ static bool test_uniforms(struct fixture *fixture) {
 		pal_pair->floats[1] = 1.0f; pal_pair->floats[3] = 1.0f; // green
 		pal_pair->floats[4] = 1.0f; pal_pair->floats[7] = 1.0f; // red
 	}
-	ok &= render_animation(fixture, folded, &pair, 0, pixel);
-	ok &= check(pixel[1] > 250 && pixel[2] < 5, "count 2 binds pal[0] when only pal[0] is read");
+	ok &= render_animation(fixture, folded, &pair, 0, pixel)
+		&& check(pixel[1] > 250 && pixel[2] < 5, "count 2 binds pal[0] when only pal[0] is read");
 	fx_effect_shader_unref(folded);
 
 	// A name too long for the cache is skipped, never cached as a truncated alias of a real uniform.
@@ -278,8 +278,8 @@ static bool test_uniforms(struct fixture *fixture) {
 	if (short_uniform != NULL) {
 		short_uniform->floats[0] = 1.0f;
 	}
-	ok &= render_animation(fixture, long_name, &named, 0, pixel);
-	ok &= check(pixel[2] > 250 && pixel[3] > 250, "binding the real short uniform by name is not blocked by the skipped long alias");
+	ok &= render_animation(fixture, long_name, &named, 0, pixel)
+		&& check(pixel[2] > 250 && pixel[3] > 250, "binding the real short uniform by name is not blocked by the skipped long alias");
 	fx_effect_shader_unref(long_name);
 
 	// Hand-built entries whose count exceeds their own storage are rejected, leaving the previous binding.
@@ -295,18 +295,18 @@ static bool test_uniforms(struct fixture *fixture) {
 		fitting_steps->ints[0] = 1;
 		fitting_tints->floats[0] = 1.0f; fitting_tints->floats[3] = 1.0f; // red
 	}
-	ok &= render_animation(fixture, bounded, &fitting, 0, pixel);
-	ok &= check(pixel[2] > 250 && pixel[1] < 5, "fitting int and vec4 array entries bind");
+	ok &= render_animation(fixture, bounded, &fitting, 0, pixel)
+		&& check(pixel[2] > 250 && pixel[1] < 5, "fitting int and vec4 array entries bind");
 	struct fx_animation_parameters too_many_ints = fitting;
 	too_many_ints.uniforms[0].count = 5;   // ints[] holds 4
 	too_many_ints.uniforms[0].ints[0] = 0;
-	ok &= render_animation(fixture, bounded, &too_many_ints, 0, pixel);
-	ok &= check(pixel[2] > 250, "an INT entry with count > 4 is rejected");
+	ok &= render_animation(fixture, bounded, &too_many_ints, 0, pixel)
+		&& check(pixel[2] > 250, "an INT entry with count > 4 is rejected");
 	struct fx_animation_parameters too_many_floats = fitting;
 	too_many_floats.uniforms[1].count = 9;   // 36 floats; floats[] holds 32
 	too_many_floats.uniforms[1].floats[0] = 0.0f; too_many_floats.uniforms[1].floats[1] = 1.0f; // green
-	ok &= render_animation(fixture, bounded, &too_many_floats, 0, pixel);
-	ok &= check(pixel[2] > 250 && pixel[1] < 5, "a float entry past FX_UNIFORM_FLOATS_MAX is rejected");
+	ok &= render_animation(fixture, bounded, &too_many_floats, 0, pixel)
+		&& check(pixel[2] > 250 && pixel[1] < 5, "a float entry past FX_UNIFORM_FLOATS_MAX is rejected");
 	fx_effect_shader_unref(bounded);
 	return ok;
 }
@@ -431,12 +431,15 @@ static bool test_persistent_scene(struct fixture *fixture) {
 	ok &= check(rendered != NULL, "scene renders with a persistent slot");
 	if (rendered != NULL) {
 		uint8_t at_effect[4], at_bystander[4], at_background[4];
-		ok &= fixture_read_pixel(fixture, rendered, 3, 3, at_effect);
-		ok &= fixture_read_pixel(fixture, rendered, 12, 12, at_bystander);
-		ok &= fixture_read_pixel(fixture, rendered, 8, 2, at_background);
-		ok &= check(at_effect[1] > 250 && at_effect[2] < 5, "the persistent program paints its node");
-		ok &= check(at_bystander[2] > 250 && at_bystander[1] < 5, "an unrelated node is untouched");
-		ok &= check(at_background[0] > 250, "the background outside the node is untouched");
+		const bool pixels_read = fixture_read_pixel(fixture, rendered, 3, 3, at_effect)
+			&& fixture_read_pixel(fixture, rendered, 12, 12, at_bystander)
+			&& fixture_read_pixel(fixture, rendered, 8, 2, at_background);
+		ok &= pixels_read;
+		if (pixels_read) {
+			ok &= check(at_effect[1] > 250 && at_effect[2] < 5, "the persistent program paints its node");
+			ok &= check(at_bystander[2] > 250 && at_bystander[1] < 5, "an unrelated node is untouched");
+			ok &= check(at_background[0] > 250, "the background outside the node is untouched");
+		}
 		wlr_buffer_unlock(rendered);
 	}
 	wlr_output_state_finish(&state);
@@ -490,11 +493,14 @@ static bool test_occlusion(struct fixture *fixture) {
 	ok &= check(rendered != NULL, "scene renders");
 	if (rendered != NULL) {
 		uint8_t mirrored[4], covered[4];
-		ok &= fixture_read_pixel(fixture, rendered, 5, 8, mirrored);
-		ok &= fixture_read_pixel(fixture, rendered, 10, 8, covered);
-		ok &= check(mirrored[0] > 250 && mirrored[1] > 250 && mirrored[2] > 250,
-			"the covered input is captured and mirrored into the left half");
-		ok &= check(covered[2] > 250 && covered[0] < 5 && covered[1] < 5, "the red rect still covers the right half");
+		const bool pixels_read = fixture_read_pixel(fixture, rendered, 5, 8, mirrored)
+			&& fixture_read_pixel(fixture, rendered, 10, 8, covered);
+		ok &= pixels_read;
+		if (pixels_read) {
+			ok &= check(mirrored[0] > 250 && mirrored[1] > 250 && mirrored[2] > 250,
+				"the covered input is captured and mirrored into the left half");
+			ok &= check(covered[2] > 250 && covered[0] < 5 && covered[1] < 5, "the red rect still covers the right half");
+		}
 		wlr_buffer_unlock(rendered);
 	}
 	wlr_output_state_finish(&state);
@@ -676,8 +682,8 @@ static bool test_transient_policy(struct fixture *fixture) {
 	ok &= check(rendered != NULL, "transient frame renders");
 	if (rendered != NULL) {
 		uint8_t under[4];
-		ok &= fixture_read_pixel(fixture, rendered, 8, 8, under);
-		ok &= check(under[0] > 250 && under[2] < 5, "the covered background was drawn into the target");
+		ok &= fixture_read_pixel(fixture, rendered, 8, 8, under)
+			&& check(under[0] > 250 && under[2] < 5, "the covered background was drawn into the target");
 		wlr_buffer_unlock(rendered);
 	}
 	wlr_output_state_finish(&state);
@@ -801,10 +807,13 @@ static bool test_offscreen_margin(struct fixture *fixture) {
 		ok &= check(rendered != NULL, "scene renders with a node outside the output");
 		if (rendered != NULL) {
 			uint8_t margin[4], beyond[4];
-			ok &= fixture_read_pixel(fixture, rendered, 1, 8, margin);
-			ok &= fixture_read_pixel(fixture, rendered, 4, 8, beyond);
-			ok &= check(margin[2] > 250 && margin[0] < 5, cases[i].name);
-			ok &= check(beyond[0] > 250 && beyond[2] < 5, "the margin ends at its expand");
+			const bool pixels_read = fixture_read_pixel(fixture, rendered, 1, 8, margin)
+				&& fixture_read_pixel(fixture, rendered, 4, 8, beyond);
+			ok &= pixels_read;
+			if (pixels_read) {
+				ok &= check(margin[2] > 250 && margin[0] < 5, cases[i].name);
+				ok &= check(beyond[0] > 250 && beyond[2] < 5, "the margin ends at its expand");
+			}
 			wlr_buffer_unlock(rendered);
 		}
 		wlr_output_state_finish(&state);
@@ -869,20 +878,23 @@ static bool test_border_geometry(struct fixture *fixture) {
 	ok &= check(rendered != NULL, "renders");
 	if (rendered != NULL) {
 		uint8_t ring[4], hole[4], outside[4];
-		ok &= fixture_read_pixel(fixture, rendered, 3, 8, ring);      // inside the 2px wall
-		ok &= fixture_read_pixel(fixture, rendered, 8, 8, hole);      // hole centre
-		ok &= fixture_read_pixel(fixture, rendered, 0, 0, outside);   // past the node
-		ok &= check(ring[0] > 250 && ring[2] < 5, "the ring is blue where the distance is positive");
-		ok &= check(hole[0] < 5 && hole[1] < 5 && hole[2] < 5, "the hole is cut out of the result");
-		ok &= check(outside[0] < 5, "nothing draws past the border box");
+		const bool pixels_read = fixture_read_pixel(fixture, rendered, 3, 8, ring)   // inside the 2px wall
+			&& fixture_read_pixel(fixture, rendered, 8, 8, hole)                      // hole centre
+			&& fixture_read_pixel(fixture, rendered, 0, 0, outside);                  // past the node
+		ok &= pixels_read;
+		if (pixels_read) {
+			ok &= check(ring[0] > 250 && ring[2] < 5, "the ring is blue where the distance is positive");
+			ok &= check(hole[0] < 5 && hole[1] < 5 && hole[2] < 5, "the hole is cut out of the result");
+			ok &= check(outside[0] < 5, "nothing draws past the border box");
+		}
 		wlr_buffer_unlock(rendered);
 	}
 	wlr_output_state_finish(&state);
 	// Drawn again without geometry, the program sees no hole: the centre the
 	// last composite cut is painted.
 	uint8_t centre[4];
-	ok &= render_animation(fixture, program, &parameters, 0, centre);
-	ok &= check(centre[0] > 250 && centre[3] > 250, "a draw without geometry does not reuse the previous hole");
+	ok &= render_animation(fixture, program, &parameters, 0, centre)
+		&& check(centre[0] > 250 && centre[3] > 250, "a draw without geometry does not reuse the previous hole");
 	fx_effect_shader_unref(program);
 	wlr_scene_node_destroy(&scene->tree.node);
 	return ok;
@@ -919,16 +931,19 @@ static bool test_border_geometry_tree(struct fixture *fixture) {
 	ok &= check(rendered != NULL, "renders");
 	if (rendered != NULL) {
 		uint8_t offset[4], shift[4], inside[4], rounded[4], square[4];
-		ok &= fixture_read_pixel(fixture, rendered, 3, 9, offset);
-		ok &= fixture_read_pixel(fixture, rendered, 2, 9, shift);
-		ok &= fixture_read_pixel(fixture, rendered, 11, 9, inside);
-		ok &= fixture_read_pixel(fixture, rendered, 11, 12, rounded);
-		ok &= fixture_read_pixel(fixture, rendered, 4, 5, square);
-		ok &= check(offset[0] > 250, "the hole starts at the ring's offset within the tree bounds");
-		ok &= check(shift[0] > 250, "the hole moves with the expanded drawn box");
-		ok &= check(inside[0] < 5, "the hole's right column is cut");
-		ok &= check(rounded[0] > 250, "the bottom-right hole corner is rounded");
-		ok &= check(square[0] < 5, "the top-left hole corner stays square");
+		const bool pixels_read = fixture_read_pixel(fixture, rendered, 3, 9, offset)
+			&& fixture_read_pixel(fixture, rendered, 2, 9, shift)
+			&& fixture_read_pixel(fixture, rendered, 11, 9, inside)
+			&& fixture_read_pixel(fixture, rendered, 11, 12, rounded)
+			&& fixture_read_pixel(fixture, rendered, 4, 5, square);
+		ok &= pixels_read;
+		if (pixels_read) {
+			ok &= check(offset[0] > 250, "the hole starts at the ring's offset within the tree bounds");
+			ok &= check(shift[0] > 250, "the hole moves with the expanded drawn box");
+			ok &= check(inside[0] < 5, "the hole's right column is cut");
+			ok &= check(rounded[0] > 250, "the bottom-right hole corner is rounded");
+			ok &= check(square[0] < 5, "the top-left hole corner stays square");
+		}
 		wlr_buffer_unlock(rendered);
 	}
 	wlr_output_state_finish(&state);
@@ -1024,37 +1039,46 @@ static bool test_border_light(struct fixture *fixture) {
 	const struct light_ring square = { .box = { 4, 4, 8, 8 }, .wall = 2, .scale = 1, .spread = 3 };
 	// 2 px left of the ring, inside its left wall, 2 px right of the ring.
 	const int square_probes[FAR + 1][2] = { { 2, 8 }, { 5, 8 }, { 13, 8 } };
-	bool ok = render_light_ring(fixture, &square, true, square_probes, FAR + 1, lit);
-	ok &= render_light_ring(fixture, &square, false, square_probes, FAR + 1, dark);
-	ok &= check(lit[RING][2] > 250 && dark[RING][2] > 250, "the emitting wall is red with and without light");
-	ok &= check(lit[SPILL][2] > 20, "light spills red past the emitting side");
-	ok &= check(lit[SPILL][2] < lit[RING][2], "the spill is dimmer than the ring");
-	ok &= check(lit[FAR][2] < 8, "no light past the side that emits nothing");
-	ok &= check(dark[SPILL][2] < 5 && dark[SPILL][1] < 5, "without a light layer nothing spills");
+	const bool square_read = render_light_ring(fixture, &square, true, square_probes, FAR + 1, lit)
+		&& render_light_ring(fixture, &square, false, square_probes, FAR + 1, dark);
+	bool ok = square_read;
+	if (square_read) {
+		ok &= check(lit[RING][2] > 250 && dark[RING][2] > 250, "the emitting wall is red with and without light");
+		ok &= check(lit[SPILL][2] > 20, "light spills red past the emitting side");
+		ok &= check(lit[SPILL][2] < lit[RING][2], "the spill is dimmer than the ring");
+		ok &= check(lit[FAR][2] < 8, "no light past the side that emits nothing");
+		ok &= check(dark[SPILL][2] < 5 && dark[SPILL][1] < 5, "without a light layer nothing spills");
+	}
 
 	// The same buffer layout at scale 2: a 4x4 logical ring with 1 px walls.
 	const struct light_ring scaled = { .box = { 2, 2, 4, 4 }, .wall = 1, .scale = 2, .spread = 3 };
 	const int scaled_probes[FAR + 1][2] = { { 1, 4 }, { 2, 4 }, { 7, 4 } };
-	ok &= render_light_ring(fixture, &scaled, true, scaled_probes, FAR + 1, lit);
-	ok &= check(lit[RING][2] > 250, "the scaled emitting wall is red");
-	ok &= check(lit[SPILL][2] > 20 && lit[SPILL][2] < lit[RING][2], "light spills past the scaled ring's emitting side");
-	ok &= check(lit[FAR][2] < 8, "no light past the scaled ring's dark side");
+	const bool scaled_read = render_light_ring(fixture, &scaled, true, scaled_probes, FAR + 1, lit);
+	ok &= scaled_read;
+	if (scaled_read) {
+		ok &= check(lit[RING][2] > 250, "the scaled emitting wall is red");
+		ok &= check(lit[SPILL][2] > 20 && lit[SPILL][2] < lit[RING][2], "light spills past the scaled ring's emitting side");
+		ok &= check(lit[FAR][2] < 8, "no light past the scaled ring's dark side");
+	}
 
 	// A wide ring glows the same on a 90-degree output as on a normal one.
 	const struct light_ring wide = { .box = { 2, 6, 12, 4 }, .wall = 1, .scale = 1, .spread = 4 };
 	struct light_ring rotated = wide;
 	rotated.transform = WL_OUTPUT_TRANSFORM_90;
 	const int wide_probes[PROBES][2] = { { 1, 8 }, { 2, 8 }, { 15, 8 }, { 2, 3 }, { 0, 4 } };
-	ok &= render_light_ring(fixture, &wide, true, wide_probes, PROBES, lit);
-	ok &= render_light_ring(fixture, &rotated, true, wide_probes, PROBES, dark);
-	ok &= check(dark[RING][2] > 250, "the rotated emitting wall is red");
-	ok &= check(lit[SPILL][2] > 12 && dark[SPILL][2] > 12, "light spills past the wide ring's emitting side");
-	ok &= check(lit[FAR][2] < 8 && dark[FAR][2] < 8, "no light past the wide ring's dark side");
-	bool same = true;
-	for (int i = 0; i < PROBES; i++) {
-		same &= abs(lit[i][2] - dark[i][2]) <= 4;
+	const bool wide_read = render_light_ring(fixture, &wide, true, wide_probes, PROBES, lit)
+		&& render_light_ring(fixture, &rotated, true, wide_probes, PROBES, dark);
+	ok &= wide_read;
+	if (wide_read) {
+		ok &= check(dark[RING][2] > 250, "the rotated emitting wall is red");
+		ok &= check(lit[SPILL][2] > 12 && dark[SPILL][2] > 12, "light spills past the wide ring's emitting side");
+		ok &= check(lit[FAR][2] < 8 && dark[FAR][2] < 8, "no light past the wide ring's dark side");
+		bool same = true;
+		for (int i = 0; i < PROBES; i++) {
+			same &= abs(lit[i][2] - dark[i][2]) <= 4;
+		}
+		ok &= check(same, "the rotated glow matches the normal one");
 	}
-	ok &= check(same, "the rotated glow matches the normal one");
 	return ok;
 }
 
@@ -1073,17 +1097,18 @@ static bool light_proxy_is(struct wlr_scene_tree *layer, int x, int y, int width
 }
 
 // The red channel at (x, y) after a whole-damage frame, or -1 when the frame
-// could not be rendered, so a "no light" check cannot pass on a failed render.
+// could not be rendered or read, so a "no light" check cannot pass on a failure.
 static int light_spill_red(struct fixture *fixture, struct wlr_scene_output *scene_output, int x, int y) {
-	uint8_t pixel[4] = { 0 };
+	uint8_t pixel[4];
 	wlr_scene_output_damage_whole_for_test(scene_output);
 	struct wlr_output_state state;
 	struct wlr_buffer *rendered = fixture_render_scene(fixture, scene_output, &state);
 	int red = -1;
 	if (rendered != NULL) {
-		fixture_read_pixel(fixture, rendered, x, y, pixel);
+		if (fixture_read_pixel(fixture, rendered, x, y, pixel)) {
+			red = pixel[2];
+		}
 		wlr_buffer_unlock(rendered);
-		red = pixel[2];
 	}
 	wlr_output_state_finish(&state);
 	return red;
@@ -1219,14 +1244,17 @@ static bool test_in_place(struct fixture *fixture) {
 	ok &= check(rendered != NULL, "renders");
 	if (rendered != NULL) {
 		uint8_t centre[4], corner[4], outside[4];
-		ok &= fixture_read_pixel(fixture, rendered, 8, 8, centre);
-		ok &= fixture_read_pixel(fixture, rendered, 4, 4, corner);
-		ok &= fixture_read_pixel(fixture, rendered, 2, 2, outside);
-		// Under the window: 0.25 red + 0.75 blue, swapped. Unswapped would be the reverse, a capture pure blue.
-		ok &= check(centre[2] > 170 && centre[2] < 210 && centre[0] > 45 && centre[0] < 85,
-			"the program read the backdrop through the translucent window");
-		ok &= check(corner[0] > 250 && corner[2] < 5, "the rounded corner keeps the untouched background");
-		ok &= check(outside[0] > 250 && outside[2] < 5, "nothing outside the window changes");
+		const bool pixels_read = fixture_read_pixel(fixture, rendered, 8, 8, centre)
+			&& fixture_read_pixel(fixture, rendered, 4, 4, corner)
+			&& fixture_read_pixel(fixture, rendered, 2, 2, outside);
+		ok &= pixels_read;
+		if (pixels_read) {
+			// Under the window: 0.25 red + 0.75 blue, swapped. Unswapped would be the reverse, a capture pure blue.
+			ok &= check(centre[2] > 170 && centre[2] < 210 && centre[0] > 45 && centre[0] < 85,
+				"the program read the backdrop through the translucent window");
+			ok &= check(corner[0] > 250 && corner[2] < 5, "the rounded corner keeps the untouched background");
+			ok &= check(outside[0] > 250 && outside[2] < 5, "nothing outside the window changes");
+		}
 		wlr_buffer_unlock(rendered);
 	}
 	wlr_output_state_finish(&state);
@@ -1241,9 +1269,9 @@ static bool test_in_place(struct fixture *fixture) {
 		ok &= check(rendered != NULL, "renders with a failed target copy");
 		if (rendered != NULL) {
 			uint8_t centre[4];
-			ok &= fixture_read_pixel(fixture, rendered, 8, 8, centre);
-			ok &= check(centre[2] > 45 && centre[2] < 85 && centre[0] > 170 && centre[0] < 210,
-				"a failed copy leaves the window as drawn");
+			ok &= fixture_read_pixel(fixture, rendered, 8, 8, centre)
+				&& check(centre[2] > 45 && centre[2] < 85 && centre[0] > 170 && centre[0] < 210,
+					"a failed copy leaves the window as drawn");
 			wlr_buffer_unlock(rendered);
 		}
 		wlr_output_state_finish(&state);
@@ -1287,8 +1315,8 @@ static bool test_damage_expansion(struct fixture *fixture) {
 	ok &= check(buffer != NULL, "whole-damage frame");
 	if (buffer != NULL) {
 		uint8_t pixel[4];
-		ok &= fixture_read_pixel(fixture, buffer, 12, 8, pixel);
-		ok &= check(pixel[2] > 250 && pixel[1] < 5, "a whole-damage frame mirrors the marker to the right edge");
+		ok &= fixture_read_pixel(fixture, buffer, 12, 8, pixel)
+			&& check(pixel[2] > 250 && pixel[1] < 5, "a whole-damage frame mirrors the marker to the right edge");
 		wlr_buffer_unlock(buffer);
 	}
 	wlr_output_state_finish(&state);
@@ -1303,10 +1331,10 @@ static bool test_damage_expansion(struct fixture *fixture) {
 	ok &= check(buffer != NULL, "partial-damage frame");
 	if (buffer != NULL) {
 		uint8_t old_spot[4], new_spot[4];
-		ok &= fixture_read_pixel(fixture, buffer, 12, 8, old_spot);
-		ok &= fixture_read_pixel(fixture, buffer, 12, 12, new_spot);
-		ok &= check(old_spot[2] > 250 && old_spot[1] > 250, "the stale mirrored marker was repainted white");
-		ok &= check(new_spot[2] > 250 && new_spot[1] < 5, "the moved marker is mirrored at its new rows");
+		ok &= fixture_read_pixel(fixture, buffer, 12, 8, old_spot)
+			&& check(old_spot[2] > 250 && old_spot[1] > 250, "the stale mirrored marker was repainted white");
+		ok &= fixture_read_pixel(fixture, buffer, 12, 12, new_spot)
+			&& check(new_spot[2] > 250 && new_spot[1] < 5, "the moved marker is mirrored at its new rows");
 		wlr_buffer_unlock(buffer);
 	}
 	wlr_output_state_finish(&state);
@@ -1343,8 +1371,8 @@ static bool test_capture_policy(struct fixture *fixture) {
 		uint8_t display[4], captured[4];
 		// The swapchain buffer holds the display composition. Read it through its framebuffer: a texture import
 		// of the same buffer is exactly what the capture policy redirects.
-		const bool shown = fixture_read_display_pixel(fixture, state.buffer, 8, 8, display);
-		ok &= shown && check(display[1] > 250 && display[2] < 5, "the display shows the window effect");
+		ok &= fixture_read_display_pixel(fixture, state.buffer, 8, 8, display)
+			&& check(display[1] > 250 && display[2] < 5, "the display shows the window effect");
 		// A dmabuf import (what screencopy and image-copy do) resolves to the unfiltered capture.
 		struct wlr_texture *import = wlr_texture_from_buffer(fixture->renderer, state.buffer);
 		uint8_t pixels[TEST_WIDTH * TEST_HEIGHT * 4];
@@ -1370,11 +1398,10 @@ static bool test_capture_policy(struct fixture *fixture) {
 			"renders with a failed capture save");
 		if (ok) {
 			uint8_t display[4], captured[4];
-			const bool shown = fixture_read_display_pixel(fixture, state.buffer, 8, 8, display);
-			ok &= shown && check(display[2] > 250 && display[1] < 5, "without a capture the display shows the plain window");
-			const bool imported = fixture_read_pixel(fixture, state.buffer, 8, 8, captured);
-			ok &= check(imported, "import reads");
-			ok &= imported && check(captured[2] > 250 && captured[1] < 5, "without a capture the import sees the plain window");
+			ok &= fixture_read_display_pixel(fixture, state.buffer, 8, 8, display)
+				&& check(display[2] > 250 && display[1] < 5, "without a capture the display shows the plain window");
+			ok &= fixture_read_pixel(fixture, state.buffer, 8, 8, captured)
+				&& check(captured[2] > 250 && captured[1] < 5, "without a capture the import sees the plain window");
 		}
 		wlr_output_state_finish(&state);
 	}
@@ -1521,21 +1548,20 @@ static bool test_capture_policy_encoding(struct fixture *fixture) {
 			ok &= check(wlr_scene_output_build_state(scene_output, &state, &options) && state.buffer != NULL,
 				"renders");
 			if (ok) {
-				ok &= check(fixture_read_pixel(fixture, state.buffer, 1, 1, backgrounds[frame]), "import reads");
+				ok &= fixture_read_pixel(fixture, state.buffer, 1, 1, backgrounds[frame]);
 			}
 			if (ok && frame == 0) {
 				uint8_t display[4], captured[4];
-				const bool shown = fixture_read_display_pixel(fixture, state.buffer, 8, 8, display);
-				ok &= shown && check(display[1] > 250 && display[2] < 5, "the display shows the window effect");
-				const bool imported = fixture_read_pixel(fixture, state.buffer, 8, 8, captured);
-				ok &= check(imported, "import reads");
-				ok &= imported && check(captured[2] > 250 && captured[1] < 5, "the capture sees the plain red window");
+				ok &= fixture_read_display_pixel(fixture, state.buffer, 8, 8, display)
+					&& check(display[1] > 250 && display[2] < 5, "the display shows the window effect");
+				ok &= fixture_read_pixel(fixture, state.buffer, 8, 8, captured)
+					&& check(captured[2] > 250 && captured[1] < 5, "the capture sees the plain red window");
 			}
 			if (ok && frame == 0 && mode == 1) {
 				uint8_t display[4];
-				const bool shown = fixture_read_display_pixel(fixture, state.buffer, 14, 14, display);
-				ok &= shown && check(display[0] > 122 && display[0] < 134 && display[2] < 5,
-					"an in-place swap under a colour transform keeps the encoding");
+				ok &= fixture_read_display_pixel(fixture, state.buffer, 14, 14, display)
+					&& check(display[0] > 122 && display[0] < 134 && display[2] < 5,
+						"an in-place swap under a colour transform keeps the encoding");
 			}
 			wlr_output_state_finish(&state);
 		}
@@ -1590,7 +1616,10 @@ static bool test_in_place_feedback(struct fixture *fixture) {
 		static const int probes[][2] = { { 5, 5 }, { 10, 5 } };
 		for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
 			uint8_t pixel[4];
-			ok &= fixture_read_pixel(fixture, buffer, probes[i][0], probes[i][1], pixel);
+			if (!fixture_read_pixel(fixture, buffer, probes[i][0], probes[i][1], pixel)) {
+				ok = false;
+				continue;
+			}
 			if (pixel[2] < 72 || pixel[2] > 88) {
 				fprintf(stderr, "  red %d at (%d,%d), expected 80\n", pixel[2], probes[i][0], probes[i][1]);
 			}
@@ -1634,7 +1663,10 @@ static bool test_expand_feedback(struct fixture *fixture) {
 		static const int probes[][2] = { { 8, 8 }, { 4, 4 }, { 11, 8 } };
 		for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
 			uint8_t pixel[4];
-			ok &= fixture_read_pixel(fixture, buffer, probes[i][0], probes[i][1], pixel);
+			if (!fixture_read_pixel(fixture, buffer, probes[i][0], probes[i][1], pixel)) {
+				ok = false;
+				continue;
+			}
 			if (pixel[2] < 72 || pixel[2] > 88) {
 				fprintf(stderr, "  red %d at (%d,%d), expected 80\n", pixel[2], probes[i][0], probes[i][1]);
 			}
@@ -1793,8 +1825,8 @@ static bool test_in_place_shape(struct fixture *fixture) {
 		static const int probes[][2] = { { 8, 8 }, { 4, 8 }, { 11, 8 }, { 8, 4 }, { 8, 11 } };
 		for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
 			uint8_t pixel[4];
-			ok &= fixture_read_pixel(fixture, rendered, probes[i][0], probes[i][1], pixel);
-			ok &= is_colour(pixel, 0, 0, 255, "the outermost buffer pixels are fully in the mask");
+			ok &= fixture_read_pixel(fixture, rendered, probes[i][0], probes[i][1], pixel)
+				&& is_colour(pixel, 0, 0, 255, "the outermost buffer pixels are fully in the mask");
 		}
 		wlr_buffer_unlock(rendered);
 	}
@@ -1820,18 +1852,18 @@ static bool test_in_place_shape(struct fixture *fixture) {
 		ok &= check(rendered != NULL, rotated ? "rotated frame" : "margin frame");
 		if (rendered != NULL) {
 			uint8_t pixel[4];
-			ok &= read_logical(fixture, rendered, transform, 6.25f, 4.25f, pixel);
-			ok &= is_colour(pixel, 0, 255, 0, "the marker is mirrored across the content box");
-			ok &= read_logical(fixture, rendered, transform, 1.75f, 4.25f, pixel);
-			ok &= is_colour(pixel, 0, 0, 255, "the marker's own column shows the mirrored content");
-			ok &= read_logical(fixture, rendered, transform, 0.25f, 4.25f, pixel);
-			ok &= is_colour(pixel, 0, 0, 255, "the side margin keeps the desktop");
-			ok &= read_logical(fixture, rendered, transform, 4.25f, 1.25f, pixel);
-			ok &= is_colour(pixel, 0, 0, 255, "the top margin keeps the desktop");
-			ok &= read_logical(fixture, rendered, transform, 1.25f, 2.25f, pixel);
-			ok &= is_colour(pixel, 0, 0, 255, "the content box's rounded corner keeps the desktop");
-			ok &= read_logical(fixture, rendered, transform, 4.25f, 2.25f, pixel);
-			ok &= is_colour(pixel, 0, 0, 255, "the content's top row is fully in the mask");
+			ok &= read_logical(fixture, rendered, transform, 6.25f, 4.25f, pixel)
+				&& is_colour(pixel, 0, 255, 0, "the marker is mirrored across the content box");
+			ok &= read_logical(fixture, rendered, transform, 1.75f, 4.25f, pixel)
+				&& is_colour(pixel, 0, 0, 255, "the marker's own column shows the mirrored content");
+			ok &= read_logical(fixture, rendered, transform, 0.25f, 4.25f, pixel)
+				&& is_colour(pixel, 0, 0, 255, "the side margin keeps the desktop");
+			ok &= read_logical(fixture, rendered, transform, 4.25f, 1.25f, pixel)
+				&& is_colour(pixel, 0, 0, 255, "the top margin keeps the desktop");
+			ok &= read_logical(fixture, rendered, transform, 1.25f, 2.25f, pixel)
+				&& is_colour(pixel, 0, 0, 255, "the content box's rounded corner keeps the desktop");
+			ok &= read_logical(fixture, rendered, transform, 4.25f, 2.25f, pixel)
+				&& is_colour(pixel, 0, 0, 255, "the content's top row is fully in the mask");
 			wlr_buffer_unlock(rendered);
 		}
 		wlr_scene_node_destroy(&scene->tree.node);
@@ -1862,8 +1894,8 @@ static bool test_in_place_shape(struct fixture *fixture) {
 		ok &= check(rendered != NULL, "cut-corner frame");
 		if (rendered != NULL) {
 			uint8_t pixel[4];
-			ok &= read_logical(fixture, rendered, WL_OUTPUT_TRANSFORM_NORMAL, 7.9f, 6.8f, pixel);
-			ok &= is_colour(pixel, 255, 0, 255, "the node-bounds-cut corner is fully shaded");
+			ok &= read_logical(fixture, rendered, WL_OUTPUT_TRANSFORM_NORMAL, 7.9f, 6.8f, pixel)
+				&& is_colour(pixel, 255, 0, 255, "the node-bounds-cut corner is fully shaded");
 			wlr_buffer_unlock(rendered);
 		}
 		wlr_scene_node_destroy(&scene->tree.node);
@@ -1903,10 +1935,10 @@ static bool test_output_effects(struct fixture *fixture) {
 	ok &= check(rendered != NULL, "renders");
 	if (rendered != NULL) {
 		uint8_t far[4], at_pointer[4];
-		ok &= fixture_read_pixel(fixture, rendered, 2, 2, far);
-		ok &= fixture_read_pixel(fixture, rendered, 12, 12, at_pointer);
-		ok &= check(far[2] > 250 && far[0] < 5, "the screen effect swapped the whole output to red");
-		ok &= check(at_pointer[1] > 250, "the cursor effect reads the screen effect's result");
+		ok &= fixture_read_pixel(fixture, rendered, 2, 2, far)
+			&& check(far[2] > 250 && far[0] < 5, "the screen effect swapped the whole output to red");
+		ok &= fixture_read_pixel(fixture, rendered, 12, 12, at_pointer)
+			&& check(at_pointer[1] > 250, "the cursor effect reads the screen effect's result");
 		wlr_buffer_unlock(rendered);
 	}
 	wlr_output_state_finish(&state);
@@ -1915,8 +1947,8 @@ static bool test_output_effects(struct fixture *fixture) {
 	rendered = fixture_render_scene(fixture, scene_output, &state);
 	if (rendered != NULL) {
 		uint8_t at_pointer[4];
-		ok &= fixture_read_pixel(fixture, rendered, 12, 12, at_pointer);
-		ok &= check(at_pointer[1] < 5 && at_pointer[2] > 250, "a hidden pointer has no cursor effect");
+		ok &= fixture_read_pixel(fixture, rendered, 12, 12, at_pointer)
+			&& check(at_pointer[1] < 5 && at_pointer[2] > 250, "a hidden pointer has no cursor effect");
 		wlr_buffer_unlock(rendered);
 	}
 	wlr_output_state_finish(&state);
@@ -1930,14 +1962,14 @@ static bool test_output_effects(struct fixture *fixture) {
 		"renders with a pending capture");
 	if (ok) {
 		uint8_t display[4], captured[4];
-		ok &= fixture_read_display_pixel(fixture, state.buffer, 2, 2, display);
-		ok &= check(display[2] > 250 && display[0] < 5, "the display keeps the screen effect");
-		ok &= fixture_read_display_pixel(fixture, state.buffer, 12, 12, display);
-		ok &= check(display[1] > 250, "the display keeps the cursor effect");
-		ok &= fixture_read_pixel(fixture, state.buffer, 2, 2, captured);
-		ok &= check(captured[0] > 250 && captured[2] < 5, "the capture has no screen effect");
-		ok &= fixture_read_pixel(fixture, state.buffer, 12, 12, captured);
-		ok &= check(captured[0] > 250 && captured[1] < 5, "the capture has no cursor effect");
+		ok &= fixture_read_display_pixel(fixture, state.buffer, 2, 2, display)
+			&& check(display[2] > 250 && display[0] < 5, "the display keeps the screen effect");
+		ok &= fixture_read_display_pixel(fixture, state.buffer, 12, 12, display)
+			&& check(display[1] > 250, "the display keeps the cursor effect");
+		ok &= fixture_read_pixel(fixture, state.buffer, 2, 2, captured)
+			&& check(captured[0] > 250 && captured[2] < 5, "the capture has no screen effect");
+		ok &= fixture_read_pixel(fixture, state.buffer, 12, 12, captured)
+			&& check(captured[0] > 250 && captured[1] < 5, "the capture has no cursor effect");
 	}
 	wlr_output_state_finish(&state);
 	// Without a screen effect, motion damages only the old and new cursor squares.
@@ -1970,8 +2002,8 @@ static bool test_output_effects(struct fixture *fixture) {
 		"renders the re-set cursor effect");
 	if (state.buffer != NULL) {
 		uint8_t old_square[4];
-		ok &= fixture_read_display_pixel(fixture, state.buffer, 4, 4, old_square);
-		ok &= check(old_square[0] > 250, "a re-set cursor effect draws nothing at the stale pointer");
+		ok &= fixture_read_display_pixel(fixture, state.buffer, 4, 4, old_square)
+			&& check(old_square[0] > 250, "a re-set cursor effect draws nothing at the stale pointer");
 	}
 	wlr_scene_output_acknowledge_damage_for_test(scene_output, &state);
 	wlr_output_state_finish(&state);
@@ -1990,8 +2022,8 @@ static bool test_output_effects(struct fixture *fixture) {
 		"renders after the pointer push");
 	if (state.buffer != NULL) {
 		uint8_t at_pointer[4];
-		ok &= fixture_read_display_pixel(fixture, state.buffer, 12, 12, at_pointer);
-		ok &= check(at_pointer[0] < 5 && at_pointer[1] < 5, "the pushed pointer draws the cursor effect");
+		ok &= fixture_read_display_pixel(fixture, state.buffer, 12, 12, at_pointer)
+			&& check(at_pointer[0] < 5 && at_pointer[1] < 5, "the pushed pointer draws the cursor effect");
 	}
 	wlr_output_state_finish(&state);
 	wlr_swapchain_destroy(swapchain);
@@ -2006,12 +2038,12 @@ static bool test_output_effects(struct fixture *fixture) {
 		ok &= check(rendered != NULL, rotated ? "rotated scale-2 frame" : "scale-2 frame");
 		if (rendered != NULL) {
 			uint8_t pixel[4];
-			ok &= read_logical(fixture, rendered, transform, 6.9f, 2.1f, pixel);
-			ok &= is_colour(pixel, 0, 255, 0, "the pointer's texel is painted");
-			ok &= read_logical(fixture, rendered, transform, 6.1f, 2.9f, pixel);
-			ok &= is_colour(pixel, 0, 0, 255, "the transposed texel is not");
-			ok &= read_logical(fixture, rendered, transform, 2.1f, 6.9f, pixel);
-			ok &= is_colour(pixel, 0, 0, 255, "outside the square is untouched");
+			ok &= read_logical(fixture, rendered, transform, 6.9f, 2.1f, pixel)
+				&& is_colour(pixel, 0, 255, 0, "the pointer's texel is painted");
+			ok &= read_logical(fixture, rendered, transform, 6.1f, 2.9f, pixel)
+				&& is_colour(pixel, 0, 0, 255, "the transposed texel is not");
+			ok &= read_logical(fixture, rendered, transform, 2.1f, 6.9f, pixel)
+				&& is_colour(pixel, 0, 0, 255, "outside the square is untouched");
 			wlr_buffer_unlock(rendered);
 		}
 	}

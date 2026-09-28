@@ -1327,8 +1327,7 @@ namespace umbriel {
     // Render + commit only if the scene actually changed or a gamma upload is pending. All exit paths below MUST reach
     // the unconditional wlr_scene_output_send_frame_done call at the bottom: mailbox/FIFO clients (games via DXVK,
     // video players) block on wl_surface.frame before submitting their next buffer. If we skip frame_done on the
-    // "nothing to render" path, they never commit again -> damage stays clean -> wlr_scene_output_needs_frame returns
-    // false forever -> compositor parks in epoll_wait. (Reproducible with any mailbox/FIFO Vulkan game.)
+    // "nothing to render" path, they never commit again, damage stays clean, and the output stops producing frames.
     bool commitFailed = false;
     const bool sceneChanged = wlr_scene_output_needs_frame(m_sceneOutput);
     if (sceneChanged) {

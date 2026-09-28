@@ -306,14 +306,10 @@ namespace umbriel {
           !card.shortcut.empty() && matched && fits && !m_closing && &card != m_dragCard && badgeAlpha > 0.01F;
       wlr_scene_node_set_enabled(&card.badge->node, badgeOn);
       if (badgeOn) {
-        // The badge hugs the card's top-left corner, and only that corner can
-        // go missing: the output tree clips cards at the output edge, and the
-        // top and overlay layers draw their exclusive zones over the overview.
-        // So on each axis it slides just enough to clear the start of the usable
-        // area, never past the card's own opposite inset. A card whose corner
-        // has scrolled out of view keeps its badge at that inset, which is the
-        // bottom-left corner for a preview above the current workspace.
-        // `fits` is what keeps the card-local bounds ordered.
+        // The badge hugs the card's top-left corner, the only corner the output clip or the top/overlay exclusive
+        // zones can hide. On each axis it slides just far enough to clear the start of the usable area, never past
+        // the card's opposite inset, where a card scrolled out of view keeps it. `fits` keeps the card-local bounds
+        // ordered.
         const auto inset = [](int origin, int extent, int badgeExtent, int clipStart) {
           return std::clamp(
               std::max(clipStart, origin) + kBadgeMargin - origin, kBadgeMargin, extent - badgeExtent - kBadgeMargin
@@ -2029,10 +2025,9 @@ namespace umbriel {
       snapshotCardForClose(*card);
     }
     dropCard(view);
-    // The closed window may have been the focused one. The overview keeps the focus chrome while it owns the seat, so
-    // reassign to the nearest survivor now rather than leaving the workspace focused on a dead view until zoom-out (or
-    // a later destroy) happens to refocus. Ask before layout detachment so the closing view still identifies its row
-    // and column, preferring its predecessor and using the next neighbor only at the leading edge.
+    // The overview keeps the focus chrome while it owns the seat, so a closed focused window hands focus to the nearest
+    // survivor now rather than at zoom-out. Ask before layout detachment so the closing view still identifies its row
+    // and column; the replacement is its predecessor, or the next neighbor at the leading edge.
     if (workspace != nullptr && workspace->focusedView() == view) {
       View* replacement = workspace->focusReplacementForRemoval(view);
       if (replacement != nullptr) {

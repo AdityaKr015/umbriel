@@ -48,10 +48,9 @@ namespace umbriel {
       return surface != nullptr && wlr_xdg_popup_try_from_wlr_surface(wlr_surface_get_root_surface(surface)) != nullptr;
     }
 
-    // `[input.touchpad] scroll_factor` scales a touchpad's smooth scroll delta before it reaches the focused client.
-    // The `horizontal`/`vertical` table keys override it per direction. Reads the live config per event so a successful
-    // reload applies on the very next axis; non-touchpads and unset values stay
-    // at identity (1.0). Only the continuous delta is scaled, never the discrete value120 notches.
+    // `[input.touchpad] scroll_factor` (overridden per direction by `horizontal`/`vertical`) scales a touchpad's smooth
+    // scroll delta, never the discrete value120 notches. Read per event so a reload applies on the next axis;
+    // non-touchpads and unset values stay at 1.0.
     double touchpadScrollFactor(wlr_pointer* pointer, bool vertical) {
       if (pointer == nullptr || !wlr_input_device_is_libinput(&pointer->base)) {
         return 1.0;
@@ -991,9 +990,8 @@ namespace umbriel {
         if (button == grab->button) {
           m_server->gestures()->endPointerScroll(m_server->sessionLocked(), timeMsec);
           resetMode();
-          // The grab cleared client focus on press and consumed every motion.
-          // Re-run hit testing so hover/focus is correct without requiring the
-          // user to jiggle the mouse after release.
+          // The grab cleared client focus on press and consumed every motion; re-run hit testing so hover/focus is
+          // correct without further motion.
           processMotion(timeMsec, m_cursor->x, m_cursor->y);
         }
         return;
@@ -1059,10 +1057,8 @@ namespace umbriel {
       m_server->seat()->notifyPointerModifiers();
       wlr_seat_pointer_notify_button(m_server->seat()->wlr(), timeMsec, button, state);
 
-      // After the final release, refresh pointer focus so it matches the surface actually under the cursor. The
-      // implicit-grab guard kept focus pinned while buttons were held; realign now so a subsequent press without
-      // intervening motion targets the correct surface. The overview keeps the desktop inert, so there focus goes
-      // nowhere instead.
+      // After the final release, realign pointer focus (pinned by the implicit grab) with the surface under the cursor,
+      // so a press without intervening motion targets it. The overview keeps the desktop inert, so focus goes nowhere.
       if (m_server->seat()->wlr()->pointer_state.button_count == 0) {
         const Overview* overview = m_server->overview();
         if (overview != nullptr && overview->active() && !m_server->sessionLocked()) {

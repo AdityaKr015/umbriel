@@ -134,8 +134,8 @@ namespace umbriel {
     void arrange(bool animate = true);
     // Record that the layout is stale instead of rebuilding it now. The work runs once, before the next frame, however
     // many times this is called in between: a touchpad swipe marks on every motion event, and unrelated paths reached
-    // in the same frame (a focus change, a config reload, a client's fullscreen commit) each used to arrange on their
-    // own. Prefer this to arrange(). Call arrange() directly only when the code immediately afterwards reads the
+    // in the same frame (a focus change, a config reload, a client's fullscreen commit) coalesce into one arrange.
+    // Prefer this to arrange(). Call arrange() directly only when the code immediately afterwards reads the
     // arranged geometry back out of the layout, or when protocol state and size must land in one configure before the
     // next frame. targetBox() is the only thing arrange() produces that is not simply applied to the scene.
     void markArrange(bool animate = true);

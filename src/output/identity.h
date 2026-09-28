@@ -15,10 +15,8 @@ namespace umbriel {
     std::string_view serial;
   };
 
-  // "<make> <model> <serial>", with the literal "Unknown" standing in for any
-  // field the display does not report. This is the string a user writes to name
-  // an output by the panel rather than by the port it happens to be plugged
-  // into, and it is what `umbriel outputs` shows them.
+  // "<make> <model> <serial>", with "Unknown" for any field the display does not report. Names an output by panel
+  // rather than port; shown by `umbriel outputs`.
   [[nodiscard]] std::string outputDescriptor(const OutputIdentity& identity);
 
   enum class OutputNameMatch {

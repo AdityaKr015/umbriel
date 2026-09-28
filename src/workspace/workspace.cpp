@@ -511,10 +511,8 @@ namespace umbriel {
 
   void Workspace::layoutDetach(View* view, bool animate) {
     detachFromLayout(view);
-    // The column just left the strip, so the old offset can now point past the end: a survivor stays cut off at the
-    // left edge while empty space opens on the right. Clamping re-anchors the remaining columns after removal while
-    // leaving the offset alone if the strip is still longer than the viewport. Deliberately not inside arrange(): a
-    // touchpad swipe overscrolls on purpose, and it arranges on every frame of the gesture.
+    // Removing the column can leave the offset past the end of the strip; clamp it now. Not done in arrange(), since a
+    // touchpad swipe overscrolls on purpose and arranges every frame.
     clampScrollToRange();
     markArrange(animate);
   }
@@ -562,10 +560,8 @@ namespace umbriel {
   }
 
   void Workspace::markArrange(bool animate) {
-    // Last mark wins. The pairing that settles this is a touchpad scroll: every motion marks unanimated, and the
-    // release that snaps to the nearest column marks animated, often in the same frame as the last motion. Letting the
-    // unanimated mark win would teleport the strip at the end of every swipe. The opposite mistake, an animated mark
-    // landing mid-drag, costs one tween on a frame where something unrelated also changed the layout.
+    // Last mark wins, so a swipe's animated snap on release is not overridden by an unanimated motion mark in the same
+    // frame.
     m_arrangeAnimate = animate;
     m_arrangePending = true;
     if (m_group != nullptr && m_group->output() != nullptr) {
@@ -1572,10 +1568,7 @@ namespace umbriel {
     }
     View* view = m_focusedView;
     if (view->floating()) {
-      // No arrange here, for the same reason the fraction verbs do not arrange: an
-      // arrange re-clamps a float against the geometry the client has committed so
-      // far, and mid-resize that is still the size from before this action, so the
-      // opposite edge is pulled back to a bound computed for the old size.
+      // No arrange here: it would re-clamp the float against the client's pre-resize committed size.
       view->resizeFloatingEdge(edges, delta);
       return true;
     }
@@ -1746,7 +1739,7 @@ namespace umbriel {
       view->setOnActiveWorkspace(m_active);
       // Persistent resting state: an inactive workspace keeps its nodes disabled so the shared scene never renders them
       // on any output. Active (and in-transition) views are enabled + clipped to their home output by
-      // syncViewPresentation (arrange / slide), which replaces the old per-render-pass enable/disable.
+      // syncViewPresentation (arrange / slide).
       if (!m_active && !m_inSwitchTransition) {
         view->setNodeEnabled(false);
       }
@@ -2105,7 +2098,7 @@ namespace umbriel {
       workspace->rename(std::to_string(workspace->index() + 1), workspace->index(), false);
     }
 
-    // As in niri, declarations added during a live reload enter at the top of
+    // Declarations added during a live reload enter at the top of
     // the dynamic list. Preserve declaration order among names added together,
     // and keep the optional leading unnamed sentinel first.
     for (const std::string& entry : std::views::reverse(desired)) {

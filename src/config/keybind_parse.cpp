@@ -653,8 +653,6 @@ namespace umbriel {
   std::vector<Keybind> defaultKeybinds() {
     std::vector<Keybind> keybinds;
     keybinds.reserve(60);
-    // Built by assignment rather than aggregate initialisation: the trigger and payload fields already carry default
-    // member initialisers, and naming every one of them just to satisfy -Wmissing-field-initializers is noise.
     auto add = [&keybinds](KeybindAction action, uint32_t keysym, uint32_t modifiers = 0) -> Keybind& {
       Keybind bind;
       bind.modifiers = modifiers;

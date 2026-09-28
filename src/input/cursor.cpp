@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "core/log.h"
+#include "input/event_time.h"
 #include "input/gestures.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
@@ -19,7 +20,6 @@
 #include "view/xdg_size.h"
 // clang-format off
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <linux/input-event-codes.h>
 #include "wlr.h"
@@ -42,12 +42,6 @@ namespace umbriel {
       }
       const uint32_t which = layer->layerSurface()->current.layer;
       return which == ZWLR_LAYER_SHELL_V1_LAYER_TOP || which == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
-    }
-
-    // Programmatic pointer events have no input event timestamp. libinput stamps events from the same clock.
-    uint32_t monotonicMsec() {
-      const auto now = std::chrono::steady_clock::now().time_since_epoch();
-      return static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
     }
 
     bool isXdgPopupSurface(wlr_surface* surface) {

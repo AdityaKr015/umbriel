@@ -4566,7 +4566,8 @@ static bool scene_buffer_matches_background(struct wlr_scene_buffer* scene_buffe
     return false;
   }
   for (size_t i = 0; i < 4; i++) {
-    if (scene_buffer->single_pixel_buffer_color[i] != (uint32_t)(background[i] * UINT32_MAX)) {
+    float component = (float)scene_buffer->single_pixel_buffer_color[i] / (float)UINT32_MAX;
+    if (component != background[i]) {
       return false;
     }
   }

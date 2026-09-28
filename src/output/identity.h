@@ -29,6 +29,10 @@ namespace umbriel {
 
   [[nodiscard]] bool outputNamesEqual(std::string_view left, std::string_view right);
 
+  // Virtual output names use ASCII letters, digits, '-', '_' and '.', so they fit the "<output>:<n>" workspace IDs
+  // and "<workspace>/<output>" action targets.
+  [[nodiscard]] bool validVirtualOutputName(std::string_view name);
+
   // Return which configured output-name form refers to this identity.
   //
   // Connectors and descriptors are compared case-insensitively over ASCII. A

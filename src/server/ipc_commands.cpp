@@ -107,9 +107,7 @@ namespace umbriel {
       }
     }
 
-#ifdef UMBRIEL_TEST_IPC
     void printOutputName(const nlohmann::json& ok) { std::println("{}", ok.get<std::string>()); }
-#endif
 
     std::string fourccName(uint32_t format) {
       if (format == DRM_FORMAT_INVALID) {
@@ -691,11 +689,9 @@ namespace umbriel {
       {"color", "", "show color-management state", false, &IpcCommands::color, &printColor},
       {"tearing", "", "show tearing-control state", false, &IpcCommands::tearing, &printTearing},
       {"keyboard-layouts", "", "list keyboard layouts", false, &IpcCommands::keyboardLayouts, &printKeyboardLayouts},
+      {"output-create", "<name>", "create a virtual output", true, &IpcCommands::outputCreate, &printOutputName},
+      {"output-destroy", "<name>", "destroy a virtual output", true, &IpcCommands::outputDestroy, nullptr},
 #ifdef UMBRIEL_TEST_IPC
-      {"output-create", "<name>", "create a headless output (headless sessions only)", true, &IpcCommands::outputCreate,
-       &printOutputName},
-      {"output-destroy", "<name>", "destroy an output (headless sessions only)", true, &IpcCommands::outputDestroy,
-       nullptr},
       {"settle", "", "wait until no layout or animation is pending and every output has drawn a frame", false,
        &IpcCommands::settle, nullptr, 35},
       {"clock-freeze", "", "stop animation time", false, &IpcCommands::clockFreeze, nullptr},

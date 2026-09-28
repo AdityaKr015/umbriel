@@ -32,11 +32,9 @@ jobs:
             alpine:edge \
             /bin/sh -eu -c '
               apk add --no-cache \
-                bash build-base clang22 just meson pkgconf samurai \
+                bash build-base just meson pkgconf samurai \
                 cairo-dev nlohmann-json pango-dev tomlplusplus-dev \
                 wayland-dev wayland-protocols wlroots0.20-dev
-              export CC=clang-22
-              export CXX=clang++-22
               just build
               just test
             '

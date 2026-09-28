@@ -13,10 +13,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CC: clang
-  CXX: clang++
-
 jobs:
   format:
     name: Format

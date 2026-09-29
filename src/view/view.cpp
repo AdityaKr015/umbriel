@@ -271,6 +271,7 @@ namespace umbriel {
   }
 
   View::~View() {
+    clearLaunchPlacement(true, true);
     if (m_effectSelectionIdle != nullptr) {
       wl_event_source_remove(m_effectSelectionIdle);
       m_effectSelectionIdle = nullptr;
@@ -460,8 +461,79 @@ namespace umbriel {
     return true;
   }
 
+  bool View::assignLaunchOrigin(
+      std::string_view token, std::shared_ptr<WorkspaceLaunchAnchor> workspace, uint32_t timeoutMsec
+  ) {
+    Workspace* target = workspace != nullptr ? workspace->workspace : nullptr;
+    if (token.empty()
+        || target == nullptr
+        || m_mapped
+        || m_hasEverMapped
+        || m_launchPlacementPending
+        || m_launchToken.has_value()) {
+      return false;
+    }
+    wl_event_source* timer = nullptr;
+    if (timeoutMsec > 0) {
+      timer = wl_event_loop_add_timer(wl_display_get_event_loop(m_server->display()), onLaunchPlacementTimeout, this);
+      if (timer == nullptr || wl_event_source_timer_update(timer, static_cast<int>(timeoutMsec)) < 0) {
+        if (timer != nullptr) {
+          wl_event_source_remove(timer);
+        }
+        return false;
+      }
+    }
+    m_launchWorkspace = std::move(workspace);
+    m_launchToken = token;
+    m_launchWorkspaceId = target->id();
+    m_launchPlacementPending = true;
+    m_launchPlacementTimer = timer;
+    return true;
+  }
+
+  bool View::consumeLaunchActivation(std::string_view token) {
+    if (!m_launchToken || *m_launchToken != token) {
+      return false;
+    }
+    if (m_hasEverMapped && !m_mapped) {
+      m_launchToken.reset();
+      return false;
+    }
+    m_launchToken.reset();
+    return true;
+  }
+
+  bool View::cancelLaunchOrigin(std::string_view token) {
+    if (!m_launchToken || *m_launchToken != token) {
+      return false;
+    }
+    clearLaunchPlacement(true, true);
+    return true;
+  }
+
+  void View::clearLaunchPlacement(bool reconcile, bool clearToken) {
+    Workspace* workspace = m_launchWorkspace != nullptr ? m_launchWorkspace->workspace : nullptr;
+    WorkspaceGroup* group = workspace != nullptr ? workspace->group() : nullptr;
+    if (m_launchPlacementTimer != nullptr) {
+      wl_event_source_remove(m_launchPlacementTimer);
+      m_launchPlacementTimer = nullptr;
+    }
+    m_launchWorkspace.reset();
+    m_launchPlacementPending = false;
+    m_launchWorkspaceId.clear();
+    if (clearToken) {
+      m_launchToken.reset();
+    }
+    if (reconcile && group != nullptr && !m_server->stopping()) {
+      group->reconcileDynamic();
+    }
+  }
+
   void View::detachWorkspace() {
     m_workspace = nullptr;
+    if (!m_hasEverMapped && m_launchPlacementPending) {
+      clearLaunchPlacement(true, true);
+    }
     m_openingScale = 1.0;
     m_openingSlide = 0;
     setOnActiveWorkspace(true);
@@ -1872,6 +1944,12 @@ namespace umbriel {
     self->handleUnmap();
   }
 
+  int View::onLaunchPlacementTimeout(void* data) {
+    auto* self = static_cast<View*>(data);
+    self->clearLaunchPlacement(true, true);
+    return 0;
+  }
+
   void View::onRootSurfaceDestroy(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_rootSurfaceDestroy);
     wl_list_remove(&self->m_rootSurfaceDestroy.link);
@@ -2934,6 +3012,7 @@ namespace umbriel {
   }
 
   void View::handleMap() {
+    m_hasEverMapped = true;
     // The XDG map signal is emitted before the root surface commit signal.
     // Refresh only the root cache here, then let each descendant's own commit
     // keep its cached double-buffered state authoritative.
@@ -2976,6 +3055,8 @@ namespace umbriel {
     m_initialRulesContentType = m_contentType;
     m_namedScrollingColumnName = rule.defaultScrollingColumn;
     m_namedScrollingColumnOrder = rule.defaultScrollingColumnOrder;
+    const bool launchRuleOverride = m_launchPlacementPending
+        && (rule.defaultOutput.has_value() || rule.defaultWorkspace.has_value() || rule.defaultScratchpad.has_value());
     if (rule.defaultFloating) {
       m_tiled = !*rule.defaultFloating;
     }
@@ -2986,6 +3067,12 @@ namespace umbriel {
 
     showDecorations(!m_toplevel->scheduled.fullscreen);
 
+    Workspace* launchWorkspace = m_launchWorkspace != nullptr ? m_launchWorkspace->workspace : nullptr;
+    if (!launchRuleOverride && m_workspace == nullptr && launchWorkspace != nullptr) {
+      setWorkspace(launchWorkspace, false);
+    } else if (launchRuleOverride && m_workspace != nullptr) {
+      setWorkspace(nullptr, false);
+    }
     if (m_workspace != nullptr) {
       m_workspace->layoutAttach(
           this, rule.defaultScrollingExtent, rule.defaultScrollingExtentPx, LayoutAttachOrigin::OpeningView
@@ -3049,6 +3136,20 @@ namespace umbriel {
       setFadeAlpha(m_fadeAlpha);
     }
 
+    const bool launchPlacementUsed = m_launchPlacementPending
+        && !launchRuleOverride
+        && !assignedScratchpad
+        && m_workspace != nullptr
+        && m_workspace->id() == m_launchWorkspaceId;
+    Output* preferredOutput = m_server->outputFromWlr(m_server->preferredOutput());
+    Workspace* preferredWorkspace = preferredOutput != nullptr && preferredOutput->workspaceGroup() != nullptr
+        ? preferredOutput->workspaceGroup()->active()
+        : nullptr;
+    const bool launchPlacementSilent = launchPlacementUsed && m_workspace != preferredWorkspace;
+    if (m_launchPlacementPending) {
+      clearLaunchPlacement(!launchPlacementUsed, !launchPlacementUsed);
+    }
+
     updateForeignIdentity();
     updateForeignState();
     const std::optional<bool> deferredActivation = std::exchange(m_deferredActivationTrusted, std::nullopt);
@@ -3057,7 +3158,7 @@ namespace umbriel {
     const bool focusOnMap =
         activateOnMap || (!deferredActivation.value_or(false) && rule.defaultFocused.value_or(true));
     const bool hiddenScratchpad = assignedScratchpad && !m_onActiveWorkspace;
-    if (!m_server->sessionLocked() && focusOnMap && !hiddenScratchpad) {
+    if (!m_server->sessionLocked() && focusOnMap && !hiddenScratchpad && !launchPlacementSilent) {
       m_server->focusView(this, activateOnMap ? FocusReason::XdgActivation : FocusReason::Startup);
     } else if (deferredActivation.has_value()) {
       setUrgent(true);
@@ -3288,6 +3389,7 @@ namespace umbriel {
       m_server->effects().prepare(m_server->renderer());
     }
     m_openingParentRequested = false;
+    m_launchToken.reset();
     m_acceptClientMaximizeRequests = false;
     m_consumeRestoredMaximizeRequest = false;
     m_acceptClientMaximizeSerial.reset();
@@ -3477,7 +3579,12 @@ namespace umbriel {
 
       // Resolve the workspace this view will attach to, so the output and layout that will actually arrange it are the
       // ones that size the first configure.
-      Workspace* target = m_workspace;
+      const bool launchRuleOverride = m_launchPlacementPending
+          && (rule.defaultOutput.has_value()
+              || rule.defaultWorkspace.has_value()
+              || rule.defaultScratchpad.has_value());
+      Workspace* launchWorkspace = m_launchWorkspace != nullptr ? m_launchWorkspace->workspace : nullptr;
+      Workspace* target = launchRuleOverride ? nullptr : (m_workspace != nullptr ? m_workspace : launchWorkspace);
       Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
       WorkspaceGroup* targetGroup = target != nullptr
           ? target->group()

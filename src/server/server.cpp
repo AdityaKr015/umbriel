@@ -1186,9 +1186,11 @@ namespace umbriel {
       if (!launchTokenName.empty()) {
         setenv("XDG_ACTIVATION_TOKEN", launchTokenName.c_str(), 1);
         setenv("DESKTOP_STARTUP_ID", launchTokenName.c_str(), 1);
+        setenv(kLaunchTokenEnvironment.data(), launchTokenName.c_str(), 1);
       } else {
         unsetenv("XDG_ACTIVATION_TOKEN");
         unsetenv("DESKTOP_STARTUP_ID");
+        unsetenv(kLaunchTokenEnvironment.data());
       }
       if (scopeRequired) {
         execApplicationInScope(

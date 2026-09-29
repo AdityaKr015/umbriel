@@ -7,6 +7,8 @@
 // With ACTIVATION_TOKEN_FILE set, an `a` command reads and uses that token. A `c` command requests an ordinary client
 // token instead. An `i` command requests a token from the latest focused key press and writes it to that file. When the
 // surface is hidden, `a` or `c` queues activation before the remap commit.
+// ACTIVATE_ON_START uses the inherited XDG_ACTIVATION_TOKEN before the initial surface commit.
+// MAP_ON_STDIN creates the toplevel role, prints "map-pending", then waits for one byte before its initial commit.
 // CONTENT_TYPE sets a surface hint before its initial commit. CONTENT_TYPE_ON_SUBSURFACE places it on a rendering
 // child. XDG_TAG sets a toplevel tag before the initial commit.
 // CONTENT_TYPE_AFTER_MAP, XDG_TAG_AFTER_MAP, and TITLE_AFTER_MAP update their metadata on stdin. NO_TITLE never sets a
@@ -586,6 +588,21 @@ namespace {
     }
   }
 
+  bool activateWithToken(State& state, const char* token) {
+    if (state.activation == nullptr) {
+      std::println(stderr, "unmap-client: compositor is missing xdg_activation_v1");
+      return false;
+    }
+    if (token == nullptr || token[0] == '\0') {
+      std::println(stderr, "unmap-client: activation token is empty");
+      return false;
+    }
+    xdg_activation_v1_activate(state.activation, token, state.surface);
+    std::println("activation-sent");
+    std::fflush(stdout);
+    return true;
+  }
+
   bool activateFromFile(State& state, const char* path) {
     if (path == nullptr) {
       std::println(stderr, "unmap-client: activation command needs ACTIVATION_TOKEN_FILE");
@@ -604,10 +621,7 @@ namespace {
       std::println(stderr, "unmap-client: activation token file is empty");
       return false;
     }
-    xdg_activation_v1_activate(state.activation, token, state.surface);
-    std::println("activation-sent");
-    std::fflush(stdout);
-    return true;
+    return activateWithToken(state, token);
   }
 
   void queueRemap(State& state) {
@@ -728,6 +742,8 @@ int main(int argc, char** argv) {
     state.remapAppId = state.appId;
   }
   const bool remapOnStdin = std::getenv("REMAP_ON_STDIN") != nullptr;
+  const bool activateOnStart = std::getenv("ACTIVATE_ON_START") != nullptr;
+  const bool mapOnStdin = std::getenv("MAP_ON_STDIN") != nullptr;
   state.activationTokenFile = std::getenv("ACTIVATION_TOKEN_FILE");
   const char* initialContentType = std::getenv("CONTENT_TYPE");
   const char* updatedContentType = std::getenv("CONTENT_TYPE_AFTER_MAP");
@@ -999,6 +1015,21 @@ int main(int argc, char** argv) {
     imported = zxdg_importer_v2_import_toplevel(state.importer, foreignHandle);
     if (!foreignParentOnStdin) {
       zxdg_imported_v2_set_parent_of(imported, state.surface);
+    }
+  }
+  if (activateOnStart && !activateWithToken(state, std::getenv("XDG_ACTIVATION_TOKEN"))) {
+    return EXIT_FAILURE;
+  }
+  if (mapOnStdin) {
+    if (wl_display_roundtrip(state.display) < 0) {
+      return EXIT_FAILURE;
+    }
+    std::println("map-pending");
+    std::fflush(stdout);
+    char command = 0;
+    if (read(STDIN_FILENO, &command, 1) <= 0) {
+      std::println(stderr, "unmap-client: MAP_ON_STDIN could not read its map command");
+      return EXIT_FAILURE;
     }
   }
   wl_surface_commit(state.surface);

@@ -105,6 +105,7 @@ namespace umbriel {
       : m_group(&group), m_handle(handle), m_id(std::move(id)), m_name(std::move(name)), m_index(index), m_named(named),
         m_layout(createLayout(layoutConfig.mode)), m_layoutConfig(std::move(layoutConfig)),
         m_layoutMode(m_layoutConfig.mode) {
+    m_launchAnchor->workspace = this;
     m_layout->setConfig(&m_layoutConfig);
     m_layout->setConstraints(&viewLayoutConstraints);
     m_handle->data = this;
@@ -122,6 +123,7 @@ namespace umbriel {
   }
 
   Workspace::~Workspace() {
+    m_launchAnchor->workspace = nullptr;
     discardCloseSnapshots();
     endLayoutMotion();
     for (View* view : m_views) {
@@ -149,6 +151,12 @@ namespace umbriel {
       wlr_ext_workspace_handle_v1_destroy(m_handle);
       m_handle = nullptr;
     }
+  }
+
+  void Workspace::invalidateLaunchReservations() {
+    m_launchAnchor->workspace = nullptr;
+    m_launchAnchor = std::make_shared<WorkspaceLaunchAnchor>();
+    m_launchAnchor->workspace = this;
   }
 
   ScrollingLayout* Workspace::scrollingLayout() {
@@ -2157,7 +2165,8 @@ namespace umbriel {
           return workspace.get() != leadingSentinel
               && workspace.get() != trailingSentinel
               && !workspace->named()
-              && !workspace->hasViews();
+              && !workspace->hasViews()
+              && !workspace->launchReserved();
         });
         if (reusable == m_workspaces.end()) {
           // The declaration remains pending until an ordinary anonymous
@@ -2380,6 +2389,7 @@ namespace umbriel {
       Workspace* workspace = m_workspaces[index].get();
       if (!workspace->named()
           && !workspace->hasViews()
+          && !workspace->launchReserved()
           && workspace != activeKeeper
           && workspace != backKeeper
           && workspace != frontKeeper) {

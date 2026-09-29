@@ -45,6 +45,7 @@ namespace umbriel {
   class Workspace;
   enum class LayoutAttachOrigin;
   struct ResolvedWindowRule;
+  struct WorkspaceLaunchAnchor;
 
   class View : public SceneNode, public Animatable {
   public:
@@ -358,6 +359,7 @@ namespace umbriel {
 
     static void onMap(wl_listener* listener, void* data);
     static void onUnmap(wl_listener* listener, void* data);
+    static int onLaunchPlacementTimeout(void* data);
     static void onRootSurfaceDestroy(wl_listener* listener, void* data);
     static void onCommit(wl_listener* listener, void* data);
     static void onClientCommit(wl_listener* listener, void* data);
@@ -565,6 +567,11 @@ namespace umbriel {
     void enterForeignOutput();
     void enterForeignOutput(Output* output);
     void leaveForeignOutput();
+    bool
+    assignLaunchOrigin(std::string_view token, std::shared_ptr<WorkspaceLaunchAnchor> workspace, uint32_t timeoutMsec);
+    bool consumeLaunchActivation(std::string_view token);
+    bool cancelLaunchOrigin(std::string_view token);
+    void clearLaunchPlacement(bool reconcile, bool clearToken);
     void applyWindowRules(const ResolvedWindowRule& initiallyApplied);
     bool attachToAvailableWorkspace(const ResolvedWindowRule& rule, LayoutAttachOrigin origin);
     // `resolved` lets a caller that already resolved the rules pass them in, avoiding a second regex pass.
@@ -669,6 +676,12 @@ namespace umbriel {
     std::optional<DisplacedHome> m_displacedHome;
 
     bool m_mapped = false;
+    bool m_hasEverMapped = false;
+    bool m_launchPlacementPending = false;
+    std::shared_ptr<WorkspaceLaunchAnchor> m_launchWorkspace;
+    std::optional<std::string> m_launchToken;
+    std::string m_launchWorkspaceId;
+    wl_event_source* m_launchPlacementTimer = nullptr;
     // The raw pre-map set_parent request. wlroots discards an unmapped target,
     // but its presence still determines the window's opening layout policy.
     bool m_openingParentRequested = false;

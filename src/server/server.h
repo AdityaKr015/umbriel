@@ -109,6 +109,7 @@ namespace umbriel {
   // wlroots' scene helper only walks enabled scene nodes, so a hidden view otherwise never receives another frame_done
   // and a client that gates its game/network loop on the frame callback stalls. 10 Hz keeps such loops alive cheaply.
   inline constexpr int kBackgroundFrameIntervalMs = 100;
+  inline constexpr std::string_view kLaunchTokenEnvironment = "UMBRIEL_LAUNCH_TOKEN";
 
   // The pid of the process owning a surface's Wayland connection, or -1 when the surface has no client or the kernel
   // cannot represent that pid in the compositor's pid namespace.
@@ -135,6 +136,7 @@ namespace umbriel {
   class View;
   class Workspace;
   class WorkspaceGroup;
+  struct WorkspaceLaunchAnchor;
   class ScratchpadManager;
   class ConfigBanner;
   class Cheatsheet;
@@ -509,6 +511,8 @@ namespace umbriel {
     void spawnCommand(const char* command, const char* description, bool withActivationToken, SpawnClass spawnClass);
 
     void trackActivationToken(wlr_xdg_activation_token_v1* token, bool compositorIssued);
+    void assignLaunchOriginFromEnvironment(View& view);
+    bool claimLaunchOrigin(View& view, wlr_xdg_activation_token_v1* token);
 
     void addOutput(wlr_output* output);
     void addKeyboard(wlr_input_device* device);
@@ -608,9 +612,15 @@ namespace umbriel {
       wl_listener destroy{};
     };
     struct ActivationTokenWatch {
+      Server* server = nullptr;
       std::chrono::steady_clock::time_point createdAt;
       bool compositorIssued = false;
       bool inputBacked = false;
+      bool launchClaimed = false;
+      std::shared_ptr<WorkspaceLaunchAnchor> launchWorkspace;
+      std::string tokenName;
+      std::string launchOutputName;
+      std::string launchWorkspaceId;
       wl_listener destroy{};
     };
 

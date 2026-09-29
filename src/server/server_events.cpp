@@ -27,8 +27,10 @@
 
 #include <algorithm>
 #include <array>
+#include <fstream>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <unordered_set>
 #include <utility>
@@ -55,8 +57,44 @@ namespace umbriel {
       if (surface == nullptr) {
         return nullptr;
       }
+      if (View* view = View::fromSurface(surface)) {
+        return view;
+      }
       wlr_surface* root = wlr_surface_get_root_surface(surface);
       return viewForToplevel(server, wlr_xdg_toplevel_try_from_wlr_surface(root));
+    }
+
+    std::optional<std::string> processEnvironmentValue(pid_t pid, std::string_view name) {
+      if (pid <= 0 || name.empty()) {
+        return std::nullopt;
+      }
+      constexpr size_t kMaximumEnvironmentSize = 1024 * 1024;
+      std::ifstream stream("/proc/" + std::to_string(pid) + "/environ", std::ios::binary);
+      if (!stream) {
+        return std::nullopt;
+      }
+      std::string environment(kMaximumEnvironmentSize, '\0');
+      stream.read(environment.data(), static_cast<std::streamsize>(environment.size()));
+      const auto size = static_cast<size_t>(stream.gcount());
+      if (size == environment.size()) {
+        return std::nullopt;
+      }
+      environment.resize(size);
+      const std::string prefix = std::string(name) + "=";
+      size_t offset = 0;
+      while (offset < environment.size()) {
+        const size_t end = environment.find('\0', offset);
+        const size_t length = (end == std::string::npos ? environment.size() : end) - offset;
+        const std::string_view entry(environment.data() + offset, length);
+        if (entry.starts_with(prefix)) {
+          return std::string(entry.substr(prefix.size()));
+        }
+        if (end == std::string::npos) {
+          break;
+        }
+        offset = end + 1;
+      }
+      return std::nullopt;
     }
 
     const char* deviceName(const wlr_input_device* device) {
@@ -943,7 +981,8 @@ namespace umbriel {
   void Server::onNewXdgToplevel(wl_listener* listener, void* data) {
     Server* self;
     self = wl_container_of(listener, self, m_newXdgToplevel);
-    self->m_registry.add(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
+    View& view = self->m_registry.add(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
+    self->assignLaunchOriginFromEnvironment(view);
   }
 
   void Server::onSetXdgToplevelTag(wl_listener* listener, void* data) {
@@ -1199,6 +1238,21 @@ namespace umbriel {
         targetWorkspace != nullptr && targetWorkspace->active(),
         targetWorkspace != nullptr && !targetWorkspace->active(), self->m_sessionLocked
     );
+    bool launchStartup = false;
+    if (target != nullptr && token != nullptr) {
+      const bool assigned = self->claimLaunchOrigin(*target, token);
+      const bool associated = tokenName != nullptr && target->consumeLaunchActivation(tokenName);
+      launchStartup = assigned || associated;
+    }
+    if (launchStartup && target != nullptr && !target->mapped()) {
+      target->deferActivation(trusted);
+      kLog.debug(
+          "xdg-activation startup placement target_app_id='{}' mapped={} action=defer",
+          target != nullptr && target->toplevel()->app_id != nullptr ? target->toplevel()->app_id : "",
+          target != nullptr && target->mapped()
+      );
+      return;
+    }
     if (self->m_sessionLocked) {
       return;
     }
@@ -1213,6 +1267,11 @@ namespace umbriel {
       if (entry->toplevel() == toplevel) {
         const std::optional<bool> rulePolicy = entry->resolvedRules().focusOnActivate;
         const bool focusOnActivate = rulePolicy.value_or(trusted || config().general.focusOnActivate);
+        Output* preferredOutput = self->outputFromWlr(self->preferredOutput());
+        Workspace* preferredWorkspace = preferredOutput != nullptr && preferredOutput->workspaceGroup() != nullptr
+            ? preferredOutput->workspaceGroup()->active()
+            : nullptr;
+        const bool launchAway = launchStartup && entry->workspace() != preferredWorkspace;
         const bool alreadyFocused = entry->activated();
         kLog.debug(
             "xdg-activation policy target_app_id='{}' trusted={} compositor_issued={} input_backed={} mapped={} "
@@ -1220,13 +1279,14 @@ namespace umbriel {
             entry->toplevel()->app_id != nullptr ? entry->toplevel()->app_id : "", trusted,
             watch != nullptr && watch->compositorIssued, watch != nullptr && watch->inputBacked, entry->mapped(),
             focusOnActivate, alreadyFocused,
-            alreadyFocused ? "none" : (entry->mapped() ? (focusOnActivate ? "focus" : "urgent") : "defer")
+            alreadyFocused ? "none"
+                           : (entry->mapped() ? (focusOnActivate && !launchAway ? "focus" : "urgent") : "defer")
         );
         if (alreadyFocused) {
           entry->setUrgent(false);
         } else if (!entry->mapped()) {
           entry->deferActivation(trusted);
-        } else if (focusOnActivate) {
+        } else if (focusOnActivate && !launchAway) {
           self->focusView(entry.get(), FocusReason::XdgActivation);
         } else {
           entry->setUrgent(true);
@@ -1266,21 +1326,115 @@ namespace umbriel {
   }
 
   void Server::trackActivationToken(wlr_xdg_activation_token_v1* token, bool compositorIssued) {
-    auto* watch = new ActivationTokenWatch{
-        .createdAt = std::chrono::steady_clock::now(),
-        .compositorIssued = compositorIssued,
-        .inputBacked = !compositorIssued && token->seat != nullptr && token->surface != nullptr,
-    };
+    auto* watch = new ActivationTokenWatch();
+    watch->server = this;
+    watch->createdAt = std::chrono::steady_clock::now();
+    watch->compositorIssued = compositorIssued;
+    watch->inputBacked = !compositorIssued && token->seat != nullptr && token->surface != nullptr;
+    if (const char* tokenName = wlr_xdg_activation_token_v1_get_name(token)) {
+      watch->tokenName = tokenName;
+    }
+
+    Workspace* launchWorkspace = nullptr;
+    if (compositorIssued) {
+      if (Output* output = outputFromWlr(preferredOutput()); output != nullptr && output->workspaceGroup() != nullptr) {
+        launchWorkspace = output->workspaceGroup()->active();
+      }
+    } else if (watch->inputBacked) {
+      if (View* source = viewForSurface(*this, token->surface); source != nullptr) {
+        launchWorkspace = source->workspace();
+        if (source->pinned() || launchWorkspace == nullptr) {
+          if (Output* output = source->currentOutput(); output != nullptr && output->workspaceGroup() != nullptr) {
+            launchWorkspace = output->workspaceGroup()->active();
+          }
+        }
+      } else if (
+          LayerSurface* source = LayerSurface::fromSurface(token->surface);
+          source != nullptr && source->output() != nullptr && source->output()->workspaceGroup() != nullptr
+      ) {
+        launchWorkspace = source->output()->workspaceGroup()->active();
+      }
+    }
+    if (launchWorkspace != nullptr && launchWorkspace->group() != nullptr) {
+      watch->launchWorkspace = launchWorkspace->reserveForLaunch();
+      watch->launchWorkspaceId = launchWorkspace->id();
+      if (Output* output = launchWorkspace->group()->output(); output != nullptr && output->wlr()->name != nullptr) {
+        watch->launchOutputName = output->wlr()->name;
+      }
+    }
     watch->destroy.notify = onActivationTokenDestroy;
     wl_signal_add(&token->events.destroy, &watch->destroy);
     token->data = watch;
   }
 
+  bool Server::claimLaunchOrigin(View& view, wlr_xdg_activation_token_v1* token) {
+    auto* watch = token != nullptr ? static_cast<ActivationTokenWatch*>(token->data) : nullptr;
+    if (watch == nullptr || watch->launchClaimed || watch->launchWorkspace == nullptr) {
+      return false;
+    }
+    watch->launchClaimed = true;
+    Workspace* workspace = watch->launchWorkspace->workspace;
+    WorkspaceGroup* group = workspace != nullptr ? workspace->group() : nullptr;
+    const char* tokenName = wlr_xdg_activation_token_v1_get_name(token);
+    uint32_t timeoutMsec = 0;
+    if (token->activation != nullptr && token->activation->token_timeout_msec > 0) {
+      const auto age =
+          std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - watch->createdAt)
+              .count();
+      const uint32_t configured = token->activation->token_timeout_msec;
+      timeoutMsec = age >= 0 && static_cast<uint64_t>(age) < configured ? configured - static_cast<uint32_t>(age) : 1;
+    }
+    const bool assigned = workspace != nullptr
+        && tokenName != nullptr
+        && view.assignLaunchOrigin(tokenName, watch->launchWorkspace, timeoutMsec);
+    watch->launchWorkspace.reset();
+    if (group != nullptr && !m_stopping) {
+      group->reconcileDynamic();
+    }
+    kLog.debug(
+        "launch placement token='{}' output='{}' workspace='{}' target_app_id='{}' assigned={}",
+        tokenName != nullptr ? tokenName : "<unknown>", watch->launchOutputName, watch->launchWorkspaceId,
+        view.toplevel()->app_id != nullptr ? view.toplevel()->app_id : "", assigned
+    );
+    return assigned;
+  }
+
+  void Server::assignLaunchOriginFromEnvironment(View& view) {
+    if (view.xwayland() || m_xdgActivation == nullptr) {
+      return;
+    }
+    const std::optional<std::string> tokenName = processEnvironmentValue(view.pid(), kLaunchTokenEnvironment);
+    if (!tokenName || tokenName->empty()) {
+      return;
+    }
+    wlr_xdg_activation_token_v1* token = wlr_xdg_activation_v1_find_token(m_xdgActivation, tokenName->c_str());
+    const auto* watch = token != nullptr ? static_cast<ActivationTokenWatch*>(token->data) : nullptr;
+    if (watch == nullptr || !watch->compositorIssued) {
+      return;
+    }
+    claimLaunchOrigin(view, token);
+  }
+
   void Server::onActivationTokenDestroy(wl_listener* listener, void* /*data*/) {
     ActivationTokenWatch* watch;
     watch = wl_container_of(listener, watch, destroy);
+    Workspace* workspace = watch->launchWorkspace != nullptr ? watch->launchWorkspace->workspace : nullptr;
+    WorkspaceGroup* group = workspace != nullptr ? workspace->group() : nullptr;
+    Server* server = watch->server;
+    const std::string tokenName = watch->tokenName;
+    watch->launchWorkspace.reset();
     wl_list_remove(&watch->destroy.link);
     delete watch;
+    if (server != nullptr && !tokenName.empty()) {
+      for (const auto& entry : server->m_registry.all()) {
+        if (entry->cancelLaunchOrigin(tokenName)) {
+          break;
+        }
+      }
+    }
+    if (group != nullptr && server != nullptr && !server->m_stopping) {
+      group->reconcileDynamic();
+    }
   }
 
   void Server::onWorkspaceCommit(wl_listener* listener, void* data) {
@@ -2166,6 +2320,11 @@ namespace umbriel {
     Workspace* targetWorkspace = destination != nullptr && destination->workspaceGroup() != nullptr
         ? destination->workspaceGroup()->active()
         : nullptr;
+    if (sourceGroup != nullptr) {
+      for (size_t index = 0; index < sourceGroup->workspaceCount(); ++index) {
+        sourceGroup->workspaceAt(index)->invalidateLaunchReservations();
+      }
+    }
     const char* sourceName = source->wlr()->name;
     if (sourceGroup != nullptr && sourceGroup->active() != nullptr && sourceName != nullptr) {
       const auto existing = std::ranges::find_if(m_displacedWorkspaceSelections, [sourceName](const auto& selection) {

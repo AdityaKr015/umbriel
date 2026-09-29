@@ -27,7 +27,15 @@ namespace umbriel {
   class ScrollingLayout;
   class Server;
   class View;
+  class Workspace;
   class WorkspaceGroup;
+
+  // Launch tokens keep this indirection alive while a window is pending. The
+  // workspace clears the pointer before destruction, so token expiry and
+  // output removal never leave a dangling placement target.
+  struct WorkspaceLaunchAnchor {
+    Workspace* workspace = nullptr;
+  };
 
   enum class LayoutAttachOrigin {
     ExistingView,
@@ -62,6 +70,9 @@ namespace umbriel {
     [[nodiscard]] bool named() const { return m_named; }
     [[nodiscard]] size_t index() const { return m_index; }
     [[nodiscard]] bool active() const { return m_active; }
+    [[nodiscard]] std::shared_ptr<WorkspaceLaunchAnchor> reserveForLaunch() const { return m_launchAnchor; }
+    [[nodiscard]] bool launchReserved() const { return m_launchAnchor.use_count() > 1; }
+    void invalidateLaunchReservations();
     [[nodiscard]] Layout& layout() { return *m_layout; }
     [[nodiscard]] const Layout& layout() const { return *m_layout; }
     // The one place a layout is downcast. Null unless this workspace is scrolling, so callers that need scroll offsets,
@@ -252,6 +263,7 @@ namespace umbriel {
     size_t m_index = 0;
     bool m_named = false;
     bool m_active = false;
+    std::shared_ptr<WorkspaceLaunchAnchor> m_launchAnchor = std::make_shared<WorkspaceLaunchAnchor>();
     std::vector<View*> m_views;
     std::vector<View*> m_floatingStack;
     std::unique_ptr<Layout> m_layout;

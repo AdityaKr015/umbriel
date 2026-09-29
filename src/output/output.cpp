@@ -1144,14 +1144,14 @@ namespace umbriel {
     }
   }
 
-  void Output::applyMode(int width, int height) {
+  void Output::applyMode(int width, int height, int refreshMHz) {
     if (width <= 0 || height <= 0) {
       return;
     }
 
     wlr_output_state state{};
     wlr_output_state_init(&state);
-    wlr_output_state_set_custom_mode(&state, width, height, 0);
+    wlr_output_state_set_custom_mode(&state, width, height, refreshMHz);
     if (!wlr_output_commit_state(m_output, &state)) {
       wlr_log(WLR_ERROR, "failed to commit output mode %dx%d for '%s'", width, height, m_output->name);
     } else {
@@ -1229,7 +1229,7 @@ namespace umbriel {
     flushDirty();
     if (m_hasDeferredMode) {
       m_hasDeferredMode = false;
-      applyMode(m_deferredWidth, m_deferredHeight);
+      applyMode(m_deferredWidth, m_deferredHeight, m_deferredRefresh);
     }
     timespec now{};
     clock_gettime(CLOCK_MONOTONIC, &now);
@@ -1445,7 +1445,7 @@ namespace umbriel {
     // A request_state that arrived mid-commit is applied now that we're out of it.
     if (m_hasDeferredMode) {
       m_hasDeferredMode = false;
-      applyMode(m_deferredWidth, m_deferredHeight);
+      applyMode(m_deferredWidth, m_deferredHeight, m_deferredRefresh);
     }
 
     if (commitFailed && m_output->idle_frame != nullptr) {
@@ -1495,6 +1495,7 @@ namespace umbriel {
         && event->state->mode_type == WLR_OUTPUT_STATE_MODE_CUSTOM) {
       m_deferredWidth = event->state->custom_mode.width;
       m_deferredHeight = event->state->custom_mode.height;
+      m_deferredRefresh = event->state->custom_mode.refresh;
       m_hasDeferredMode = true;
       return;
     }

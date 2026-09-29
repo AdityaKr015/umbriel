@@ -74,11 +74,12 @@ namespace umbriel {
       untrack(input.border);
     } else {
       fx_animation_parameters parameters{};
+      parameters.scale = input.scale;
       registry.fillTimeUniforms(parameters, seconds, *preset, shader);
       if (preset->light) {
         parameters.light = {
             .enabled = true,
-            .spread = static_cast<float>(preset->light->spread),
+            .spread = static_cast<float>(preset->light->spread) * input.scale,
             .intensity = preset->light->intensity,
             .threshold = preset->light->threshold,
         };
@@ -120,6 +121,7 @@ namespace umbriel {
         return;
       }
       fx_animation_parameters parameters{};
+      parameters.scale = input.scale;
       registry.fillTimeUniforms(parameters, seconds, *preset, shader);
       wlr_scene_node_set_animation(node, slot, shader, &parameters);
     };

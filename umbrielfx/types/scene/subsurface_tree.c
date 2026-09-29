@@ -27,6 +27,9 @@ struct wlr_scene_subsurface_tree {
 	struct wlr_addon scene_addon;
 
 	struct wlr_box clip;
+	// Optional hit-test policy shared by the whole client surface tree.
+	// New subsurfaces inherit it when their scene nodes are created.
+	wlr_scene_buffer_point_accepts_input_func_t point_accepts_input;
 
 	// Only valid if the surface is a sub-surface
 
@@ -63,6 +66,28 @@ static struct wlr_scene_subsurface_tree *subsurface_tree_from_subsurface(
 	struct wlr_scene_subsurface_tree *subsurface_tree =
 		wl_container_of(addon, subsurface_tree, surface_addon);
 	return subsurface_tree;
+}
+
+static void subsurface_tree_set_point_accepts_input(
+		struct wlr_scene_subsurface_tree *subsurface_tree,
+		wlr_scene_buffer_point_accepts_input_func_t point_accepts_input) {
+	subsurface_tree->point_accepts_input = point_accepts_input;
+	subsurface_tree->scene_surface->buffer->point_accepts_input =
+		point_accepts_input;
+
+	struct wlr_subsurface *subsurface;
+	wl_list_for_each(subsurface, &subsurface_tree->surface->current.subsurfaces_below,
+			current.link) {
+		subsurface_tree_set_point_accepts_input(
+			subsurface_tree_from_subsurface(subsurface_tree, subsurface),
+			point_accepts_input);
+	}
+	wl_list_for_each(subsurface, &subsurface_tree->surface->current.subsurfaces_above,
+			current.link) {
+		subsurface_tree_set_point_accepts_input(
+			subsurface_tree_from_subsurface(subsurface_tree, subsurface),
+			point_accepts_input);
+	}
 }
 
 static bool subsurface_tree_reconfigure_clip(
@@ -210,6 +235,10 @@ static bool subsurface_tree_create_subsurface(
 	}
 
 	child->parent = parent;
+	if (parent->point_accepts_input != NULL) {
+		subsurface_tree_set_point_accepts_input(child,
+			parent->point_accepts_input);
+	}
 
 	wlr_addon_init(&child->surface_addon, &subsurface->surface->addons,
 		parent, &subsurface_tree_surface_addon_impl);
@@ -323,6 +352,15 @@ static struct wlr_scene_subsurface_tree *get_subsurface_tree_from_node(
 	struct wlr_scene_subsurface_tree *tree =
 		wl_container_of(addon, tree, scene_addon);
 	return tree;
+}
+
+void scene_subsurface_tree_set_point_accepts_input(struct wlr_scene_tree *tree,
+		wlr_scene_buffer_point_accepts_input_func_t point_accepts_input) {
+	struct wlr_scene_subsurface_tree *subsurface_tree =
+		get_subsurface_tree_from_node(&tree->node);
+	assert(subsurface_tree != NULL);
+	subsurface_tree_set_point_accepts_input(subsurface_tree,
+		point_accepts_input);
 }
 
 static bool subsurface_tree_set_clip(struct wlr_scene_node *node,

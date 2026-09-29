@@ -155,7 +155,11 @@ input_method_client = executable(
 # Harness helper that owns a mapped surface and initiates a data-device drag.
 drag_client = executable(
   'drag-client',
-  ['harness/clients/drag_client.cpp', layer_shell_client_h, layer_shell_client_c, xdg_shell_client_c],
+  [
+    'harness/clients/drag_client.cpp',
+    layer_shell_client_h, layer_shell_client_c,
+    xdg_shell_client_h, xdg_shell_client_c,
+  ],
   dependencies: [wayland_client_dep],
 )
 

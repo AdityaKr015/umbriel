@@ -53,7 +53,14 @@ This is required even when the pointer did not move: clients use the fresh
 surface-local input to recalculate hover state and restore their cursor image.
 When `follows_mouse` is enabled, the same refresh selects a different window
 under the pointer and restores keyboard focus there after the drag grab ends.
+While the grab remains active, holding the pointer near a scrolling strip edge
+moves the layout on a delayed timer. Scene refreshes route enter and motion
+through the grab as each frame settles, allowing a newly revealed client to
+become the drop target without physical pointer motion.
+
 The short-drag cursor refresh is covered by
 [`drag/external_drag.sh`](../../tests/harness/checks/drag/external_drag.sh), and
 cross-window focus is covered by
 [`drag/data_drag_hover_focus.sh`](../../tests/harness/checks/drag/data_drag_hover_focus.sh).
+Edge scrolling and stationary drop-target retargeting are covered by
+[`drag/data_drag_edge_scroll.sh`](../../tests/harness/checks/drag/data_drag_edge_scroll.sh).

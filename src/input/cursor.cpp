@@ -33,6 +33,11 @@ namespace umbriel {
   namespace {
     constexpr Logger kLog("cursor");
     constexpr double kHotCornerExtent = 8.0;
+    constexpr double kDataDragEdgeScrollTrigger = 30.0;
+    constexpr double kDataDragEdgeScrollMaxSpeed = 1500.0;
+    constexpr int kDataDragEdgeScrollDelayMs = 100;
+    constexpr int kDataDragEdgeScrollTickMs = 16;
+    constexpr uint32_t kDataDragEdgeScrollMaxElapsedMs = 50;
 
     // Panels (top/overlay) keep working inside the overview. Background- and bottom-layer surfaces are part of the
     // inert backdrop behind the filmstrip, so their clicks belong to the overview instead.
@@ -149,6 +154,9 @@ namespace umbriel {
   }
 
   Cursor::~Cursor() {
+    if (m_dataDragEdgeScrollTimer != nullptr) {
+      wl_event_source_remove(m_dataDragEdgeScrollTimer);
+    }
     if (m_hotCornerTimer != nullptr) {
       wl_event_source_remove(m_hotCornerTimer);
     }
@@ -181,6 +189,9 @@ namespace umbriel {
 
   void Cursor::attachInputDevice(wlr_input_device* device) { wlr_cursor_attach_input_device(m_cursor, device); }
   void Cursor::resetWheelAccumulation() { m_wheelAccum[0] = m_wheelAccum[1] = 0; }
+
+  void Cursor::handleDataDragStarted() { updateDataDragEdgeScroll(); }
+  void Cursor::handleDataDragEnded() { cancelDataDragEdgeScroll(); }
 
   void Cursor::applyConfig() {
     const Config::Input::Cursor& configured = config().input.cursor;
@@ -397,6 +408,140 @@ namespace umbriel {
       Keybind triggered = *action;
       cursor->m_server->executeKeybindAction(triggered);
     }
+    return 0;
+  }
+
+  Workspace* Cursor::dataDragEdgeScrollTarget(double* speed) const {
+    *speed = 0;
+    if (m_server->sessionLocked()
+        || m_server->seat()->wlr()->drag == nullptr
+        || (m_server->overview() != nullptr && m_server->overview()->active())) {
+      return nullptr;
+    }
+
+    wlr_output* wlrOutput = wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y);
+    Output* output = m_server->outputFromWlr(wlrOutput);
+    WorkspaceGroup* group = output != nullptr ? output->workspaceGroup() : nullptr;
+    Workspace* workspace = group != nullptr ? group->active() : nullptr;
+    ScrollingLayout* scrolling = workspace != nullptr ? workspace->scrollingLayout() : nullptr;
+    if (scrolling == nullptr || scrolling->columns().empty()) {
+      return nullptr;
+    }
+
+    const wlr_box area = workspace->usableArea();
+    const bool vertical = workspace->scrollingVertical();
+    const double origin = vertical ? area.y : area.x;
+    const double extent = vertical ? area.height : area.width;
+    if (extent <= 0) {
+      return nullptr;
+    }
+    const double trigger = std::min(kDataDragEdgeScrollTrigger, extent / 2.0);
+    const double position = vertical ? m_cursor->y : m_cursor->x;
+    if (position < origin + trigger) {
+      *speed = -kDataDragEdgeScrollMaxSpeed * std::clamp((origin + trigger - position) / trigger, 0.0, 1.0);
+    } else if (position > origin + extent - trigger) {
+      *speed = kDataDragEdgeScrollMaxSpeed * std::clamp((position - (origin + extent - trigger)) / trigger, 0.0, 1.0);
+    }
+    if (*speed == 0) {
+      return nullptr;
+    }
+
+    const double oldScroll = scrolling->scroll();
+    const double maximum = static_cast<double>(scrolling->maxScroll(workspace->scrollViewportExtent()));
+    if (maximum <= 0) {
+      return nullptr;
+    }
+    if ((*speed < 0 && oldScroll <= 0) || (*speed > 0 && oldScroll >= maximum)) {
+      return nullptr;
+    }
+    return workspace;
+  }
+
+  void Cursor::updateDataDragEdgeScroll() {
+    double speed = 0;
+    Workspace* workspace = dataDragEdgeScrollTarget(&speed);
+    const int direction = (speed > 0) - (speed < 0);
+    const int previousDirection = (m_dataDragEdgeScrollSpeed > 0) - (m_dataDragEdgeScrollSpeed < 0);
+    if (workspace == nullptr) {
+      cancelDataDragEdgeScroll();
+      return;
+    }
+    if (workspace == m_dataDragEdgeScrollWorkspace && direction == previousDirection) {
+      m_dataDragEdgeScrollSpeed = speed;
+      return;
+    }
+    if (m_dataDragEdgeScrollTimer == nullptr) {
+      m_dataDragEdgeScrollTimer =
+          wl_event_loop_add_timer(wl_display_get_event_loop(m_server->display()), onDataDragEdgeScrollTimer, this);
+      if (m_dataDragEdgeScrollTimer == nullptr) {
+        return;
+      }
+    }
+    m_dataDragEdgeScrollWorkspace = workspace;
+    m_dataDragEdgeScrollSpeed = speed;
+    m_dataDragEdgeScrollLastMsec = 0;
+    m_dataDragEdgeScrollPending = true;
+    wl_event_source_timer_update(m_dataDragEdgeScrollTimer, kDataDragEdgeScrollDelayMs);
+  }
+
+  void Cursor::cancelDataDragEdgeScroll() {
+    if (m_dataDragEdgeScrollTimer != nullptr) {
+      wl_event_source_timer_update(m_dataDragEdgeScrollTimer, 0);
+    }
+    m_dataDragEdgeScrollWorkspace = nullptr;
+    m_dataDragEdgeScrollSpeed = 0;
+    m_dataDragEdgeScrollLastMsec = 0;
+    m_dataDragEdgeScrollPending = false;
+  }
+
+  int Cursor::onDataDragEdgeScrollTimer(void* data) {
+    return static_cast<Cursor*>(data)->handleDataDragEdgeScrollTimer();
+  }
+
+  int Cursor::handleDataDragEdgeScrollTimer() {
+    double speed = 0;
+    Workspace* workspace = dataDragEdgeScrollTarget(&speed);
+    const int direction = (speed > 0) - (speed < 0);
+    const int activeDirection = (m_dataDragEdgeScrollSpeed > 0) - (m_dataDragEdgeScrollSpeed < 0);
+    if (workspace == nullptr) {
+      cancelDataDragEdgeScroll();
+      return 0;
+    }
+    if (workspace != m_dataDragEdgeScrollWorkspace || direction != activeDirection) {
+      updateDataDragEdgeScroll();
+      return 0;
+    }
+    m_dataDragEdgeScrollSpeed = speed;
+
+    const uint32_t now = monotonicMsec();
+    if (m_dataDragEdgeScrollPending) {
+      m_dataDragEdgeScrollPending = false;
+      m_dataDragEdgeScrollLastMsec = now;
+      wl_event_source_timer_update(m_dataDragEdgeScrollTimer, kDataDragEdgeScrollTickMs);
+      return 0;
+    }
+
+    const uint32_t elapsed = std::min(now - m_dataDragEdgeScrollLastMsec, kDataDragEdgeScrollMaxElapsedMs);
+    m_dataDragEdgeScrollLastMsec = now;
+    if (elapsed == 0) {
+      wl_event_source_timer_update(m_dataDragEdgeScrollTimer, kDataDragEdgeScrollTickMs);
+      return 0;
+    }
+    ScrollingLayout* scrolling = workspace->scrollingLayout();
+    if (scrolling == nullptr) {
+      cancelDataDragEdgeScroll();
+      return 0;
+    }
+    const double maximum = static_cast<double>(scrolling->maxScroll(workspace->scrollViewportExtent()));
+    const double oldScroll = scrolling->scroll();
+    const double nextScroll = std::clamp(oldScroll + speed * static_cast<double>(elapsed) / 1000.0, 0.0, maximum);
+    if (nextScroll == oldScroll) {
+      cancelDataDragEdgeScroll();
+      return 0;
+    }
+    scrolling->setScroll(nextScroll);
+    workspace->markArrange(false);
+    wl_event_source_timer_update(m_dataDragEdgeScrollTimer, kDataDragEdgeScrollTickMs);
     return 0;
   }
 
@@ -1473,6 +1618,7 @@ namespace umbriel {
     }
 
     wlr_seat* seat = m_server->seat()->wlr();
+    updateDataDragEdgeScroll();
     if (seat->drag == nullptr
         && seat->pointer_state.button_count > 0
         && seat->pointer_state.focused_surface != nullptr) {
@@ -2308,7 +2454,7 @@ namespace umbriel {
     if (pointerFocusPinned()) {
       return;
     }
-    wlr_seat_pointer_clear_focus(m_server->seat()->wlr());
+    wlr_seat_pointer_notify_clear_focus(m_server->seat()->wlr());
   }
 
   void Cursor::clearPointerFocusOverridingGrab() { wlr_seat_pointer_clear_focus(m_server->seat()->wlr()); }
@@ -2326,14 +2472,35 @@ namespace umbriel {
   }
 
   void Cursor::refreshPointerContents(const Output* output) {
-    const wlr_seat* seat = m_server->seat()->wlr();
+    wlr_seat* seat = m_server->seat()->wlr();
     if (output == nullptr
-        || !isPassthrough()
         || m_cursorHidden
-        || seat->drag != nullptr
-        || seat->pointer_state.button_count != 0
         || std::ranges::any_of(m_tools, [](const auto& tool) { return tool->inProximity; })
         || wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y) != output->wlr()) {
+      return;
+    }
+    if (seat->drag != nullptr) {
+      updateDataDragEdgeScroll();
+      if (m_server->sessionLocked()) {
+        wlr_seat_pointer_notify_clear_focus(seat);
+        wlr_seat_pointer_notify_frame(seat);
+        return;
+      }
+      double sx = 0;
+      double sy = 0;
+      wlr_surface* surface = nullptr;
+      m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+      if (surface != nullptr) {
+        const uint32_t timeMsec = monotonicMsec();
+        wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+        wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);
+      } else {
+        wlr_seat_pointer_notify_clear_focus(seat);
+      }
+      wlr_seat_pointer_notify_frame(seat);
+      return;
+    }
+    if (!isPassthrough() || seat->pointer_state.button_count != 0) {
       return;
     }
     // Content still in motion would flicker hover state on every frame. The next press resolves it regardless.

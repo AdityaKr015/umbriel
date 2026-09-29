@@ -233,6 +233,7 @@ namespace umbriel {
     }
     m_dragDestroy.notify = onDragDestroy;
     wl_signal_add(&drag->events.destroy, &m_dragDestroy);
+    m_server->cursor()->handleDataDragStarted();
     if (drag->icon == nullptr) {
       return;
     }
@@ -248,6 +249,7 @@ namespace umbriel {
     wl_list_remove(&m_dragDestroy.link);
     m_dragDestroy.link.next = nullptr;
     m_dragDestroy.link.prev = nullptr;
+    m_server->cursor()->handleDataDragEnded();
     m_server->restoreActivatedViewKeyboardFocus();
   }
 

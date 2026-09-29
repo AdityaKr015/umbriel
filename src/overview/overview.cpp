@@ -576,6 +576,12 @@ namespace umbriel {
     );
   }
 
+  void Overview::refreshEffectBindings() {
+    if (m_active) {
+      syncCardEffects();
+    }
+  }
+
   void Overview::syncCardEffects() {
     for (const auto& state : m_outputs) {
       for (const auto& card : state->cards) {

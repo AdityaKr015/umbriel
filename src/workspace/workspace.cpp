@@ -613,6 +613,14 @@ namespace umbriel {
     }
   }
 
+  std::unique_ptr<Layout> Workspace::previewArrangedLayout() const {
+    auto preview = previewLayout();
+    if (preview != nullptr) {
+      preview->arrange(tiledArea());
+    }
+    return preview;
+  }
+
   void Workspace::arrange(bool animate) {
     // Clearing here, rather than only in flushArrange, is what makes mixing the two safe: a direct arrange() satisfies
     // whatever was marked earlier in the frame, so the flush does not repeat it.

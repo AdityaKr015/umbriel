@@ -33,7 +33,7 @@ TYPE_CHANGE_ITEMS = (
     "Breaking change",
     "Refactoring",
     "Build / packaging",
-    "Documentation",
+    "Documentation only",
 )
 PRIMARY_CHANGE_TYPES = tuple(item for item in TYPE_CHANGE_ITEMS if item != "Breaking change")
 CHANGE_TYPE_REQUIREMENT = "exactly one checked change type other than Breaking change"

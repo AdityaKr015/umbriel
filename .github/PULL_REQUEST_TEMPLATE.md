@@ -23,14 +23,15 @@
 ## Type of Change
 
 <!-- A pull request covers one feature, fix, or refactor; split unrelated changes into
-     separate pull requests. Check exactly one type, plus Breaking change if it applies. -->
+     separate pull requests. Check exactly one type, plus Breaking change if it applies.
+     Documentation that ships with a feature or fix is part of that type. -->
 
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Refactoring
 - [ ] Build / packaging
-- [ ] Documentation
+- [ ] Documentation only
 
 ## Related Issue
 

@@ -3238,6 +3238,8 @@ namespace umbriel {
     if (m_workspace != nullptr && m_workspace->focusedView() == this) {
       View* replacement = m_workspace->focusReplacementForRemoval(this);
       if (replacement != nullptr) {
+        // The layout judges the pair once this column is gone, so the reveal this unblocks may only fit the survivor.
+        m_workspace->noteRemovalOfFocusedColumn(m_workspace->layout().columnOf(this));
         if (m_workspace->active() && !m_server->sessionLocked()) {
           m_server->focusView(replacement, FocusReason::Directional);
         } else {

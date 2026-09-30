@@ -15,11 +15,14 @@
 #include <GLES2/gl2ext.h>
 #include <assert.h>
 #include <drm_fourcc.h>
+#include <errno.h>
+#include <linux/dma-buf.h>
 #include <math.h>
 #include <pixman.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
 #include <wlr/render/allocator.h>
@@ -383,6 +386,48 @@ static bool render_pass_apply_output_transform(struct fx_gles_render_pass* pass)
   return true;
 }
 
+// Attach the render fence to the target's DMA-BUF, as wlroots' Vulkan renderer does, and wait on it where the
+// driver ignores implicit fences. False when there is no fence to order the client's read.
+static bool sync_implicit_target(struct fx_renderer* renderer, struct wlr_buffer* buffer) {
+  struct wlr_egl* egl = renderer->egl;
+  EGLSyncKHR sync = wlr_egl_create_sync(egl, -1);
+  if (sync == EGL_NO_SYNC_KHR) {
+    return false;
+  }
+  // The native fence has no fd until flushed.
+  glFlush();
+
+  bool attached = false;
+  struct wlr_dmabuf_attributes dmabuf = {0};
+  int sync_file_fd = wlr_buffer_get_dmabuf(buffer, &dmabuf) ? wlr_egl_dup_fence_fd(egl, sync) : -1;
+  if (sync_file_fd >= 0) {
+    attached = true;
+    for (int i = 0; i < dmabuf.n_planes; i++) {
+      struct dma_buf_import_sync_file data = {
+          .flags = DMA_BUF_SYNC_WRITE,
+          .fd = sync_file_fd,
+      };
+      int ret;
+      do {
+        ret = ioctl(dmabuf.fd[i], DMA_BUF_IOCTL_IMPORT_SYNC_FILE, &data);
+      } while (ret != 0 && (errno == EINTR || errno == EAGAIN));
+      if (ret != 0) {
+        wlr_log_errno(WLR_DEBUG, "DMA_BUF_IOCTL_IMPORT_SYNC_FILE failed");
+        attached = false;
+        break;
+      }
+    }
+    close(sync_file_fd);
+  }
+
+  bool ok = attached && !egl->ignores_implicit_fences;
+  if (!ok && egl->eglClientWaitSyncKHR != NULL) {
+    ok = egl->eglClientWaitSyncKHR(egl->display, sync, 0, EGL_FOREVER_KHR) == EGL_CONDITION_SATISFIED_KHR;
+  }
+  wlr_egl_destroy_sync(egl, sync);
+  return ok;
+}
+
 static bool render_pass_submit(struct wlr_render_pass* wlr_pass) {
   struct fx_gles_render_pass* pass = fx_get_render_pass(wlr_pass);
   struct fx_renderer* renderer = pass->buffer->renderer;
@@ -435,6 +480,10 @@ static bool render_pass_submit(struct wlr_render_pass* wlr_pass) {
     close(sync_file_fd);
     if (!ok) {
       goto out;
+    }
+  } else if (pass->implicit_sync_target) {
+    if (!sync_implicit_target(renderer, pass->output_buffer->buffer)) {
+      glFinish();
     }
   } else {
     glFlush();

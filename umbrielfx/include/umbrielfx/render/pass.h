@@ -21,6 +21,8 @@ struct fx_gles_render_pass {
 	struct fx_render_timer *timer;
 	struct wlr_drm_syncobj_timeline *signal_timeline;
 	uint64_t signal_point;
+	// A client reads the target right after submit (capture destinations).
+	bool implicit_sync_target;
 	bool has_color_transform;
 	struct wlr_color_transform *color_transform;
 	struct fx_offscreen_buffers *output_buffers;

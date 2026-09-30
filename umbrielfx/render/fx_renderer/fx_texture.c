@@ -9,6 +9,7 @@
 #include "umbrielfx/render/fx_renderer/fx_offscreen_buffers.h"
 #include "umbrielfx/render/fx_renderer/fx_renderer.h"
 #include "render/fx_renderer/fx_renderer.h"
+#include "render/pass.h"
 #include "render/pixel_format.h"
 #include "render/egl.h"
 
@@ -440,6 +441,8 @@ bool fx_framebuffer_copy(struct fx_framebuffer *target,
 		wlr_texture_destroy(texture);
 		return false;
 	}
+	// The target is ours and only this context reads it.
+	fx_get_render_pass(pass)->implicit_sync_target = false;
 
 	struct wlr_box box = {
 		.width = target->buffer->width,

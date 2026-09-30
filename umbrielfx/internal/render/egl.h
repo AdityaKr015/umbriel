@@ -56,6 +56,9 @@ struct wlr_egl {
 
 	// Keep additions after the fields read by wlroots' GLES2 renderer.
 	enum wlr_egl_drm_fd_strategy drm_fd_strategy;
+	PFNEGLCLIENTWAITSYNCKHRPROC eglClientWaitSyncKHR;
+	// NVIDIA does not honor implicit DMA-BUF fences.
+	bool ignores_implicit_fences;
 };
 
 struct wlr_egl_context {

@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <gbm.h>
 #include <wlr/render/egl.h>
@@ -358,6 +359,7 @@ static bool egl_init_display(struct wlr_egl *egl, EGLDisplay display,
 		load_egl_proc(&egl->procs.eglDestroySyncKHR, "eglDestroySyncKHR");
 		load_egl_proc(&egl->procs.eglDupNativeFenceFDANDROID,
 			"eglDupNativeFenceFDANDROID");
+		load_egl_proc(&egl->eglClientWaitSyncKHR, "eglClientWaitSyncKHR");
 	}
 
 	if (check_egl_ext(display_exts_str, "EGL_KHR_wait_sync")) {
@@ -375,7 +377,9 @@ static bool egl_init_display(struct wlr_egl *egl, EGLDisplay display,
 	if (device_exts_str != NULL) {
 		wlr_log(WLR_INFO, "Supported EGL device extensions: %s", device_exts_str);
 	}
-	wlr_log(WLR_INFO, "EGL vendor: %s", eglQueryString(egl->display, EGL_VENDOR));
+	const char *vendor = eglQueryString(egl->display, EGL_VENDOR);
+	wlr_log(WLR_INFO, "EGL vendor: %s", vendor);
+	egl->ignores_implicit_fences = vendor != NULL && strstr(vendor, "NVIDIA") != NULL;
 	if (driver_name != NULL) {
 		wlr_log(WLR_INFO, "EGL driver name: %s", driver_name);
 	}

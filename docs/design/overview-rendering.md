@@ -10,6 +10,10 @@ hidden while the overview is open. Wheel steps move one workspace at a time,
 while touchpad navigation drags the previews and selects on release.
 Configured focus actions retain their layout-specific behavior.
 
+Wheel steps along a scrolling strip record the selected column's activation
+direction before snapping it into view. `on_overflow` judges the neighbor that
+focus came from; fullscreen and maximize transitions retain that direction.
+
 Transparent windows keep their window-rule blur throughout the zoom
 transition.
 
@@ -182,6 +186,9 @@ The relevant checks are:
 - [`tests/unit/animation.cpp`](../../tests/unit/animation.cpp) for terminal
   spring motion following the analytic solution without accelerating in either
   direction at the same refresh rate.
+- [`tests/harness/checks/overview/shift_wheel.sh`](../../tests/harness/checks/overview/shift_wheel.sh)
+  for physical-axis wheel navigation, notch factors, binding precedence, and
+  rendered `on_overflow` rests using the incoming neighbor in both directions.
 - [`tests/harness/checks/overview/keybind_actions.sh`](../../tests/harness/checks/overview/keybind_actions.sh)
   for configured directional actions and fallback arrow navigation.
 - [`tests/harness/checks/drag/external_drag.sh`](../../tests/harness/checks/drag/external_drag.sh)

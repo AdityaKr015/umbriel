@@ -818,8 +818,8 @@ namespace umbriel {
     return std::clamp(hidden, 0.0, span);
   }
 
-  void ScrollingLayout::revealColumn(int columnIndex, int viewportPrimary, bool center) {
-    const double target = targetScrollForEnsureVisible(columnIndex, viewportPrimary, center, false);
+  void ScrollingLayout::revealColumn(int columnIndex, int viewportPrimary, bool center, bool force) {
+    const double target = targetScrollForEnsureVisible(columnIndex, viewportPrimary, center, force);
     m_centeredRest = center || (m_centeredRest && target == m_scroll);
     // A rest the user asked for with column-center outlives a re-judgment, so keep track of who asked for this one.
     m_policyCenteredRest = m_centeredRest && (center || m_policyCenteredRest);
@@ -843,20 +843,34 @@ namespace umbriel {
     }
   }
 
-  // Re-runs the centering decision for a column whose extent just changed, so a width change is judged by the geometry
-  // it produced. The pair is the one the last activation used, focus having not moved since; with none to remember, the
-  // column after it stands in for the missing side.
   void ScrollingLayout::reevaluateColumn(int columnIndex, int viewportPrimary) {
+    applyCenteringPolicy(columnIndex, viewportPrimary, false);
+    if (columnIndex >= 0 && columnIndex < static_cast<int>(m_columns.size())) {
+      m_lastFocusedColumn = columnIndex;
+    }
+  }
+
+  // The pair is the one the last activation used, focus having not moved since; with none to remember, the column after
+  // it stands in for the missing side.
+  ScrollingLayout::FocusSide ScrollingLayout::reevaluationSide(int columnIndex) const {
+    if (m_focusSide != FocusSide::None) {
+      return m_focusSide;
+    }
+    const int columnCount = static_cast<int>(m_columns.size());
+    return columnIndex + 1 < columnCount ? FocusSide::FromRight : FocusSide::FromLeft;
+  }
+
+  // `force` is snapVisible's: an extent change can leave the column parked where an ordinary reveal calls it visible.
+  void ScrollingLayout::applyCenteringPolicy(int columnIndex, int viewportPrimary, bool force) {
     const int columnCount = static_cast<int>(m_columns.size());
     if (columnIndex < 0 || columnIndex >= columnCount) {
       return;
     }
-    const FocusSide side = m_focusSide == FocusSide::None
-        ? (columnIndex + 1 < columnCount ? FocusSide::FromRight : FocusSide::FromLeft)
-        : m_focusSide;
-    const bool center = shouldCenterFocusedColumn(columnIndex, viewportPrimary, side);
-    if (center) {
+    const FocusSide side = reevaluationSide(columnIndex);
+    if (shouldCenterFocusedColumn(columnIndex, viewportPrimary, side)) {
       revealColumn(columnIndex, viewportPrimary, true);
+      // Always centers by the user's standing choice, so only OnOverflow's centering is the policy's to take back.
+      m_policyCenteredRest = m_config->scrolling.centerFocused == CenterFocusedColumn::OnOverflow;
     } else if (m_config->scrolling.centerFocused == CenterFocusedColumn::OnOverflow && m_policyCenteredRest) {
       // The pair fits again, so a centering the policy made is stale. A plain fit would keep it, the column being fully
       // visible already: put the pair back at the edge it reads from, where the focus move left the strip.
@@ -864,16 +878,13 @@ namespace umbriel {
       m_policyCenteredRest = false;
       m_scroll = pairScroll(columnIndex, viewportPrimary, focusNeighbor(columnIndex, side));
     } else {
-      revealColumn(columnIndex, viewportPrimary, false);
+      revealColumn(columnIndex, viewportPrimary, false, force);
     }
-    m_lastFocusedColumn = columnIndex;
   }
 
+  // A fullscreen or maximize-to-edges transition is a width change, so the snap judges it instead of only revealing it.
   void ScrollingLayout::snapVisible(int columnIndex, int viewportPrimary) {
-    const bool centered = alwaysCentersFocus();
-    m_centeredRest = centered;
-    m_policyCenteredRest = false;
-    m_scroll = targetScrollForEnsureVisible(columnIndex, viewportPrimary, centered, true);
+    applyCenteringPolicy(columnIndex, viewportPrimary, true);
   }
 
   void ScrollingLayout::arrange(const wlr_box& usable) {

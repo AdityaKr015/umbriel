@@ -118,14 +118,18 @@ namespace umbriel {
     [[nodiscard]] bool alwaysCentersFocus() const;
     // Side a focus move from the focused column to `columnIndex` would come from.
     [[nodiscard]] FocusSide focusSideFrom(int columnIndex) const;
+    // Side an extent change measures its pair from, with no focus move left to read it.
+    [[nodiscard]] FocusSide reevaluationSide(int columnIndex) const;
     [[nodiscard]] bool shouldCenterFocusedColumn(int columnIndex, int viewportPrimary, FocusSide side) const;
     [[nodiscard]] bool shouldCenterOnOverflow(int columnIndex, int viewportPrimary, FocusSide side) const;
     [[nodiscard]] int focusNeighbor(int columnIndex, FocusSide side) const;
     // Scroll putting `columnIndex` and `neighbor` side by side at the edge `neighbor` sits on, for a pair known to fit.
     [[nodiscard]] double pairScroll(int columnIndex, int viewportPrimary, int neighbor) const;
-    // Shared body of ensureVisible, activateColumn and reevaluateColumn: they differ only in which centering policy
-    // applies.
-    void revealColumn(int columnIndex, int viewportPrimary, bool center);
+    // Shared body of ensureVisible, activateColumn and applyCenteringPolicy: they differ only in which centering policy
+    // applies, and `force` only in whether an already visible column may still be moved.
+    void revealColumn(int columnIndex, int viewportPrimary, bool center, bool force = false);
+    // Shared body of reevaluateColumn and snapVisible, which differ only in `force`.
+    void applyCenteringPolicy(int columnIndex, int viewportPrimary, bool force);
     [[nodiscard]] bool vertical() const;
     void syncHeightWeights(Column& column);
     // Weight for a row being added to `column` at `row`, taking over the column's edge gap when the row lands against

@@ -1195,6 +1195,95 @@ UMBRIEL_TEST(onOverflowMeasuresTheSideFocusCameFromAfterAWidthChange) {
   CHECK(!fixture.layout.centeredRest());
 }
 
+// A fullscreen lane is wider than the viewport, so it centers; handing the strip back at the restored extent is a width
+// change, so the snap judges it too.
+UMBRIEL_TEST(onOverflowFollowsAFullscreenTransition) {
+  Fixture fixture;
+  fixture.config.scrolling.centerFocused = CenterFocusedColumn::OnOverflow;
+  fixture.addColumns(3);
+  for (int column = 0; column < 3; ++column) {
+    CHECK(fixture.layout.setWidthFromPixels(column, kViewport, 700));
+  }
+
+  // 700 + gap + 700 overruns the 1260 viewport.
+  fixture.layout.activateColumn(0, kViewport);
+  fixture.layout.activateColumn(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), 432.0);
+
+  fixture.layout.setConstraints([](const View* view) { return LayoutConstraints{.fullscreen = view == stub(1)}; });
+  fixture.layout.snapVisible(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), static_cast<double>(fixture.layout.columnX(1, kViewport) + fixture.config.edgePad));
+  CHECK(fixture.layout.centeredRest());
+
+  // A plain snap would land the column flush against the right edge instead of centering it again.
+  fixture.layout.setConstraints([](const View*) { return LayoutConstraints{}; });
+  fixture.layout.snapVisible(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), 432.0);
+  CHECK(fixture.layout.centeredRest());
+}
+
+// Leaving maximize-to-edges makes the pair fit, so the restore is the documented one: the pair side by side at the edge
+// focus came from, not at whichever edge the lane left the strip against.
+UMBRIEL_TEST(onOverflowPutsThePairBackWhenAMaximizedToEdgesLaneGoesAway) {
+  Fixture fixture;
+  fixture.config.scrolling.centerFocused = CenterFocusedColumn::OnOverflow;
+  // Two 624 wide columns and the gap between them fill the 1260 viewport exactly, so the pair fits.
+  fixture.addColumns(3);
+
+  fixture.layout.activateColumn(2, kViewport);
+  fixture.layout.activateColumn(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), 636.0);
+  CHECK(!fixture.layout.centeredRest());
+
+  fixture.layout.setConstraints([](const View* view) {
+    return LayoutConstraints{.maximizedToEdges = view == stub(1)};
+  });
+  fixture.layout.snapVisible(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), static_cast<double>(fixture.layout.columnX(1, kViewport) + fixture.config.edgePad));
+  CHECK(fixture.layout.centeredRest());
+
+  // Focus came from the right, so the restored pair fills the viewport.
+  fixture.layout.setConstraints([](const View*) { return LayoutConstraints{}; });
+  fixture.layout.snapVisible(1, kViewport);
+  const int scroll = static_cast<int>(std::lround(fixture.layout.scroll()));
+  CHECK_EQ(fixture.layout.columnX(1, kViewport) - scroll, 0);
+  CHECK_EQ(fixture.layout.columnX(2, kViewport) + fixture.layout.columnWidth(2, kViewport) - scroll, kViewport);
+  CHECK(!fixture.layout.centeredRest());
+}
+
+// The centering a lane needed was the policy's, so a round trip must not leave it holding one it would take back on the
+// next width change and read the user's own column-center as a leftover.
+UMBRIEL_TEST(onOverflowLeavesAColumnCenterAloneAfterAFullscreenRoundTrip) {
+  Fixture fixture;
+  fixture.config.scrolling.centerFocused = CenterFocusedColumn::OnOverflow;
+  fixture.addColumns(3);
+  CHECK(fixture.layout.setWidthFromPixels(0, kViewport, 400));
+  CHECK(fixture.layout.setWidthFromPixels(1, kViewport, 700));
+  CHECK(fixture.layout.setWidthFromPixels(2, kViewport, 500));
+
+  fixture.layout.activateColumn(0, kViewport);
+  fixture.layout.activateColumn(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), 0.0);
+
+  fixture.layout.setConstraints([](const View* view) { return LayoutConstraints{.fullscreen = view == stub(1)}; });
+  fixture.layout.snapVisible(1, kViewport);
+  CHECK(fixture.layout.centeredRest());
+
+  fixture.layout.setConstraints([](const View*) { return LayoutConstraints{}; });
+  fixture.layout.snapVisible(1, kViewport);
+  CHECK(!fixture.layout.centeredRest());
+
+  CHECK(fixture.layout.centerColumn(1, kViewport));
+  const double centered = fixture.layout.scroll();
+  CHECK(centered > 0.0);
+
+  // 500 + gap + 700 still fits, so there is no pair to judge and no centering of the policy's to take back.
+  CHECK(fixture.layout.setWidthFromPixels(0, kViewport, 500));
+  fixture.layout.reevaluateColumn(1, kViewport);
+  CHECK_EQ(fixture.layout.scroll(), centered);
+  CHECK(fixture.layout.centeredRest());
+}
+
 // A column-center is the user's own, so OnOverflow gives up only the rest it took itself: a width change that keeps the
 // pair fitting must leave a manual centering where it is.
 UMBRIEL_TEST(onOverflowKeepsAManualCenteredRestAcrossAWidthChange) {

@@ -2651,6 +2651,7 @@ namespace umbriel {
     } else {
       workspace->setFocusedView(target);
     }
+    workspace->activateFocusedColumn();
     scrolling->snapVisible(scrolling->columnOf(target), workspace->scrollViewportExtent());
     workspace->markArrange(true);
     return true;

@@ -98,9 +98,11 @@ namespace umbriel {
     updateForeignIdentity();
     // A title the client set settles the opening rules even when it is empty: an empty title is matchable, an absent
     // one is not. applyWindowRules refreshes dynamic effects itself.
-    if (!m_initialRulesSettled && title() != nullptr) {
-      m_initialRulesSettled = true;
-      applyWindowRules(m_initialRules);
+    if (!m_initialTitleRulesSettled && title() != nullptr) {
+      m_initialTitleRulesSettled = true;
+      m_initialRulesAppId = ruleText(appId());
+      m_initialRulesTitle = ruleText(title());
+      applyWindowRules();
       return;
     }
     applyDynamicRules();
@@ -109,12 +111,14 @@ namespace umbriel {
   void View::handleSetAppId() {
     kLog.debug("app_id='{}'", appId() != nullptr ? appId() : "");
     updateForeignIdentity();
-    if (!m_initialRulesSettled) {
+    if (!m_initialTitleRulesSettled) {
       // Title hasn't arrived yet. If no rule cares about title, we can settle now.
       // Otherwise only update non-disruptive effects; disruptive rules wait for the title.
       if (!anyWindowRuleHasTitlePattern(config())) {
-        m_initialRulesSettled = true;
-        applyWindowRules(m_initialRules);
+        m_initialTitleRulesSettled = true;
+        m_initialRulesAppId = ruleText(appId());
+        m_initialRulesTitle = ruleText(title());
+        applyWindowRules();
       } else {
         applyDynamicRules();
       }

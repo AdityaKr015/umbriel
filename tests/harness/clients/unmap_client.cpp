@@ -10,9 +10,11 @@
 // ACTIVATE_ON_START uses the inherited XDG_ACTIVATION_TOKEN before the initial surface commit.
 // MAP_ON_STDIN creates the toplevel role, prints "map-pending", then waits for one byte before its initial commit.
 // CONTENT_TYPE sets a surface hint before its initial commit. CONTENT_TYPE_ON_SUBSURFACE places it on a rendering
-// child. XDG_TAG sets a toplevel tag before the initial commit.
-// CONTENT_TYPE_AFTER_MAP, XDG_TAG_AFTER_MAP, and TITLE_AFTER_MAP update their metadata on stdin. NO_TITLE never sets a
-// title at all. With TRANSIENT_SUITE, TRANSIENT_PARENT_SIZE=<width>x<height> gives the parent its own size.
+// child. With only CONTENT_TYPE_AFTER_MAP, that child is created when stdin triggers the update, matching Wine's
+// late rendering-surface attachment. XDG_TAG sets a toplevel tag before the initial commit.
+// CONTENT_TYPE_AFTER_MAP, XDG_TAG_AFTER_MAP, and TITLE_AFTER_MAP update their metadata on a `u` command. A `t` command
+// updates only TITLE_AFTER_MAP, allowing checks to sequence title and content hints. NO_TITLE never sets a title at
+// all. With TRANSIENT_SUITE, TRANSIENT_PARENT_SIZE=<width>x<height> gives the parent its own size.
 // TRANSIENT_SUITE=mapped-together maps the parent and this toplevel in one flush, parenting from the first configure
 // so the compositor maps both in the same dispatch. TRANSIENT_FOREIGN_HANDLE=<handle> parents this toplevel to
 // another client's exported toplevel, the way a portal dialog is parented.
@@ -132,7 +134,9 @@ namespace {
     bool colorManagerDone = false;
     bool imageDescriptionReady = false;
     bool imageDescriptionFailed = false;
-    bool metadataUpdated = false;
+    bool contentTypeUpdated = false;
+    bool xdgTagUpdated = false;
+    bool titleUpdated = false;
     int tearingHint = -1;
     uint32_t fillColor = 0xFF5577AA;
     std::optional<uint32_t> resizeFillColor;
@@ -902,26 +906,54 @@ int main(int argc, char** argv) {
     state.tearingControl = wp_tearing_control_manager_v1_get_tearing_control(state.tearingManager, state.surface);
     wp_tearing_control_v1_set_presentation_hint(state.tearingControl, static_cast<uint32_t>(state.tearingHint));
   }
+  const bool deferContentTypeChild = state.contentTypeOnSubsurface
+      && !state.colorOnSubsurface
+      && initialContentType == nullptr
+      && updatedContentType != nullptr;
+  const auto createRenderingChildSurface = [&]() {
+    if (state.colorChildSurface != nullptr) {
+      return true;
+    }
+    state.colorChildBuffer = createBuffer(state, state.width, state.height);
+    if (state.colorChildBuffer.resource == nullptr) {
+      return false;
+    }
+    state.colorChildSurface = wl_compositor_create_surface(state.compositor);
+    if (state.colorChildSurface == nullptr) {
+      return false;
+    }
+    return true;
+  };
+  const auto attachRenderingChild = [&]() {
+    if (state.colorChildSubsurface != nullptr) {
+      return true;
+    }
+    if (state.colorChildSurface == nullptr) {
+      return false;
+    }
+    state.colorChildSubsurface =
+        wl_subcompositor_get_subsurface(state.subcompositor, state.colorChildSurface, state.surface);
+    if (state.colorChildSubsurface == nullptr) {
+      return false;
+    }
+    wl_subsurface_set_desync(state.colorChildSubsurface);
+    return true;
+  };
   wl_surface* colorTargetSurface = state.surface;
-  if (state.colorOnSubsurface || state.contentTypeOnSubsurface) {
+  if (state.colorOnSubsurface || (state.contentTypeOnSubsurface && !deferContentTypeChild)) {
     if (state.subcompositor == nullptr) {
       std::println(stderr, "unmap-client: compositor is missing wl_subcompositor");
       return EXIT_FAILURE;
     }
-    state.colorChildBuffer = createBuffer(state, state.width, state.height);
-    if (state.colorChildBuffer.resource == nullptr) {
-      std::println(stderr, "unmap-client: failed to allocate color child buffer");
+    if (!createRenderingChildSurface() || !attachRenderingChild()) {
+      std::println(stderr, "unmap-client: failed to create rendering child");
       return EXIT_FAILURE;
     }
-    state.colorChildSurface = wl_compositor_create_surface(state.compositor);
-    state.colorChildSubsurface =
-        wl_subcompositor_get_subsurface(state.subcompositor, state.colorChildSurface, state.surface);
-    wl_subsurface_set_desync(state.colorChildSubsurface);
     if (state.colorOnSubsurface) {
       colorTargetSurface = state.colorChildSurface;
     }
   }
-  if (initialContentType != nullptr || updatedContentType != nullptr) {
+  if ((initialContentType != nullptr || updatedContentType != nullptr) && !deferContentTypeChild) {
     state.contentTypeSurface = state.contentTypeOnSubsurface ? state.colorChildSurface : state.surface;
     state.contentType =
         wp_content_type_manager_v1_get_surface_content_type(state.contentTypeManager, state.contentTypeSurface);
@@ -1103,21 +1135,52 @@ int main(int argc, char** argv) {
             wl_display_flush(state.display);
             std::println("unfullscreen-requested");
             std::fflush(stdout);
-          } else if (state.mapped && updateOnStdin && !state.metadataUpdated) {
-            if (updatedContentType != nullptr) {
+          } else if (
+              state.mapped && updateOnStdin && command == 't' && updatedTitle != nullptr && !state.titleUpdated
+          ) {
+            xdg_toplevel_set_title(state.toplevel, updatedTitle);
+            wl_display_flush(state.display);
+            state.titleUpdated = true;
+            std::println("title-updated");
+            std::fflush(stdout);
+          } else if (state.mapped && updateOnStdin && command == 'u') {
+            if (updatedContentType != nullptr && !state.contentTypeUpdated) {
+              if (deferContentTypeChild) {
+                if (state.subcompositor == nullptr || !createRenderingChildSurface()) {
+                  std::println(stderr, "unmap-client: failed to create late content type child");
+                  return EXIT_FAILURE;
+                }
+                state.contentTypeSurface = state.colorChildSurface;
+                state.contentType = wp_content_type_manager_v1_get_surface_content_type(
+                    state.contentTypeManager, state.contentTypeSurface
+                );
+              }
               wp_content_type_v1_set_content_type(
                   state.contentType, static_cast<uint32_t>(parseContentType(updatedContentType))
               );
+              if (deferContentTypeChild) {
+                if (!attachRenderingChild()) {
+                  std::println(stderr, "unmap-client: failed to attach late content type child");
+                  return EXIT_FAILURE;
+                }
+                // Apply the new subsurface relationship and positioning before the rendering child's first commit,
+                // matching Wine's already tagged client-surface attachment order.
+                wl_surface_commit(state.surface);
+                wl_surface_attach(state.colorChildSurface, state.colorChildBuffer.resource, 0, 0);
+                wl_surface_damage_buffer(state.colorChildSurface, 0, 0, state.width, state.height);
+              }
               wl_surface_commit(state.contentTypeSurface);
+              state.contentTypeUpdated = true;
             }
-            if (updatedXdgTag != nullptr) {
+            if (updatedXdgTag != nullptr && !state.xdgTagUpdated) {
               xdg_toplevel_tag_manager_v1_set_toplevel_tag(state.xdgTagManager, state.toplevel, updatedXdgTag);
+              state.xdgTagUpdated = true;
             }
-            if (updatedTitle != nullptr) {
+            if (updatedTitle != nullptr && !state.titleUpdated) {
               xdg_toplevel_set_title(state.toplevel, updatedTitle);
+              state.titleUpdated = true;
             }
             wl_display_flush(state.display);
-            state.metadataUpdated = true;
             std::println("{}", updatedXdgTag != nullptr ? "xdg-tag-updated" : "content-type-updated");
             std::fflush(stdout);
           } else if (!state.mapped && remapOnStdin) {

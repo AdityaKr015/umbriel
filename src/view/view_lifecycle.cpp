@@ -247,6 +247,10 @@ namespace umbriel {
         m_server->uptimeMs()
     );
     m_initialRules = rule;
+    m_initialRuleHistory.clear();
+    m_initialRuleHistory.push_back(rule);
+    m_initialRulesAppId = ruleText(appId());
+    m_initialRulesTitle = ruleText(title());
     m_initialRulesXdgTag = m_xdgTag;
     m_initialRulesContentType = m_contentType;
     m_namedScrollingColumnName = rule.defaultScrollingColumn;
@@ -259,7 +263,10 @@ namespace umbriel {
     const bool restoreTiled = m_tiled;
     // Unsettled when any rule uses a title pattern: the first handleSetTitle after map re-applies disruptive effects
     // with the real title, even if the client mapped with a placeholder.
-    m_initialRulesSettled = !anyWindowRuleHasTitlePattern(config());
+    m_initialTitleRulesSettled = !anyWindowRuleHasTitlePattern(config());
+    m_initialContentTypeRulesSettled = m_contentType != ContentType::None
+        || std::ranges::none_of(config().windowRules,
+                                [](const WindowRule& candidate) { return candidate.matchContentType.has_value(); });
 
     showDecorations(!scheduledFullscreen());
 
@@ -619,9 +626,13 @@ namespace umbriel {
     if (!m_server->cursor()->isPassthrough()) {
       m_server->cursor()->resetMode();
     }
-    m_initialRulesSettled = false;
+    m_initialTitleRulesSettled = false;
+    m_initialContentTypeRulesSettled = false;
     m_initialRules = {};
+    m_initialRuleHistory.clear();
     m_initialRuleState = {};
+    m_initialRulesAppId.reset();
+    m_initialRulesTitle.reset();
     m_initialRulesXdgTag.reset();
     m_initialRulesContentType = ContentType::None;
     m_namedScrollingColumnName.reset();
@@ -687,6 +698,12 @@ namespace umbriel {
     m_contentType = next;
     m_server->scheduleIpcWindowsEvent();
     if (m_mapped) {
+      if (!m_initialContentTypeRulesSettled && next != ContentType::None) {
+        m_initialContentTypeRulesSettled = true;
+        m_initialRulesContentType = next;
+        applyWindowRules();
+        return;
+      }
       applyDynamicRules();
     }
   }

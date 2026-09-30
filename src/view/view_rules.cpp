@@ -26,8 +26,28 @@ namespace umbriel {
     constexpr Logger kLog("view");
 
     template <typename T>
-    bool changedInitialRule(const std::optional<T>& current, const std::optional<T>& initiallyApplied) {
-      return current.has_value() && current != initiallyApplied;
+    bool unseenInitialRuleValue(
+        const std::optional<T>& current, const std::vector<ResolvedWindowRule>& history,
+        const std::optional<T> ResolvedWindowRule::* member
+    ) {
+      return current.has_value() && std::ranges::none_of(history, [&](const ResolvedWindowRule& previous) {
+               return previous.*member == current;
+             });
+    }
+
+    bool unseenInitialExtentValue(
+        const std::optional<int>& currentPixels, const std::optional<double>& currentFraction,
+        const std::vector<ResolvedWindowRule>& history, const std::optional<int> ResolvedWindowRule::* pixelsMember,
+        const std::optional<double> ResolvedWindowRule::* fractionMember
+    ) {
+      if (currentPixels) {
+        return std::ranges::none_of(history, [&](const ResolvedWindowRule& previous) {
+          return previous.*pixelsMember == currentPixels;
+        });
+      }
+      return currentFraction.has_value() && std::ranges::none_of(history, [&](const ResolvedWindowRule& previous) {
+               return !(previous.*pixelsMember).has_value() && previous.*fractionMember == currentFraction;
+             });
     }
   } // namespace
 
@@ -242,7 +262,7 @@ namespace umbriel {
 
   std::optional<bool> View::tearingRuleOverride() { return resolvedRules().allowTearing; }
 
-  void View::applyWindowRules(const ResolvedWindowRule& initiallyApplied) {
+  void View::applyWindowRules() {
     if (!m_mapped) {
       return;
     }
@@ -250,30 +270,43 @@ namespace umbriel {
     // new one-shot behavior. is_alone never selects opening settings: alone effects are applied and undone on every
     // change to the workspace's tiled set.
     const ResolvedWindowRule rule = resolveWindowRules(
-        config(), ruleText(appId()), ruleText(title()), m_initialRulesXdgTag, m_initialRulesContentType,
+        config(), m_initialRulesAppId, m_initialRulesTitle, m_initialRulesXdgTag, m_initialRulesContentType,
         m_initialRuleState, m_server->uptimeMs()
     );
     ScratchpadManager* scratchpadManager = m_server->scratchpadManager();
     const bool wasInScratchpad = scratchpadManager != nullptr && scratchpadManager->contains(this);
-    const bool scratchpadChanged = changedInitialRule(rule.defaultScratchpad, initiallyApplied.defaultScratchpad);
-    const bool defaultFloatingChanged = changedInitialRule(rule.defaultFloating, initiallyApplied.defaultFloating);
-    const bool floatingWidthChanged =
-        changedInitialRule(rule.defaultFloatingWidthPx, initiallyApplied.defaultFloatingWidthPx)
-        || changedInitialRule(rule.defaultFloatingWidth, initiallyApplied.defaultFloatingWidth);
-    const bool floatingHeightChanged =
-        changedInitialRule(rule.defaultFloatingHeightPx, initiallyApplied.defaultFloatingHeightPx)
-        || changedInitialRule(rule.defaultFloatingHeight, initiallyApplied.defaultFloatingHeight);
-    const bool floatingPositionChanged = changedInitialRule(rule.defaultPosition, initiallyApplied.defaultPosition);
+    const bool scratchpadChanged =
+        unseenInitialRuleValue(rule.defaultScratchpad, m_initialRuleHistory, &ResolvedWindowRule::defaultScratchpad);
+    const bool defaultFloatingChanged =
+        unseenInitialRuleValue(rule.defaultFloating, m_initialRuleHistory, &ResolvedWindowRule::defaultFloating);
+    const bool floatingWidthChanged = unseenInitialExtentValue(
+        rule.defaultFloatingWidthPx, rule.defaultFloatingWidth, m_initialRuleHistory,
+        &ResolvedWindowRule::defaultFloatingWidthPx, &ResolvedWindowRule::defaultFloatingWidth
+    );
+    const bool floatingHeightChanged = unseenInitialExtentValue(
+        rule.defaultFloatingHeightPx, rule.defaultFloatingHeight, m_initialRuleHistory,
+        &ResolvedWindowRule::defaultFloatingHeightPx, &ResolvedWindowRule::defaultFloatingHeight
+    );
+    const bool floatingPositionChanged =
+        unseenInitialRuleValue(rule.defaultPosition, m_initialRuleHistory, &ResolvedWindowRule::defaultPosition);
     bool floatingGeometryAppliedOnTransition = false;
     const bool enteringFloatingByRule = !wasInScratchpad && defaultFloatingChanged && *rule.defaultFloating && m_tiled;
-    const bool placementChanged = (rule.defaultOutput.has_value() || rule.defaultWorkspace.has_value())
-        && (rule.defaultOutput != initiallyApplied.defaultOutput
-            || rule.defaultWorkspace != initiallyApplied.defaultWorkspace);
+    const bool placementChanged =
+        (rule.defaultOutput.has_value() || rule.defaultWorkspace.has_value())
+        && std::ranges::none_of(m_initialRuleHistory, [&](const ResolvedWindowRule& previous) {
+             return previous.defaultOutput == rule.defaultOutput && previous.defaultWorkspace == rule.defaultWorkspace;
+           });
 
-    const bool namedScrollingColumnNameChanged = rule.defaultScrollingColumn.has_value()
-        && rule.defaultScrollingColumn != initiallyApplied.defaultScrollingColumn;
-    const bool namedScrollingColumnOrderChanged = rule.defaultScrollingColumn.has_value()
-        && rule.defaultScrollingColumnOrder != initiallyApplied.defaultScrollingColumnOrder;
+    const bool namedScrollingColumnTupleUnseen =
+        rule.defaultScrollingColumn.has_value()
+        && std::ranges::none_of(m_initialRuleHistory, [&](const ResolvedWindowRule& previous) {
+             return previous.defaultScrollingColumn == rule.defaultScrollingColumn
+                 && previous.defaultScrollingColumnOrder == rule.defaultScrollingColumnOrder;
+           });
+    const bool namedScrollingColumnNameChanged =
+        namedScrollingColumnTupleUnseen && rule.defaultScrollingColumn != m_namedScrollingColumnName;
+    const bool namedScrollingColumnOrderChanged =
+        namedScrollingColumnTupleUnseen && rule.defaultScrollingColumn == m_namedScrollingColumnName;
     std::optional<Workspace::NamedScrollingColumnChange> namedScrollingColumnChange;
     if (namedScrollingColumnNameChanged) {
       namedScrollingColumnChange = Workspace::NamedScrollingColumnChange::Name;
@@ -394,14 +427,16 @@ namespace umbriel {
       }
     }
     const bool inScratchpad = wasInScratchpad || assignedScratchpad;
-    if (!inScratchpad && changedInitialRule(rule.defaultPinned, initiallyApplied.defaultPinned)) {
+    if (!inScratchpad
+        && unseenInitialRuleValue(rule.defaultPinned, m_initialRuleHistory, &ResolvedWindowRule::defaultPinned)) {
       setPinned(*rule.defaultPinned, false);
     }
 
     ScrollingLayout* scrolling = m_workspace != nullptr ? m_workspace->scrollingLayout() : nullptr;
-    const bool defaultExtentChanged =
-        changedInitialRule(rule.defaultScrollingExtentPx, initiallyApplied.defaultScrollingExtentPx)
-        || changedInitialRule(rule.defaultScrollingExtent, initiallyApplied.defaultScrollingExtent);
+    const bool defaultExtentChanged = unseenInitialExtentValue(
+        rule.defaultScrollingExtentPx, rule.defaultScrollingExtent, m_initialRuleHistory,
+        &ResolvedWindowRule::defaultScrollingExtentPx, &ResolvedWindowRule::defaultScrollingExtent
+    );
     const bool ownsNamedScrollingColumnExtent =
         m_displacedHome ? m_displacedHome->ownsNamedScrollingColumnExtent : m_ownsNamedScrollingColumnExtent;
     if (defaultExtentChanged
@@ -477,14 +512,16 @@ namespace umbriel {
     }
 
     if (!inScratchpad
-        && changedInitialRule(rule.defaultFullscreen, initiallyApplied.defaultFullscreen)
+        && unseenInitialRuleValue(rule.defaultFullscreen, m_initialRuleHistory, &ResolvedWindowRule::defaultFullscreen)
         && *rule.defaultFullscreen
         && !scheduledFullscreen()) {
       setFullscreen(true);
     }
 
     if (!inScratchpad
-        && changedInitialRule(rule.defaultMaximizeToEdges, initiallyApplied.defaultMaximizeToEdges)
+        && unseenInitialRuleValue(
+            rule.defaultMaximizeToEdges, m_initialRuleHistory, &ResolvedWindowRule::defaultMaximizeToEdges
+        )
         && *rule.defaultMaximizeToEdges
         && !m_maximizedToEdges) {
       setMaximizedToEdges(true);
@@ -492,11 +529,16 @@ namespace umbriel {
 
     if (!inScratchpad
         && !openingParented()
-        && changedInitialRule(rule.defaultMaximize, initiallyApplied.defaultMaximize)
+        && unseenInitialRuleValue(rule.defaultMaximize, m_initialRuleHistory, &ResolvedWindowRule::defaultMaximize)
         && *rule.defaultMaximize
         && !scheduledMaximized()) {
       setMaximized(true);
     }
+
+    // A later initial identity signal compares against every resolution already considered, so it cannot replay an
+    // earlier one-shot value over intervening user state. Keep the latest resolution for later parent changes.
+    m_initialRules = rule;
+    m_initialRuleHistory.push_back(rule);
 
     // Dynamic effects use the current identity hints, including ones changed after map.
     applyDynamicRules();

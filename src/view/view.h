@@ -650,7 +650,7 @@ namespace umbriel {
     bool consumeLaunchActivation(std::string_view token);
     bool cancelLaunchOrigin(std::string_view token);
     void clearLaunchPlacement(bool reconcile, bool clearToken);
-    void applyWindowRules(const ResolvedWindowRule& initiallyApplied);
+    void applyWindowRules();
     bool attachToAvailableWorkspace(const ResolvedWindowRule& rule, LayoutAttachOrigin origin);
     // `resolved` lets a caller that already resolved the rules pass them in, avoiding a second regex pass.
     void applyDynamicRules(const ResolvedWindowRule* resolved = nullptr);
@@ -710,10 +710,13 @@ namespace umbriel {
       Maximize,
     };
     AloneSeed m_aloneOpeningSeed = AloneSeed::None;
-    // One-shot effects already applied at map. Late identity resolution only
-    // reapplies a field when its resolved value changes.
+    // Latest settled opening rules, plus every earlier resolution considered. The history keeps an earlier one-shot
+    // value from replaying when independent identity signals temporarily remove and then restore it.
     ResolvedWindowRule m_initialRules;
+    std::vector<ResolvedWindowRule> m_initialRuleHistory;
     WindowRuleState m_initialRuleState;
+    std::optional<std::string> m_initialRulesAppId;
+    std::optional<std::string> m_initialRulesTitle;
     std::optional<std::string> m_initialRulesXdgTag;
     ContentType m_initialRulesContentType = ContentType::None;
     std::optional<std::string> m_namedScrollingColumnName;
@@ -849,9 +852,10 @@ namespace umbriel {
     float m_fadeAlpha = 1.0F;
     bool m_borderFocusedState = false;
     bool m_focusDimInitialized = false;
-    // Window rules: unsettled means title was empty at map, so a later
-    // handleSetTitle re-applies all rule effects one more time.
-    bool m_initialRulesSettled = false;
+    // Opening identity can settle independently. The first title and first
+    // non-none content type each get one chance to add one-shot rule effects.
+    bool m_initialTitleRulesSettled = false;
+    bool m_initialContentTypeRulesSettled = false;
     float m_ruleOpacity = 1.0F;
     float m_dragOpacity = 1.0F;
     float m_overviewOpacity = 1.0F;

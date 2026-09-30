@@ -24,7 +24,7 @@ excluding the target and stale members invalid under new definitions. Focus,
 visibility, shader failure, and inactive history do not influence holdings.
 
 `View::handleMap` starts a fresh slot lifetime before mapped rule resolution.
-[`View::applyDynamicRules`](../../src/view/view.cpp) records each configured
+[`View::applyDynamicRules`](../../src/view/view_rules.cpp) records each configured
 winner/source and resolves only while mapped. Same-pool valid members stay;
 a changed pool restores destination history before reusing a current member
 or making a policy pick. `ViewEffects::syncNames` caches unsuppressed names
@@ -147,19 +147,19 @@ frames.
 
 | Source | Snapshot node | Slots |
 | --- | --- | --- |
-| View content tree | snapshot root (`view.cpp`) | content-tree slots, then `windows_move` is cleared |
-| View surface tree node | snapshot content tree (`view.cpp`) | window, overlay |
+| View content tree | snapshot root (`view_animation.cpp`) | content-tree slots, then `windows_move` is cleared |
+| View surface tree node | snapshot content tree (`view_animation.cpp`) | window, overlay |
 | View border tree | each copied border (`border_rect.cpp`) | border effect, border |
 | Card tree, surface tree, border | snapshot root, copied surface tree, copied border (`overview.cpp`) | as the live card |
 | Layer tree | snapshot root (`layer_surface.cpp`) | layers |
 
 Drag physics binds the built-in deformation program to the content tree's drag
 slot with `umbriel_deformation[16]` and an `expand` of the sheet's
-displacement bound plus 2 px (`view.cpp`). The sheet spans
+displacement bound plus 2 px (`view_animation.cpp`). The sheet spans
 the content tree's drawn bounds from `wlr_scene_node_effect_bounds` and is
-refit on every tick (`view.cpp`); a re-grab while it settles keeps
+refit on every tick (`view_animation.cpp`); a re-grab while it settles keeps
 the sheet and its transition. `View::animatesOn` includes every output the
-drawn box reaches (`view.cpp`). The program is not shape-preserving,
+drawn box reaches (`view_animation.cpp`). The program is not shape-preserving,
 so `render_animation_shadow` (`wlr_scene.c`) captures the content
 tree and the drop shadow follows the deformation within the shadow node's own
 region. A close mid-drag moves the drag slot to the snapshot root, and
@@ -376,14 +376,14 @@ roots; named actions can prepare programs without adding draws or a timer):
   settings alone decide; no deformation program, light layer, output-effect
   addon, effect timer, or ledger instance exists.
 - Per view sync: `ViewEffects::configured()` and the ledger size
-  (`view.cpp`). Per output frame: an eligible count over the empty ledger;
+  (`view_animation.cpp`). Per output frame: an eligible count over the empty ledger;
   the clock is never read for effect time; `expand_damage_to_effects` returns
   at once; `Output::effectCapturePending` is false, so no second composition
   runs. Per pointer motion: one boolean (`cursor.cpp`).
 - Drag physics: `Cursor` gates every call on `MoveGrab::physics`, and
   `View::tickAnimations`, `View::hasActiveAnimations`,
-  `View::syncAnimationEffects` (`view.cpp`), and `View::animatesOn`
-  (`view.cpp`) read `DragPhysics::active()`/`grabbed()` per view per tick
+  `View::syncAnimationEffects` (`view_animation.cpp`), and `View::animatesOn`
+  (`view_animation.cpp`) read `DragPhysics::active()`/`grabbed()` per view per tick
   and sync, with no writes, scene calls, or allocations.
 - Scanout, damage, and culling take only the transient branches in the table
   above, as they do for built-in animations. Reload prepares only with the

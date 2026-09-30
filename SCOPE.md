@@ -19,7 +19,7 @@ Read the project [ethos](https://noctalia.dev/ethos) for the values behind these
   it already tracks.
 - Wayland protocol support that real applications need, implemented through wlroots.
 - Correct behavior on scaled outputs, multiple outputs, hotplug, session locking, and X11 clients through
-  xwayland-satellite.
+  Xwayland.
 - Documentation, packaging, and test coverage for all of the above.
 
 ## Out of scope

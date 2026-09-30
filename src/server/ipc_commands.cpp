@@ -428,8 +428,8 @@ namespace umbriel {
       const ScratchpadManager* scratchpads = server.scratchpadManager();
       entry["scratchpad"] = scratchpads != nullptr ? std::string(scratchpads->nameFor(v.get())) : std::string{};
       entry["active"] = v->activated();
-      entry["app_id"] = v->toplevel()->app_id != nullptr ? v->toplevel()->app_id : "";
-      entry["title"] = v->toplevel()->title != nullptr ? v->toplevel()->title : "";
+      entry["app_id"] = v->appId() != nullptr ? v->appId() : "";
+      entry["title"] = v->title() != nullptr ? v->title() : "";
       entry["xdg_tag"] = v->xdgTag().value_or("");
       entry["content_type"] = contentTypeName(v->contentType());
       entry["floating"] = v->floating();
@@ -440,7 +440,7 @@ namespace umbriel {
       entry["focused"] = v->workspace() != nullptr && v->workspace()->focusedView() == v.get();
       entry["urgent"] = v->urgent();
       entry["xwayland"] = v->xwayland();
-      // -1 whenever the owning process is unknown, including for every XWayland view.
+      // -1 whenever the owning process is unknown: an X11 client that publishes no _NET_WM_PID.
       entry["pid"] = v->pid();
       // Tiled windows report their layout slot, which the layout computes even for hidden workspaces; floats report
       // their own position. Ordering a listing by these positions then matches the strip (scrolling) or tile tree
@@ -507,7 +507,7 @@ namespace umbriel {
       owners.push_back({
           {"type", "window"},
           {"id", id != nullptr ? id : ""},
-          {"app_id", view->toplevel()->app_id != nullptr ? view->toplevel()->app_id : ""},
+          {"app_id", view->appId() != nullptr ? view->appId() : ""},
           {"slots",
            {{"border", effectSlotJson(view->effectSlot(EffectKind::Border), true)},
             {"window", effectSlotJson(view->effectSlot(EffectKind::Window))}}},
@@ -617,15 +617,15 @@ namespace umbriel {
       if (!view->mapped()) {
         continue;
       }
-      wlr_surface* surface = view->toplevel()->base->surface;
+      wlr_surface* surface = view->rootSurface();
       const wlr_image_description_v1_data* description = server.surfaceTreeHdrDescription(surface);
       if (description == nullptr) {
         description = server.surfaceImageDescription(surface);
       }
       nlohmann::json entry = {
           {"id", view->extForeignIdentifier() != nullptr ? view->extForeignIdentifier() : ""},
-          {"app_id", view->toplevel()->app_id != nullptr ? view->toplevel()->app_id : ""},
-          {"title", view->toplevel()->title != nullptr ? view->toplevel()->title : ""},
+          {"app_id", view->appId() != nullptr ? view->appId() : ""},
+          {"title", view->title() != nullptr ? view->title() : ""},
           {"transfer_function", protocolTransferFunctionName(description != nullptr ? description->tf_named : 0)},
           {"primaries", protocolPrimariesName(description != nullptr ? description->primaries_named : 0)},
           {"max_cll", description != nullptr ? description->max_cll : 0},
@@ -702,15 +702,15 @@ namespace umbriel {
       const bool asyncHint = output != nullptr
           ? output->clientTearingHintAsync(view.get())
           : wlr_tearing_control_manager_v1_surface_hint_from_surface(
-                server.tearingControlManager(), view->toplevel()->base->surface
+                server.tearingControlManager(), view->rootSurface()
             ) == WP_TEARING_CONTROL_V1_PRESENTATION_HINT_ASYNC;
       nlohmann::json entry = {
           {"id", view->extForeignIdentifier() != nullptr ? view->extForeignIdentifier() : ""},
-          {"app_id", view->toplevel()->app_id != nullptr ? view->toplevel()->app_id : ""},
-          {"title", view->toplevel()->title != nullptr ? view->toplevel()->title : ""},
+          {"app_id", view->appId() != nullptr ? view->appId() : ""},
+          {"title", view->title() != nullptr ? view->title() : ""},
           {"output", output != nullptr ? output->wlr()->name : ""},
           {"hint", asyncHint ? "async" : "vsync"},
-          {"fullscreen", view->toplevel()->current.fullscreen},
+          {"fullscreen", view->currentFullscreen()},
           {"eligible", output != nullptr && output->tearingEligible(view.get())},
       };
       entry["rule_override"] = nullptr;

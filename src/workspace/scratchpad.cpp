@@ -283,7 +283,7 @@ namespace umbriel {
       Workspace* previous = options.restoreWorkspace != nullptr ? options.restoreWorkspace : view->workspace();
       setReturnLocation(*newEntry, options.restoreOutput, previous);
     }
-    if (view->toplevel()->scheduled.fullscreen || view->toplevel()->current.fullscreen) {
+    if (view->scheduledFullscreen() || view->currentFullscreen()) {
       view->toggleFullscreen();
     }
     if (view->pinned()) {
@@ -298,7 +298,7 @@ namespace umbriel {
     const wlr_box targetArea = usableArea(*m_server, output);
     const auto& scratchpadConfig = config().animation.scratchpad;
     if (scratchpadConfig.fullscreen) {
-      if (!view->toplevel()->scheduled.fullscreen && !view->toplevel()->current.fullscreen) {
+      if (!view->scheduledFullscreen() && !view->currentFullscreen()) {
         view->toggleFullscreen();
       }
     } else if (scratchpadConfig.maximize) {
@@ -308,7 +308,7 @@ namespace umbriel {
     ) {
       const int targetWidth = std::max(100, static_cast<int>(std::lround(targetArea.width * scratchpadConfig.scale)));
       const int targetHeight = std::max(100, static_cast<int>(std::lround(targetArea.height * scratchpadConfig.scale)));
-      wlr_xdg_toplevel_set_size(view->toplevel(), targetWidth, targetHeight);
+      view->configureSize(targetWidth, targetHeight);
       view->setPosition(
           targetArea.x + std::max(0, (targetArea.width - targetWidth) / 2),
           targetArea.y + std::max(0, (targetArea.height - targetHeight) / 2)
@@ -499,12 +499,8 @@ namespace umbriel {
           const int newY = targetArea.y + static_cast<int>(std::lround(yFraction * targetArea.height));
           view->cancelPositionAnimation();
           view->setPosition(
-              std::clamp(
-                  newX, targetArea.x, targetArea.x + std::max(0, targetArea.width - view->toplevel()->current.width)
-              ),
-              std::clamp(
-                  newY, targetArea.y, targetArea.y + std::max(0, targetArea.height - view->toplevel()->current.height)
-              )
+              std::clamp(newX, targetArea.x, targetArea.x + std::max(0, targetArea.width - view->currentSize().width)),
+              std::clamp(newY, targetArea.y, targetArea.y + std::max(0, targetArea.height - view->currentSize().height))
           );
         }
       }
@@ -615,8 +611,8 @@ namespace umbriel {
         const double yFraction = static_cast<double>(view->sceneTree()->node.y - previousArea.y) / previousArea.height;
         const int newX = targetArea.x + static_cast<int>(std::lround(xFraction * targetArea.width));
         const int newY = targetArea.y + static_cast<int>(std::lround(yFraction * targetArea.height));
-        const int width = view->toplevel()->current.width;
-        const int height = view->toplevel()->current.height;
+        const int width = view->currentSize().width;
+        const int height = view->currentSize().height;
         view->cancelPositionAnimation();
         view->setPosition(
             std::clamp(newX, targetArea.x, targetArea.x + std::max(0, targetArea.width - width)),
@@ -925,7 +921,7 @@ namespace umbriel {
     if (Cursor* cursor = m_server->cursor(); cursor != nullptr && cursor->isDraggingView(view)) {
       return;
     }
-    if (view->toplevel()->scheduled.fullscreen) {
+    if (view->scheduledFullscreen()) {
       view->applyFullscreenLayout();
       return;
     }
@@ -938,12 +934,12 @@ namespace umbriel {
       if (area.width > 0 && area.height > 0) {
         view->cancelPositionAnimation();
         view->setPosition(area.x, area.y);
-        wlr_xdg_toplevel_set_size(view->toplevel(), area.width, area.height);
+        view->configureSize(area.width, area.height);
         view->applyPresentation(area);
       }
       return;
     }
-    const wlr_box& geometry = view->toplevel()->base->geometry;
+    const wlr_box& geometry = view->geometryBox();
     if (geometry.width <= 0 || geometry.height <= 0) {
       return;
     }
@@ -1021,8 +1017,8 @@ namespace umbriel {
       if (restoreOutput != nullptr && restoreOutput != scratchpadOutput) {
         const wlr_box area = restoreOutput->usableArea();
         if (area.width > 0 && area.height > 0) {
-          const int width = view->toplevel()->current.width;
-          const int height = view->toplevel()->current.height;
+          const int width = view->currentSize().width;
+          const int height = view->currentSize().height;
           view->setPosition(
               std::clamp(view->sceneTree()->node.x, area.x, area.x + std::max(0, area.width - width)),
               std::clamp(view->sceneTree()->node.y, area.y, area.y + std::max(0, area.height - height))
@@ -1194,8 +1190,8 @@ namespace umbriel {
           if (entry.scratchpad != name || entry.view == nullptr) {
             continue;
           }
-          const bool managerOwnedGeometry = entry.view->toplevel()->scheduled.fullscreen
-              || entry.view->toplevel()->current.fullscreen
+          const bool managerOwnedGeometry = entry.view->scheduledFullscreen()
+              || entry.view->currentFullscreen()
               || entry.view->maximizedToEdges()
               || entry.view->m_floatingMaximized;
           if (entry.displacedPosition && !managerOwnedGeometry && homeArea.width > 0 && homeArea.height > 0) {

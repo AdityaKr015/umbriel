@@ -1,9 +1,9 @@
 #include "input/cursor.h"
 #include "input/seat.h"
-#include "scene/node.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
+#include "xwayland/xwayland.h"
 
 namespace umbriel {
 
@@ -63,20 +63,11 @@ namespace umbriel {
     if (m_activeConstraint == nullptr || m_activeConstraint->surface == nullptr) {
       return false;
     }
-    wlr_surface* root = wlr_surface_get_root_surface(m_activeConstraint->surface);
-    wlr_xdg_surface* xdg = root != nullptr ? wlr_xdg_surface_try_from_wlr_surface(root) : nullptr;
-    if (xdg == nullptr || xdg->data == nullptr) {
+    // The view owning the constrained surface, whichever shell role it has.
+    const View* view = View::fromSurface(wlr_surface_get_root_surface(m_activeConstraint->surface));
+    if (view == nullptr) {
       return false;
     }
-    auto* tree = static_cast<wlr_scene_tree*>(xdg->data);
-    if (tree == nullptr) {
-      return false;
-    }
-    SceneNode* node = sceneNodeFrom(tree->node.data);
-    if (node == nullptr || node->kind != SceneNodeKind::View) {
-      return false;
-    }
-    auto* view = static_cast<View*>(node);
     return view->mapped() && view->onActiveWorkspace();
   }
 
@@ -108,10 +99,12 @@ namespace umbriel {
       return;
     }
 
+    // The hint and the seat position are surface-local; the cursor moves in layout units.
+    const double scale = surfaceScale(constraint->surface);
     double sx = seat->pointer_state.sx;
     double sy = seat->pointer_state.sy;
-    double lx = m_cursor->x + (constraint->current.cursor_hint.x - sx);
-    double ly = m_cursor->y + (constraint->current.cursor_hint.y - sy);
+    double lx = m_cursor->x + ((constraint->current.cursor_hint.x - sx) / scale);
+    double ly = m_cursor->y + ((constraint->current.cursor_hint.y - sy) / scale);
     wlr_cursor_warp(m_cursor, nullptr, lx, ly);
     forwardEffectPointer();
     // Keep wlroots' surface-local pointer state in sync with the layout
@@ -129,6 +122,8 @@ namespace umbriel {
       return true;
     }
 
+    // The region is surface-local; the deltas are in layout units.
+    const double scale = surfaceScale(m_activeConstraint->surface);
     double sx = seat->pointer_state.sx;
     double sy = seat->pointer_state.sy;
 
@@ -144,7 +139,7 @@ namespace umbriel {
 
     double confinedX = 0;
     double confinedY = 0;
-    const bool ok = wlr_region_confine(region, sx, sy, sx + *dx, sy + *dy, &confinedX, &confinedY);
+    const bool ok = wlr_region_confine(region, sx, sy, sx + (*dx * scale), sy + (*dy * scale), &confinedX, &confinedY);
     if (region == &fullSurface) {
       pixman_region32_fini(&fullSurface);
     }
@@ -152,9 +147,14 @@ namespace umbriel {
       return false;
     }
 
-    *dx = confinedX - sx;
-    *dy = confinedY - sy;
+    *dx = (confinedX - sx) / scale;
+    *dy = (confinedY - sy) / scale;
     return true;
+  }
+
+  double Cursor::surfaceScale(wlr_surface* surface) const {
+    const Xwayland* xwayland = m_server->xwayland();
+    return xwayland != nullptr ? xwayland->surfaceScale(surface) : 1.0;
   }
 
 } // namespace umbriel

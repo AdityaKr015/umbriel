@@ -330,7 +330,7 @@ int main(int argc, char** argv) {
   wl_subsurface_set_desync(state.subsurface);
 
   if (state.initialFullscreen) {
-    // xwayland-satellite does this when an X11 window is already output-sized as its xdg role is created.
+    // A game window that is already output-sized asks for fullscreen before its first buffer.
     xdg_toplevel_set_fullscreen(state.toplevel, nullptr);
   }
   wl_surface_commit(state.surface);

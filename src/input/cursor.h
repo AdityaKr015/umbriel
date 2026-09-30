@@ -159,6 +159,7 @@ namespace umbriel {
     void setXcursor(const char* name);
     bool beginMove(View* view, uint32_t button);
     bool beginResize(View* view, uint32_t edges, uint32_t button);
+    // A null seat client is an X11 move/resize request, which carries no serial.
     void beginClientMove(View* view, wlr_seat_client* seatClient, uint32_t serial);
     void beginClientResize(View* view, wlr_seat_client* seatClient, uint32_t serial, uint32_t edges);
     void resetMode();
@@ -308,6 +309,8 @@ namespace umbriel {
     [[nodiscard]] bool constraintSurfaceActive() const;
     void warpToConstraintHint(wlr_pointer_constraint_v1* constraint);
     [[nodiscard]] bool confineDelta(double* dx, double* dy) const;
+    // Surface-local units per layout unit in `surface`: above 1 for an X11 window drawn at native resolution.
+    [[nodiscard]] double surfaceScale(wlr_surface* surface) const;
     TabletToolState* toolState(wlr_tablet_tool* tool);
     void setToolEmulating(TabletToolState* state, bool emulating);
     void processTabletMotion(uint32_t timeMsec, double oldX, double oldY, TabletToolState* state, wlr_tablet* tablet);

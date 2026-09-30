@@ -24,6 +24,7 @@
 #include "wlr.h"
 #include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
+#include "xwayland/xwayland.h"
 
 #include <algorithm>
 #include <array>
@@ -702,8 +703,8 @@ namespace umbriel {
       updateOutputManagerConfig();
       // A disabled output must not keep keyboard focus: pull it onto a live one.
       refocus();
-      // Scale may have changed; every surface must hear about it or clients
-      // like xwayland-satellite keep mapping input with the stale scale.
+      // Scale may have changed; every surface must hear about it or scale-aware
+      // clients keep mapping input with the stale scale.
       refreshSurfaceScales();
     }
     if (effects.tearingPolicy) {
@@ -805,8 +806,7 @@ namespace umbriel {
       if (!view->mapped() || view->onActiveWorkspace()) {
         continue;
       }
-      wlr_xdg_surface_for_each_surface(
-          view->toplevel()->base,
+      view->forEachSurface(
           [](wlr_surface* surface, int /*sx*/, int /*sy*/, void* userData) {
             wlr_surface_send_frame_done(surface, static_cast<timespec*>(userData));
           },
@@ -981,8 +981,13 @@ namespace umbriel {
   void Server::onNewXdgToplevel(wl_listener* listener, void* data) {
     Server* self;
     self = wl_container_of(listener, self, m_newXdgToplevel);
-    View& view = self->m_registry.add(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
-    self->assignLaunchOriginFromEnvironment(view);
+    self->adoptView(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
+  }
+
+  View& Server::adoptView(std::unique_ptr<View> view) {
+    View& adopted = m_registry.add(std::move(view));
+    assignLaunchOriginFromEnvironment(adopted);
+    return adopted;
   }
 
   void Server::onSetXdgToplevelTag(wl_listener* listener, void* data) {
@@ -1229,10 +1234,9 @@ namespace umbriel {
         static_cast<const void*>(token != nullptr ? token->seat : nullptr),
         static_cast<const void*>(token != nullptr ? token->surface : nullptr),
         surfaceClientPid(token != nullptr ? token->surface : nullptr),
-        source != nullptr && source->toplevel()->app_id != nullptr ? source->toplevel()->app_id : "",
+        source != nullptr && source->appId() != nullptr ? source->appId() : "",
         token != nullptr && token->app_id != nullptr ? token->app_id : "", static_cast<const void*>(event->surface),
-        surfaceClientPid(event->surface),
-        target != nullptr && target->toplevel()->app_id != nullptr ? target->toplevel()->app_id : "",
+        surfaceClientPid(event->surface), target != nullptr && target->appId() != nullptr ? target->appId() : "",
         target != nullptr && target->mapped(), target != nullptr && target->onActiveWorkspace(), targetKeyboardFocused,
         targetPointerFocused, targetWorkspace != nullptr ? targetWorkspace->name() : "",
         targetWorkspace != nullptr && targetWorkspace->active(),
@@ -1248,8 +1252,7 @@ namespace umbriel {
       target->deferActivation(trusted);
       kLog.debug(
           "xdg-activation startup placement target_app_id='{}' mapped={} action=defer",
-          target != nullptr && target->toplevel()->app_id != nullptr ? target->toplevel()->app_id : "",
-          target != nullptr && target->mapped()
+          target != nullptr && target->appId() != nullptr ? target->appId() : "", target != nullptr && target->mapped()
       );
       return;
     }
@@ -1276,9 +1279,8 @@ namespace umbriel {
         kLog.debug(
             "xdg-activation policy target_app_id='{}' trusted={} compositor_issued={} input_backed={} mapped={} "
             "focus_on_activate={} already_focused={} action={}",
-            entry->toplevel()->app_id != nullptr ? entry->toplevel()->app_id : "", trusted,
-            watch != nullptr && watch->compositorIssued, watch != nullptr && watch->inputBacked, entry->mapped(),
-            focusOnActivate, alreadyFocused,
+            entry->appId() != nullptr ? entry->appId() : "", trusted, watch != nullptr && watch->compositorIssued,
+            watch != nullptr && watch->inputBacked, entry->mapped(), focusOnActivate, alreadyFocused,
             alreadyFocused ? "none"
                            : (entry->mapped() ? (focusOnActivate && !launchAway ? "focus" : "urgent") : "defer")
         );
@@ -1309,7 +1311,7 @@ namespace umbriel {
         "app_id_hint='{}' source_mapped={} source_visible={} source_keyboard_focused={} source_pointer_focused={}",
         tokenName != nullptr ? tokenName : "<unknown>", token->serial, static_cast<const void*>(token->seat),
         static_cast<const void*>(token->surface), surfaceClientPid(token->surface),
-        source != nullptr && source->toplevel()->app_id != nullptr ? source->toplevel()->app_id : "",
+        source != nullptr && source->appId() != nullptr ? source->appId() : "",
         token->app_id != nullptr ? token->app_id : "", source != nullptr && source->mapped(),
         source != nullptr && source->onActiveWorkspace(),
         source != nullptr
@@ -1394,13 +1396,13 @@ namespace umbriel {
     kLog.debug(
         "launch placement token='{}' output='{}' workspace='{}' target_app_id='{}' assigned={}",
         tokenName != nullptr ? tokenName : "<unknown>", watch->launchOutputName, watch->launchWorkspaceId,
-        view.toplevel()->app_id != nullptr ? view.toplevel()->app_id : "", assigned
+        view.appId() != nullptr ? view.appId() : "", assigned
     );
     return assigned;
   }
 
   void Server::assignLaunchOriginFromEnvironment(View& view) {
-    if (view.xwayland() || m_xdgActivation == nullptr) {
+    if (m_xdgActivation == nullptr || view.pid() <= 0) {
       return;
     }
     const std::optional<std::string> tokenName = processEnvironmentValue(view.pid(), kLaunchTokenEnvironment);
@@ -2100,7 +2102,7 @@ namespace umbriel {
       wlr_output* output = nullptr;
       if (cfg.mapToFocusedWindow) {
         if (View* view = View::fromSurface(m_seat->wlr()->keyboard_state.focused_surface)) {
-          const wlr_box geo = view->toplevel()->base->geometry;
+          const wlr_box geo = view->geometryBox();
           if (geo.width > 0 && geo.height > 0) {
             region = {view->layoutTargetX(), view->layoutTargetY(), geo.width, geo.height};
           }
@@ -2988,7 +2990,7 @@ namespace umbriel {
     for (const auto& output : m_outputs) {
       output->forgetHdrView(view);
     }
-    const bool hadKeyboardFocus = m_seat->wlr()->keyboard_state.focused_surface == view->toplevel()->base->surface;
+    const bool hadKeyboardFocus = m_seat->wlr()->keyboard_state.focused_surface == view->rootSurface();
     if (m_scratchpadManager != nullptr) {
       m_scratchpadManager->remove(view);
     }
@@ -3048,6 +3050,9 @@ namespace umbriel {
       self->updateOutputManagerConfig();
     }
     self->m_cursor->handleOutputLayoutChange();
+    if (self->m_xwayland != nullptr) {
+      self->m_xwayland->handleOutputLayoutChange();
+    }
   }
 
   void Server::updateOutputManagerConfig() {

@@ -86,6 +86,9 @@ wlr_has_drm_backend = cpp.get_define(
 if cpp.get_define('WLR_HAS_LIBINPUT_BACKEND', prefix: '#include <wlr/config.h>', dependencies: wlroots_dep) != '1'
   error('Umbriel requires wlroots built with the libinput backend')
 endif
+if cpp.get_define('WLR_HAS_XWAYLAND', prefix: '#include <wlr/config.h>', dependencies: wlroots_dep) != '1'
+  error('Umbriel requires wlroots built with Xwayland support')
+endif
 
 # jemalloc keeps a long-running compositor's heap compact: fewer arenas and fast page decay bound RSS. It interposes malloc only on glibc, so other libc builds
 # skip it (auto) or fail (enabled).
@@ -115,6 +118,9 @@ cairo_dep = dependency('cairo')
 pangocairo_dep = dependency('pangocairo')
 libdrm_dep = dependency('libdrm', version: '>=2.4.129')
 libudev_dep = dependency('libudev', required: false)
+xcb_dep = dependency('xcb')
+xcb_icccm_dep = dependency('xcb-icccm')
+xcb_ewmh_dep = dependency('xcb-ewmh')
 native_drm_policy_supported = wlr_has_drm_backend and libudev_dep.found()
 native_drm_policy_deps = []
 if native_drm_policy_supported
@@ -351,6 +357,18 @@ color_management_server_c = custom_target(
   'color-management-v1-server-protocol.c',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/color-management/color-management-v1.xml',
   output: 'color-management-v1-server-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+xdg_output_server_h = custom_target(
+  'xdg-output-unstable-v1-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/xdg-output/xdg-output-unstable-v1.xml',
+  output: 'xdg-output-unstable-v1-protocol.h',
+  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+xdg_output_server_c = custom_target(
+  'xdg-output-unstable-v1-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/xdg-output/xdg-output-unstable-v1.xml',
+  output: 'xdg-output-unstable-v1-protocol.c',
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
@@ -613,10 +631,14 @@ core_sources = files(
   'src/view/resize_crossfade.cpp',
   'src/view/registry.cpp',
   'src/server/focus.cpp',
-  'src/xwayland/supervisor.cpp',
+  'src/xwayland/xwayland.cpp',
+  'src/xwayland/window.cpp',
+  'src/xwayland/unmanaged.cpp',
+  'src/xwayland/outputs.cpp',
   'src/core/process.cpp',
   'src/core/process_syscall.cpp',
   'src/view/view_foreign.cpp',
+  'src/view/view_role.cpp',
   'src/view/popup.cpp',
   'src/layer/layer_surface.cpp',
   'src/scene/surface_blur.cpp',
@@ -653,6 +675,9 @@ umbriel_core_deps = [
   native_drm_policy_deps,
   nlohmann_json_dep,
   layer_shell_protocol_dep,
+  xcb_dep,
+  xcb_icccm_dep,
+  xcb_ewmh_dep,
 ]
 
 umbriel_core = static_library(
@@ -662,6 +687,8 @@ umbriel_core = static_library(
     output_mgmt_client_c,
     color_management_server_h,
     color_management_server_c,
+    xdg_output_server_h,
+    xdg_output_server_c,
   ],
   include_directories: include_directories('src'),
   link_with: umbriel_pure,

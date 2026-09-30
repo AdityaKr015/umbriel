@@ -6,6 +6,7 @@
 #include "core/build_info.h"
 #include "core/fdlimit.h"
 #include "core/log.h"
+#include "core/process.h"
 #include "scene/cheatsheet_rows.h"
 #include "server/ipc.h"
 #include "server/ipc_commands.h"
@@ -393,9 +394,9 @@ int main(int argc, char** argv) {
     umbriel::Server server;
 
     // SIGINT and SIGTERM are handled on the event loop by the server itself.
-    // SIG_IGN for SIGCHLD reaps spawned children without a handler. Every fork
-    // in Server restores the default before exec.
-    std::signal(SIGCHLD, SIG_IGN);
+    // Exited children are reaped by a SIGCHLD handler. Every fork in Server
+    // restores the default before exec.
+    umbriel::installChildReaper();
 
     if (!server.start(startupCmd)) {
       kLog.error("failed to start server");

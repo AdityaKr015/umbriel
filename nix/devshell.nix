@@ -31,7 +31,7 @@ pkgs.mkShell {
     python3
     imagemagick
     procps
-    xwayland-satellite
+    xwayland
   ];
 
   shellHook = ''

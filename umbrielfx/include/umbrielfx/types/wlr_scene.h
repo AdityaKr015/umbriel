@@ -152,7 +152,8 @@ struct wlr_scene_surface {
 	struct wlr_surface *surface;
 
 	struct {
-		struct wlr_box clip;
+		struct wlr_box clip; // in scene units
+		double scale; // surface-local units per scene unit
 
 		struct wlr_addon addon;
 
@@ -1103,12 +1104,30 @@ struct wlr_scene_tree *wlr_scene_subsurface_tree_create(
 /**
  * Sets a cropping region for any subsurface trees that are children of this
  * scene node. The clip coordinate space will be that of the root surface of
- * the subsurface tree.
+ * the subsurface tree, in scene units (see
+ * wlr_scene_subsurface_tree_set_scale()).
  *
  * A NULL or empty clip will disable clipping
  */
 void wlr_scene_subsurface_tree_set_clip(struct wlr_scene_node *node,
 	const struct wlr_box *clip);
+
+/**
+ * Sets how many surface-local units make up one scene unit, for every surface
+ * in the subsurface trees under this scene node. Such a surface is shown at
+ * 1/scale of its surface size: Xwayland, for one, can draw at an output's
+ * physical resolution. Clip boxes stay in scene units, and wlr_scene_node_at()
+ * reports surface-local coordinates. The default is 1.
+ */
+void wlr_scene_subsurface_tree_set_scale(struct wlr_scene_node *node,
+	double scale);
+
+/**
+ * Gets the size a scene surface is shown at, in scene units: its surface size
+ * divided by its scale (see wlr_scene_subsurface_tree_set_scale()).
+ */
+void wlr_scene_surface_get_size(const struct wlr_scene_surface *surface,
+	int *width, int *height);
 
 /**
  * Add a node displaying an xdg_surface and all of its sub-surfaces to the

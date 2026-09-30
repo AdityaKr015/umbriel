@@ -704,11 +704,11 @@ namespace umbriel {
           }
           return false;
         }
-        wlr_xdg_toplevel_send_close(view->toplevel());
+        view->requestClose();
         return true;
       }
       if (View* view = focusedWindow(server)) {
-        wlr_xdg_toplevel_send_close(view->toplevel());
+        view->requestClose();
       }
       return true;
     }
@@ -1065,7 +1065,7 @@ namespace umbriel {
         if (view->maximizedToEdges()) {
           view->setMaximizedToEdges(false);
         }
-        if (!view->toplevel()->scheduled.fullscreen) {
+        if (!view->scheduledFullscreen()) {
           view->toggleMaximized();
         }
         return true;

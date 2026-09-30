@@ -28,13 +28,13 @@ namespace umbriel {
 
   void View::updateForeignIdentity() {
     if (m_foreign != nullptr) {
-      wlr_foreign_toplevel_handle_v1_set_title(m_foreign, m_toplevel->title != nullptr ? m_toplevel->title : "");
-      wlr_foreign_toplevel_handle_v1_set_app_id(m_foreign, m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
+      wlr_foreign_toplevel_handle_v1_set_title(m_foreign, title() != nullptr ? title() : "");
+      wlr_foreign_toplevel_handle_v1_set_app_id(m_foreign, appId() != nullptr ? appId() : "");
     }
     if (m_extForeign != nullptr) {
       const wlr_ext_foreign_toplevel_handle_v1_state state = {
-          .title = m_toplevel->title,
-          .app_id = m_toplevel->app_id,
+          .title = title(),
+          .app_id = appId(),
       };
       wlr_ext_foreign_toplevel_handle_v1_update_state(m_extForeign, &state);
     }
@@ -45,8 +45,8 @@ namespace umbriel {
     if (m_foreign == nullptr) {
       return;
     }
-    wlr_foreign_toplevel_handle_v1_set_maximized(m_foreign, m_toplevel->current.maximized);
-    wlr_foreign_toplevel_handle_v1_set_fullscreen(m_foreign, m_toplevel->current.fullscreen);
+    wlr_foreign_toplevel_handle_v1_set_maximized(m_foreign, currentMaximized());
+    wlr_foreign_toplevel_handle_v1_set_fullscreen(m_foreign, currentFullscreen());
   }
 
   void View::enterForeignOutput() {
@@ -98,7 +98,7 @@ namespace umbriel {
     updateForeignIdentity();
     // A title the client set settles the opening rules even when it is empty: an empty title is matchable, an absent
     // one is not. applyWindowRules refreshes dynamic effects itself.
-    if (!m_initialRulesSettled && m_toplevel->title != nullptr) {
+    if (!m_initialRulesSettled && title() != nullptr) {
       m_initialRulesSettled = true;
       applyWindowRules(m_initialRules);
       return;
@@ -107,7 +107,7 @@ namespace umbriel {
   }
 
   void View::handleSetAppId() {
-    kLog.debug("app_id='{}'", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "");
+    kLog.debug("app_id='{}'", appId() != nullptr ? appId() : "");
     updateForeignIdentity();
     if (!m_initialRulesSettled) {
       // Title hasn't arrived yet. If no rule cares about title, we can settle now.
@@ -135,8 +135,8 @@ namespace umbriel {
     Workspace* workspace = m_workspace;
     kLog.debug(
         "foreign-toplevel activate app_id='{}' mapped={} visible={} workspace='{}' other_workspace={}",
-        m_toplevel->app_id != nullptr ? m_toplevel->app_id : "", m_mapped, m_onActiveWorkspace,
-        workspace != nullptr ? workspace->name() : "", workspace != nullptr && !workspace->active()
+        appId() != nullptr ? appId() : "", m_mapped, m_onActiveWorkspace, workspace != nullptr ? workspace->name() : "",
+        workspace != nullptr && !workspace->active()
     );
     m_server->focusView(this, FocusReason::ForeignActivation);
     Overview* overview = m_server->overview();
@@ -145,7 +145,7 @@ namespace umbriel {
     }
   }
 
-  void View::handleForeignClose() { wlr_xdg_toplevel_send_close(m_toplevel); }
+  void View::handleForeignClose() { requestClose(); }
 
   void View::handleForeignDestroy() {
     wl_list_remove(&m_foreignActivate.link);

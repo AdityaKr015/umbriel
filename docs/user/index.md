@@ -27,7 +27,7 @@ without a running session.
 - Independent workspaces and configuration per output
 - Floating, pinned, fullscreen, and [scratchpad](scratchpad.md) windows
 - Configurable keybinds, gestures, window rules, blur, shadows, animations, and [effects](effects.md)
-- X11 application support through xwayland-satellite
+- X11 application support through Xwayland
 - Local [IPC](ipc.md) for scripts, panels, and runtime inspection
 
 ## Help and contributing

@@ -232,7 +232,7 @@ namespace umbriel {
     if (wlr_surface* surface = m_server->seat()->wlr()->keyboard_state.focused_surface) {
       if (View* view = View::fromSurface(surface); view != nullptr && view->mapped() && view->currentOutput() == this) {
         if (const std::optional<HdrMode> mode = view->resolvedRules().hdr) {
-          const bool fullscreen = view->layoutFullscreen() || view->toplevel()->current.fullscreen;
+          const bool fullscreen = view->layoutFullscreen() || view->currentFullscreen();
           return hdrEnabled(*mode, fullscreen, autoHdrEligible(view));
         }
       }
@@ -283,7 +283,7 @@ namespace umbriel {
           && view->onActiveWorkspace()
           && view->currentOutput() == this
           && view->layoutFullscreen()
-          && view->toplevel()->current.fullscreen;
+          && view->currentFullscreen();
     };
     if (View* focused = workspace->focusedView(); eligible(focused)) {
       return focused;
@@ -298,7 +298,7 @@ namespace umbriel {
       return false;
     }
     return wlr_tearing_control_manager_v1_surface_hint_from_surface(
-               m_server->tearingControlManager(), view->toplevel()->base->surface
+               m_server->tearingControlManager(), view->rootSurface()
            )
         == WP_TEARING_CONTROL_V1_PRESENTATION_HINT_ASYNC;
   }
@@ -635,7 +635,7 @@ namespace umbriel {
     if (wlr_surface* surface = m_server->seat()->wlr()->keyboard_state.focused_surface) {
       if (View* view = View::fromSurface(surface); view != nullptr && view->mapped() && view->currentOutput() == this) {
         focusedMode = view->resolvedRules().vrr;
-        focusedFullscreen = view->toplevel()->current.fullscreen || view->toplevel()->scheduled.fullscreen;
+        focusedFullscreen = view->currentFullscreen() || view->scheduledFullscreen();
       }
     }
     return effectiveVrrEnabled(outputMode, fullscreen, focusedMode, focusedFullscreen);
@@ -644,9 +644,7 @@ namespace umbriel {
   bool Output::hasFullscreenView(const View* ignored) const {
     const Workspace* workspace = m_workspaceGroup != nullptr ? m_workspaceGroup->active() : nullptr;
     return workspace != nullptr && std::ranges::any_of(workspace->allViews(), [ignored](const View* view) {
-             return view != ignored
-                 && view->mapped()
-                 && (view->layoutFullscreen() || view->toplevel()->current.fullscreen);
+             return view != ignored && view->mapped() && (view->layoutFullscreen() || view->currentFullscreen());
            });
   }
 
@@ -655,10 +653,10 @@ namespace umbriel {
         || !view->mapped()
         || !view->onActiveWorkspace()
         || view->currentOutput() != this
-        || (!view->layoutFullscreen() && !view->toplevel()->current.fullscreen)) {
+        || (!view->layoutFullscreen() && !view->currentFullscreen())) {
       return false;
     }
-    return m_server->surfaceTreeHdrDescription(view->toplevel()->base->surface) != nullptr;
+    return m_server->surfaceTreeHdrDescription(view->rootSurface()) != nullptr;
   }
 
   View* Output::findAutoHdrCandidate() const {

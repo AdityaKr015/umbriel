@@ -75,7 +75,8 @@ distribution-provided LTO and archive member pruning.
 
 ### Build and link dependencies
 
-- wlroots 0.20.1 or newer, and strictly below 0.21: `umbrielfx` compiles against wlroots' private struct layouts
+- wlroots 0.20.1 or newer, and strictly below 0.21, built with Xwayland support: `umbrielfx` compiles against
+  wlroots' private struct layouts
 - wayland-server 1.24 or newer, plus the Wayland client library
 - wayland-protocols 1.47 or newer
 - xkbcommon
@@ -86,6 +87,7 @@ distribution-provided LTO and archive member pruning.
 - Cairo and PangoCairo
 - tomlplusplus
 - nlohmann-json
+- xcb, xcb-icccm, and xcb-ewmh
 - EGL, GLES2, and GBM
 - lcms2, optional; without it `umbrielfx` rejects client ICC profiles and keeps only its parametric color transforms
 - jemalloc on glibc, optional
@@ -97,13 +99,13 @@ Distribution package names vary.
 
 | Dependency                                 | Role                                                       |
 | ------------------------------------------ | ---------------------------------------------------------- |
-| `xwayland-satellite`                       | X11 application support when `general.xwayland` is enabled |
+| `Xwayland`                                 | X11 application support when `general.xwayland` is enabled |
 | `xdg-desktop-portal-umbriel`               | Screencast and Screenshot portal interfaces for portal-based screen capture |
 | A usable font stack                        | Internal overlays and configuration diagnostics            |
 | A Wayland-capable graphics and input stack | DRM or nested compositor operation through wlroots         |
 
-`xwayland-satellite` must be discoverable on `PATH`. It may be omitted when a
-package or installation deliberately disables Xwayland in the configuration.
+`Xwayland` must be discoverable on `PATH`. It may be omitted when a package or
+installation deliberately disables Xwayland in the configuration.
 
 For a native launch with a working systemd user manager, `start-umbriel` runs
 the compositor as `umbriel.service`. Umbriel uses `systemd-run` from that

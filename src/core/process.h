@@ -9,6 +9,11 @@ namespace umbriel {
   // before exec, alongside `restoreFileDescriptorLimit`.
   void resetChildSignalState();
 
+  // Reap exited children from a SIGCHLD handler. Unlike SIG_IGN, a handler is not inherited across exec, so programs
+  // the compositor's libraries launch start with the default disposition: Xwayland waits for its own xkbcomp child and
+  // cannot start when SIGCHLD is ignored. wlroots tolerates its Xwayland launcher being reaped here.
+  void installChildReaper();
+
   // Close every non-standard descriptor before a managed application child
   // hands control to systemd-run. Returns false when a complete close cannot
   // be guaranteed.

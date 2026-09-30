@@ -1,32 +1,24 @@
 # Xwayland input stability
 
-Umbriel supports X11 clients through xwayland-satellite, which acts as both
-the Wayland client owning every X11 surface and the window manager of its own
-X server. Two satellite behaviors make compositor-side geometry churn
-dangerous, and several Umbriel invariants exist purely to protect against
-them. Breaking any of these reintroduces a bug class where an X11 game's
-mouse input dies in part of the screen while everything looks correct.
+Umbriel supports X11 clients through wlroots' Xwayland server: managed X11
+windows are views, and the compositor tells the X server where each one sits
+on screen. X11 games are sensitive to compositor-side geometry churn, and
+several Umbriel invariants exist to keep it away from them. Breaking any of
+these reintroduces a bug class where an X11 game's mouse input dies in part
+of the screen while everything looks correct.
 
-## Satellite latches wl_surface.enter forever
-
-Satellite positions each X11 window in its X coordinate space at the origin
-of the output the surface last entered (`logical_position - global_min`), and
-sets the surface's pointer scale from that output. `wl_surface.leave` never
-reverts either one; only the next `enter` does. A single enter event for the
-wrong output therefore permanently corrupts the window's X position and
-pointer mapping until the surface happens to fully leave and re-enter its
-real output.
+## Output membership follows real geometry
 
 wlroots emits enter/leave from scene-node visibility with a 10% overlap
-threshold. Two situations cross it:
+threshold, and scale-aware clients size and map input from the outputs a
+surface entered. Two situations cross that threshold:
 
 - Any window whose layout box reaches past its output: a scrolling column
   scrolled off the shared edge, an unanimated snap move that jumps a node,
-  a workspace slide, a close-fade snapshot (observed: a strip snap during a
-  fullscreen fight re-homed a game to the neighboring output's origin).
-- Interactive drags legitimately span monitors; every boundary graze latches
-  the neighbor's origin and scale mid-drag. This is accepted as inherent to
-  a drag (the drop's final enter re-homes correctly), see below.
+  a workspace slide, a close-fade snapshot.
+- Interactive drags legitimately span monitors; every boundary graze enters
+  the neighbor mid-drag. This is accepted as inherent to a drag (the drop's
+  final enter settles it), see below.
 
 Defense:
 
@@ -57,11 +49,11 @@ filtering its result.
 ## X11 games can retain stale input after a windowed resize round trip
 
 A fake-fullscreen game (borderless window at output size) that receives a
-compositor-imposed windowed size, then returns to fullscreen, keeps a stale
+compositor-imposed windowed size, then returns to fullscreen, can keep a stale
 mouse mapping: X geometry, stacking, focus, and event delivery all recover,
-but hover and clicks die outside the transient size. This is upstream
-Wine/satellite behavior, reproduced outside Umbriel; the boundary of the dead
-zone always equals whatever transient size the compositor sent.
+but hover and clicks die outside the transient size. This is upstream Wine
+behavior; the boundary of the dead zone always equals whatever transient size
+the compositor sent.
 
 Umbriel therefore avoids incidental windowed resize round trips while keeping
 deliberate fullscreen exits authoritative:
@@ -76,7 +68,7 @@ deliberate fullscreen exits authoritative:
    re-tiles as a regular column.
 3. **Fullscreen exit** (`View::setFullscreen(false)`): a tiled view clears
    fullscreen and sets its restored column size in the same client configure.
-   This applies equally to native Wayland and xwayland-satellite
+   This applies equally to native Wayland and X11
    views. There is no timer and no size-0x0 probe, so an X11 client that keeps
    its fullscreen-sized buffer cannot make the compositor undo the action.
    Client requests that arrive later still use the normal fullscreen request
@@ -103,7 +95,7 @@ edge. Run it as `just check output/two_output_containment`.
 
 The shared fullscreen-exit ordering is covered by `just check layout/fullscreen_exit_configure`: the first
 windowed configure must already contain the restored tile size. The headless
-harness cannot exercise satellite or multi-output X coordinate spaces, so the
+harness runs without Xwayland and cannot exercise multi-output X coordinate spaces, so the
 X11 path still needs a running session with Steam or another X11 game. A
 fullscreen exit must start the windowed resize immediately and remain windowed
 after the animation settles. For the protected float and re-tile round trip,

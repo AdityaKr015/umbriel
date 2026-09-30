@@ -31,7 +31,7 @@
 #include "wlr.h"
 #include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
-#include "xwayland/supervisor.h"
+#include "xwayland/xwayland.h"
 
 extern "C" {
 #include <umbrielfx/render/effect.h>
@@ -170,6 +170,9 @@ namespace umbriel {
       }
       if (interfaceName == "zxdg_decoration_manager_v1" || interfaceName == "org_kde_kwin_server_decoration_manager") {
         return policy->advertiseDecorationManagers;
+      }
+      if (interfaceName == "zxdg_output_manager_v1" && server->xwayland() != nullptr) {
+        return server->xwayland()->advertiseOutputManager(client, global);
       }
       if (interfaceName == "wp_color_manager_v1") {
         const bool wine = WineColorManager::clientNeedsCompatibility(client);
@@ -404,14 +407,6 @@ namespace umbriel {
     return pid > 0 ? pid : -1;
   }
 
-  bool Server::isXwaylandSurface(const wlr_surface* surface) const {
-    if (m_xwayland == nullptr) {
-      return false;
-    }
-    const pid_t pid = surfaceClientPid(surface);
-    return pid > 0 && pid == m_xwayland->pid();
-  }
-
   Server::Server() : m_effects(*this) {
     m_nested = std::getenv("WAYLAND_DISPLAY") != nullptr
         || std::getenv("WAYLAND_SOCKET") != nullptr
@@ -585,6 +580,7 @@ namespace umbriel {
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP] = wlr_scene_tree_create(&m_scene->tree);
     m_fullscreenTree = wlr_scene_tree_create(&m_scene->tree);
     m_pinnedTree = wlr_scene_tree_create(&m_scene->tree);
+    m_xwaylandUnmanagedTree = wlr_scene_tree_create(&m_scene->tree);
     m_shellLayerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY] = wlr_scene_tree_create(&m_scene->tree);
     m_imPopupTree = wlr_scene_tree_create(&m_scene->tree);
     m_cheatsheetTree = wlr_scene_tree_create(&m_scene->tree);
@@ -771,6 +767,9 @@ namespace umbriel {
     m_sessionLock.reset();
     m_layerSurfaces.clear();
     m_registry.clear();
+    // After the views, which hold listeners on X11 surfaces, and before the seat, which unmanaged X11 windows release
+    // keyboard focus through. The Xwayland client itself goes with the other Wayland clients below.
+    m_xwayland.reset();
     m_keyboards.clear();
     // The backend destroys physical input devices below, after the seat and cursor; detach their watchers first.
     for (const auto& pointer : m_pointers) {
@@ -805,8 +804,6 @@ namespace umbriel {
     m_gestures.reset();
     m_cursor.reset();
 
-    // Tear down xwayland-satellite before destroying Wayland clients.
-    m_xwayland.reset();
     if (m_backgroundFrameTimer != nullptr) {
       wl_event_source_remove(m_backgroundFrameTimer);
       m_backgroundFrameTimer = nullptr;
@@ -945,8 +942,8 @@ namespace umbriel {
     setenv("XDG_SESSION_DESKTOP", "umbriel", 1);
     setenv("XDG_SESSION_TYPE", "wayland", 1);
 
-    // Export cursor settings so X11 clients (via xwayland-satellite) and
-    // toolkit clients pick up the compositor's configured cursor.
+    // Export cursor settings so X11 clients and toolkit clients pick up the
+    // compositor's configured cursor.
     const auto& cursorCfg = config().input.cursor;
     const std::string cursorSize = std::to_string(cursorCfg.size);
     setenv("XCURSOR_SIZE", cursorSize.c_str(), 1);
@@ -954,12 +951,16 @@ namespace umbriel {
       setenv("XCURSOR_THEME", cursorCfg.theme.c_str(), 1);
     }
 
-    // Start xwayland-satellite before session services and autostart so X11
-    // applications can connect. The supervisor applies configured values in
-    // the child while this process retains its session-control environment.
+    // Create the Xwayland server before session services and autostart so X11
+    // applications can connect. It starts lazily: the X display socket exists
+    // now, and Xwayland itself spawns when the first X client connects.
     if (config().general.xwayland) {
-      m_xwayland = std::make_unique<XwaylandSupervisor>(wl_display_get_event_loop(m_display), m_socketName);
-      m_xwayland->start();
+      m_xwayland = std::make_unique<Xwayland>(*this);
+      if (m_xwayland->available()) {
+        setenv("DISPLAY", m_xwayland->displayName(), 1);
+      } else {
+        m_xwayland.reset();
+      }
     }
 
     // Fork session synchronization before applying configured values locally.
@@ -1004,11 +1005,11 @@ namespace umbriel {
 
   void Server::showConfigDiagnostics() {
     std::vector<ConfigDiagnostic> diagnostics = configDiagnostics();
-    if (m_xwayland != nullptr && !m_xwayland->executableAvailable()) {
+    if (config().general.xwayland && m_xwayland == nullptr) {
       ConfigDiagnostic diagnostic;
       diagnostic.severity = ConfigDiagnostic::Severity::Warning;
       diagnostic.message =
-          "general.xwayland is enabled, but xwayland-satellite was not found on PATH; X11 applications will not work";
+          "general.xwayland is enabled, but the Xwayland server could not be created; X11 applications will not work";
       diagnostics.push_back(std::move(diagnostic));
     }
     m_configBanner->show(diagnostics);
@@ -1177,8 +1178,8 @@ namespace umbriel {
       }
       setenv("WAYLAND_DISPLAY", m_socketName.c_str(), 1);
       unsetenv("WAYLAND_SOCKET");
-      if (m_xwayland != nullptr && !m_xwayland->display().empty()) {
-        setenv("DISPLAY", m_xwayland->display().c_str(), 1);
+      if (m_xwayland != nullptr) {
+        setenv("DISPLAY", m_xwayland->displayName(), 1);
       } else {
         // Avoid X11/XWayland fallback into the parent session.
         unsetenv("DISPLAY");

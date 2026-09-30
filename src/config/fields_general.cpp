@@ -225,6 +225,7 @@ namespace umbriel {
               registry::Case::Fold
           ),
           boolean("xwayland", &G::xwayland),
+          boolean("xwayland_native_resolution", &G::xwaylandNativeResolution),
           boolean("show_cheatsheet", &G::showCheatsheet),
           boolean("focus_on_activate", &G::focusOnActivate),
           boolean("honor_restored_maximize", &G::honorRestoredMaximize),

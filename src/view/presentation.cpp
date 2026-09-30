@@ -136,9 +136,11 @@ namespace umbriel {
           wlr_surface* surface = sceneSurface->surface;
           wlr_fbox base{};
           wlr_surface_get_buffer_source_box(surface, &base);
-          const wlr_fbox src = croppedSourceBox(
-              base, *ctx.geometry, *ctx.content, *ctx.clip, surface->current.width, surface->current.height
-          );
+          // Geometry, content, and clip are in scene units, which differ from surface units when it is drawn scaled.
+          int width = 0;
+          int height = 0;
+          wlr_scene_surface_get_size(sceneSurface, &width, &height);
+          const wlr_fbox src = croppedSourceBox(base, *ctx.geometry, *ctx.content, *ctx.clip, width, height);
           if (src.width <= 0 || src.height <= 0) {
             return;
           }
@@ -159,9 +161,10 @@ namespace umbriel {
             return;
           }
           wlr_scene_buffer_set_source_box(buffer, nullptr);
-          wlr_scene_buffer_set_dest_size(
-              buffer, sceneSurface->surface->current.width, sceneSurface->surface->current.height
-          );
+          int width = 0;
+          int height = 0;
+          wlr_scene_surface_get_size(sceneSurface, &width, &height);
+          wlr_scene_buffer_set_dest_size(buffer, width, height);
         },
         surface
     );

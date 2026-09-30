@@ -265,7 +265,7 @@ fi
 "$UMBRIEL" msg window-toggle-fullscreen > /dev/null
 "$UMBRIEL" settle
 
-# The 0.1 fraction floor, not the one-pixel minimum clampXdgWidth alone leaves a
+# The 0.1 fraction floor, not the one-pixel minimum clampWidth alone leaves a
 # hint-less client with: the delta lands on the fraction, so from the 700px box
 # this is 0.547 - 0.9 -> 0.1, where pixel arithmetic would land on 1px.
 floor=$(box float-a)

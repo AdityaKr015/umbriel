@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <wlr/types/wlr_compositor.h>
 #include "umbrielfx/types/wlr_scene.h"
@@ -27,6 +28,9 @@ struct wlr_scene_subsurface_tree {
 	struct wlr_addon scene_addon;
 
 	struct wlr_box clip;
+	// Surface-local units per scene unit, shared by the whole client surface
+	// tree. New subsurfaces inherit it when their scene nodes are created.
+	double scale;
 	// Optional hit-test policy shared by the whole client surface tree.
 	// New subsurfaces inherit it when their scene nodes are created.
 	wlr_scene_buffer_point_accepts_input_func_t point_accepts_input;
@@ -37,6 +41,12 @@ struct wlr_scene_subsurface_tree {
 
 	struct wl_listener subsurface_destroy;
 };
+
+// A length in the surface-local units of `subsurface_tree` as scene units.
+static int subsurface_tree_scene_length(
+		const struct wlr_scene_subsurface_tree *subsurface_tree, int length) {
+	return (int)round(length / subsurface_tree->scale);
+}
 
 static void subsurface_tree_addon_destroy(struct wlr_addon *addon) {
 	struct wlr_scene_subsurface_tree *subsurface_tree =
@@ -110,8 +120,10 @@ static bool subsurface_tree_reconfigure_clip(
 	} else {
 		struct wlr_box clip = subsurface_tree->clip;
 		struct wlr_box surface_box = {
-			.width = subsurface_tree->surface->current.width,
-			.height = subsurface_tree->surface->current.height,
+			.width = subsurface_tree_scene_length(subsurface_tree,
+				subsurface_tree->surface->current.width),
+			.height = subsurface_tree_scene_length(subsurface_tree,
+				subsurface_tree->surface->current.height),
 		};
 
 		bool intersects = wlr_box_intersection(&clip, &clip, &surface_box);
@@ -144,7 +156,8 @@ static void subsurface_tree_reconfigure(
 		prev = &child->tree->node;
 
 		wlr_scene_node_set_position(&child->tree->node,
-			subsurface->current.x, subsurface->current.y);
+			subsurface_tree_scene_length(subsurface_tree, subsurface->current.x),
+			subsurface_tree_scene_length(subsurface_tree, subsurface->current.y));
 
 		if (has_clip) {
 			subsurface_tree_reconfigure_clip(child);
@@ -164,7 +177,8 @@ static void subsurface_tree_reconfigure(
 		prev = &child->tree->node;
 
 		wlr_scene_node_set_position(&child->tree->node,
-			subsurface->current.x, subsurface->current.y);
+			subsurface_tree_scene_length(subsurface_tree, subsurface->current.x),
+			subsurface_tree_scene_length(subsurface_tree, subsurface->current.y));
 
 		if (has_clip) {
 			subsurface_tree_reconfigure_clip(child);
@@ -225,6 +239,27 @@ static const struct wlr_addon_interface subsurface_tree_surface_addon_impl = {
 static struct wlr_scene_subsurface_tree *scene_surface_tree_create(
 	struct wlr_scene_tree *parent, struct wlr_surface *surface);
 
+static void subsurface_tree_set_scale(
+		struct wlr_scene_subsurface_tree *subsurface_tree, double scale) {
+	subsurface_tree->scale = scale;
+	scene_surface_set_scale(subsurface_tree->scene_surface, scale);
+
+	struct wlr_subsurface *subsurface;
+	wl_list_for_each(subsurface, &subsurface_tree->surface->current.subsurfaces_below,
+			current.link) {
+		subsurface_tree_set_scale(
+			subsurface_tree_from_subsurface(subsurface_tree, subsurface), scale);
+	}
+	wl_list_for_each(subsurface, &subsurface_tree->surface->current.subsurfaces_above,
+			current.link) {
+		subsurface_tree_set_scale(
+			subsurface_tree_from_subsurface(subsurface_tree, subsurface), scale);
+	}
+
+	// Subsurface positions and the clip depend on the scale.
+	subsurface_tree_reconfigure(subsurface_tree);
+}
+
 static bool subsurface_tree_create_subsurface(
 		struct wlr_scene_subsurface_tree *parent,
 		struct wlr_subsurface *subsurface) {
@@ -238,6 +273,9 @@ static bool subsurface_tree_create_subsurface(
 	if (parent->point_accepts_input != NULL) {
 		subsurface_tree_set_point_accepts_input(child,
 			parent->point_accepts_input);
+	}
+	if (parent->scale != 1.0) {
+		subsurface_tree_set_scale(child, parent->scale);
 	}
 
 	wlr_addon_init(&child->surface_addon, &subsurface->surface->addons,
@@ -284,6 +322,7 @@ static struct wlr_scene_subsurface_tree *scene_surface_tree_create(
 	}
 
 	subsurface_tree->surface = surface;
+	subsurface_tree->scale = 1.0;
 
 	struct wlr_subsurface *subsurface;
 	wl_list_for_each(subsurface, &surface->current.subsurfaces_below,
@@ -403,6 +442,42 @@ void wlr_scene_subsurface_tree_set_clip(struct wlr_scene_node *node,
 	bool found =
 #endif
 		subsurface_tree_set_clip(node, clip);
+
+	assert(found);
+}
+
+static bool subsurface_tree_set_scale_under(struct wlr_scene_node *node,
+		double scale) {
+	if (node->type != WLR_SCENE_NODE_TREE) {
+		return false;
+	}
+
+	struct wlr_scene_subsurface_tree *tree = get_subsurface_tree_from_node(node);
+	if (tree) {
+		// The tree carries the scale down to its subsurfaces.
+		if (tree->scale != scale) {
+			subsurface_tree_set_scale(tree, scale);
+		}
+		return true;
+	}
+
+	bool discovered_subsurface_tree = false;
+	struct wlr_scene_tree *scene_tree = wlr_scene_tree_from_node(node);
+	struct wlr_scene_node *child;
+	wl_list_for_each(child, &scene_tree->children, link) {
+		discovered_subsurface_tree |= subsurface_tree_set_scale_under(child, scale);
+	}
+
+	return discovered_subsurface_tree;
+}
+
+void wlr_scene_subsurface_tree_set_scale(struct wlr_scene_node *node,
+		double scale) {
+	assert(scale > 0);
+#ifndef NDEBUG
+	bool found =
+#endif
+		subsurface_tree_set_scale_under(node, scale);
 
 	assert(found);
 }

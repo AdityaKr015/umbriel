@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# xwayland-satellite requests fullscreen before the initial surface commit when an X11 game window already matches an
-# output. Umbriel must carry that pending request into the initial configure so the game maps as a square, borderless
+# A client can request fullscreen before its first buffer, as a game whose window already matches an output does.
+# Umbriel must carry that pending request into the initial configure so the game maps as a square, borderless
 # fullscreen surface instead of an output-sized rounded tile.
 set -euo pipefail
 

@@ -23,7 +23,7 @@
   jemalloc,
   tomlplusplus,
   nlohmann_json,
-  xwayland-satellite,
+  xwayland,
   makeBinaryWrapper,
   rev ? "unknown",
 }:
@@ -81,7 +81,7 @@ stdenv.mkDerivation {
         --replace-fail 'Exec=start-umbriel' "Exec=$out/bin/start-umbriel"
     fi
     wrapProgram $out/bin/umbriel \
-      --prefix PATH : ${lib.makeBinPath [ xwayland-satellite ]} \
+      --prefix PATH : ${lib.makeBinPath [ xwayland ]} \
   '';
 
   passthru.providedSessions = [ "umbriel" ];

@@ -90,4 +90,13 @@ extern "C" {
 #define namespace namespace_
 #include <wlr/types/wlr_layer_shell_v1.h>
 #undef namespace
+
+// xcb pulls in pthread.h, which declares a C++ class; include it before shadowing the keyword.
+#include <wlr/xwayland/server.h>
+#include <xcb/xcb.h>
+#include <xcb/xcb_ewmh.h>
+#include <xcb/xcb_icccm.h>
+#define class class_
+#include <wlr/xwayland/xwayland.h>
+#undef class
 }

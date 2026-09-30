@@ -6,9 +6,8 @@ workspaces, window rules, blur, shadows, and fluid animations.
 It runs independently and can be paired with [Noctalia](https://github.com/noctalia-dev/noctalia), which provides a
 first-class desktop shell experience for Umbriel. Umbriel is built in C++23 on
 [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) and `umbrielfx`, its own hard fork of
-[SceneFX](https://github.com/wlrfx/scenefx). Xwayland support comes from
-[xwayland-satellite](https://github.com/Supreeeme/xwayland-satellite), which must be
-installed and on `PATH`. Portal screen capture and sharing is provided by
+[SceneFX](https://github.com/wlrfx/scenefx). Xwayland support comes from wlroots' Xwayland server, which needs the
+`Xwayland` binary installed and on `PATH`. Portal screen capture and sharing is provided by
 [xdg-desktop-portal-umbriel](https://github.com/noctalia-dev/xdg-desktop-portal-umbriel), an
 xdg-desktop-portal backend for Umbriel.
 
@@ -52,7 +51,7 @@ To understand the values and philosophy guiding the project, read our [ethos](ht
 - [Restricted Wayland connections](docs/user/security.md) for sandbox engines through security-context-v1, with
   per-application protocol grants
 - Layer shell, session locking, clipboard management, screen capture, output control, and gamma control
-- X11 application support through xwayland-satellite, when xwayland-satellite is installed and on `PATH`
+- X11 application support through Xwayland, when `Xwayland` is installed and on `PATH`
 - Live-reloaded TOML configuration with diagnostics and includes, plus local IPC and runtime inspection commands
 - Stable effect pools, runtime effect actions, and `umbriel effects [--json]` selection and program inspection
 - Runs as a nested Wayland compositor inside an existing Wayland or X11 desktop for development, or directly on DRM

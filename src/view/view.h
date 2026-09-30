@@ -12,8 +12,8 @@
 
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cmath>
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -36,6 +36,8 @@ struct wlr_subsurface;
 struct wlr_surface;
 struct wlr_xdg_popup;
 struct wlr_xdg_toplevel;
+struct wlr_xwayland_surface;
+struct wlr_xwayland_surface_configure_event;
 
 namespace umbriel {
 
@@ -46,16 +48,54 @@ namespace umbriel {
   enum class LayoutAttachOrigin;
   struct ResolvedWindowRule;
   struct WorkspaceLaunchAnchor;
+  struct SizeHints;
+  struct XwaylandRegion;
 
   class View : public SceneNode, public Animatable {
   public:
     View(Server& server, wlr_xdg_toplevel* toplevel);
+    View(Server& server, wlr_xwayland_surface* xsurface);
     ~View();
 
     View(const View&) = delete;
     View& operator=(const View&) = delete;
 
+    // The shell role behind this window: exactly one of these is non-null.
     [[nodiscard]] wlr_xdg_toplevel* toplevel() const { return m_toplevel; }
+    [[nodiscard]] wlr_xwayland_surface* xwaylandSurface() const { return m_xsurface; }
+    [[nodiscard]] bool xwayland() const { return m_xsurface != nullptr; }
+    // X pixels per layout unit in an X11 window: the scale of its output when X11 clients see outputs at their
+    // physical resolution, else 1.
+    [[nodiscard]] double xwaylandScale() const { return m_xScale; }
+    [[nodiscard]] wlr_surface* rootSurface() const;
+    // Null when the client has not set one. X11 windows report their WM_CLASS class as the app id.
+    [[nodiscard]] const char* title() const;
+    [[nodiscard]] const char* appId() const;
+    // Role state. For xdg toplevels `scheduled` is what the next configure carries and `current` what the client
+    // acknowledged; an X11 window has no acknowledgement, so both read the state last sent to it.
+    [[nodiscard]] bool scheduledFullscreen() const;
+    [[nodiscard]] bool currentFullscreen() const;
+    [[nodiscard]] bool scheduledMaximized() const;
+    [[nodiscard]] bool currentMaximized() const;
+    [[nodiscard]] bool scheduledActivated() const;
+    void setActivatedState(bool activated);
+    void setFullscreenState(bool fullscreen);
+    void setMaximizedState(bool maximized);
+    void requestClose();
+    // The client's window geometry in surface-local coordinates.
+    [[nodiscard]] wlr_box geometryBox() const;
+    [[nodiscard]] SizeHints sizeHints() const;
+    struct ClientSize {
+      int width = 0;
+      int height = 0;
+    };
+    // The size the compositor last configured (0 before any configure), and the size the client last committed to.
+    [[nodiscard]] ClientSize scheduledSize() const;
+    [[nodiscard]] ClientSize currentSize() const;
+    using SurfaceIterator = void (*)(wlr_surface* surface, int sx, int sy, void* data);
+    // Every surface of the window, and every xdg popup surface under it (X11 menus are separate windows).
+    void forEachSurface(SurfaceIterator iterator, void* data) const;
+    void forEachPopupSurface(SurfaceIterator iterator, void* data) const;
     [[nodiscard]] const std::optional<std::string>& xdgTag() const { return m_xdgTag; }
     [[nodiscard]] ContentType contentType() const { return m_contentType; }
     // The view's frame: it carries the position, parent, stacking order, and visibility of the whole window. Its
@@ -75,9 +115,7 @@ namespace umbriel {
     void refreshEffectSelection();
     [[nodiscard]] wlr_scene_tree* captureTree() const;
     [[nodiscard]] bool mapped() const { return m_mapped; }
-    [[nodiscard]] bool xwayland() const { return m_xwayland; }
-    // The pid of the application process, or -1 when it is unknown. XWayland views all share the xwayland-satellite
-    // connection, so their client pid identifies the satellite rather than the application and is never reported.
+    // The pid of the application process, or -1 when it is unknown (an X11 client that sets no _NET_WM_PID).
     [[nodiscard]] pid_t pid() const;
     [[nodiscard]] Workspace* workspace() const { return m_workspace; }
     // The output currently presenting this view. Unassigned views follow the
@@ -143,6 +181,10 @@ namespace umbriel {
     // update, the keyboard enter is deferred to the close.
     void applySeatFocus(bool withKeyboard = true);
     void setForeignActivated(bool activated);
+    // The X screen moved relative to the layout: send an X11 window its geometry again.
+    void resyncXwaylandGeometry();
+    // The shell role is gone: tears the view down and removes it from the server, which deletes it.
+    void roleDestroyed();
     void setUrgent(bool urgent);
     // Activation can arrive after the XDG role exists but before its first buffer. Preserve its provenance until map,
     // when the window's final metadata is available for rule matching.
@@ -338,6 +380,43 @@ namespace umbriel {
 
     // Move the frame, and a lent shadow with it.
     void setScenePosition(int x, int y);
+    // Shared by both constructors once the role pointer is set.
+    void initCommon();
+    // Role mechanism behind the opening and configure paths.
+    [[nodiscard]] bool requestedFullscreen() const;
+    [[nodiscard]] bool requestedMaximized() const;
+    // Send a size configure and return its serial; X11 configures carry none and return 0.
+    uint32_t configureSize(int width, int height);
+    // Take a size the client chose as the scheduled one, without sending a configure.
+    void adoptScheduledSize(int width, int height);
+    [[nodiscard]] bool configureSettled(uint32_t serial) const;
+    [[nodiscard]] bool pendingConfigureSettled(uint32_t serial) const;
+    // Retire the floating size request once the client has answered it.
+    [[nodiscard]] bool retireFloatingSizeRequest();
+    [[nodiscard]] bool roleInitialized() const;
+    [[nodiscard]] bool openingConfigurePending() const;
+    // Resend the current role state, answering a client request the compositor declined.
+    void reassertRoleState();
+    void setTiledState(uint32_t edges);
+    [[nodiscard]] bool shellParentRequested() const;
+    // A window without a parent, fixed size, or dialog-like X11 window type opens tiled.
+    [[nodiscard]] bool looksTiled() const;
+    // X11 windows are positioned by the compositor: the X server must know where the window is on screen, because
+    // override-redirect menus place themselves relative to it. Deduplicated, so animation frames cost nothing.
+    void sendXwaylandConfigure(int width, int height);
+    void syncXwaylandConfigure();
+    // How the X11 window's output maps into X coordinates.
+    [[nodiscard]] XwaylandRegion xwaylandRegion() const;
+    // Draws the X11 window's surface at `scale` X pixels per layout unit.
+    void applyXwaylandScale(double scale);
+    // An X11 length in layout units, rounded as the scene rounds the drawn surface.
+    [[nodiscard]] int xToLayoutLength(int length) const;
+    void handleXwaylandRequestConfigure(const wlr_xwayland_surface_configure_event* event);
+    void handleXwaylandRequestActivate();
+    void handleXwaylandSetHints();
+    static void onXwaylandRequestConfigure(wl_listener* listener, void* data);
+    static void onXwaylandRequestActivate(wl_listener* listener, void* data);
+    static void onXwaylandSetHints(wl_listener* listener, void* data);
     // Lend the shadow to the workspace's tile shadow layer while the frame is in the tiled layer, or take it back.
     void syncShadowPool();
 
@@ -390,7 +469,6 @@ namespace umbriel {
     void handleClientCommit();
     void setXdgTag(std::string_view tag);
     void syncContentType(wlr_surface* committedSurface = nullptr);
-    void handleDestroy();
     void handleRequestMove(void* data);
     void handleRequestResize(void* data);
     void handleRequestMaximize();
@@ -535,8 +613,8 @@ namespace umbriel {
     void setSurfaceTreeClip(const wlr_box* clip);
     void unconstrainPopup(wlr_xdg_popup* popup);
     // Push the current output's scale to every surface of this toplevel (fractional-scale + preferred buffer scale,
-    // popups included). Clients like xwayland-satellite size and map pointer coordinates by this, so it must follow the
-    // view across outputs and track scale changes.
+    // popups included). Scale-aware clients size and map pointer coordinates by this, so it must follow the view across
+    // outputs and track scale changes.
     void notifyOutputScale();
     // Keep floats visually at the last requested size while client geometry lags.
     void syncFloatingSurfaceClip();
@@ -557,7 +635,7 @@ namespace umbriel {
     // The output box a fullscreen window covers: its workspace's output, else the one under it.
     [[nodiscard]] wlr_box fullscreenArea() const;
     void setPinned(bool pinned, bool focus);
-    [[nodiscard]] View* xdgParent() const;
+    [[nodiscard]] View* shellParent() const;
     [[nodiscard]] View* transientParent() const;
     [[nodiscard]] bool inheritScratchpadFromParent(bool restoreTiled);
     void syncTransientSceneParent();
@@ -646,6 +724,29 @@ namespace umbriel {
 
     Server* m_server = nullptr;
     wlr_xdg_toplevel* m_toplevel = nullptr;
+    wlr_xwayland_surface* m_xsurface = nullptr;
+    // The state last sent to an X11 window, which has no configure acknowledgement to read it back from.
+    struct {
+      bool fullscreen = false;
+      bool maximized = false;
+      bool activated = false;
+    } m_xState;
+    // The X11 window geometry last configured, in X coordinates.
+    struct {
+      int x = INT_MIN;
+      int y = INT_MIN;
+      int width = 0;
+      int height = 0;
+    } m_xConfigured;
+    double m_xScale = 1.0;
+    // The size the compositor wants an X11 window at (0 = the client's own), the counterpart of xdg's scheduled size.
+    ClientSize m_xScheduled;
+    // The size of the emulated RandR mode a fullscreen X11 window switched to, in X pixels, while it fills the output
+    // that way.
+    std::optional<ClientSize> m_xFullscreenSize;
+    // The size an X11 window had when a size request was sent. X11 clients with resize increments pick a nearby legal
+    // size, so a commit at any other size answers the request.
+    ClientSize m_xFloatingRequestBase;
     std::optional<std::string> m_xdgTag;
     ContentType m_contentType = ContentType::None;
     wlr_scene_tree* m_sceneTree = nullptr;
@@ -695,7 +796,6 @@ namespace umbriel {
     wl_event_source* m_effectSelectionIdle = nullptr;
     // Configure serial whose acknowledgement opens the gate when one was outstanding after the map dispatch.
     std::optional<uint32_t> m_acceptClientMaximizeSerial;
-    bool m_xwayland = false;
     // False until the first setPosition/animateTo places the node; the initial
     // placement snaps (avoids animating from the default (0,0) world origin).
     bool m_positioned = false;
@@ -707,6 +807,7 @@ namespace umbriel {
       uint32_t serial = 0;
       int width = 0;
       int height = 0;
+      ClientSize base;
     };
     std::optional<TiledSizeRequest> m_tiledSizeRequest;
     float m_layoutMotionDirection = 1.0F;
@@ -789,6 +890,9 @@ namespace umbriel {
     wl_listener m_foreignDestroy{};
     wl_listener m_extForeignDestroy{};
     wl_listener m_captureSourceDestroy{};
+    wl_listener m_xRequestConfigure{};
+    wl_listener m_xRequestActivate{};
+    wl_listener m_xSetHints{};
   };
 
 } // namespace umbriel

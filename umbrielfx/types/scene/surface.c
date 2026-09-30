@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <wlr/types/wlr_alpha_modifier_v1.h>
 #include <wlr/types/wlr_color_management_v1.h>
@@ -10,6 +11,7 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_presentation_time.h>
 #include <wlr/types/wlr_single_pixel_buffer_v1.h>
+#include <wlr/util/region.h>
 #include <wlr/util/transform.h>
 #include "types/wlr_scene.h"
 
@@ -235,6 +237,10 @@ static int min(int a, int b) {
 	return a < b ? a : b;
 }
 
+static int max(int a, int b) {
+	return a > b ? a : b;
+}
+
 static void surface_reconfigure(struct wlr_scene_surface *scene_surface) {
 	struct wlr_scene_buffer *scene_buffer = scene_surface->buffer;
 	struct wlr_surface *surface = scene_surface->surface;
@@ -249,28 +255,35 @@ static void surface_reconfigure(struct wlr_scene_surface *scene_surface) {
 
 	int width = state->width;
 	int height = state->height;
+	double scale = scene_surface->scale;
 
 	if (!wlr_box_empty(&scene_surface->clip)) {
-		struct wlr_box *clip = &scene_surface->clip;
+		// The clip is in scene units, the surface state in surface-local units.
+		struct wlr_box clip = {
+			.x = (int)round(scene_surface->clip.x * scale),
+			.y = (int)round(scene_surface->clip.y * scale),
+			.width = (int)round(scene_surface->clip.width * scale),
+			.height = (int)round(scene_surface->clip.height * scale),
+		};
 
 		int buffer_width = state->buffer_width;
 		int buffer_height = state->buffer_height;
-		width = min(clip->width, width - clip->x);
-		height = min(clip->height, height - clip->y);
+		width = min(clip.width, width - clip.x);
+		height = min(clip.height, height - clip.y);
 
 		wlr_fbox_transform(&src_box, &src_box, state->transform,
 			buffer_width, buffer_height);
 		wlr_output_transform_coords(state->transform, &buffer_width, &buffer_height);
 
-		src_box.x += (double)(clip->x * src_box.width) / state->width;
-		src_box.y += (double)(clip->y * src_box.height) / state->height;
+		src_box.x += (double)(clip.x * src_box.width) / state->width;
+		src_box.y += (double)(clip.y * src_box.height) / state->height;
 		src_box.width *= (double)width / state->width;
 		src_box.height *= (double)height / state->height;
 
 		wlr_fbox_transform(&src_box, &src_box, wlr_output_transform_invert(state->transform),
 			buffer_width, buffer_height);
 
-		pixman_region32_translate(&opaque, -clip->x, -clip->y);
+		pixman_region32_translate(&opaque, -clip.x, -clip.y);
 		// A shrunk subsurface can push width or height negative; the empty
 		// check below drops the buffer, so keep pixman off the invalid rect.
 		if (width > 0 && height > 0) {
@@ -313,9 +326,21 @@ static void surface_reconfigure(struct wlr_scene_surface *scene_surface) {
 		}
 	}
 
+	int dest_width = width;
+	int dest_height = height;
+	if (scale != 1.0) {
+		dest_width = max(1, (int)round(width / scale));
+		dest_height = max(1, (int)round(height / scale));
+		pixman_region32_t scaled;
+		pixman_region32_init(&scaled);
+		wlr_region_scale(&scaled, &opaque, (float)(1.0 / scale));
+		pixman_region32_fini(&opaque);
+		opaque = scaled;
+	}
+
 	wlr_scene_buffer_set_opaque_region(scene_buffer, &opaque);
 	wlr_scene_buffer_set_source_box(scene_buffer, &src_box);
-	wlr_scene_buffer_set_dest_size(scene_buffer, width, height);
+	wlr_scene_buffer_set_dest_size(scene_buffer, dest_width, dest_height);
 	wlr_scene_buffer_set_transform(scene_buffer, state->transform);
 	wlr_scene_buffer_set_opacity(scene_buffer, opacity);
 	wlr_scene_buffer_set_transfer_function(scene_buffer, tf);
@@ -387,8 +412,9 @@ static bool scene_buffer_point_accepts_input(struct wlr_scene_buffer *scene_buff
 	struct wlr_scene_surface *scene_surface =
 		wlr_scene_surface_try_from_buffer(scene_buffer);
 
-	*sx += scene_surface->clip.x;
-	*sy += scene_surface->clip.y;
+	// The hit test works in scene units; the client expects surface-local ones.
+	*sx = (*sx + scene_surface->clip.x) * scene_surface->scale;
+	*sy = (*sy + scene_surface->clip.y) * scene_surface->scale;
 
 	return wlr_surface_point_accepts_input(scene_surface->surface, *sx, *sy);
 }
@@ -441,6 +467,7 @@ struct wlr_scene_surface *wlr_scene_surface_create(struct wlr_scene_tree *parent
 
 	surface->buffer = scene_buffer;
 	surface->surface = wlr_surface;
+	surface->scale = 1.0;
 	scene_buffer->point_accepts_input = scene_buffer_point_accepts_input;
 
 	surface->outputs_update.notify = handle_scene_buffer_outputs_update;
@@ -478,4 +505,25 @@ void scene_surface_set_clip(struct wlr_scene_surface *surface, struct wlr_box *c
 	}
 
 	surface_reconfigure(surface);
+}
+
+void scene_surface_set_scale(struct wlr_scene_surface *surface, double scale) {
+	assert(scale > 0);
+	if (surface->scale == scale) {
+		return;
+	}
+	surface->scale = scale;
+	surface_reconfigure(surface);
+}
+
+void wlr_scene_surface_get_size(const struct wlr_scene_surface *surface,
+		int *width, int *height) {
+	const struct wlr_surface_state *state = &surface->surface->current;
+	if (surface->scale == 1.0) {
+		*width = state->width;
+		*height = state->height;
+		return;
+	}
+	*width = (int)round(state->width / surface->scale);
+	*height = (int)round(state->height / surface->scale);
 }

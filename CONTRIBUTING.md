@@ -36,7 +36,7 @@ Direct project dependencies. Transitive dependencies are owned by their providin
 | Memory allocation | `jemalloc` (optional, glibc) |
 | Config | `tomlplusplus` |
 | JSON (IPC) | `nlohmann/json` |
-| Xwayland | `xwayland-satellite` (managed at runtime) |
+| Xwayland | wlroots' Xwayland server (`Xwayland` spawned on demand), `xcb`, `xcb-icccm`, `xcb-ewmh` |
 
 ## Development Commands
 
@@ -314,7 +314,7 @@ src/
   view/       XDG toplevels and popups, window rules, and decoration
   layer/      layer-shell surfaces
   lock/       ext-session-lock surfaces
-  xwayland/   xwayland-satellite process supervisor
+  xwayland/   Xwayland server, X11 window lifecycle, override-redirect windows
   workspace/  per-output workspaces and scratchpads
   layout/     scrolling, dwindle, and master layouts, insert and drop targets
   overview/   overview lifecycle and presentation

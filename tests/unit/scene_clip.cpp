@@ -30,7 +30,7 @@ namespace {
   };
 
   // Records the enter/leave stream for one scene output. Membership itself is private to SceneFX; these signals are
-  // what a client observes and what the xwayland-satellite re-homing bug keyed off.
+  // what a client observes, and what scale-aware clients map their input from.
   struct OutputTracker {
     wl_listener enter{};
     wl_listener leave{};

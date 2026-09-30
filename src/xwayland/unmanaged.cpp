@@ -1,0 +1,109 @@
+#include "xwayland/unmanaged.h"
+
+#include "input/seat.h"
+#include "server/server.h"
+#include "wlr.h"
+#include "xwayland/xwayland.h"
+
+namespace umbriel {
+
+  XwaylandUnmanaged::XwaylandUnmanaged(Server& server, wlr_xwayland_surface* xsurface)
+      : m_server(server), m_xsurface(xsurface) {
+    m_tree = wlr_scene_tree_create(server.xwaylandUnmanagedTree());
+    wlr_scene_subsurface_tree_create(m_tree, xsurface->surface);
+    syncPosition();
+    wlr_scene_node_set_enabled(&m_tree->node, xsurface->surface->mapped);
+
+    m_map.notify = onMap;
+    wl_signal_add(&xsurface->surface->events.map, &m_map);
+    m_unmap.notify = onUnmap;
+    wl_signal_add(&xsurface->surface->events.unmap, &m_unmap);
+    m_setGeometry.notify = onSetGeometry;
+    wl_signal_add(&xsurface->events.set_geometry, &m_setGeometry);
+    m_requestConfigure.notify = onRequestConfigure;
+    wl_signal_add(&xsurface->events.request_configure, &m_requestConfigure);
+    if (xsurface->surface->mapped) {
+      handleMap();
+    }
+  }
+
+  XwaylandUnmanaged::~XwaylandUnmanaged() {
+    wl_list_remove(&m_map.link);
+    wl_list_remove(&m_unmap.link);
+    wl_list_remove(&m_setGeometry.link);
+    wl_list_remove(&m_requestConfigure.link);
+    releaseKeyboard();
+    wlr_scene_node_destroy(&m_tree->node);
+  }
+
+  void XwaylandUnmanaged::onMap(wl_listener* listener, void* /*data*/) {
+    XwaylandUnmanaged* self = wl_container_of(listener, self, m_map); // NOLINT(modernize-use-auto)
+    self->handleMap();
+  }
+
+  void XwaylandUnmanaged::onUnmap(wl_listener* listener, void* /*data*/) {
+    XwaylandUnmanaged* self = wl_container_of(listener, self, m_unmap); // NOLINT(modernize-use-auto)
+    self->handleUnmap();
+  }
+
+  void XwaylandUnmanaged::onSetGeometry(wl_listener* listener, void* /*data*/) {
+    XwaylandUnmanaged* self = wl_container_of(listener, self, m_setGeometry); // NOLINT(modernize-use-auto)
+    self->handleSetGeometry();
+  }
+
+  void XwaylandUnmanaged::onRequestConfigure(wl_listener* listener, void* data) {
+    XwaylandUnmanaged* self = wl_container_of(listener, self, m_requestConfigure); // NOLINT(modernize-use-auto)
+    self->handleRequestConfigure(static_cast<const wlr_xwayland_surface_configure_event*>(data));
+  }
+
+  void XwaylandUnmanaged::handleMap() {
+    syncPosition();
+    wlr_scene_node_set_enabled(&m_tree->node, true);
+    wlr_scene_node_raise_to_top(&m_tree->node);
+    if (!wlr_xwayland_surface_override_redirect_wants_focus(m_xsurface)
+        || wlr_xwayland_surface_icccm_input_model(m_xsurface) == WLR_ICCCM_INPUT_MODEL_NONE
+        || m_server.sessionLocked()
+        || m_server.exclusiveKeyboardLayer() != nullptr) {
+      return;
+    }
+    // A menu that takes the keyboard: the window it belongs to keeps its activated chrome, as with an xdg popup.
+    wlr_seat* seat = m_server.seat()->wlr();
+    if (seat->drag == nullptr && wlr_seat_keyboard_has_grab(seat)) {
+      wlr_seat_keyboard_end_grab(seat);
+    }
+    m_server.notifyKeyboardEnter(m_xsurface->surface);
+  }
+
+  void XwaylandUnmanaged::handleUnmap() {
+    wlr_scene_node_set_enabled(&m_tree->node, false);
+    releaseKeyboard();
+  }
+
+  void XwaylandUnmanaged::releaseKeyboard() {
+    wlr_seat* seat = m_server.seat()->wlr();
+    if (m_xsurface->surface == nullptr || seat->keyboard_state.focused_surface != m_xsurface->surface) {
+      return;
+    }
+    m_server.restoreActivatedViewKeyboardFocus();
+    if (seat->keyboard_state.focused_surface == m_xsurface->surface) {
+      m_server.clearKeyboardFocus();
+    }
+  }
+
+  void XwaylandUnmanaged::handleSetGeometry() { syncPosition(); }
+
+  void XwaylandUnmanaged::syncPosition() {
+    const XwaylandRegion region = m_server.xwayland()->outputs().regionAtX(m_xsurface->x, m_xsurface->y);
+    wlr_scene_node_set_position(&m_tree->node, region.toLayoutX(m_xsurface->x), region.toLayoutY(m_xsurface->y));
+    if (region.scale != m_scale) {
+      m_scale = region.scale;
+      wlr_scene_subsurface_tree_set_scale(&m_tree->node, m_scale);
+    }
+  }
+
+  void XwaylandUnmanaged::handleRequestConfigure(const wlr_xwayland_surface_configure_event* event) {
+    // The resulting set_geometry moves the node.
+    grantConfigureRequest(m_xsurface, event);
+  }
+
+} // namespace umbriel

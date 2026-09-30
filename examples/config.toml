@@ -26,6 +26,8 @@ files = []
 # [general]
 # autostart = ["noctalia", "kitty"]
 # xwayland = false
+# Sharp X11 apps and games on scaled outputs; they see physical resolutions.
+# xwayland_native_resolution = true
 
 # ==============================================================================
 # Lid events

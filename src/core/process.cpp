@@ -1,16 +1,35 @@
 #include "core/process.h"
 
+#include <cerrno>
 #include <climits>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <sys/resource.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 extern "C" int umbrielCloseRange(unsigned int first, unsigned int last, int flags);
 
 namespace umbriel {
+
+  namespace {
+    void reapChildren(int /*signal*/) {
+      const int savedErrno = errno;
+      while (waitpid(-1, nullptr, WNOHANG) > 0) {
+      }
+      errno = savedErrno;
+    }
+  } // namespace
+
+  void installChildReaper() {
+    struct sigaction action{};
+    action.sa_handler = reapChildren;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &action, nullptr);
+  }
 
   void resetChildSignalState() {
     struct sigaction action{};

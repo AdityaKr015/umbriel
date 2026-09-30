@@ -18,7 +18,7 @@ extern "C" {
 #include <umbrielfx/render/effect.h>
 }
 #include "view/maximize.h"
-#include "view/xdg_size.h"
+#include "view/size_hints.h"
 // clang-format off
 #include <algorithm>
 #include <cmath>
@@ -29,6 +29,7 @@ extern "C" {
 // clang-format on
 #include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
+#include "xwayland/xwayland.h"
 
 namespace umbriel {
   namespace {
@@ -47,11 +48,12 @@ namespace umbriel {
       wlr_scene_buffer_set_opacity(buffer, opacity);
     }
 
-    bool looksTiled(const wlr_xdg_toplevel* toplevel, bool parented) {
-      const auto& state = toplevel->current;
-      const bool fixedWidth = state.max_width > 0 && state.min_width == state.max_width;
-      const bool fixedHeight = state.max_height > 0 && state.min_height == state.max_height;
-      return !parented && !fixedWidth && !fixedHeight;
+    // Remove a listener that may never have been added, or was already removed.
+    void removeListener(wl_listener& listener) {
+      if (listener.link.next != nullptr) {
+        wl_list_remove(&listener.link);
+        listener.link = {};
+      }
     }
 
     template <typename T>
@@ -184,25 +186,43 @@ namespace umbriel {
   } // namespace
 
   View::View(Server& server, wlr_xdg_toplevel* toplevel)
-      : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel),
-        m_xwayland(server.isXwaylandSurface(toplevel->base->surface)) {
+      : SceneNode(SceneNodeKind::View), m_server(&server), m_toplevel(toplevel) {
+    initCommon();
+  }
+
+  View::View(Server& server, wlr_xwayland_surface* xsurface)
+      : SceneNode(SceneNodeKind::View), m_server(&server), m_xsurface(xsurface) {
+    initCommon();
+  }
+
+  void View::initCommon() {
+    wlr_surface* surface = rootSurface();
     m_server->registerAnimatable(this);
     // Register map/unmap listeners BEFORE creating the scene tree so our handlers fire before wlroots' internal unmap
     // handler disables the surface subtree (needed for close-animation buffer snapshot).
     m_map.notify = onMap;
-    wl_signal_add(&m_toplevel->base->surface->events.map, &m_map);
+    wl_signal_add(&surface->events.map, &m_map);
     m_unmap.notify = onUnmap;
-    wl_signal_add(&m_toplevel->base->surface->events.unmap, &m_unmap);
+    wl_signal_add(&surface->events.unmap, &m_unmap);
     m_rootSurfaceDestroy.notify = onRootSurfaceDestroy;
-    wl_signal_add(&m_toplevel->base->surface->events.destroy, &m_rootSurfaceDestroy);
+    wl_signal_add(&surface->events.destroy, &m_rootSurfaceDestroy);
 
     m_sceneTree = wlr_scene_tree_create(m_server->xdgTree());
     m_decoration.createShadow(m_sceneTree);
-    m_contentTree = wlr_scene_xdg_surface_create(m_sceneTree, m_toplevel->base);
-    // Both carry the tag: popups and constraints find the view through `base->data`, layer walks through the frame.
+    // The content tree's direct child is the root surface's subsurface tree for both roles; the effect, clip, and
+    // crossfade paths find the surface there.
+    if (m_toplevel != nullptr) {
+      m_contentTree = wlr_scene_xdg_surface_create(m_sceneTree, m_toplevel->base);
+      m_toplevel->base->data = m_contentTree;
+    } else {
+      m_contentTree = wlr_scene_tree_create(m_sceneTree);
+      wlr_scene_subsurface_tree_create(m_contentTree, surface);
+      m_xsurface->data = m_contentTree;
+    }
+    // Both carry the tag: popups and constraints find the view through the role's `data`, layer walks through the
+    // frame.
     m_sceneTree->node.data = sceneNodeData(this);
     m_contentTree->node.data = sceneNodeData(this);
-    m_toplevel->base->data = m_contentTree;
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
     m_presentation.createBackdrop(m_contentTree);
 
@@ -212,34 +232,59 @@ namespace umbriel {
     m_captureScene = wlr_scene_create();
     if (m_captureScene != nullptr) {
       m_captureScene->restack_xwayland_surfaces = false;
-      wlr_scene_xdg_surface_create(&m_captureScene->tree, m_toplevel->base);
+      if (m_toplevel != nullptr) {
+        wlr_scene_xdg_surface_create(&m_captureScene->tree, m_toplevel->base);
+      } else {
+        wlr_scene_subsurface_tree_create(&m_captureScene->tree, surface);
+      }
+    }
+    if (m_xsurface != nullptr) {
+      // Until the first configure places it, the window is drawn at the scale of the output its X position is on.
+      applyXwaylandScale(m_server->xwayland()->outputs().regionAtX(m_xsurface->x, m_xsurface->y).scale);
     }
     notifyOutputScale();
 
     // The surface watcher must run before the general commit handler so a
     // newly committed content type participates in initial window rules.
-    watchViewSurfaceTree(m_toplevel->base->surface);
+    watchViewSurfaceTree(surface);
     m_commit.notify = onCommit;
-    wl_signal_add(&m_toplevel->base->surface->events.commit, &m_commit);
+    wl_signal_add(&surface->events.commit, &m_commit);
     m_clientCommit.notify = onClientCommit;
-    wl_signal_add(&m_toplevel->base->surface->events.client_commit, &m_clientCommit);
-    m_destroy.notify = onDestroy;
-    wl_signal_add(&m_toplevel->events.destroy, &m_destroy);
+    wl_signal_add(&surface->events.client_commit, &m_clientCommit);
 
     m_requestMove.notify = onRequestMove;
-    wl_signal_add(&m_toplevel->events.request_move, &m_requestMove);
     m_requestResize.notify = onRequestResize;
-    wl_signal_add(&m_toplevel->events.request_resize, &m_requestResize);
     m_requestMaximize.notify = onRequestMaximize;
-    wl_signal_add(&m_toplevel->events.request_maximize, &m_requestMaximize);
     m_requestFullscreen.notify = onRequestFullscreen;
-    wl_signal_add(&m_toplevel->events.request_fullscreen, &m_requestFullscreen);
     m_setParent.notify = onSetParent;
-    wl_signal_add(&m_toplevel->events.set_parent, &m_setParent);
     m_setTitle.notify = onSetTitle;
-    wl_signal_add(&m_toplevel->events.set_title, &m_setTitle);
     m_setAppId.notify = onSetAppId;
-    wl_signal_add(&m_toplevel->events.set_app_id, &m_setAppId);
+    if (m_toplevel != nullptr) {
+      m_destroy.notify = onDestroy;
+      wl_signal_add(&m_toplevel->events.destroy, &m_destroy);
+      wl_signal_add(&m_toplevel->events.request_move, &m_requestMove);
+      wl_signal_add(&m_toplevel->events.request_resize, &m_requestResize);
+      wl_signal_add(&m_toplevel->events.request_maximize, &m_requestMaximize);
+      wl_signal_add(&m_toplevel->events.request_fullscreen, &m_requestFullscreen);
+      wl_signal_add(&m_toplevel->events.set_parent, &m_setParent);
+      wl_signal_add(&m_toplevel->events.set_title, &m_setTitle);
+      wl_signal_add(&m_toplevel->events.set_app_id, &m_setAppId);
+    } else {
+      // The X11 window's owner tears the view down through roleDestroyed() when the surface dissociates.
+      wl_signal_add(&m_xsurface->events.request_move, &m_requestMove);
+      wl_signal_add(&m_xsurface->events.request_resize, &m_requestResize);
+      wl_signal_add(&m_xsurface->events.request_maximize, &m_requestMaximize);
+      wl_signal_add(&m_xsurface->events.request_fullscreen, &m_requestFullscreen);
+      wl_signal_add(&m_xsurface->events.set_parent, &m_setParent);
+      wl_signal_add(&m_xsurface->events.set_title, &m_setTitle);
+      wl_signal_add(&m_xsurface->events.set_class, &m_setAppId);
+      m_xRequestConfigure.notify = onXwaylandRequestConfigure;
+      wl_signal_add(&m_xsurface->events.request_configure, &m_xRequestConfigure);
+      m_xRequestActivate.notify = onXwaylandRequestActivate;
+      wl_signal_add(&m_xsurface->events.request_activate, &m_xRequestActivate);
+      m_xSetHints.notify = onXwaylandSetHints;
+      wl_signal_add(&m_xsurface->events.set_hints, &m_xSetHints);
+    }
 
     if (wlr_foreign_toplevel_manager_v1* manager = m_server->foreignToplevelManager()) {
       m_foreign = wlr_foreign_toplevel_handle_v1_create(manager);
@@ -258,8 +303,8 @@ namespace umbriel {
 
     if (wlr_ext_foreign_toplevel_list_v1* list = m_server->extForeignToplevelList()) {
       const wlr_ext_foreign_toplevel_handle_v1_state state = {
-          .title = m_toplevel->title,
-          .app_id = m_toplevel->app_id,
+          .title = title(),
+          .app_id = appId(),
       };
       m_extForeign = wlr_ext_foreign_toplevel_handle_v1_create(list, &state);
       if (m_extForeign != nullptr) {
@@ -284,19 +329,19 @@ namespace umbriel {
     m_effects.detach();
     clearViewSurfaceWatches();
     setWorkspace(nullptr);
+    // A view deleted while its role lives on (server teardown) must not leave the role pointing at freed scene nodes.
     if (m_map.link.next != nullptr) {
-      wl_list_remove(&m_map.link);
-      wl_list_remove(&m_unmap.link);
-      wl_list_remove(&m_commit.link);
-      wl_list_remove(&m_clientCommit.link);
-      wl_list_remove(&m_destroy.link);
-      wl_list_remove(&m_requestMove.link);
-      wl_list_remove(&m_requestResize.link);
-      wl_list_remove(&m_requestMaximize.link);
-      wl_list_remove(&m_requestFullscreen.link);
-      wl_list_remove(&m_setParent.link);
-      wl_list_remove(&m_setTitle.link);
-      wl_list_remove(&m_setAppId.link);
+      if (m_toplevel != nullptr) {
+        m_toplevel->base->data = nullptr;
+      } else {
+        m_xsurface->data = nullptr;
+      }
+    }
+    for (wl_listener* listener :
+         {&m_map, &m_unmap, &m_commit, &m_clientCommit, &m_destroy, &m_requestMove, &m_requestResize,
+          &m_requestMaximize, &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure,
+          &m_xRequestActivate, &m_xSetHints}) {
+      removeListener(*listener);
     }
     if (m_rootSurfaceDestroy.link.next != nullptr) {
       wl_list_remove(&m_rootSurfaceDestroy.link);
@@ -389,24 +434,24 @@ namespace umbriel {
             || m_pendingFloatingPosition)) {
       auto [width, height] = floatingSize();
       const wlr_box usable = floatingUsableArea();
-      const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+      const SizeHints hints = sizeHints();
       if (m_pendingFloatingWidthPx) {
-        width = clampXdgWidth(*m_pendingFloatingWidthPx, hints);
+        width = clampWidth(*m_pendingFloatingWidthPx, hints);
         m_pendingFloatingWidthPx.reset();
         m_pendingFloatingWidth.reset();
       } else if (m_pendingFloatingWidth && usable.width > 0) {
-        width = clampXdgWidth(floatingFractionSize(*m_pendingFloatingWidth, usable.width), hints);
+        width = clampWidth(floatingFractionSize(*m_pendingFloatingWidth, usable.width), hints);
         m_pendingFloatingWidth.reset();
       }
       if (m_pendingFloatingHeightPx) {
-        height = clampXdgHeight(*m_pendingFloatingHeightPx, hints);
+        height = clampHeight(*m_pendingFloatingHeightPx, hints);
         m_pendingFloatingHeightPx.reset();
         m_pendingFloatingHeight.reset();
       } else if (m_pendingFloatingHeight && usable.height > 0) {
-        height = clampXdgHeight(floatingFractionSize(*m_pendingFloatingHeight, usable.height), hints);
+        height = clampHeight(floatingFractionSize(*m_pendingFloatingHeight, usable.height), hints);
         m_pendingFloatingHeight.reset();
       }
-      if (width > 0 && height > 0 && (m_toplevel->scheduled.width != width || m_toplevel->scheduled.height != height)) {
+      if (width > 0 && height > 0 && (scheduledSize().width != width || scheduledSize().height != height)) {
         requestFloatingSize(width, height);
         beginResizeAnimation(width, height);
       }
@@ -589,11 +634,19 @@ namespace umbriel {
     root->raiseTransientTree();
   }
 
-  View* View::xdgParent() const {
-    if (m_toplevel->parent == nullptr || m_toplevel->parent->base == nullptr) {
+  View* View::shellParent() const {
+    wlr_surface* parentSurface = nullptr;
+    if (m_toplevel != nullptr) {
+      if (m_toplevel->parent != nullptr && m_toplevel->parent->base != nullptr) {
+        parentSurface = m_toplevel->parent->base->surface;
+      }
+    } else if (m_xsurface->parent != nullptr) {
+      parentSurface = m_xsurface->parent->surface;
+    }
+    if (parentSurface == nullptr) {
       return nullptr;
     }
-    View* parent = fromSurface(m_toplevel->parent->base->surface);
+    View* parent = fromSurface(parentSurface);
     if (parent == this || parent == nullptr || !parent->m_mapped) {
       return nullptr;
     }
@@ -604,7 +657,7 @@ namespace umbriel {
     if (!m_mapped) {
       return nullptr;
     }
-    View* parent = xdgParent();
+    View* parent = shellParent();
     if (parent == nullptr) {
       return nullptr;
     }
@@ -629,7 +682,7 @@ namespace umbriel {
         || m_initialRules.defaultPinned.value_or(false)) {
       return false;
     }
-    View* parent = xdgParent();
+    View* parent = shellParent();
     if (parent == nullptr) {
       return false;
     }
@@ -697,6 +750,10 @@ namespace umbriel {
   void View::setSceneParent(wlr_scene_tree* parent) {
     wlr_scene_node_reparent(&m_sceneTree->node, parent);
     syncShadowPool();
+    // Another parent can put the window elsewhere in layout coordinates.
+    if (m_xsurface != nullptr && m_mapped) {
+      syncXwaylandConfigure();
+    }
   }
 
   void View::syncShadowPool() {
@@ -709,6 +766,9 @@ namespace umbriel {
   void View::setScenePosition(int x, int y) {
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
     m_decoration.setShadowPosition(x, y);
+    if (m_xsurface != nullptr) {
+      syncXwaylandConfigure();
+    }
   }
 
   void View::applySeatFocus(bool withKeyboard) {
@@ -719,14 +779,14 @@ namespace umbriel {
     }
 
     wlr_seat* seat = m_server->seat()->wlr();
-    wlr_surface* surface = m_toplevel->base->surface;
+    wlr_surface* surface = rootSurface();
     // Always clear other views first: the previous seat surface may be a layer, so
     // deactivating only that surface can leave another window's focus border on.
     m_server->deactivateViews(this);
 
     raiseToTop();
-    if (!m_toplevel->scheduled.activated) {
-      wlr_xdg_toplevel_set_activated(m_toplevel, true);
+    if (!scheduledActivated()) {
+      setActivatedState(true);
     }
     setBorderFocused(true);
     setForeignActivated(true);
@@ -775,8 +835,7 @@ namespace umbriel {
 
   float View::effectiveOpacity() const {
     // Overshooting curves can push this past [0, 1]; wlr_scene_buffer_set_opacity asserts.
-    const float ruleOpacity =
-        m_toplevel->scheduled.fullscreen && config().appearance.opaqueFullscreen ? 1.0F : m_ruleOpacity;
+    const float ruleOpacity = scheduledFullscreen() && config().appearance.opaqueFullscreen ? 1.0F : m_ruleOpacity;
     const float fade = fadeComposited() ? 1.0F : m_fadeAlpha;
     return std::clamp(
         fade * ruleOpacity * m_dragOpacity * m_overviewOpacity * static_cast<float>(m_focusDim.current()), 0.0F, 1.0F
@@ -790,12 +849,12 @@ namespace umbriel {
     if (m_ruleOpacity < 1.0F) {
       return false;
     }
-    wlr_surface* surface = m_toplevel->base->surface;
+    wlr_surface* surface = rootSurface();
     if (const wlr_alpha_modifier_surface_v1_state* clientAlpha = wlr_alpha_modifier_v1_get_surface_state(surface);
         clientAlpha != nullptr && clientAlpha->multiplier < 1.0) {
       return false;
     }
-    const wlr_box& geometry = m_toplevel->base->geometry;
+    const wlr_box& geometry = geometryBox();
     return geometry.width <= 0 || geometry.height <= 0 || !surfaceTransparent(surface, geometry);
   }
 
@@ -982,16 +1041,16 @@ namespace umbriel {
   }
 
   wlr_box View::committedContentBox() const {
-    wlr_box box = m_toplevel->base->geometry;
-    if (!m_tiled || m_toplevel->current.fullscreen) {
+    wlr_box box = geometryBox();
+    if (m_xsurface != nullptr || !m_tiled || currentFullscreen()) {
       return box;
     }
     // A client may ack a configure, render the new size into its buffer, and leave set_window_geometry at the old size
     // (Electron does, permanently). Presenting that stale box would crop the content the client just drew, so trust
     // the pixels: grow the box towards the size this view was configured to, never past what the surface holds.
-    const wlr_surface_state& surface = m_toplevel->base->surface->current;
-    box.width = std::max(box.width, std::min(m_toplevel->scheduled.width, surface.width - box.x));
-    box.height = std::max(box.height, std::min(m_toplevel->scheduled.height, surface.height - box.y));
+    const wlr_surface_state& surface = rootSurface()->current;
+    box.width = std::max(box.width, std::min(scheduledSize().width, surface.width - box.x));
+    box.height = std::max(box.height, std::min(scheduledSize().height, surface.height - box.y));
     return box;
   }
 
@@ -1002,7 +1061,7 @@ namespace umbriel {
     if (layoutPresentationOwned()) {
       return m_presentation.width();
     }
-    if (m_toplevel->current.fullscreen) {
+    if (currentFullscreen()) {
       return target.width;
     }
     return std::min(committedContentBox().width, target.width);
@@ -1017,7 +1076,7 @@ namespace umbriel {
     if (layoutPresentationOwned()) {
       return m_presentation.height();
     }
-    if (m_toplevel->current.fullscreen) {
+    if (currentFullscreen()) {
       return target.height;
     }
     return std::min(committedContentBox().height, target.height);
@@ -1028,19 +1087,16 @@ namespace umbriel {
 
   void View::updateFullscreenPresentation(int width, int height) {
     m_presentation.updateFullscreen(
-        m_toplevel->current.fullscreen, width, height,
-        toplevelSurfaceTreeNode(m_contentTree, m_toplevel->base->surface), m_toplevel->base->geometry
+        currentFullscreen(), width, height, toplevelSurfaceTreeNode(m_contentTree, rootSurface()), geometryBox()
     );
   }
 
   void View::applyPresentedCrop(const wlr_box& content, const wlr_box& surfaceClip) {
-    m_presentation.applyCrop(
-        m_contentTree, m_toplevel->base->surface, m_toplevel->base->geometry, content, surfaceClip
-    );
+    m_presentation.applyCrop(m_contentTree, rootSurface(), geometryBox(), content, surfaceClip);
   }
 
   void View::resetPresentedSurface() {
-    m_presentation.resetCrop(m_contentTree, m_toplevel->base->surface);
+    m_presentation.resetCrop(m_contentTree, rootSurface());
     // Clear the subsurface clip so the next syncViewPresentation re-applies the resting clip through a real
     // reconfigure: an unchanged clip box early-outs and would leave the animated src/dst behind.
     setSurfaceTreeClip(nullptr);
@@ -1058,7 +1114,7 @@ namespace umbriel {
     const int width = m_presentation.width();
     const int height = m_presentation.height();
     updateBorderGeometry(width, height);
-    if (!m_toplevel->scheduled.fullscreen) {
+    if (!scheduledFullscreen()) {
       updateShadow(width, height);
     }
     updateBlur(width, height);
@@ -1268,7 +1324,7 @@ namespace umbriel {
     if (!m_mapped
         || (!m_onActiveWorkspace && !presentedInOverview)
         || (m_workspace == nullptr && !presentedInScratchpad && !allowFullscreen)
-        || (!allowFullscreen && (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen))
+        || (!allowFullscreen && (scheduledFullscreen() || currentFullscreen()))
         || width <= 0
         || height <= 0) {
       return;
@@ -1389,9 +1445,10 @@ namespace umbriel {
 
   void View::requestTiledSize(int width, int height) {
     m_tiledSizeRequest = TiledSizeRequest{
-        .serial = wlr_xdg_toplevel_set_size(m_toplevel, width, height),
+        .serial = configureSize(width, height),
         .width = width,
         .height = height,
+        .base = currentSize(),
     };
   }
 
@@ -1400,11 +1457,15 @@ namespace umbriel {
       return true;
     }
     const TiledSizeRequest& request = *m_tiledSizeRequest;
-    if (!serialSettled(m_toplevel->base->current.configure_serial, request.serial)) {
+    if (!configureSettled(request.serial)) {
       return false;
     }
     const wlr_box content = committedContentBox();
-    if (content.width != request.width || content.height != request.height) {
+    const bool exact = content.width == request.width && content.height == request.height;
+    // An X11 client with resize increments answers with the nearest size it accepts.
+    const bool answered =
+        m_xsurface != nullptr && (content.width != request.base.width || content.height != request.base.height);
+    if (!exact && !answered) {
       return false;
     }
     m_tiledSizeRequest.reset();
@@ -1558,16 +1619,15 @@ namespace umbriel {
     if (m_effects.configured() || effectRegistry().active()) {
       wlr_scene_node* captureSurface = nullptr;
       if (ownTrees && m_effects.needsSurface()) {
-        surface = toplevelSurfaceTreeNode(m_contentTree, m_toplevel->base->surface);
-        captureSurface = m_captureScene != nullptr
-            ? toplevelSurfaceTreeNode(&m_captureScene->tree, m_toplevel->base->surface)
-            : nullptr;
+        surface = toplevelSurfaceTreeNode(m_contentTree, rootSurface());
+        captureSurface =
+            m_captureScene != nullptr ? toplevelSurfaceTreeNode(&m_captureScene->tree, rootSurface()) : nullptr;
       }
       const BorderEffectGate ownGate{
           .focused = m_borderFocusedState,
           .decorated = decorated(),
           .urgent = m_urgent,
-          .fullscreen = m_toplevel->scheduled.fullscreen,
+          .fullscreen = scheduledFullscreen(),
       };
       Output* output = cardOutput != nullptr ? cardOutput : currentOutput();
       m_effects.apply({
@@ -1695,6 +1755,9 @@ namespace umbriel {
       }
     }
     syncAnimationEffects();
+    if (!active && m_mapped && m_xsurface != nullptr) {
+      syncXwaylandConfigure();
+    }
     return active;
   }
 
@@ -1722,7 +1785,7 @@ namespace umbriel {
         || m_dragPhysics.active();
   }
 
-  bool View::layoutFullscreen() const { return m_toplevel->scheduled.fullscreen; }
+  bool View::layoutFullscreen() const { return scheduledFullscreen(); }
 
   // True when this is the only tiled window in the workspace.
   bool View::isAloneInLayout() const {
@@ -1732,7 +1795,12 @@ namespace umbriel {
         && m_workspace->isOnlyTiledView(this);
   }
 
-  pid_t View::pid() const { return m_xwayland ? -1 : surfaceClientPid(m_toplevel->base->surface); }
+  pid_t View::pid() const {
+    if (m_xsurface != nullptr) {
+      return m_xsurface->pid > 0 ? m_xsurface->pid : -1;
+    }
+    return surfaceClientPid(rootSurface());
+  }
 
   // Reads the rules with the alone state forced either way, so the alone effect knows what it should change, and so
   // the opening configure can read the alone rules while the view is not in the layout yet.
@@ -1740,8 +1808,7 @@ namespace umbriel {
     WindowRuleState state = ruleState();
     state.alone = alone;
     return resolveWindowRules(
-        config(), ruleText(m_toplevel->app_id), ruleText(m_toplevel->title), m_xdgTag, m_contentType, state,
-        m_server->uptimeMs()
+        config(), ruleText(appId()), ruleText(title()), m_xdgTag, m_contentType, state, m_server->uptimeMs()
     );
   }
 
@@ -1772,7 +1839,7 @@ namespace umbriel {
   // The exception is a state the opening configure seeded from these same rules, which this pass takes over.
   bool View::applyAloneRuleEffects(const ResolvedWindowRule& delta) {
     if (delta.defaultFullscreen && *delta.defaultFullscreen) {
-      if (m_toplevel->scheduled.fullscreen && m_aloneOpeningSeed != AloneSeed::Fullscreen) {
+      if (scheduledFullscreen() && m_aloneOpeningSeed != AloneSeed::Fullscreen) {
         return false;
       }
       setFullscreen(true);
@@ -1780,7 +1847,7 @@ namespace umbriel {
       return true;
     }
     if (delta.defaultMaximizeToEdges && *delta.defaultMaximizeToEdges) {
-      if (m_maximizedToEdges || m_toplevel->scheduled.fullscreen) {
+      if (m_maximizedToEdges || scheduledFullscreen()) {
         return false;
       }
       setMaximizedToEdges(true);
@@ -1788,7 +1855,7 @@ namespace umbriel {
       return true;
     }
     if (!openingParented() && delta.defaultMaximize && *delta.defaultMaximize) {
-      if (m_toplevel->scheduled.maximized && m_aloneOpeningSeed != AloneSeed::Maximize) {
+      if (scheduledMaximized() && m_aloneOpeningSeed != AloneSeed::Maximize) {
         return false;
       }
       setMaximized(true);
@@ -1797,9 +1864,9 @@ namespace umbriel {
     }
     if ((delta.defaultScrollingExtentPx || delta.defaultScrollingExtent)
         && m_workspace != nullptr
-        && !m_toplevel->scheduled.fullscreen
+        && !scheduledFullscreen()
         && !m_maximizedToEdges
-        && !m_toplevel->scheduled.maximized) {
+        && !scheduledMaximized()) {
       ScrollingLayout* scrolling = m_workspace->scrollingLayout();
       if (scrolling != nullptr) {
         const int column = scrolling->columnOf(this);
@@ -1840,7 +1907,7 @@ namespace umbriel {
   void View::revertAloneRuleEffects() {
     switch (m_aloneAction) {
     case AloneAction::Fullscreen:
-      if (m_toplevel->scheduled.fullscreen) {
+      if (scheduledFullscreen()) {
         setFullscreen(false);
       }
       break;
@@ -1850,7 +1917,7 @@ namespace umbriel {
       }
       break;
     case AloneAction::Maximize:
-      if (m_toplevel->scheduled.maximized && !m_maximizedToEdges) {
+      if (scheduledMaximized() && !m_maximizedToEdges) {
         setMaximized(false);
       }
       break;
@@ -1914,10 +1981,9 @@ namespace umbriel {
   void View::settleOpeningAloneState() {
     // Restored maximize only steals alone ownership when the compositor honors it. Otherwise the alone rule owns the
     // state like any other window, and the client's session flag is ignored.
-    const bool clientRequested = m_aloneOpeningSeed == AloneSeed::Fullscreen ? m_toplevel->requested.fullscreen
-                                                                             : m_aloneOpeningSeed == AloneSeed::Maximize
-            && m_toplevel->requested.maximized
-            && config().general.honorRestoredMaximize;
+    const bool clientRequested = m_aloneOpeningSeed == AloneSeed::Fullscreen
+        ? requestedFullscreen()
+        : m_aloneOpeningSeed == AloneSeed::Maximize && requestedMaximized() && config().general.honorRestoredMaximize;
     if (clientRequested) {
       // The client has asked for the state itself since the opening configure, so it owns it.
       m_aloneOpeningSeed = AloneSeed::None;
@@ -2008,7 +2074,7 @@ namespace umbriel {
 
   void View::onDestroy(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_destroy);
-    self->handleDestroy();
+    self->roleDestroyed();
   }
 
   void View::onRequestMove(wl_listener* listener, void* data) {
@@ -2034,10 +2100,12 @@ namespace umbriel {
     }
     // Clients such as kitty restore maximize just after their first frame. Keep the gate closed until the client
     // acknowledges the configure that carries the opening layout.
-    const wlr_xdg_surface* surface = self->m_toplevel->base;
-    if (surface->configure_idle != nullptr || !wl_list_empty(&surface->configure_list)) {
-      self->m_acceptClientMaximizeSerial = surface->scheduled_serial;
-      return;
+    if (self->m_toplevel != nullptr) {
+      const wlr_xdg_surface* surface = self->m_toplevel->base;
+      if (surface->configure_idle != nullptr || !wl_list_empty(&surface->configure_list)) {
+        self->m_acceptClientMaximizeSerial = surface->scheduled_serial;
+        return;
+      }
     }
     self->m_acceptClientMaximizeRequests = true;
   }
@@ -2090,11 +2158,7 @@ namespace umbriel {
   }
 
   std::optional<FloatingPoint> View::floatingClampTarget(FloatingPoint origin, int width, int height, bool resize) {
-    if (m_tiled
-        || !m_mapped
-        || m_toplevel->scheduled.fullscreen
-        || m_toplevel->scheduled.maximized
-        || sizeGrabActive()) {
+    if (m_tiled || !m_mapped || scheduledFullscreen() || scheduledMaximized() || sizeGrabActive()) {
       return std::nullopt;
     }
     if (Cursor* cursor = m_server->cursor(); cursor != nullptr && cursor->isDraggingView(this)) {
@@ -2104,7 +2168,7 @@ namespace umbriel {
     if (usable.width <= 0 || usable.height <= 0 || width <= 0 || height <= 0) {
       return std::nullopt;
     }
-    const wlr_box& geo = m_toplevel->base->geometry;
+    const wlr_box& geo = geometryBox();
     const wlr_box box{.x = geo.x, .y = geo.y, .width = width, .height = height};
     const FloatingPoint clamped =
         resize ? clampFloatingOriginForResize(origin, box, usable) : clampFloatingOrigin(origin, box, usable);
@@ -2118,7 +2182,7 @@ namespace umbriel {
     if (m_posX.animating() || m_posY.animating()) {
       return;
     }
-    const wlr_box& geo = m_toplevel->base->geometry;
+    const wlr_box& geo = geometryBox();
     const FloatingPoint origin{.x = m_sceneTree->node.x, .y = m_sceneTree->node.y};
     if (const auto clamped = floatingClampTarget(origin, geo.width, geo.height, false)) {
       setPosition(clamped->x, clamped->y);
@@ -2156,11 +2220,11 @@ namespace umbriel {
   }
 
   bool View::centerFloating() {
-    if (!m_mapped || m_tiled || m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen) {
+    if (!m_mapped || m_tiled || scheduledFullscreen() || currentFullscreen()) {
       return false;
     }
     const wlr_box usable = floatingUsableArea();
-    const wlr_box& geo = m_toplevel->base->geometry;
+    const wlr_box& geo = geometryBox();
     if (usable.width <= 0 || usable.height <= 0 || geo.width <= 0 || geo.height <= 0) {
       return false;
     }
@@ -2190,7 +2254,7 @@ namespace umbriel {
     if (inLayout) {
       m_workspace->flushArrange();
     }
-    if (m_toplevel->scheduled.fullscreen) {
+    if (scheduledFullscreen()) {
       // Fullscreen takes the output's size; the strip still places a tiled one at its column.
       const wlr_box area = fullscreenArea();
       return {layoutTargetX(), layoutTargetY(), area.width, area.height};
@@ -2199,9 +2263,9 @@ namespace umbriel {
       return m_workspace->presentedTiledBox(this);
     }
     // A float's scheduled size is the one a maximize or resize is taking it to, and the client's own once it settled.
-    const wlr_box& geometry = m_toplevel->base->geometry;
-    const int width = m_toplevel->scheduled.width > 0 ? m_toplevel->scheduled.width : geometry.width;
-    const int height = m_toplevel->scheduled.height > 0 ? m_toplevel->scheduled.height : geometry.height;
+    const wlr_box& geometry = geometryBox();
+    const int width = scheduledSize().width > 0 ? scheduledSize().width : geometry.width;
+    const int height = scheduledSize().height > 0 ? scheduledSize().height : geometry.height;
     return {layoutTargetX(), layoutTargetY(), width, height};
   }
 
@@ -2219,7 +2283,7 @@ namespace umbriel {
       w = (*size)[0];
       h = (*size)[1];
     } else {
-      const wlr_box& geo = m_toplevel->base->geometry;
+      const wlr_box& geo = geometryBox();
       w = geo.width > 0 ? geo.width : usable.width;
       h = geo.height > 0 ? geo.height : usable.height;
     }
@@ -2278,8 +2342,8 @@ namespace umbriel {
     } else if (const View* parent = transientParent()) {
       // Where the parent is headed, not where its node is mid-animation right after it mapped. A fullscreen parent
       // shows over any panel, so the whole output counts as visible for it.
-      const wlr_box shownIn = parent->m_toplevel->scheduled.fullscreen ? parent->fullscreenArea() : usable;
-      const wlr_box& geo = m_toplevel->base->geometry;
+      const wlr_box shownIn = parent->scheduledFullscreen() ? parent->fullscreenArea() : usable;
+      const wlr_box& geo = geometryBox();
       const int width = geo.width > 0 ? geo.width : usable.width;
       const int height = geo.height > 0 ? geo.height : usable.height;
       origin = centeredOverShown(parent->targetBox(), shownIn, width, height);
@@ -2292,8 +2356,7 @@ namespace umbriel {
   int View::borderInset() const { return decorated() ? m_decoration.totalBorderWidth() : 0; }
 
   int View::surfaceRadius() const {
-    return decorated() && !m_toplevel->scheduled.fullscreen ? nestedRadius(m_decoration.cornerRadius(), borderInset())
-                                                            : 0;
+    return decorated() && !scheduledFullscreen() ? nestedRadius(m_decoration.cornerRadius(), borderInset()) : 0;
   }
 
   void View::setBorderFocused(bool focused) {
@@ -2360,7 +2423,7 @@ namespace umbriel {
     const int radius = surfaceRadius();
     // A tiled target and an active resize animation can both lead committed geometry, so the box follows the presented
     // size in either case.
-    const wlr_box& geometry = m_toplevel->base->geometry;
+    const wlr_box& geometry = geometryBox();
     const bool usePresentedSize =
         (m_tiled || sizeAnimating()) && m_presentation.width() > 0 && m_presentation.height() > 0;
     struct Ctx {
@@ -2384,7 +2447,7 @@ namespace umbriel {
           auto* ctx = static_cast<Ctx*>(data);
           wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
           if (sceneSurface == nullptr
-              || wlr_surface_get_root_surface(sceneSurface->surface) != ctx->view->m_toplevel->base->surface) {
+              || wlr_surface_get_root_surface(sceneSurface->surface) != ctx->view->rootSurface()) {
             return;
           }
 
@@ -2412,25 +2475,24 @@ namespace umbriel {
 
   void View::updateBlur(int contentWidth, int contentHeight) {
     UMBRIEL_ZONE("View::updateBlur");
-    if (m_toplevel->current.fullscreen && fullscreenOpaque()) {
+    if (currentFullscreen() && fullscreenOpaque()) {
       m_decoration.hideBlur();
       return;
     }
     const wlr_box nodeBox{0, 0, contentWidth, contentHeight};
     m_decoration.updateBlur(
-        m_contentTree, m_toplevel->base->surface, nodeBox, m_toplevel->base->geometry, surfaceRadius(), nullptr,
-        effectiveOpacity(), m_fadeAlpha
+        m_contentTree, rootSurface(), nodeBox, geometryBox(), surfaceRadius(), nullptr, effectiveOpacity(), m_fadeAlpha
     );
   }
 
   void View::updateShadow() {
-    if (m_toplevel->scheduled.fullscreen || m_maximizedToEdges) {
+    if (scheduledFullscreen() || m_maximizedToEdges) {
       m_decoration.hideShadow();
       return;
     }
     // Tiled targets and active resize animations can lead committed geometry,
     // so their shadows must follow the presented size.
-    const wlr_box& geometry = m_toplevel->base->geometry;
+    const wlr_box& geometry = geometryBox();
     const bool usePresentedSize =
         (m_tiled || sizeAnimating()) && m_presentation.width() > 0 && m_presentation.height() > 0;
     updateShadow(
@@ -2562,7 +2624,7 @@ namespace umbriel {
     // Window and overlay effects live on the surface tree; the snapshot's content tree takes them over with time
     // frozen.
     if (m_effects.needsSurface()) {
-      if (wlr_scene_node* surface = toplevelSurfaceTreeNode(m_contentTree, m_toplevel->base->surface)) {
+      if (wlr_scene_node* surface = toplevelSurfaceTreeNode(m_contentTree, rootSurface())) {
         wlr_scene_node_copy_animations_for_snapshot(&content->node, surface);
       }
     }
@@ -2581,7 +2643,7 @@ namespace umbriel {
     // Clip only the toplevel subsurface tree. Calling set_clip on the xdg root also stamps that clip onto popup
     // children (wrong coords → cut-off menus), and clearing clip on border/popup trees asserts when they have no
     // subsurface tree.
-    if (wlr_scene_node* surfaceNode = toplevelSurfaceTreeNode(m_contentTree, m_toplevel->base->surface)) {
+    if (wlr_scene_node* surfaceNode = toplevelSurfaceTreeNode(m_contentTree, rootSurface())) {
       wlr_scene_subsurface_tree_set_clip(surfaceNode, clip);
     } else if (clip == nullptr) {
       wlr_scene_subsurface_tree_set_clip(&m_contentTree->node, nullptr);
@@ -2603,8 +2665,8 @@ namespace umbriel {
     // Other floating views with no workspace use their scene coordinates.
     if (m_sceneTree != nullptr && m_server != nullptr && m_server->outputLayout() != nullptr) {
       wlr_output* wlrOut = wlr_output_layout_output_at(
-          m_server->outputLayout(), m_sceneTree->node.x + (m_toplevel ? m_toplevel->current.width / 2 : 0),
-          m_sceneTree->node.y + (m_toplevel ? m_toplevel->current.height / 2 : 0)
+          m_server->outputLayout(), m_sceneTree->node.x + (currentSize().width / 2),
+          m_sceneTree->node.y + (currentSize().height / 2)
       );
       if (wlrOut != nullptr) {
         return m_server->outputFromWlr(wlrOut);
@@ -2617,15 +2679,15 @@ namespace umbriel {
 
   void View::notifyOutputScale() {
     Output* output = currentOutput();
-    if (output == nullptr || m_toplevel == nullptr || m_toplevel->base == nullptr) {
+    if (output == nullptr || rootSurface() == nullptr) {
       return;
     }
-    wlr_xdg_surface_for_each_surface(m_toplevel->base, &Output::notifySurfaceScaleIter, output);
-    wlr_xdg_surface_for_each_popup_surface(m_toplevel->base, &Output::notifySurfaceScaleIter, output);
+    forEachSurface(&Output::notifySurfaceScaleIter, output);
+    forEachPopupSurface(&Output::notifySurfaceScaleIter, output);
   }
 
   void View::unconstrainPopup(wlr_xdg_popup* popup) {
-    if (popup == nullptr || m_sceneTree == nullptr) {
+    if (popup == nullptr || m_sceneTree == nullptr || m_toplevel == nullptr) {
       return;
     }
     Output* output = currentOutput();
@@ -2652,7 +2714,7 @@ namespace umbriel {
     // itself is flush with the output edge. Vertically, use the output working area. Floating popups can use the whole
     // area. The box is in root toplevel surface coordinates. The xdg scene root is positioned at the window geometry,
     // not at the surface origin.
-    const wlr_box& geometry = m_toplevel->base->geometry;
+    const wlr_box& geometry = geometryBox();
     const wlr_box box{
         .x = m_tiled ? geometry.x : target.x - lx + geometry.x,
         .y = target.y - ly + geometry.y,
@@ -2663,18 +2725,26 @@ namespace umbriel {
   }
 
   View* View::fromSurface(wlr_surface* surface) {
+    // Both roles point their `data` at the view's content tree, which carries the view's tag.
+    const auto viewFromContentTree = [](void* data) -> View* {
+      auto* tree = static_cast<wlr_scene_tree*>(data);
+      if (tree == nullptr) {
+        return nullptr;
+      }
+      SceneNode* node = sceneNodeFrom(tree->node.data);
+      if (node == nullptr || node->kind != SceneNodeKind::View) {
+        return nullptr;
+      }
+      return static_cast<View*>(node);
+    };
     wlr_surface* walk = surface;
     while (walk != nullptr) {
       if (wlr_xdg_toplevel* toplevel = wlr_xdg_toplevel_try_from_wlr_surface(walk)) {
-        auto* tree = static_cast<wlr_scene_tree*>(toplevel->base->data);
-        if (tree == nullptr) {
-          return nullptr;
-        }
-        SceneNode* node = sceneNodeFrom(tree->node.data);
-        if (node == nullptr || node->kind != SceneNodeKind::View) {
-          return nullptr;
-        }
-        return static_cast<View*>(node);
+        return viewFromContentTree(toplevel->base->data);
+      }
+      // Override-redirect X11 windows carry no content tree and resolve to no view.
+      if (wlr_xwayland_surface* xsurface = wlr_xwayland_surface_try_from_wlr_surface(walk)) {
+        return viewFromContentTree(xsurface->data);
       }
       if (wlr_xdg_popup* popup = wlr_xdg_popup_try_from_wlr_surface(walk)) {
         walk = popup->parent;
@@ -2688,7 +2758,7 @@ namespace umbriel {
   void View::resetSurfaceClip() {
     // Fullscreen must not keep a copied tile clip (that freezes usable-area size and leaves a bar-sized gap). Use
     // scheduled (not current): on leave, scheduled clears immediately while current lags until the client acks.
-    const bool fullscreen = m_toplevel->scheduled.fullscreen;
+    const bool fullscreen = scheduledFullscreen();
     const wlr_box content = committedContentBox();
     trackPresentedSize(content.width, content.height);
     if (!fullscreen && !m_tiled) {
@@ -2706,14 +2776,17 @@ namespace umbriel {
   }
 
   void View::requestFloatingSize(int width, int height) {
-    m_floating.recordSizeRequest(width, height, wlr_xdg_toplevel_set_size(m_toplevel, width, height));
+    if (m_xsurface != nullptr) {
+      m_xFloatingRequestBase = currentSize();
+    }
+    m_floating.recordSizeRequest(width, height, configureSize(width, height));
   }
 
   std::array<int, 2> View::floatingSize() const {
     if (const auto& pending = m_floating.pendingSize()) {
       return *pending;
     }
-    const wlr_box& geo = m_toplevel->base->geometry;
+    const wlr_box& geo = geometryBox();
     return {geo.width, geo.height};
   }
 
@@ -2742,19 +2815,19 @@ namespace umbriel {
   bool View::resizeFloatingFractions(
       const std::optional<double>& widthFraction, const std::optional<double>& heightFraction
   ) {
-    if (!m_mapped || m_tiled || m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
+    if (!m_mapped || m_tiled || currentFullscreen() || scheduledFullscreen()) {
       return false;
     }
     const wlr_box usable = floatingUsableArea();
     if (usable.width <= 0 || usable.height <= 0) {
       return false;
     }
-    const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+    const SizeHints hints = sizeHints();
     const auto [basisWidth, basisHeight] = floatingSize();
     const int width =
-        widthFraction ? clampXdgWidth(floatingFractionSize(*widthFraction, usable.width), hints) : basisWidth;
+        widthFraction ? clampWidth(floatingFractionSize(*widthFraction, usable.width), hints) : basisWidth;
     const int height =
-        heightFraction ? clampXdgHeight(floatingFractionSize(*heightFraction, usable.height), hints) : basisHeight;
+        heightFraction ? clampHeight(floatingFractionSize(*heightFraction, usable.height), hints) : basisHeight;
     if (width <= 0 || height <= 0) {
       return false;
     }
@@ -2771,22 +2844,22 @@ namespace umbriel {
     }
     // First-time floats prefer the last acked or scheduled configure size,
     // then fall back to the layout target and committed geometry.
-    int width = m_toplevel->current.width;
-    int height = m_toplevel->current.height;
+    int width = currentSize().width;
+    int height = currentSize().height;
     if (width <= 0 || height <= 0) {
-      width = m_toplevel->scheduled.width;
-      height = m_toplevel->scheduled.height;
+      width = scheduledSize().width;
+      height = scheduledSize().height;
     }
     if ((width <= 0 || height <= 0) && m_workspace != nullptr) {
       const wlr_box target = m_workspace->layout().targetBox(this);
       if (target.width > 0 && target.height > 0) {
-        const XdgSizeHints hints = xdgSizeHints(m_toplevel);
-        width = clampXdgWidth(target.width, hints);
-        height = clampXdgHeight(target.height, hints);
+        const SizeHints hints = sizeHints();
+        width = clampWidth(target.width, hints);
+        height = clampHeight(target.height, hints);
       }
     }
     if (width <= 0 || height <= 0) {
-      const wlr_box& geo = m_toplevel->base->geometry;
+      const wlr_box& geo = geometryBox();
       width = geo.width;
       height = geo.height;
     }
@@ -2794,7 +2867,7 @@ namespace umbriel {
   }
 
   void View::beginFloatingResize(uint32_t edges) {
-    const wlr_box& geo = m_toplevel->base->geometry;
+    const wlr_box& geo = geometryBox();
     m_floating.beginResize(
         {.x = m_sceneTree->node.x + geo.x, .y = m_sceneTree->node.y + geo.y, .width = geo.width, .height = geo.height},
         edges
@@ -2811,7 +2884,7 @@ namespace umbriel {
     // Mirror the guard set of resizeFloatingFractions: a fullscreen view owns its
     // size, a tiled one has no floating box, and a view with no usable area has
     // nothing to size against.
-    if (!m_mapped || m_tiled || m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
+    if (!m_mapped || m_tiled || currentFullscreen() || scheduledFullscreen()) {
       return;
     }
     const wlr_box usable = floatingUsableArea();
@@ -2826,20 +2899,20 @@ namespace umbriel {
     // The same 0.1 fraction floor the fraction path enforces, so a hint-less
     // client cannot collapse to a single pixel.
     const double target = std::clamp(*current + delta, 0.1, 1.0);
-    const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+    const SizeHints hints = sizeHints();
     const auto [basisWidth, basisHeight] = floatingSize();
     // A pending size and the position animation target form one logical box.
     // Anchor that box rather than the in-flight scene node, so repeated actions
     // keep the same far edge while the previous resize is still animating.
-    const wlr_box& geo = m_toplevel->base->geometry;
+    const wlr_box& geo = geometryBox();
     const wlr_box anchor{
         .x = layoutTargetX() + geo.x,
         .y = layoutTargetY() + geo.y,
         .width = basisWidth,
         .height = basisHeight,
     };
-    const int width = widthAxis ? clampXdgWidth(floatingFractionSize(target, usable.width), hints) : basisWidth;
-    const int height = widthAxis ? basisHeight : clampXdgHeight(floatingFractionSize(target, usable.height), hints);
+    const int width = widthAxis ? clampWidth(floatingFractionSize(target, usable.width), hints) : basisWidth;
+    const int height = widthAxis ? basisHeight : clampHeight(floatingFractionSize(target, usable.height), hints);
     if (width <= 0 || height <= 0) {
       return;
     }
@@ -2867,7 +2940,7 @@ namespace umbriel {
     if (!m_floating.anchor()) {
       return;
     }
-    const wlr_box& geo = m_toplevel->base->geometry;
+    const wlr_box& geo = geometryBox();
     const FloatingPoint content = anchoredContentOrigin(*m_floating.anchor(), m_floating.edges(), geo);
     const int x = content.x - geo.x;
     const int y = content.y - geo.y;
@@ -2883,38 +2956,36 @@ namespace umbriel {
   }
 
   void View::adoptFloatingClientSize() {
-    if (m_tiled || !m_mapped || m_toplevel->scheduled.fullscreen || m_toplevel->scheduled.maximized) {
+    if (m_tiled || !m_mapped || scheduledFullscreen() || scheduledMaximized()) {
       return;
     }
-    wlr_xdg_surface* base = m_toplevel->base;
-    if (!m_floating.retireSizeRequestIfSettled(base->current.configure_serial)) {
+    if (!retireFloatingSizeRequest()) {
       return;
     }
-    const wlr_box& geo = base->geometry;
+    const wlr_box geo = geometryBox();
     if (geo.width <= 0 || geo.height <= 0) {
       return;
     }
-    if (m_toplevel->scheduled.width != geo.width || m_toplevel->scheduled.height != geo.height) {
+    if (scheduledSize().width != geo.width || scheduledSize().height != geo.height) {
       // Once the latest compositor size request is committed, a floating
       // client owns its size. Direct assignment avoids an echo configure.
-      m_toplevel->scheduled.width = geo.width;
-      m_toplevel->scheduled.height = geo.height;
+      adoptScheduledSize(geo.width, geo.height);
       clampFloatingPosition();
     }
   }
 
   void View::syncFloatingSurfaceClip() {
-    if (m_tiled || m_toplevel->scheduled.fullscreen) {
+    if (m_tiled || scheduledFullscreen()) {
       return;
     }
-    const wlr_box& geo = m_toplevel->base->geometry;
-    int width = m_toplevel->scheduled.width;
-    int height = m_toplevel->scheduled.height;
+    const wlr_box& geo = geometryBox();
+    int width = scheduledSize().width;
+    int height = scheduledSize().height;
     if (width <= 0) {
-      width = m_toplevel->current.width;
+      width = currentSize().width;
     }
     if (height <= 0) {
-      height = m_toplevel->current.height;
+      height = currentSize().height;
     }
     // Electron often keeps a wide buffer while tiled; without a clip, toggling float
     // would suddenly show the full surface.
@@ -2929,7 +3000,7 @@ namespace umbriel {
   }
 
   wlr_scene_tree* View::homeTree() const {
-    const bool fs = m_toplevel->scheduled.fullscreen;
+    const bool fs = scheduledFullscreen();
     if (m_workspace != nullptr) {
       return fs ? m_workspace->fullscreenTree() : m_workspace->viewLayer(m_tiled);
     }
@@ -2941,8 +3012,8 @@ namespace umbriel {
     if (fullArea.width <= 0 || fullArea.height <= 0) {
       return;
     }
-    if (m_toplevel->scheduled.width != fullArea.width || m_toplevel->scheduled.height != fullArea.height) {
-      wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
+    if (scheduledSize().width != fullArea.width || scheduledSize().height != fullArea.height) {
+      configureSize(fullArea.width, fullArea.height);
     }
     if (fullscreenOpeningActive()) {
       // windows_in owns the node position and the presented size until the fade ends; the layout owns only the box
@@ -2972,7 +3043,7 @@ namespace umbriel {
 
   void View::applyPresentation(const wlr_box& target) {
     updateFullscreenPresentation(target.width, target.height);
-    const wlr_box& geometry = m_toplevel->base->geometry;
+    const wlr_box& geometry = geometryBox();
     // Stay inside the tile while geometry lags configure (Electron often stays wide).
     const wlr_box content{
         .x = target.x,
@@ -2980,7 +3051,7 @@ namespace umbriel {
         .width = presentedWidth(target),
         .height = presentedHeight(target),
     };
-    if (m_toplevel->current.fullscreen) {
+    if (currentFullscreen()) {
       // The backdrop is the window's own letterbox, so it follows the presented box rather than the tile: a window
       // scaling into or out of fullscreen carries its surround instead of sitting in an output-wide one. The output's
       // clipped root scissors whatever hangs over a shared edge.
@@ -3016,7 +3087,12 @@ namespace umbriel {
     // The XDG map signal is emitted before the root surface commit signal.
     // Refresh only the root cache here, then let each descendant's own commit
     // keep its cached double-buffered state authoritative.
-    syncContentType(m_toplevel->base->surface);
+    syncContentType(rootSurface());
+    if (m_xsurface != nullptr) {
+      // X11 has no initial-commit handshake: send the opening configure now. The first buffer is presented through
+      // committedContentBox() until the client redraws at the configured size.
+      handleCommit(true);
+    }
     m_mapped = true;
     m_effects.resetSlots();
     m_tiledOpeningDeferred = false;
@@ -3026,7 +3102,7 @@ namespace umbriel {
     // it cannot override alone/default opening policy; later maximize requests stay valid.
     if (config().general.honorRestoredMaximize) {
       m_consumeRestoredMaximizeRequest = false;
-    } else if (m_toplevel->requested.maximized) {
+    } else if (requestedMaximized()) {
       m_consumeRestoredMaximizeRequest = true;
     }
     m_acceptClientMaximizeIdle =
@@ -3036,8 +3112,8 @@ namespace umbriel {
       m_acceptClientMaximizeRequests = true;
     }
     m_server->scheduleIpcWindowsEvent();
-    m_tiled = looksTiled(m_toplevel, openingParented());
-    const wlr_box& mapGeo = m_toplevel->base->geometry;
+    m_tiled = looksTiled();
+    const wlr_box& mapGeo = geometryBox();
     m_presentation.setSize(mapGeo.width, mapGeo.height);
     resetSurfaceClip();
 
@@ -3047,8 +3123,8 @@ namespace umbriel {
     m_initialRuleState.focused = false;
     m_initialRuleState.alone = false;
     const ResolvedWindowRule rule = resolveWindowRules(
-        config(), ruleText(m_toplevel->app_id), ruleText(m_toplevel->title), m_xdgTag, m_contentType,
-        m_initialRuleState, m_server->uptimeMs()
+        config(), ruleText(appId()), ruleText(title()), m_xdgTag, m_contentType, m_initialRuleState,
+        m_server->uptimeMs()
     );
     m_initialRules = rule;
     m_initialRulesXdgTag = m_xdgTag;
@@ -3065,7 +3141,7 @@ namespace umbriel {
     // with the real title, even if the client mapped with a placeholder.
     m_initialRulesSettled = !anyWindowRuleHasTitlePattern(config());
 
-    showDecorations(!m_toplevel->scheduled.fullscreen);
+    showDecorations(!scheduledFullscreen());
 
     Workspace* launchWorkspace = m_launchWorkspace != nullptr ? m_launchWorkspace->workspace : nullptr;
     if (!launchRuleOverride && m_workspace == nullptr && launchWorkspace != nullptr) {
@@ -3168,7 +3244,7 @@ namespace umbriel {
     // flag during this transition; only an explicit window rule overrides the
     // layout's initial size.
     const bool ruleMaximized = !openingParented() && rule.defaultMaximize && *rule.defaultMaximize;
-    const bool restoredMaximized = config().general.honorRestoredMaximize && m_toplevel->requested.maximized;
+    const bool restoredMaximized = config().general.honorRestoredMaximize && requestedMaximized();
     if (!assignedScratchpad && (ruleMaximized || restoredMaximized)) {
       setMaximized(true);
     }
@@ -3300,7 +3376,7 @@ namespace umbriel {
         && closingWorkspace->focusedView() == this
         && closingWorkspace->active()
         && m_tiled
-        && m_toplevel->parent == nullptr
+        && !shellParentRequested()
         && config().input.focus.followsMouse
         && !m_server->sessionLocked()
         && m_server->exclusiveKeyboardLayer() == nullptr
@@ -3358,7 +3434,7 @@ namespace umbriel {
     m_dragPhysics = DragPhysics{};
     // The window slots leave with the snapshot; a remap binds them again.
     if (m_effects.needsSurface()) {
-      wlr_surface* surface = m_toplevel->base->surface;
+      wlr_surface* surface = rootSurface();
       clearWindowEffectSlots(toplevelSurfaceTreeNode(m_contentTree, surface));
       if (m_captureScene != nullptr) {
         clearWindowEffectSlots(toplevelSurfaceTreeNode(&m_captureScene->tree, surface));
@@ -3376,7 +3452,7 @@ namespace umbriel {
     m_decoration.setBordersEnabled(false);
     m_decoration.hideEffects();
     m_presentation.setBackdropEnabled(false);
-    if (m_toplevel->current.fullscreen || m_toplevel->scheduled.fullscreen) {
+    if (currentFullscreen() || scheduledFullscreen()) {
       // Move out of the fullscreen layer back to the normal workspace/xdg tree.
       setSceneParent(m_workspace ? m_workspace->viewLayer(m_tiled) : m_server->xdgTree());
     }
@@ -3487,7 +3563,7 @@ namespace umbriel {
       ContentType effective = ContentType::None;
     } context{this};
     wlr_surface_for_each_surface(
-        m_toplevel->base->surface,
+        rootSurface(),
         [](wlr_surface* surface, int /*sx*/, int /*sy*/, void* data) {
           auto& context = *static_cast<Context*>(data);
           const auto watch = std::ranges::find_if(context.view->m_viewSurfaceWatches, [surface](const auto& candidate) {
@@ -3517,20 +3593,20 @@ namespace umbriel {
   void View::handleClientCommit() {
     // The scene still shows the previous state here, so this is the last moment the outgoing frame can be cloned.
     const auto& animation = config().animation;
-    wlr_surface* surface = m_toplevel->base->surface;
+    wlr_surface* surface = rootSurface();
     if (!m_mapped
         || !m_tiled
         || !m_onActiveWorkspace
         || !m_tiledSizeRequest
         || !layoutPresentationOwned()
-        || m_toplevel->scheduled.fullscreen
-        || m_toplevel->current.fullscreen
+        || scheduledFullscreen()
+        || currentFullscreen()
         || !animation.enabled
         || !animation.windowsMove.enabled
         || (surface->pending.committed & WLR_SURFACE_STATE_BUFFER) == 0
         || surface->pending.buffer == nullptr
         || (surface->pending.width == surface->current.width && surface->pending.height == surface->current.height)
-        || !serialSettled(m_toplevel->base->pending.configure_serial, m_tiledSizeRequest->serial)) {
+        || !pendingConfigureSettled(m_tiledSizeRequest->serial)) {
       return;
     }
     m_resizeCrossfade.capture(
@@ -3552,21 +3628,21 @@ namespace umbriel {
       m_presentation.setFullscreenOpaque(fullscreenOpaque());
     }
     if (m_captureScene != nullptr) {
-      // Restrict the capture to the xdg window geometry. Client subsurfaces
+      // Restrict the capture to the window geometry. Client subsurfaces
       // remain visible, while buffer content outside the declared window is
       // excluded. Window-owned popups are separate children and remain part
       // of the isolated scene.
-      wlr_scene_subsurface_tree_set_clip(&m_captureScene->tree.node, &m_toplevel->base->geometry);
+      const wlr_box captureClip = geometryBox();
+      wlr_scene_subsurface_tree_set_clip(&m_captureScene->tree.node, &captureClip);
     }
-    if (m_toplevel->base->initial_commit || reconfigureOpeningState) {
+    if (openingConfigurePending() || reconfigureOpeningState) {
       // Resolve window rules early to influence initial tiled/float decision and size.
       WindowRuleState openingState = ruleState();
       openingState.focused = false;
-      openingState.floating = !looksTiled(m_toplevel, openingParented());
+      openingState.floating = !looksTiled();
       openingState.alone = false;
       ResolvedWindowRule rule = resolveWindowRules(
-          config(), ruleText(m_toplevel->app_id), ruleText(m_toplevel->title), m_xdgTag, m_contentType, openingState,
-          m_server->uptimeMs()
+          config(), ruleText(appId()), ruleText(title()), m_xdgTag, m_contentType, openingState, m_server->uptimeMs()
       );
       ScratchpadManager* scratchpadManager = m_server->scratchpadManager();
       const bool openingInScratchpad = rule.defaultScratchpad
@@ -3575,7 +3651,7 @@ namespace umbriel {
       const auto& scratchpadConfig = config().animation.scratchpad;
       const bool wantTiled = !openingInScratchpad
           && !rule.defaultPinned.value_or(false)
-          && (rule.defaultFloating ? !*rule.defaultFloating : looksTiled(m_toplevel, openingParented()));
+          && (rule.defaultFloating ? !*rule.defaultFloating : looksTiled());
 
       // Resolve the workspace this view will attach to, so the output and layout that will actually arrange it are the
       // ones that size the first configure.
@@ -3606,11 +3682,10 @@ namespace umbriel {
             || (alone.defaultMaximizeToEdges.value_or(false) && !rule.defaultMaximizeToEdges.value_or(false));
         // A client's restored maximize flag only blocks alone ownership when we honor it. Otherwise alone seeds as
         // usual and the restore is ignored (and consumed after map if the client re-asserts it).
-        const bool clientOwnsRestoredMaximize =
-            config().general.honorRestoredMaximize && m_toplevel->requested.maximized;
-        if (seedFullscreen && !m_toplevel->requested.fullscreen) {
+        const bool clientOwnsRestoredMaximize = config().general.honorRestoredMaximize && requestedMaximized();
+        if (seedFullscreen && !requestedFullscreen()) {
           m_aloneOpeningSeed = AloneSeed::Fullscreen;
-        } else if (seedMaximized && !m_toplevel->requested.fullscreen && !clientOwnsRestoredMaximize) {
+        } else if (seedMaximized && !requestedFullscreen() && !clientOwnsRestoredMaximize) {
           m_aloneOpeningSeed = AloneSeed::Maximize;
         }
         rule.defaultFullscreen = alone.defaultFullscreen;
@@ -3622,7 +3697,7 @@ namespace umbriel {
 
       const bool wantFullscreen = openingInScratchpad
           ? scratchpadConfig.fullscreen
-          : m_toplevel->requested.fullscreen || (rule.defaultFullscreen && *rule.defaultFullscreen);
+          : requestedFullscreen() || (rule.defaultFullscreen && *rule.defaultFullscreen);
       const bool wantMaximizeToEdges = openingInScratchpad
           ? !wantFullscreen && scratchpadConfig.maximize
           : rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges;
@@ -3630,28 +3705,26 @@ namespace umbriel {
           ? wantMaximizeToEdges
           : (!openingParented() && rule.defaultMaximize && *rule.defaultMaximize)
               || wantMaximizeToEdges
-              || (config().general.honorRestoredMaximize && m_toplevel->requested.maximized);
+              || (config().general.honorRestoredMaximize && requestedMaximized());
 
       Output* targetOutput = targetGroup != nullptr ? targetGroup->output() : preferred;
       if (openingInScratchpad) {
         targetOutput = scratchpadManager->presentationOutput(*rule.defaultScratchpad, targetOutput);
       }
 
-      wlr_xdg_toplevel_set_tiled(
-          m_toplevel, wantTiled ? WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT : 0
-      );
+      setTiledState(wantTiled ? WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT : 0);
 
       if (wantFullscreen) {
-        // xwayland-satellite can request fullscreen while creating the xdg role, before the initial surface commit.
-        // The request event is too early to configure, but wlroots preserves it in requested state for us to honor now.
-        wlr_xdg_toplevel_set_fullscreen(m_toplevel, true);
+        // An X11 client can request fullscreen before its first buffer. The request event is too early to configure,
+        // but the role preserves it in requested state for us to honor now.
+        setFullscreenState(true);
         wlr_box fullArea{};
         wlr_output* initialOutput = targetOutput != nullptr ? targetOutput->wlr() : m_server->preferredOutput();
         if (initialOutput != nullptr) {
           wlr_output_layout_get_box(m_server->outputLayout(), initialOutput, &fullArea);
         }
         if (fullArea.width > 0 && fullArea.height > 0) {
-          wlr_xdg_toplevel_set_size(m_toplevel, fullArea.width, fullArea.height);
+          configureSize(fullArea.width, fullArea.height);
         }
       } else if (wantTiled) {
         const wlr_box usable = openingUsableArea(targetOutput);
@@ -3688,14 +3761,14 @@ namespace umbriel {
               target != nullptr ? target->focusedView() : nullptr
           );
         }
-        const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+        const SizeHints hints = sizeHints();
         const int width =
-            (initial.width > 0 && !wantMaximizeToEdges) ? clampXdgWidth(initial.width, hints) : initial.width;
+            (initial.width > 0 && !wantMaximizeToEdges) ? clampWidth(initial.width, hints) : initial.width;
         const int height =
-            (initial.height > 0 && !wantMaximizeToEdges) ? clampXdgHeight(initial.height, hints) : initial.height;
-        wlr_xdg_toplevel_set_size(m_toplevel, width, height);
+            (initial.height > 0 && !wantMaximizeToEdges) ? clampHeight(initial.height, hints) : initial.height;
+        configureSize(width, height);
         if (wantMaximized) {
-          wlr_xdg_toplevel_set_maximized(m_toplevel, true);
+          setMaximizedState(true);
         }
 
         // Keep floating defaults symbolic until the first float transition, when the target usable area is known.
@@ -3705,11 +3778,11 @@ namespace umbriel {
         m_pendingFloatingHeight = rule.defaultFloatingHeight;
         m_pendingFloatingPosition = rule.defaultPosition;
       } else {
-        const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+        const SizeHints hints = sizeHints();
         if (wantMaximized) {
           const wlr_box usable = openingUsableArea(targetOutput);
           requestFloatingSize(usable.width, usable.height);
-          wlr_xdg_toplevel_set_maximized(m_toplevel, true);
+          setMaximizedState(true);
         } else if (openingInScratchpad && scratchpadConfig.scale > 0.0 && scratchpadConfig.scale <= 1.0) {
           const wlr_box usable = openingUsableArea(targetOutput);
           requestFloatingSize(
@@ -3721,14 +3794,14 @@ namespace umbriel {
           int requestedWidth = 0;
           int requestedHeight = 0;
           if (rule.defaultFloatingWidthPx) {
-            requestedWidth = clampXdgWidth(*rule.defaultFloatingWidthPx, hints);
+            requestedWidth = clampWidth(*rule.defaultFloatingWidthPx, hints);
           } else if (rule.defaultFloatingWidth && usable.width > 0) {
-            requestedWidth = clampXdgWidth(floatingFractionSize(*rule.defaultFloatingWidth, usable.width), hints);
+            requestedWidth = clampWidth(floatingFractionSize(*rule.defaultFloatingWidth, usable.width), hints);
           }
           if (rule.defaultFloatingHeightPx) {
-            requestedHeight = clampXdgHeight(*rule.defaultFloatingHeightPx, hints);
+            requestedHeight = clampHeight(*rule.defaultFloatingHeightPx, hints);
           } else if (rule.defaultFloatingHeight && usable.height > 0) {
-            requestedHeight = clampXdgHeight(floatingFractionSize(*rule.defaultFloatingHeight, usable.height), hints);
+            requestedHeight = clampHeight(floatingFractionSize(*rule.defaultFloatingHeight, usable.height), hints);
           }
           requestFloatingSize(requestedWidth, requestedHeight);
         }
@@ -3740,7 +3813,7 @@ namespace umbriel {
     }
     (void)settleTiledSizeRequest();
     if (!sizeAnimating()) {
-      const wlr_box& geometry = m_toplevel->base->geometry;
+      const wlr_box& geometry = geometryBox();
       if (m_decoration.borderGeometryStale(geometry.width, geometry.height)) {
         updateBorderGeometry();
       }
@@ -3753,14 +3826,14 @@ namespace umbriel {
         && m_tiled
         && m_onActiveWorkspace
         && m_workspace != nullptr
-        && !m_toplevel->scheduled.fullscreen
-        && !m_toplevel->current.fullscreen
+        && !scheduledFullscreen()
+        && !currentFullscreen()
         && sizeGrabTracksPointer()) {
       // During interactive resize, track geometry so no spurious animation
       // replays the drag when the grab ends and mode returns to Passthrough. A
       // move grab is not that: it retargets the size once and animates there,
       // and the client's ack must not cut that animation short.
-      const wlr_box& geometry = m_toplevel->base->geometry;
+      const wlr_box& geometry = geometryBox();
       if (geometry.width > 0 && geometry.height > 0) {
         if (sizeAnimating()) {
           cancelSizeAnimation();
@@ -3773,7 +3846,7 @@ namespace umbriel {
     if (m_mapped && m_tiled && m_workspace != nullptr && m_workspace->active()) {
       m_workspace->syncViewPresentation(this);
     } else if (m_mapped && !m_tiled) {
-      if (m_toplevel->scheduled.fullscreen && m_onActiveWorkspace) {
+      if (scheduledFullscreen() && m_onActiveWorkspace) {
         // Keep fullscreen placement authoritative; the xdg scene helper just
         // reset the surface offset for this commit.
         applyFullscreenLayout();
@@ -3795,15 +3868,13 @@ namespace umbriel {
       output->updateHdr();
     }
     // The commit that leaves fullscreen uncovers top-layer surfaces, so an exclusive one takes the seat back.
-    if (m_committedFullscreen && !m_toplevel->current.fullscreen && m_mapped) {
+    if (m_committedFullscreen && !currentFullscreen() && m_mapped) {
       if (LayerSurface* layer = m_server->exclusiveKeyboardLayer()) {
         layer->focus();
       }
     }
-    m_committedFullscreen = m_toplevel->current.fullscreen;
-    if (m_mapped
-        && m_acceptClientMaximizeSerial
-        && static_cast<int32_t>(m_toplevel->base->current.configure_serial - *m_acceptClientMaximizeSerial) >= 0) {
+    m_committedFullscreen = currentFullscreen();
+    if (m_mapped && m_acceptClientMaximizeSerial && configureSettled(*m_acceptClientMaximizeSerial)) {
       m_acceptClientMaximizeSerial.reset();
       m_acceptClientMaximizeRequests = true;
     }
@@ -3812,9 +3883,13 @@ namespace umbriel {
     if (m_mapped && m_acceptClientMaximizeRequests) {
       m_consumeRestoredMaximizeRequest = false;
     }
+    // Parent trees can move the window without a setScenePosition; keep the X server's idea of it current.
+    if (m_mapped && m_xsurface != nullptr) {
+      syncXwaylandConfigure();
+    }
   }
 
-  void View::handleDestroy() {
+  void View::roleDestroyed() {
     m_resizeCrossfade.discard();
     cancelFadeAnimation();
     cancelPositionAnimation();
@@ -3839,32 +3914,19 @@ namespace umbriel {
 
     clearViewSurfaceWatches();
 
-    wl_list_remove(&m_map.link);
-    wl_list_remove(&m_unmap.link);
-    wl_list_remove(&m_commit.link);
-    wl_list_remove(&m_clientCommit.link);
-    wl_list_remove(&m_destroy.link);
-    wl_list_remove(&m_requestMove.link);
-    wl_list_remove(&m_requestResize.link);
-    wl_list_remove(&m_requestMaximize.link);
-    wl_list_remove(&m_requestFullscreen.link);
-    wl_list_remove(&m_setParent.link);
-    wl_list_remove(&m_setTitle.link);
-    wl_list_remove(&m_setAppId.link);
-    m_map.link.next = nullptr;
-    m_unmap.link.next = nullptr;
-    m_commit.link.next = nullptr;
-    m_destroy.link.next = nullptr;
-    m_requestMove.link.next = nullptr;
-    m_requestResize.link.next = nullptr;
-    m_requestMaximize.link.next = nullptr;
-    m_requestFullscreen.link.next = nullptr;
-    m_setParent.link.next = nullptr;
-    m_setTitle.link.next = nullptr;
-    m_setAppId.link.next = nullptr;
+    for (wl_listener* listener :
+         {&m_map, &m_unmap, &m_commit, &m_clientCommit, &m_destroy, &m_requestMove, &m_requestResize,
+          &m_requestMaximize, &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure,
+          &m_xRequestActivate, &m_xSetHints}) {
+      removeListener(*listener);
+    }
     m_sceneTree->node.data = nullptr;
     m_contentTree->node.data = nullptr;
-    m_toplevel->base->data = nullptr;
+    if (m_toplevel != nullptr) {
+      m_toplevel->base->data = nullptr;
+    } else {
+      m_xsurface->data = nullptr;
+    }
     m_server->removeView(this);
   }
 
@@ -3872,11 +3934,19 @@ namespace umbriel {
     if (!config().input.clientWindowDrag) {
       return;
     }
+    if (m_toplevel == nullptr) {
+      m_server->cursor()->beginClientMove(this, nullptr, 0);
+      return;
+    }
     auto* event = static_cast<wlr_xdg_toplevel_move_event*>(data);
     m_server->cursor()->beginClientMove(this, event->seat, event->serial);
   }
 
   void View::handleRequestResize(void* data) {
+    if (m_toplevel == nullptr) {
+      m_server->cursor()->beginClientResize(this, nullptr, 0, static_cast<wlr_xwayland_resize_event*>(data)->edges);
+      return;
+    }
     auto* event = static_cast<wlr_xdg_toplevel_resize_event*>(data);
     m_server->cursor()->beginClientResize(this, event->seat, event->serial, event->edges);
   }
@@ -3891,7 +3961,7 @@ namespace umbriel {
       if (column >= 0 && m_workspace->layout().isFullWidth(column) != maximized) {
         m_workspace->layout().toggleFullWidth(column);
       }
-      wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+      setMaximizedState(maximized);
       if (maximized) {
         m_workspace->ensureFocusedVisible();
       }
@@ -3911,7 +3981,7 @@ namespace umbriel {
     if (!animateFloating) {
       cancelSizeAnimation();
     }
-    const bool wasMaximized = m_toplevel->scheduled.maximized;
+    const bool wasMaximized = scheduledMaximized();
     if (maximized && !wasMaximized) {
       // Capture where the float is heading, not where it currently sits.
       // Dropping fullscreen queues a configure and starts a move, so
@@ -3930,7 +4000,7 @@ namespace umbriel {
 
       const wlr_box usable = floatingUsableArea();
       if (usable.width > 0 && usable.height > 0) {
-        wlr_xdg_toplevel_set_size(m_toplevel, usable.width, usable.height);
+        configureSize(usable.width, usable.height);
         if (animateFloating) {
           beginResizeAnimation(usable.width, usable.height);
           animateTo(usable.x, usable.y);
@@ -3948,7 +4018,7 @@ namespace umbriel {
       }
       m_hasMaximizeRestoreBox = false;
     }
-    wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
+    setMaximizedState(maximized);
     if (!sizeAnimating()) {
       syncFloatingSurfaceClip();
     }
@@ -3956,16 +4026,16 @@ namespace umbriel {
   }
 
   void View::handleRequestMaximize() {
-    if (!m_toplevel->base->initialized) {
+    if (!roleInitialized()) {
       return;
     }
     if (!m_mapped) {
-      if (config().general.honorRestoredMaximize && m_toplevel->requested.maximized) {
+      if (config().general.honorRestoredMaximize && requestedMaximized()) {
         // Some clients restore maximization only after acknowledging the first
         // configure. Reconfigure before they map a buffer so their first visible
         // content already matches the maximized layout target.
         handleCommit(true);
-      } else if (m_toplevel->requested.maximized) {
+      } else if (requestedMaximized()) {
         m_consumeRestoredMaximizeRequest = true;
       }
       return;
@@ -3973,7 +4043,7 @@ namespace umbriel {
     if (!m_acceptClientMaximizeRequests) {
       // A mapped request before the opening gate is itself the restore re-assert.
       // Consume it here so no later request inherits the suppression.
-      if (!config().general.honorRestoredMaximize && m_toplevel->requested.maximized) {
+      if (!config().general.honorRestoredMaximize && requestedMaximized()) {
         m_consumeRestoredMaximizeRequest = false;
       }
       return;
@@ -3983,40 +4053,40 @@ namespace umbriel {
     if (m_aloneEffectsActive
         && (m_aloneAction == AloneAction::Maximize || m_aloneAction == AloneAction::MaximizeToEdges)) {
       m_consumeRestoredMaximizeRequest = false;
-      if (m_toplevel->requested.maximized != m_toplevel->scheduled.maximized) {
-        wlr_xdg_toplevel_set_maximized(m_toplevel, m_toplevel->scheduled.maximized);
+      if (requestedMaximized() != scheduledMaximized()) {
+        setMaximizedState(scheduledMaximized());
       }
       return;
     }
-    if (m_consumeRestoredMaximizeRequest && m_toplevel->requested.maximized) {
+    if (m_consumeRestoredMaximizeRequest && requestedMaximized()) {
       // Drop the opening restore re-assert without granting the client maximize ownership. If the compositor (alone
       // rule, etc.) already maximized, stay there; otherwise re-ack the unmaximized configure.
       m_consumeRestoredMaximizeRequest = false;
-      if (!m_toplevel->scheduled.maximized) {
-        wlr_xdg_toplevel_set_maximized(m_toplevel, false);
+      if (!scheduledMaximized()) {
+        setMaximizedState(false);
       }
       return;
     }
     m_consumeRestoredMaximizeRequest = false;
     if (m_tiled && m_workspace != nullptr) {
       if (maximizeRequestTargetsEdges(m_maximizedToEdges)) {
-        setMaximizedToEdges(m_toplevel->requested.maximized);
+        setMaximizedToEdges(requestedMaximized());
         return;
       }
-      setMaximized(m_toplevel->requested.maximized);
+      setMaximized(requestedMaximized());
       return;
     }
-    setMaximized(m_toplevel->requested.maximized);
+    setMaximized(requestedMaximized());
   }
 
   void View::setMaximizedToEdges(bool maximized, bool animate) {
     if (!maximized) {
       m_restoreMaximizedToEdges = false;
     }
-    if (!m_toplevel->base->initialized || maximized == m_maximizedToEdges) {
+    if (!roleInitialized() || maximized == m_maximizedToEdges) {
       return;
     }
-    const bool leavingFullscreen = maximized && m_toplevel->scheduled.fullscreen;
+    const bool leavingFullscreen = maximized && scheduledFullscreen();
     if (leavingFullscreen) {
       setFullscreen(false, FullscreenExitLayout::DeferToCaller);
     }
@@ -4026,16 +4096,16 @@ namespace umbriel {
 
     m_maximizedToEdges = maximized;
     bool columnFullWidth = false;
-    if (!maximized && m_tiled && m_workspace != nullptr && !m_toplevel->scheduled.fullscreen) {
+    if (!maximized && m_tiled && m_workspace != nullptr && !scheduledFullscreen()) {
       const int column = m_workspace->layout().columnOf(this);
       columnFullWidth = column >= 0 && m_workspace->layout().isFullWidth(column);
     }
     if (m_tiled) {
-      wlr_xdg_toplevel_set_maximized(m_toplevel, maximized || columnFullWidth);
+      setMaximizedState(maximized || columnFullWidth);
     } else {
       setMaximized(maximized, animate);
     }
-    showDecorations(!maximized && !m_toplevel->scheduled.fullscreen);
+    showDecorations(!maximized && !scheduledFullscreen());
     if (m_workspace != nullptr) {
       m_workspace->snapVisible(this);
       if (leavingFullscreen) {
@@ -4051,13 +4121,13 @@ namespace umbriel {
 
   void View::toggleMaximizedToEdges() { setMaximizedToEdges(!m_maximizedToEdges); }
 
-  void View::toggleMaximized() { setMaximized(m_tiled ? !m_toplevel->scheduled.maximized : !m_floatingMaximized); }
+  void View::toggleMaximized() { setMaximized(m_tiled ? !scheduledMaximized() : !m_floatingMaximized); }
 
   void View::restoreMaximizedForMove() {
     // Fullscreen temporarily covers an underlying floating-maximized state.
     // Moving the fullscreen surface must not consume the state that should be
     // revealed when fullscreen ends.
-    if (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen) {
+    if (scheduledFullscreen() || currentFullscreen()) {
       return;
     }
     if (m_maximizedToEdges) {
@@ -4068,7 +4138,7 @@ namespace umbriel {
   }
 
   void View::dropMaximizedForResize() {
-    if (m_tiled || !m_toplevel->base->initialized) {
+    if (m_tiled || !roleInitialized()) {
       return;
     }
     if (!m_maximizedToEdges && !m_floatingMaximized) {
@@ -4082,42 +4152,39 @@ namespace umbriel {
     m_floatingMaximized = false;
     m_restoreMaximizedToEdges = false;
     m_hasMaximizeRestoreBox = false;
-    wlr_xdg_toplevel_set_maximized(m_toplevel, false);
+    setMaximizedState(false);
     if (wasEdges) {
-      showDecorations(!m_toplevel->scheduled.fullscreen);
+      showDecorations(!scheduledFullscreen());
     }
     updateForeignState();
   }
 
   void View::handleRequestFullscreen() {
-    if (!m_toplevel->base->initialized) {
+    if (!roleInitialized()) {
       return;
     }
     kLog.debug(
-        "request_fullscreen '{}' [{}]: {}", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?",
-        static_cast<const void*>(this), m_toplevel->requested.fullscreen
+        "request_fullscreen '{}' [{}]: {}", appId() != nullptr ? appId() : "?", static_cast<const void*>(this),
+        requestedFullscreen()
     );
 
-    const bool requested = m_toplevel->requested.fullscreen;
-    const FullscreenRequestDisposition disposition = m_deferredUnfullscreen.observeClientRequest(
-        requested, m_toplevel->scheduled.activated, m_toplevel->scheduled.fullscreen
-    );
+    const bool requested = requestedFullscreen();
+    const FullscreenRequestDisposition disposition =
+        m_deferredUnfullscreen.observeClientRequest(requested, scheduledActivated(), scheduledFullscreen());
 
     if (disposition == FullscreenRequestDisposition::Acknowledge) {
       // Wine spams set_fullscreen while already fullscreen. Acknowledge without the visible reparent, scroll snap, and
       // arrange churn that a full setFullscreen() would run. Observing this newer request also clears any parked
       // unfullscreen, so activation cannot apply stale client intent.
-      wlr_xdg_surface_schedule_configure(m_toplevel->base);
+      reassertRoleState();
       return;
     }
 
     if (disposition == FullscreenRequestDisposition::Park) {
       // Wine games commonly unfullscreen when they lose focus. Park that request briefly instead of ripping the game
       // out of the fullscreen strip; xdg or foreign activation consumes it, while expiry preserves fullscreen.
-      kLog.debug(
-          "request_fullscreen parked for deactivated '{}'", m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?"
-      );
-      wlr_xdg_surface_schedule_configure(m_toplevel->base);
+      kLog.debug("request_fullscreen parked for deactivated '{}'", appId() != nullptr ? appId() : "?");
+      reassertRoleState();
       return;
     }
 
@@ -4143,24 +4210,21 @@ namespace umbriel {
     m_openingParentRequested = !m_mapped && parentRequested;
   }
 
-  bool View::openingParented() const { return m_toplevel->parent != nullptr || m_openingParentRequested; }
+  bool View::openingParented() const { return shellParentRequested() || m_openingParentRequested; }
 
   void View::toggleFullscreen() {
-    if (!m_toplevel->base->initialized) {
+    if (!roleInitialized()) {
       return;
     }
-    setFullscreen(!m_toplevel->scheduled.fullscreen);
+    setFullscreen(!scheduledFullscreen());
   }
 
   void View::applyDeferredUnfullscreen() {
-    if (!m_deferredUnfullscreen.takeOnActivation() || !m_toplevel->base->initialized) {
+    if (!m_deferredUnfullscreen.takeOnActivation() || !roleInitialized()) {
       return;
     }
-    if (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen) {
-      kLog.debug(
-          "deferred unfullscreen applied on activation for '{}'",
-          m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?"
-      );
+    if (scheduledFullscreen() || currentFullscreen()) {
+      kLog.debug("deferred unfullscreen applied on activation for '{}'", appId() != nullptr ? appId() : "?");
       setFullscreen(false);
     }
   }
@@ -4197,8 +4261,8 @@ namespace umbriel {
 
   void View::setPinned(bool pinned, bool focus) {
     if (!m_mapped
-        || !m_toplevel->base->initialized
-        || (pinned && (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen))
+        || !roleInitialized()
+        || (pinned && (scheduledFullscreen() || currentFullscreen()))
         || pinned == m_pinned) {
       return;
     }
@@ -4239,13 +4303,12 @@ namespace umbriel {
   }
 
   void View::setFloating(bool floating, bool focus, TilePlacement placement) {
-    if (!m_mapped || !m_toplevel->base->initialized) {
+    if (!m_mapped || !roleInitialized()) {
       return;
     }
     kLog.debug(
-        "set_floating '{}' [{}] -> {} (tiled={}, pinned={}, fs={})",
-        m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?", static_cast<const void*>(this), floating, m_tiled,
-        m_pinned, m_toplevel->scheduled.fullscreen
+        "set_floating '{}' [{}] -> {} (tiled={}, pinned={}, fs={})", appId() != nullptr ? appId() : "?",
+        static_cast<const void*>(this), floating, m_tiled, m_pinned, scheduledFullscreen()
     );
     if (!floating && m_server->scratchpadManager() != nullptr && m_server->scratchpadManager()->contains(this)) {
       return;
@@ -4271,7 +4334,7 @@ namespace umbriel {
       }
     }
     cancelSizeAnimation();
-    const bool fullscreen = m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen;
+    const bool fullscreen = scheduledFullscreen() || currentFullscreen();
     // Only the float direction leaves fullscreen (it owns its own scene tree). Re-tiling a fullscreen view keeps the
     // state and re-inserts it as a fullscreen column, so the client never sees a transient column-sized configure.
     if (floating && fullscreen) {
@@ -4304,7 +4367,7 @@ namespace umbriel {
         }
         if (column >= 0 && m_workspace->layout().isFullWidth(column)) {
           m_workspace->layout().clearFullWidthState(column);
-          wlr_xdg_toplevel_set_maximized(m_toplevel, false);
+          setMaximizedState(false);
         }
         m_workspace->layoutDetach(this);
       }
@@ -4317,28 +4380,28 @@ namespace umbriel {
         m_workspace->syncFloatingStack(this);
       }
       const wlr_box usable = floatingUsableArea();
-      const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+      const SizeHints hints = sizeHints();
       if (m_pendingFloatingWidthPx) {
-        keepWidth = clampXdgWidth(*m_pendingFloatingWidthPx, hints);
+        keepWidth = clampWidth(*m_pendingFloatingWidthPx, hints);
         m_pendingFloatingWidthPx.reset();
         m_pendingFloatingWidth.reset();
       } else if (m_pendingFloatingWidth && usable.width > 0) {
-        keepWidth = clampXdgWidth(floatingFractionSize(*m_pendingFloatingWidth, usable.width), hints);
+        keepWidth = clampWidth(floatingFractionSize(*m_pendingFloatingWidth, usable.width), hints);
         m_pendingFloatingWidth.reset();
       }
       if (m_pendingFloatingHeightPx) {
-        keepHeight = clampXdgHeight(*m_pendingFloatingHeightPx, hints);
+        keepHeight = clampHeight(*m_pendingFloatingHeightPx, hints);
         m_pendingFloatingHeightPx.reset();
         m_pendingFloatingHeight.reset();
       } else if (m_pendingFloatingHeight && usable.height > 0) {
-        keepHeight = clampXdgHeight(floatingFractionSize(*m_pendingFloatingHeight, usable.height), hints);
+        keepHeight = clampHeight(floatingFractionSize(*m_pendingFloatingHeight, usable.height), hints);
         m_pendingFloatingHeight.reset();
       }
       // Do not clear xdg tiled edges: GTK/Qt often resize (CSD / preferred size) when
       // tiled state is dropped. Floating is a compositor layout concern.
       if (keepWidth > 0
           && keepHeight > 0
-          && (m_toplevel->scheduled.width != keepWidth || m_toplevel->scheduled.height != keepHeight)) {
+          && (scheduledSize().width != keepWidth || scheduledSize().height != keepHeight)) {
         requestFloatingSize(keepWidth, keepHeight);
       }
       beginResizeAnimation(keepWidth, keepHeight);
@@ -4386,7 +4449,7 @@ namespace umbriel {
     }
 
     const wlr_box usable = floatingUsableArea();
-    const wlr_box& geo = m_toplevel->base->geometry;
+    const wlr_box& geo = geometryBox();
     // A fullscreen geometry is not a floating size; remembering it would make
     // the next float episode restore output-sized dimensions.
     if (!fullscreen && geo.width > 0 && geo.height > 0) {
@@ -4408,8 +4471,8 @@ namespace umbriel {
       setSceneParent(homeTree());
       m_workspace->syncFloatingStack(this);
     }
-    wlr_xdg_toplevel_set_tiled(m_toplevel, WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
-    wlr_xdg_toplevel_set_maximized(m_toplevel, false);
+    setTiledState(WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);
+    setMaximizedState(false);
     m_decoration.ensureBorders(m_contentTree);
     m_decoration.setBordersEnabled(!wantFullscreen);
     updateBorderGeometry();
@@ -4459,19 +4522,18 @@ namespace umbriel {
     const bool refreshHoverFocus = !fullscreen
         && m_mapped
         && m_onActiveWorkspace
-        && (m_toplevel->scheduled.fullscreen || m_toplevel->current.fullscreen)
+        && (scheduledFullscreen() || currentFullscreen())
         && config().input.focus.followsMouse;
     kLog.debug(
-        "set_fullscreen '{}' [{}] -> {} (tiled={}, ws_active={})",
-        m_toplevel->app_id != nullptr ? m_toplevel->app_id : "?", static_cast<const void*>(this), fullscreen, m_tiled,
-        m_workspace != nullptr && m_workspace->active()
+        "set_fullscreen '{}' [{}] -> {} (tiled={}, ws_active={})", appId() != nullptr ? appId() : "?",
+        static_cast<const void*>(this), fullscreen, m_tiled, m_workspace != nullptr && m_workspace->active()
     );
     if (fullscreen && m_maximizedToEdges) {
       setMaximizedToEdges(false, false);
       m_restoreMaximizedToEdges = true;
     }
-    if (fullscreen && !m_tiled && !m_toplevel->current.fullscreen) {
-      const wlr_box& geometry = m_toplevel->base->geometry;
+    if (fullscreen && !m_tiled && !currentFullscreen()) {
+      const wlr_box& geometry = geometryBox();
       m_fullscreenRestoreBox = {
           .x = m_sceneTree->node.x,
           .y = m_sceneTree->node.y,
@@ -4506,7 +4568,7 @@ namespace umbriel {
     if (continuePresentation) {
       m_presentation.setSize(presentedWidth, presentedHeight);
     }
-    wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
+    setFullscreenState(fullscreen);
     setFadeAlpha(m_fadeAlpha);
     updateFullscreenPresentation(0, 0);
     if (fullscreen) {
@@ -4607,8 +4669,8 @@ namespace umbriel {
     // new one-shot behavior. is_alone never selects opening settings: alone effects are applied and undone on every
     // change to the workspace's tiled set.
     const ResolvedWindowRule rule = resolveWindowRules(
-        config(), ruleText(m_toplevel->app_id), ruleText(m_toplevel->title), m_initialRulesXdgTag,
-        m_initialRulesContentType, m_initialRuleState, m_server->uptimeMs()
+        config(), ruleText(appId()), ruleText(title()), m_initialRulesXdgTag, m_initialRulesContentType,
+        m_initialRuleState, m_server->uptimeMs()
     );
     ScratchpadManager* scratchpadManager = m_server->scratchpadManager();
     const bool wasInScratchpad = scratchpadManager != nullptr && scratchpadManager->contains(this);
@@ -4653,7 +4715,7 @@ namespace umbriel {
             target->layoutAttach(
                 this, rule.defaultScrollingExtent, rule.defaultScrollingExtentPx, LayoutAttachOrigin::OpeningView
             );
-            if (m_tiled && m_toplevel->scheduled.maximized && !m_maximizedToEdges) {
+            if (m_tiled && scheduledMaximized() && !m_maximizedToEdges) {
               setMaximized(true);
             }
           }
@@ -4793,20 +4855,20 @@ namespace umbriel {
     if (!inScratchpad && !floatingGeometryAppliedOnTransition && (floatingWidthChanged || floatingHeightChanged)) {
       if (!m_tiled) {
         const wlr_box usable = floatingUsableArea();
-        const XdgSizeHints hints = xdgSizeHints(m_toplevel);
+        const SizeHints hints = sizeHints();
         auto [width, height] = floatingSize();
         if (floatingWidthChanged) {
           if (rule.defaultFloatingWidthPx) {
-            width = clampXdgWidth(*rule.defaultFloatingWidthPx, hints);
+            width = clampWidth(*rule.defaultFloatingWidthPx, hints);
           } else if (rule.defaultFloatingWidth && usable.width > 0) {
-            width = clampXdgWidth(floatingFractionSize(*rule.defaultFloatingWidth, usable.width), hints);
+            width = clampWidth(floatingFractionSize(*rule.defaultFloatingWidth, usable.width), hints);
           }
         }
         if (floatingHeightChanged) {
           if (rule.defaultFloatingHeightPx) {
-            height = clampXdgHeight(*rule.defaultFloatingHeightPx, hints);
+            height = clampHeight(*rule.defaultFloatingHeightPx, hints);
           } else if (rule.defaultFloatingHeight && usable.height > 0) {
-            height = clampXdgHeight(floatingFractionSize(*rule.defaultFloatingHeight, usable.height), hints);
+            height = clampHeight(floatingFractionSize(*rule.defaultFloatingHeight, usable.height), hints);
           }
         }
         if (width > 0 && height > 0) {
@@ -4836,7 +4898,7 @@ namespace umbriel {
     if (!inScratchpad
         && changedInitialRule(rule.defaultFullscreen, initiallyApplied.defaultFullscreen)
         && *rule.defaultFullscreen
-        && !m_toplevel->scheduled.fullscreen) {
+        && !scheduledFullscreen()) {
       setFullscreen(true);
     }
 
@@ -4851,7 +4913,7 @@ namespace umbriel {
         && !openingParented()
         && changedInitialRule(rule.defaultMaximize, initiallyApplied.defaultMaximize)
         && *rule.defaultMaximize
-        && !m_toplevel->scheduled.maximized) {
+        && !scheduledMaximized()) {
       setMaximized(true);
     }
 
@@ -4883,8 +4945,8 @@ namespace umbriel {
   }
 
   const ResolvedWindowRule& View::resolvedRules() {
-    const std::optional<std::string_view> appId = ruleText(m_toplevel->app_id);
-    const std::optional<std::string_view> title = ruleText(m_toplevel->title);
+    const std::optional<std::string_view> ruleAppId = ruleText(appId());
+    const std::optional<std::string_view> ruleTitle = ruleText(title());
     const uint64_t generation = configStore().generation();
     const WindowRuleState state = ruleState();
 
@@ -4892,18 +4954,18 @@ namespace umbriel {
     // empty string, so a client that replaces a missing title with an empty one must re-resolve.
     if (m_rulesGeneration == generation
         && m_rulesState == state
-        && m_rulesAppId == appId
-        && m_rulesTitle == title
+        && m_rulesAppId == ruleAppId
+        && m_rulesTitle == ruleTitle
         && m_rulesXdgTag == m_xdgTag
         && m_rulesContentType == m_contentType) {
       return m_rules;
     }
 
-    m_rules = resolveWindowRules(config(), appId, title, m_xdgTag, m_contentType, state, m_server->uptimeMs());
+    m_rules = resolveWindowRules(config(), ruleAppId, ruleTitle, m_xdgTag, m_contentType, state, m_server->uptimeMs());
     m_rulesGeneration = generation;
     m_rulesState = state;
-    m_rulesAppId = appId;
-    m_rulesTitle = title;
+    m_rulesAppId = ruleAppId;
+    m_rulesTitle = ruleTitle;
     m_rulesXdgTag = m_xdgTag;
     m_rulesContentType = m_contentType;
     return m_rules;

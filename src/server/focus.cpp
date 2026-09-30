@@ -62,7 +62,7 @@ namespace umbriel {
 
     if (Workspace* workspace = view->workspace()) {
       if (WorkspaceGroup* group = workspace->group(); group != nullptr && !view->pinned() && !workspace->active()) {
-        const char* appId = view->toplevel()->app_id != nullptr ? view->toplevel()->app_id : "";
+        const char* appId = view->appId() != nullptr ? view->appId() : "";
         // A group without a live output still has to activate; only the log's output name degrades.
         const Output* output = group->output();
         const char* outputName = output != nullptr && output->wlr() != nullptr ? output->wlr()->name : "<none>";
@@ -332,8 +332,8 @@ namespace umbriel {
       if (entry.get() == except || !entry->mapped()) {
         continue;
       }
-      if (entry->toplevel()->scheduled.activated) {
-        wlr_xdg_toplevel_set_activated(entry->toplevel(), false);
+      if (entry->scheduledActivated()) {
+        entry->setActivatedState(false);
       }
       entry->setBorderFocused(false);
       entry->setForeignActivated(false);

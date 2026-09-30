@@ -50,7 +50,7 @@
 - [ ] Tested with multiple monitors
 - [ ] Tested with a scaled output
 - [ ] Tested with native Wayland applications
-- [ ] Tested with X11 applications through xwayland-satellite
+- [ ] Tested with X11 applications through Xwayland
 - [ ] Tested with the scrolling layout
 - [ ] Tested with the dwindle layout
 

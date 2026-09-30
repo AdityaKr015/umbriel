@@ -139,6 +139,17 @@ namespace umbriel {
       }
       return nullptr;
     }
+
+    // The size `surface` is shown at in its view, through the view's scene buffer `source`. It differs from the surface
+    // size when the view draws the surface scaled.
+    void viewSurfaceSize(wlr_scene_buffer* source, const wlr_surface* surface, int* width, int* height) {
+      if (wlr_scene_surface* sceneSurface = source != nullptr ? wlr_scene_surface_try_from_buffer(source) : nullptr) {
+        wlr_scene_surface_get_size(sceneSurface, width, height);
+        return;
+      }
+      *width = surface->current.width;
+      *height = surface->current.height;
+    }
   } // namespace
 
   Overview::Overview(Server& server) : m_server(&server) { m_server->registerAnimatable(this); }
@@ -223,7 +234,7 @@ namespace umbriel {
     if (card.shadowTree != nullptr) {
       wlr_scene_node_set_enabled(&card.shadowTree->node, false);
     }
-    const wlr_box& geometry = view->toplevel()->base->geometry;
+    const wlr_box& geometry = view->geometryBox();
     if (geometry.width <= 0 || geometry.height <= 0) {
       card.blur.hide();
       wlr_scene_node_set_enabled(&card.tree->node, false);
@@ -273,7 +284,7 @@ namespace umbriel {
     const int borderWidth = view->decorationBorderWidth();
     const int outerBorderWidth = view->decorationOuterBorderWidth();
     const int total = borderWidth + outerBorderWidth;
-    const bool decorated = total > 0 && !view->toplevel()->current.fullscreen && !view->maximizedToEdges();
+    const bool decorated = total > 0 && !view->currentFullscreen() && !view->maximizedToEdges();
     const int scaledRadius = static_cast<int>(std::lround(view->decorationCornerRadius() * z));
     const int outerRadius = decorated ? scaledRadius : 0;
     const auto scaledWidth = [z](int width) {
@@ -365,8 +376,11 @@ namespace umbriel {
       // scale the visible part of that region onto the card.
       wlr_fbox base{};
       wlr_surface_get_buffer_source_box(surface, &base);
-      const double bx = base.width / surface->current.width;
-      const double by = base.height / surface->current.height;
+      int width = 0;
+      int height = 0;
+      viewSurfaceSize(entry->sourceBuffer, surface, &width, &height);
+      const double bx = base.width / width;
+      const double by = base.height / height;
       wlr_fbox src{base.x + geometry.x * bx, base.y + geometry.y * by, geometry.width * bx, geometry.height * by};
       if (src.x < base.x) {
         src.width -= base.x - src.x;
@@ -568,7 +582,7 @@ namespace umbriel {
         .focused = workspace != nullptr && workspace->focusedView() == view && &card != m_dragCard,
         .decorated = card.border != nullptr && card.border->node.enabled && card.tree->node.enabled,
         .urgent = view->urgent(),
-        .fullscreen = view->toplevel()->scheduled.fullscreen,
+        .fullscreen = view->scheduledFullscreen(),
     };
     view->syncAnimationEffects(
         card.tree, card.border != nullptr ? &card.border->node : nullptr, &card.surfaceTree->node, &cardGate,
@@ -895,7 +909,10 @@ namespace umbriel {
     wlr_fbox src{};
     wlr_surface_get_buffer_source_box(surface, &src);
     wlr_scene_buffer_set_source_box(entry.buffer, &src);
-    wlr_scene_buffer_set_dest_size(entry.buffer, surface->current.width, surface->current.height);
+    int width = 0;
+    int height = 0;
+    viewSurfaceSize(entry.sourceBuffer, surface, &width, &height);
+    wlr_scene_buffer_set_dest_size(entry.buffer, width, height);
     wlr_scene_buffer_set_transform(entry.buffer, surface->current.transform);
     wlr_scene_buffer_set_opaque_region(entry.buffer, &surface->opaque_region);
 
@@ -935,7 +952,7 @@ namespace umbriel {
     entry->buffer = buffer;
     entry->sx = sx;
     entry->sy = sy;
-    entry->isRoot = surface == card->view->toplevel()->base->surface;
+    entry->isRoot = surface == card->view->rootSurface();
     wlr_scene_buffer_set_filter_mode(buffer, WLR_SCALE_FILTER_BILINEAR);
     buffer->point_accepts_input = rejectInput;
     entry->commit.notify = onCardSurfaceCommit;
@@ -973,7 +990,7 @@ namespace umbriel {
     }
     // The source scene surface reconfigures on every commit. Refresh the
     // passive buffer mirrors, then re-derive their overview crop and scale.
-    wlr_surface_for_each_surface(card->view->toplevel()->base->surface, syncCardSurface, card);
+    wlr_surface_for_each_surface(card->view->rootSurface(), syncCardSurface, card);
     PreviewMetrics metrics{};
     if (previewMetrics(*card->owner, *self->m_server, self->zoom(), metrics)) {
       self->layoutCard(*card, metrics, card->owner->rowScroll.current(), self->liveTargetView());
@@ -1027,7 +1044,7 @@ namespace umbriel {
     if (view == nullptr || !view->mapped() || view->pinned()) {
       return nullptr;
     }
-    wlr_surface* surface = view->toplevel()->base->surface;
+    wlr_surface* surface = view->rootSurface();
     if (surface == nullptr) {
       return nullptr;
     }
@@ -1474,7 +1491,7 @@ namespace umbriel {
           if (view == nullptr || !view->mapped() || view->pinned()) {
             continue;
           }
-          const bool fullscreen = view->toplevel()->current.fullscreen;
+          const bool fullscreen = view->currentFullscreen();
           const int layer = fullscreen ? 2 : (view->tiled() ? 0 : 1);
           if (layer == pass) {
             createCard(state, view, row);
@@ -2457,7 +2474,7 @@ namespace umbriel {
         }
         clearMiddlePress();
         if (closeCard && card != nullptr && card->view != nullptr && card->view->mapped()) {
-          wlr_xdg_toplevel_send_close(card->view->toplevel());
+          card->view->requestClose();
         }
         return true;
       }
@@ -3246,7 +3263,7 @@ namespace umbriel {
         if (m_dragSourceWidth->fullWidth) {
           m_dragSourceWorkspace->layout().toggleFullWidth(column);
         }
-        wlr_xdg_toplevel_set_maximized(view->toplevel(), m_dragSourceWidth->fullWidth);
+        view->setMaximizedState(m_dragSourceWidth->fullWidth);
       } else if (m_dragSourceWorkspace->dwindleLayout() != nullptr) {
         // Gap-index insert restores the exact flat position the drag removed.
         m_dragSourceWorkspace->layout().insertView(view, m_dragSourceColumn);

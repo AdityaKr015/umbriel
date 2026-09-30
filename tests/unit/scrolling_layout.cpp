@@ -135,12 +135,16 @@ UMBRIEL_TEST(consumeRightStacksIntoTheNextColumn) {
 UMBRIEL_TEST(expelRightUndoesConsumeLeft) {
   Fixture fixture;
   fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(0, 1.0 / 3));
+  CHECK(fixture.layout.setWidthFraction(1, 2.0 / 3));
   CHECK(fixture.layout.consume(stub(1), -1));
   CHECK(fixture.layout.expel(stub(1), 1));
 
   CHECK_EQ(fixture.layout.columns().size(), size_t{2});
   CHECK_EQ(fixture.layout.columnOf(stub(0)), 0);
   CHECK_EQ(fixture.layout.columnOf(stub(1)), 1);
+  CHECK_EQ(fixture.layout.columns()[0].widthFrac, 1.0 / 3);
+  CHECK_EQ(fixture.layout.columns()[1].widthFrac, 2.0 / 3);
 }
 
 UMBRIEL_TEST(expelLeftUndoesConsumeRight) {
@@ -152,6 +156,30 @@ UMBRIEL_TEST(expelLeftUndoesConsumeRight) {
   CHECK_EQ(fixture.layout.columns().size(), size_t{2});
   CHECK_EQ(fixture.layout.columnOf(stub(0)), 0);
   CHECK_EQ(fixture.layout.columnOf(stub(1)), 1);
+}
+
+UMBRIEL_TEST(expelForgetsTheExtentOfARemovedRow) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(1, 2.0 / 3));
+  CHECK(fixture.layout.consume(stub(1), -1));
+  fixture.layout.removeView(stub(1));
+  fixture.layout.insertViewIntoColumn(stub(1), 0, 1);
+  CHECK(fixture.layout.expel(stub(1), 1));
+
+  CHECK_EQ(fixture.layout.columns()[1].widthFrac, 0.5);
+}
+
+UMBRIEL_TEST(expelRestoresTheExtentAFullWidthColumnHadBefore) {
+  Fixture fixture;
+  fixture.addColumns(2);
+  CHECK(fixture.layout.setWidthFraction(1, 1.0 / 3));
+  CHECK(fixture.layout.toggleFullWidth(1));
+  CHECK(fixture.layout.consume(stub(1), -1));
+  CHECK(fixture.layout.expel(stub(1), 1));
+
+  CHECK_EQ(fixture.layout.columns()[1].widthFrac, 1.0 / 3);
+  CHECK(!fixture.layout.isFullWidth(1));
 }
 
 UMBRIEL_TEST(expelRightFailsOnASingleViewColumn) {

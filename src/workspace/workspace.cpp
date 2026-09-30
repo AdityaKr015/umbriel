@@ -1886,6 +1886,11 @@ namespace umbriel {
     const bool centerFocusedChanged = m_layoutConfig.scrolling.centerFocused != layoutConfig.scrolling.centerFocused;
     const bool strutsChanged = m_layoutConfig.struts != layoutConfig.struts;
     const bool directionChanged = m_layoutConfig.scrolling.direction != layoutConfig.scrolling.direction;
+    // When moving to/from scrolling, the current extents are remembered/restored.
+    // These flags check whether those operations are required.
+    const bool isMovingFromScroll =
+        (m_layoutMode == LayoutMode::Scrolling && layoutConfig.mode != LayoutMode::Scrolling);
+    const bool isMovingToScroll = (m_layoutMode != LayoutMode::Scrolling && layoutConfig.mode == LayoutMode::Scrolling);
     m_layoutConfig = std::move(layoutConfig);
     // The event payload is built when the idle runs, so scheduling here reports the mode this call installs, whether
     // it reconfigures the existing layout or replaces it below.
@@ -1907,6 +1912,19 @@ namespace umbriel {
     }
     // The members leave one layout and join another; the next arrange carries them there from their current boxes.
     endLayoutMotion();
+    // Remember each column's extent on its leading view; the other members join the new layout without one.
+    if (isMovingFromScroll) {
+      for (const Column& column : scrollingLayout()->columns()) {
+        for (View* view : column.views) {
+          view->m_savedScrollingExtentPx.reset();
+          view->m_savedScrollingExtent.reset();
+        }
+        if (!column.views.empty()) {
+          column.views.front()->m_savedScrollingExtent =
+              column.savedWidthFrac > 0 ? column.savedWidthFrac : column.widthFrac;
+        }
+      }
+    }
     std::vector<View*> tiledViews;
     for (View* view : m_views) {
       if (m_layout != nullptr && m_layout->columnOf(view) >= 0) {
@@ -1920,6 +1938,23 @@ namespace umbriel {
     m_layout->setConstraints(&viewLayoutConstraints);
     for (View* view : tiledViews) {
       m_layout->insertView(view, static_cast<int>(m_layout->columns().size()));
+    }
+    // Restore previous extents
+    if (isMovingToScroll) {
+      ScrollingLayout* scrolling = scrollingLayout();
+      for (int i = 0; i < static_cast<int>(scrolling->columns().size()); ++i) {
+        View* view = scrolling->columns()[static_cast<size_t>(i)].views.front();
+        if (view->m_savedScrollingExtentPx) {
+          scrolling->setWidthFromPixels(i, scrollViewportExtent(), *view->m_savedScrollingExtentPx);
+        } else if (view->m_savedScrollingExtent) {
+          scrolling->setWidthFraction(i, *view->m_savedScrollingExtent);
+        }
+        view->m_savedScrollingExtentPx.reset();
+        view->m_savedScrollingExtent.reset();
+      }
+      if (m_focusedView != nullptr) {
+        scrolling->ensureVisible(scrolling->columnOf(m_focusedView), scrollViewportExtent());
+      }
     }
     markArrange();
   }

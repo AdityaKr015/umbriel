@@ -54,6 +54,15 @@ namespace umbriel {
       }
     }
 
+    void ensureRememberedExtentCount(Column& column) {
+      while (column.rememberedScrollingExtents.size() < column.views.size()) {
+        column.rememberedScrollingExtents.push_back(0.0);
+      }
+      if (column.rememberedScrollingExtents.size() > column.views.size()) {
+        column.rememberedScrollingExtents.resize(column.views.size());
+      }
+    }
+
     double columnTotalWeight(const Column& column) {
       double total = std::max(0.0, column.topGapWeight) + std::max(0.0, column.bottomGapWeight);
       for (double weight : column.heightWeights) {
@@ -218,12 +227,14 @@ namespace umbriel {
           .bottomGapWeight = saved.bottomGapWeight,
           .widthFrac = saved.widthFraction,
           .savedWidthFrac = saved.savedWidthFraction,
+          .rememberedScrollingExtents = {},
       };
       for (const ScrollingSnapshot::Row& row : saved.rows) {
         View* view = (*resolved)[static_cast<size_t>(row.member)];
         if (view != nullptr) {
           column.views.push_back(view);
           column.heightWeights.push_back(row.heightWeight);
+          column.rememberedScrollingExtents.push_back(0.0);
         }
       }
       if (!column.views.empty()) {
@@ -399,6 +410,7 @@ namespace umbriel {
     column.widthFrac = m_config->scrolling.defaultExtentFraction.value_or(0.5);
     column.views.push_back(view);
     column.heightWeights.push_back(1.0);
+    column.rememberedScrollingExtents.push_back(0.0);
     m_columns.insert(m_columns.begin() + index, std::move(column));
   }
 
@@ -453,10 +465,12 @@ namespace umbriel {
     }
     Column& column = m_columns[static_cast<size_t>(columnIndex)];
     ensureWeightCount(column);
+    ensureRememberedExtentCount(column);
     const int row = std::clamp(rowIndex, 0, static_cast<int>(column.views.size()));
     const double insertedWeight = claimInsertWeight(column, row, 1.0);
     column.views.insert(column.views.begin() + row, view);
     column.heightWeights.insert(column.heightWeights.begin() + row, insertedWeight);
+    column.rememberedScrollingExtents.insert(column.rememberedScrollingExtents.begin() + row, 0.0);
   }
 
   bool ScrollingLayout::consume(View* view, int direction) {
@@ -470,17 +484,25 @@ namespace umbriel {
     }
     Column& source = m_columns[static_cast<size_t>(sourceColumn)];
     Column& destination = m_columns[static_cast<size_t>(destinationColumn)];
+    // Remember width for later expel
+    const double rememberedExtent = source.savedWidthFrac > 0 ? source.savedWidthFrac : source.widthFrac;
     ensureWeightCount(source);
+    ensureRememberedExtentCount(source);
     ensureWeightCount(destination);
+    ensureRememberedExtentCount(destination);
     const int row = rowOf(view);
     const double weight = row >= 0 ? source.heightWeights[static_cast<size_t>(row)] : 1.0;
     std::erase(source.views, view);
     if (row >= 0 && row < static_cast<int>(source.heightWeights.size())) {
       source.heightWeights.erase(source.heightWeights.begin() + row);
     }
+    if (row >= 0 && row < static_cast<int>(source.rememberedScrollingExtents.size())) {
+      source.rememberedScrollingExtents.erase(source.rememberedScrollingExtents.begin() + row);
+    }
     const double insertedWeight = claimInsertWeight(destination, static_cast<int>(destination.views.size()), weight);
     destination.views.push_back(view);
     destination.heightWeights.push_back(insertedWeight);
+    destination.rememberedScrollingExtents.push_back(rememberedExtent);
     if (source.views.empty()) {
       m_columns.erase(m_columns.begin() + sourceColumn);
     }
@@ -497,16 +519,25 @@ namespace umbriel {
       return false;
     }
     ensureWeightCount(source);
+    ensureRememberedExtentCount(source);
     const int row = rowOf(view);
     const double weight = row >= 0 ? source.heightWeights[static_cast<size_t>(row)] : 1.0;
     std::erase(source.views, view);
     if (row >= 0 && row < static_cast<int>(source.heightWeights.size())) {
       source.heightWeights.erase(source.heightWeights.begin() + row);
     }
+    // A row consumed from its own column expels back to the extent it had there.
     Column column;
     column.widthFrac = m_config->scrolling.defaultExtentFraction.value_or(0.5);
+    if (row >= 0 && row < static_cast<int>(source.rememberedScrollingExtents.size())) {
+      if (const double extent = source.rememberedScrollingExtents[static_cast<size_t>(row)]; extent > 0.0) {
+        column.widthFrac = extent;
+      }
+      source.rememberedScrollingExtents.erase(source.rememberedScrollingExtents.begin() + row);
+    }
     column.views.push_back(view);
     column.heightWeights.push_back(weight);
+    column.rememberedScrollingExtents.push_back(0.0);
     const int destinationColumn = sourceColumn + (direction > 0 ? 1 : 0);
     m_columns.insert(m_columns.begin() + destinationColumn, std::move(column));
     return true;
@@ -520,12 +551,17 @@ namespace umbriel {
     }
     Column& col = m_columns[static_cast<size_t>(column)];
     ensureWeightCount(col);
+    ensureRememberedExtentCount(col);
     const int target = row + direction;
     if (target < 0 || target >= static_cast<int>(col.views.size())) {
       return false;
     }
     std::swap(col.views[static_cast<size_t>(row)], col.views[static_cast<size_t>(target)]);
     std::swap(col.heightWeights[static_cast<size_t>(row)], col.heightWeights[static_cast<size_t>(target)]);
+    std::swap(
+        col.rememberedScrollingExtents[static_cast<size_t>(row)],
+        col.rememberedScrollingExtents[static_cast<size_t>(target)]
+    );
     return true;
   }
 
@@ -544,6 +580,10 @@ namespace umbriel {
         m_columns[static_cast<size_t>(firstColumn)].views[static_cast<size_t>(firstRow)],
         m_columns[static_cast<size_t>(secondColumn)].views[static_cast<size_t>(secondRow)]
     );
+    std::swap(
+        m_columns[static_cast<size_t>(firstColumn)].rememberedScrollingExtents[static_cast<size_t>(firstRow)],
+        m_columns[static_cast<size_t>(secondColumn)].rememberedScrollingExtents[static_cast<size_t>(secondRow)]
+    );
     for (Target& target : m_targets) {
       if (target.view == a) {
         target.view = b;
@@ -561,10 +601,14 @@ namespace umbriel {
     }
     Column& column = m_columns[static_cast<size_t>(columnIndex)];
     ensureWeightCount(column);
+    ensureRememberedExtentCount(column);
     const int row = rowOf(view);
     std::erase(column.views, view);
     if (row >= 0 && row < static_cast<int>(column.heightWeights.size())) {
       column.heightWeights.erase(column.heightWeights.begin() + row);
+    }
+    if (row >= 0 && row < static_cast<int>(column.rememberedScrollingExtents.size())) {
+      column.rememberedScrollingExtents.erase(column.rememberedScrollingExtents.begin() + row);
     }
     if (column.views.empty()) {
       m_columns.erase(m_columns.begin() + columnIndex);

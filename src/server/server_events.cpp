@@ -7,6 +7,7 @@
 #include "input/gestures.h"
 #include "input/keyboard.h"
 #include "input/seat.h"
+#include "input/text_input.h"
 #include "layer/layer_surface.h"
 #include "layout/scrolling.h"
 #include "lock/session_lock.h"
@@ -2951,17 +2952,28 @@ namespace umbriel {
     wlr_seat_keyboard_notify_clear_focus(seat);
   }
 
+  void Server::rememberKeyboardInputSource(Keyboard& keyboard) {
+    if (m_inputMethodRelay == nullptr || !m_inputMethodRelay->ownsKeyboard(keyboard.wlr())) {
+      m_keyboardInputSource = &keyboard;
+    }
+  }
+
   void Server::removeKeyboard(Keyboard* keyboard) {
     wlr_seat* seat = m_seat->wlr();
     const bool seatKeyboardRemoved = wlr_seat_get_keyboard(seat) == keyboard->wlr();
     const bool sourceRemoved = m_keyboardLayoutSource == keyboard;
+    if (m_keyboardInputSource == keyboard) {
+      m_keyboardInputSource = nullptr;
+    }
     std::erase_if(m_keyboards, [keyboard](const std::unique_ptr<Keyboard>& entry) { return entry.get() == keyboard; });
     if (seatKeyboardRemoved) {
-      wlr_keyboard* replacement = nullptr;
-      for (const auto& entry : m_keyboards) {
-        if (entry->wlr()->keymap != nullptr) {
-          replacement = entry->wlr();
-          break;
+      wlr_keyboard* replacement = m_keyboardInputSource != nullptr ? m_keyboardInputSource->wlr() : nullptr;
+      if (replacement == nullptr) {
+        for (const auto& entry : m_keyboards) {
+          if (entry->wlr()->keymap != nullptr) {
+            replacement = entry->wlr();
+            break;
+          }
         }
       }
       // Detach wlroots' later destroy listener so it cannot clear the replacement.

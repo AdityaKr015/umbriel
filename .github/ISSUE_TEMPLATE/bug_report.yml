@@ -50,28 +50,6 @@ body:
       description: If this used to work, name the last version or commit where it did.
       placeholder: "Optional: v0.1.0, or commit hash"
 
-  - type: dropdown
-    id: session-type
-    attributes:
-      label: Session type
-      description: How was Umbriel running when the problem occurred?
-      options:
-        - Native session (TTY or display manager)
-        - Nested inside a Wayland session
-        - Nested inside an X11 session
-        - Headless
-
-  - type: dropdown
-    id: installation
-    attributes:
-      label: Installation method
-      options:
-        - Source build (just install)
-        - Nix flake (nix build)
-        - NixOS module
-        - Home Manager or hjem module
-        - Distribution package
-        - Other
 
   - type: dropdown
     id: area

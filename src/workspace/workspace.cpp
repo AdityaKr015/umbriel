@@ -1353,6 +1353,16 @@ namespace umbriel {
     return true;
   }
 
+  bool Workspace::swapFocusedInDirection(bool horizontal, int direction) {
+    View* target = horizontal ? focusAdjacent(direction) : focusVertical(direction);
+    if (target == nullptr || !m_layout->swapViews(m_focusedView, target)) {
+      return false;
+    }
+    markArrange();
+    ensureFocusedVisible();
+    return true;
+  }
+
   bool Workspace::increaseMasterCount() {
     MasterStackLayout* master = masterLayout();
     if (master == nullptr || !master->promoteFromStack()) {
@@ -1414,7 +1424,25 @@ namespace umbriel {
   }
 
   bool Workspace::moveFocusedColumn(int direction) {
+    // Dwindle has no columns to carry, so a column move is the window move.
+    if (dwindleLayout() != nullptr) {
+      return moveFocusedHorizontal(direction);
+    }
     return scrollingVertical() ? moveWithinLane(direction) : moveLaneAlongStrip(direction);
+  }
+
+  bool Workspace::moveFocusedHorizontal(int direction) {
+    if (DwindleLayout* dwindle = dwindleLayout()) {
+      if (!dwindle->moveView(m_focusedView, true, direction)) {
+        return false;
+      }
+      markArrange();
+      return true;
+    }
+    if (scrollingVertical()) {
+      return moveWithinLane(direction);
+    }
+    return expelFocused(direction) || consumeFocused(direction);
   }
 
   bool Workspace::moveFocusedVertical(int direction) {

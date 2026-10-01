@@ -362,6 +362,22 @@ namespace umbriel {
     view->m_ownsNamedScrollingColumnExtent = scrolling != nullptr && name.has_value() && !placement;
     if (placement) {
       scrolling->insertViewIntoColumn(view, static_cast<int>(placement->column), placement->row);
+    } else if (DwindleLayout* dwindle = dwindleLayout(); dwindle != nullptr && m_layoutConfig.dwindle.newTowardCursor) {
+      // The pointer only means something here while it is over this workspace as shown on its output.
+      Server* server = m_group != nullptr ? m_group->server() : nullptr;
+      Output* output = m_group != nullptr ? m_group->output() : nullptr;
+      const Overview* overview = server != nullptr ? server->overview() : nullptr;
+      const Cursor* cursor = server != nullptr ? server->cursor() : nullptr;
+      const wlr_cursor* pointer = cursor != nullptr ? cursor->wlr() : nullptr;
+      if (m_active
+          && output != nullptr
+          && pointer != nullptr
+          && (overview == nullptr || !overview->active())
+          && wlr_output_layout_output_at(server->outputLayout(), pointer->x, pointer->y) == output->wlr()) {
+        dwindle->insertViewToward(view, layoutAttachIndex(view), pointer->x, pointer->y);
+      } else {
+        dwindle->insertView(view, layoutAttachIndex(view));
+      }
     } else {
       m_layout->insertView(view, layoutAttachIndex(view));
     }

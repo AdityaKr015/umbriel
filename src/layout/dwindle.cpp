@@ -433,6 +433,21 @@ namespace umbriel {
     rebuildFlatColumns();
   }
 
+  void DwindleLayout::insertViewToward(View* view, int columnIndex, double cx, double cy) {
+    const int gap = std::clamp(columnIndex, 0, static_cast<int>(m_flatColumns.size()));
+    Node* target = gap > 0 ? nodeAtFlatIndex(gap - 1) : nullptr;
+    if (view == nullptr || findNode(view) != nullptr || target == nullptr || target->areaW <= 0 || target->areaH <= 0) {
+      insertView(view, columnIndex);
+      return;
+    }
+    // Same rule arrangeNode applies when it resolves the AutoSplit below.
+    const bool horizontal = target->areaW >= target->areaH;
+    const bool newFirst =
+        horizontal ? cx < target->areaX + (target->areaW / 2.0) : cy < target->areaY + (target->areaH / 2.0);
+    splitLeaf(target, view, Node::AutoSplit, newFirst);
+    rebuildFlatColumns();
+  }
+
   void DwindleLayout::insertViewIntoColumn(View* view, int columnIndex, int /*rowIndex*/) {
     if (view == nullptr || findNode(view) != nullptr) {
       return;

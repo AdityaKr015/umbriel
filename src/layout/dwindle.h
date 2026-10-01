@@ -43,6 +43,10 @@ namespace umbriel {
     // Inserts at a gap index: the preceding leaf is split, except gap 0 which splits the first leaf with the new view
     // first.
     void insertView(View* view, int columnIndex) override;
+    // insertView, except the split puts the new view on the half of the split leaf facing (cx, cy) in layout
+    // coordinates, along the axis an AutoSplit of that leaf resolves to. A leaf not yet arranged keeps insertView's
+    // side.
+    void insertViewToward(View* view, int columnIndex, double cx, double cy);
     void insertViewIntoColumn(View* view, int columnIndex, int rowIndex) override;
     bool consume(View* view, int direction) override;
     bool expel(View* view, int direction) override;

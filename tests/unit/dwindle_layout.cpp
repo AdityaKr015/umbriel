@@ -523,6 +523,28 @@ UMBRIEL_TEST(insertAtGapZeroPlacesViewAtTheFront) {
   CHECK_EQ(fixture.layout.columnOf(stub(0)), 1);
 }
 
+UMBRIEL_TEST(insertTowardAPointTakesTheHalfFacingIt) {
+  Fixture fixture;
+  fixture.addLeaves(1);
+  fixture.layout.arrange(kUsable);
+
+  // A landscape leaf splits side by side, so only x picks the side.
+  fixture.layout.insertViewToward(stub(1), 1, 100, 700);
+  fixture.layout.arrange(kUsable);
+  const wlr_box left = fixture.layout.targetBox(stub(1));
+  const wlr_box right = fixture.layout.targetBox(stub(0));
+  CHECK(left.x < right.x);
+  CHECK_EQ(left.y, right.y);
+
+  // The 629x700 right leaf stacks, so only y picks the side.
+  fixture.layout.insertViewToward(stub(2), 2, 1270, 100);
+  fixture.layout.arrange(kUsable);
+  const wlr_box top = fixture.layout.targetBox(stub(2));
+  const wlr_box bottom = fixture.layout.targetBox(stub(0));
+  CHECK_EQ(top.x, right.x);
+  CHECK(top.y < bottom.y);
+}
+
 UMBRIEL_TEST(gapsSeparateSiblings) {
   Fixture fixture;
   fixture.addLeaves(2);

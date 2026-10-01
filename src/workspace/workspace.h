@@ -173,7 +173,7 @@ namespace umbriel {
     // vertical strip's lane, or out of its column and into the next one.
     bool moveFocusedHorizontal(int direction);
     bool swapFocusedInCycle(int direction);
-    // Swaps the focused window with the one directional focus would select.
+    // Swaps the focused window with its neighbor on screen in that direction.
     bool swapFocusedInDirection(bool horizontal, int direction);
     bool increaseMasterCount();
     bool decreaseMasterCount();

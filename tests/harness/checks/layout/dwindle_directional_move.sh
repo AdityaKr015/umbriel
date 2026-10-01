@@ -117,3 +117,28 @@ if [[ $swapped_x -ne $upper_x || $upper_now_x -ne $left_x || $upper_now_y -ne $m
 fi
 
 echo "Dwindle directional swap exchanges windows between tiles"
+
+# Four corners: the moved window over the new one on the right, A over B on the left. Focusing the upper-right window
+# last makes it the right split's remembered tile, which a swap from the lower-left must still ignore.
+spawn_client dwindle-move-fourth
+wait_for_count 4
+fourth_id=$("$UMBRIEL" windows --json | jq -r '.[] | select(.title == "dwindle-move-fourth") | .id')
+"$UMBRIEL" msg "window-focus:$lower_id" > /dev/null
+wait_for_focus "$lower_id"
+"$UMBRIEL" msg "window-focus:$upper_id" > /dev/null
+wait_for_focus "$upper_id"
+"$UMBRIEL" msg window-swap-right > /dev/null
+for _ in $(seq 40); do
+  windows=$("$UMBRIEL" windows --json)
+  upper_now_x=$(jq -r --arg id "$upper_id" '.[] | select(.id == $id) | .x' <<< "$windows")
+  upper_now_y=$(jq -r --arg id "$upper_id" '.[] | select(.id == $id) | .y' <<< "$windows")
+  fourth_x=$(jq -r --arg id "$fourth_id" '.[] | select(.id == $id) | .x' <<< "$windows")
+  [[ $upper_now_x -eq $upper_x && $upper_now_y -eq $moved_y && $fourth_x -eq $left_x ]] && break
+  sleep 0.1
+done
+if [[ $upper_now_x -ne $upper_x || $upper_now_y -ne $moved_y || $fourth_x -ne $left_x ]]; then
+  echo "window-swap-right from the lower-left did not swap with the lower-right window: $windows"
+  exit 1
+fi
+
+echo "Dwindle directional swap stays on the same row"

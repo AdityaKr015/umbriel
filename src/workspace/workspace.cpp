@@ -1354,7 +1354,15 @@ namespace umbriel {
   }
 
   bool Workspace::swapFocusedInDirection(bool horizontal, int direction) {
-    View* target = horizontal ? focusAdjacent(direction) : focusVertical(direction);
+    // Geometry only: the focus memory directional focus applies could pick a diagonal tile.
+    std::vector<LayoutTarget> targets;
+    for (const Column& column : m_layout->columns()) {
+      for (View* view : column.views) {
+        const wlr_box box = m_layout->targetBox(view);
+        targets.push_back({.view = view, .x = box.x, .y = box.y, .width = box.width, .height = box.height});
+      }
+    }
+    View* target = directionalNeighbor(targets, m_focusedView, horizontal, direction);
     if (target == nullptr || !m_layout->swapViews(m_focusedView, target)) {
       return false;
     }

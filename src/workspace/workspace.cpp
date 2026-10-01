@@ -266,7 +266,13 @@ namespace umbriel {
       const bool fs = view->currentFullscreen() || view->scheduledFullscreen();
       view->setSceneParent(fs ? m_group->server()->fullscreenTree() : m_group->server()->xdgTree());
     }
-    View* replacement = m_focusedView == view ? focusReplacementForRemoval(view) : nullptr;
+    const bool focusedHere = m_focusedView == view;
+    View* replacement = focusedHere ? focusReplacementForRemoval(view) : nullptr;
+    if (focusedHere) {
+      // detachFromLayout() judges the survivor once the column is gone, so the note and the new focus land first.
+      noteRemovalOfFocusedColumn(m_layout->columnOf(view));
+      m_focusedView = replacement;
+    }
     detachFromLayout(view);
     if (std::erase(m_views, view) > 0 && m_views.empty()) {
       m_group->server()->scheduleIpcWorkspacesEvent();
@@ -280,9 +286,6 @@ namespace umbriel {
     std::erase(m_floatingStack, view);
     std::erase(m_switchViews, view);
 
-    if (m_focusedView == view) {
-      m_focusedView = replacement;
-    }
     // Re-anchor the strip on whatever is focused now, the way every other focus-moving operation does. Fitting the
     // survivor prevents the old scroll offset from leaving it cut off at the left edge while empty space opens on the
     // right.

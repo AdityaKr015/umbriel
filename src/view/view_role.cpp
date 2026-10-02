@@ -50,7 +50,9 @@ namespace umbriel {
       return;
     }
     m_xState.activated = activated;
-    if (activated && m_xsurface->minimized) {
+    if (activated) {
+      // An ignored WM_CHANGE_STATE request can leave Wine waiting for a WM_STATE reply even though wlroots never
+      // marked the surface minimized. Reassert NormalState on activation so the client can complete its restore.
       wlr_xwayland_surface_set_minimized(m_xsurface, false);
     }
     wlr_xwayland_surface_activate(m_xsurface, activated);

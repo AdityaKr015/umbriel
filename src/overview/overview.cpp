@@ -2895,8 +2895,8 @@ namespace umbriel {
     View* target = workspace->focusedView();
     const bool focusMoved = bestColumn >= 0 && (target == nullptr || scrolling->columnOf(target) != bestColumn);
     if (focusMoved) {
-      const auto& views = scrolling->columns()[static_cast<size_t>(bestColumn)].views;
-      target = views.empty() ? nullptr : views.front();
+      // A tab group is entered on the tab it shows, as a directional focus move enters it.
+      target = columnEntry(scrolling->columns()[static_cast<size_t>(bestColumn)]);
     }
     scrolling->setScroll(bestPosition);
     // Do not activate a different workspace merely because its preview was

@@ -819,6 +819,14 @@ namespace umbriel {
     return nlohmann::json{{"ok", nullptr}};
   }
 
+  nlohmann::json IpcCommands::planeCursor(Server& server, std::string_view arg) {
+    std::string error;
+    if (!server.injectPlaneCursor(arg, &error)) {
+      return nlohmann::json{{"err", error}};
+    }
+    return nlohmann::json{{"ok", nullptr}};
+  }
+
   nlohmann::json IpcCommands::effectFrames(Server& server, std::string_view /*arg*/) {
     nlohmann::json outputs = nlohmann::json::array();
     for (const auto& output : server.outputs()) {
@@ -895,6 +903,9 @@ namespace umbriel {
        IpcCommandGroup::Harness, false, &IpcCommands::clockResume, nullptr},
       {"renderer-recover", "", "emit renderer loss and exercise recovery", IpcCommandGroup::Harness, false,
        &IpcCommands::rendererRecover, nullptr},
+      {"plane-cursor", "<output> <x> <y> <visible> <image> [width height hotspot_x hotspot_y]",
+       "synthesize a hardware cursor plane sample (harness only)", IpcCommandGroup::Harness, true,
+       &IpcCommands::planeCursor, nullptr},
       {"effect-frames", "", "count frames drawn for persistent effects per output", IpcCommandGroup::Harness, false,
        &IpcCommands::effectFrames, nullptr},
 #endif

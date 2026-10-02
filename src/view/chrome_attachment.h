@@ -1,5 +1,9 @@
 #pragma once
 
+#include <memory>
+
+struct wlr_scene_tree;
+
 namespace umbriel {
 
   // Where a view's content sits inside its frame, and what decides how chrome around it is drawn.
@@ -14,6 +18,9 @@ namespace umbriel {
     float scale = 1.0F;
     // Set while the view draws nothing around its content: unmapped, fullscreen, or maximized to the edges.
     bool suppressed = false;
+    // How much smaller than the view chrome is drawn, for a scaled preview of it such as an overview card. Every other
+    // field stays in the view's own logical units.
+    double zoom = 1.0;
     bool operator==(const ViewChromeGeometry&) const = default;
   };
 
@@ -33,6 +40,14 @@ namespace umbriel {
     virtual void setAlpha(float alpha) = 0;
     // The configuration was reloaded.
     virtual void reloadConfig() = 0;
+
+    // A copy of this chrome under `parent`, for a scaled preview of the view, or null for chrome with nothing to show
+    // there. The preview is laid out like any chrome and follows this one through syncPreview.
+    [[nodiscard]] virtual std::unique_ptr<ViewChromeAttachment> makePreview(wlr_scene_tree* /*parent*/) const {
+      return nullptr;
+    }
+    // Bring `preview`, made by this chrome's makePreview, in line with what this chrome shows.
+    virtual void syncPreview(ViewChromeAttachment& /*preview*/) const {}
   };
 
 } // namespace umbriel

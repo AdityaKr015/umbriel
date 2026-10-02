@@ -79,6 +79,33 @@ namespace umbriel {
     redraw();
   }
 
+  std::unique_ptr<ViewChromeAttachment> TabBar::makePreview(wlr_scene_tree* parent) const {
+    auto preview = std::make_unique<TabBar>(parent, m_labels);
+    syncPreview(*preview);
+    return preview;
+  }
+
+  void TabBar::syncPreview(ViewChromeAttachment& preview) const {
+    auto* bar = dynamic_cast<TabBar*>(&preview);
+    if (bar == nullptr) {
+      return;
+    }
+    bar->reloadConfig();
+    bar->setFocused(m_focused);
+    bar->setModel(m_model);
+  }
+
+  int TabBar::zoomed(int value) const {
+    return m_geometry.zoom == 1.0 ? value : static_cast<int>(std::lround(value * m_geometry.zoom));
+  }
+
+  wlr_box TabBar::zoomed(const wlr_box& box) const {
+    // Both edges scale, so slots that met at full size still meet.
+    const int x = zoomed(box.x);
+    const int y = zoomed(box.y);
+    return {.x = x, .y = y, .width = zoomed(box.x + box.width) - x, .height = zoomed(box.y + box.height) - y};
+  }
+
   bool TabBar::drawn() const {
     return !m_model.tabs.empty()
         && !m_geometry.suppressed
@@ -146,7 +173,7 @@ namespace umbriel {
       return;
     }
     const wlr_box bar = localBox();
-    wlr_scene_node_set_position(&m_tree->node, bar.x, bar.y);
+    wlr_scene_node_set_position(&m_tree->node, zoomed(bar.x), zoomed(bar.y));
     // Only the slots on show exist, so a column of many tabs draws, and renders titles for, no more than its strip.
     const TabStrip strip = visibleStrip();
     const size_t tabs = m_model.tabs.size();
@@ -236,11 +263,12 @@ namespace umbriel {
       slot.fill = wlr_scene_rect_create(m_tree, 1, 1, clear);
       slot.fill->accepts_input = false;
     }
-    const int width = std::max(1, rect.width);
-    const int height = std::max(1, rect.height);
-    wlr_scene_node_set_position(&slot.fill->node, rect.x, rect.y);
+    const wlr_box drawn = zoomed(rect);
+    const int width = std::max(1, drawn.width);
+    const int height = std::max(1, drawn.height);
+    wlr_scene_node_set_position(&slot.fill->node, drawn.x, drawn.y);
     wlr_scene_rect_set_size(slot.fill, width, height);
-    wlr_scene_rect_set_corner_radius(slot.fill, std::min({m_style.cornerRadius, height / 2, width / 2}));
+    wlr_scene_rect_set_corner_radius(slot.fill, std::min({zoomed(m_style.cornerRadius), height / 2, width / 2}));
     setRectColor(slot.fill, color, alpha);
   }
 
@@ -268,7 +296,7 @@ namespace umbriel {
     } else {
       wlr_scene_buffer_set_buffer(slot.label, label->buffer);
     }
-    wlr_scene_buffer_set_dest_size(slot.label, label->width, label->height);
+    wlr_scene_buffer_set_dest_size(slot.label, std::max(1, zoomed(label->width)), std::max(1, zoomed(label->height)));
     wlr_scene_buffer_set_opacity(slot.label, alpha);
     int x = rect.x + padding;
     switch (align) {
@@ -281,7 +309,9 @@ namespace umbriel {
       x = rect.x + std::max(padding, rect.width - padding - label->width);
       break;
     }
-    wlr_scene_node_set_position(&slot.label->node, x, rect.y + std::max(0, (rect.height - label->height) / 2));
+    wlr_scene_node_set_position(
+        &slot.label->node, zoomed(x), zoomed(rect.y + std::max(0, (rect.height - label->height) / 2))
+    );
   }
 
   void TabBar::dropLabel(Slot& slot) {

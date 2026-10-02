@@ -804,7 +804,8 @@ namespace umbriel {
     clock_gettime(CLOCK_MONOTONIC, &now);
 
     for (const auto& view : self->m_registry.all()) {
-      if (!view->mapped() || view->onActiveWorkspace()) {
+      // A hidden tab is on the active workspace but, like a hidden workspace's windows, off the rendered scene.
+      if (!view->mapped() || (view->onActiveWorkspace() && !view->tabHidden())) {
         continue;
       }
       view->forEachSurface(

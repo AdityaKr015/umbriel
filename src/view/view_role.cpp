@@ -56,6 +56,14 @@ namespace umbriel {
     wlr_xwayland_surface_activate(m_xsurface, activated);
   }
 
+  void View::setSuspendedState(bool suspended) {
+    // X11 has no such state: minimizing would tell the client it was iconified, which is not what a hidden tab is.
+    if (m_toplevel == nullptr || !m_toplevel->base->initialized || m_toplevel->scheduled.suspended == suspended) {
+      return;
+    }
+    wlr_xdg_toplevel_set_suspended(m_toplevel, suspended);
+  }
+
   void View::setFullscreenState(bool fullscreen) {
     if (m_toplevel != nullptr) {
       wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);

@@ -80,6 +80,9 @@ namespace umbriel {
     [[nodiscard]] bool currentMaximized() const;
     [[nodiscard]] bool scheduledActivated() const;
     void setActivatedState(bool activated);
+    // Take X input focus back for an X11 window that stayed activated while one of its menus held it; a no-op for xdg
+    // toplevels.
+    void reclaimXwaylandFocus();
     // Tell the client nothing of it is visible, so it can stop drawing and animating; a no-op for X11 windows.
     void setSuspendedState(bool suspended);
     void setFullscreenState(bool fullscreen);

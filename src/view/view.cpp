@@ -757,6 +757,8 @@ namespace umbriel {
     raiseToTop();
     if (!scheduledActivated()) {
       setActivatedState(true);
+    } else {
+      reclaimXwaylandFocus();
     }
     setBorderFocused(true);
     setForeignActivated(true);

@@ -58,6 +58,12 @@ namespace umbriel {
     wlr_xwayland_surface_activate(m_xsurface, activated);
   }
 
+  void View::reclaimXwaylandFocus() {
+    if (m_xsurface != nullptr) {
+      wlr_xwayland_surface_activate(m_xsurface, true);
+    }
+  }
+
   void View::setSuspendedState(bool suspended) {
     // X11 has no such state: minimizing would tell the client it was iconified, which is not what a hidden tab is.
     if (m_toplevel == nullptr || !m_toplevel->base->initialized || m_toplevel->scheduled.suspended == suspended) {

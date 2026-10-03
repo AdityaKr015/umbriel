@@ -219,6 +219,9 @@ namespace umbriel {
       wl_signal_add(&m_toplevel->events.set_parent, &m_setParent);
       wl_signal_add(&m_toplevel->events.set_title, &m_setTitle);
       wl_signal_add(&m_toplevel->events.set_app_id, &m_setAppId);
+      // wlroots prepares the first capabilities event before exposing the toplevel. Adjust that pending event directly,
+      // because the public setter schedules a configure and the surface is not initialized until its initial commit.
+      m_toplevel->scheduled.wm_capabilities &= ~WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE;
     } else {
       // The X11 window's owner tears the view down through roleDestroyed() when the surface dissociates.
       wl_signal_add(&m_xsurface->events.request_move, &m_requestMove);

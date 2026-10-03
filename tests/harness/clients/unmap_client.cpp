@@ -119,6 +119,7 @@ namespace {
     bool maximizeRequested = false;
     bool logConfigures = false;
     bool logSuspended = false;
+    bool logWmCapabilities = false;
     bool suspended = false;
     xdg_toplevel* parentOnFirstConfigure = nullptr;
     bool requestFullscreen = false;
@@ -331,13 +332,39 @@ namespace {
 
   // Sent only to a toplevel bound at version 4 and 5 or later, which LOG_SUSPENDED asks for.
   void toplevelConfigureBounds(void*, xdg_toplevel*, int32_t, int32_t) {}
-  void toplevelWmCapabilities(void*, xdg_toplevel*, wl_array*) {}
+  void auxiliaryToplevelWmCapabilities(void*, xdg_toplevel*, wl_array*) {}
+  void toplevelWmCapabilities(void* data, xdg_toplevel*, wl_array* capabilities) {
+    auto& state = *static_cast<State*>(data);
+    if (!state.logWmCapabilities) {
+      return;
+    }
+    const auto* values = static_cast<const uint32_t*>(capabilities->data);
+    const size_t count = capabilities->size / sizeof(uint32_t);
+    for (size_t index = 0; index < count; ++index) {
+      switch (values[index]) {
+      case XDG_TOPLEVEL_WM_CAPABILITIES_WINDOW_MENU:
+        std::println("wm-capability=window-menu");
+        break;
+      case XDG_TOPLEVEL_WM_CAPABILITIES_MAXIMIZE:
+        std::println("wm-capability=maximize");
+        break;
+      case XDG_TOPLEVEL_WM_CAPABILITIES_FULLSCREEN:
+        std::println("wm-capability=fullscreen");
+        break;
+      case XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE:
+        std::println("wm-capability=minimize");
+        break;
+      }
+    }
+    std::println("wm-capabilities-done");
+    std::fflush(stdout);
+  }
 
   constexpr xdg_toplevel_listener kAuxiliaryToplevelListener = {
       .configure = auxiliaryToplevelConfigure,
       .close = auxiliaryToplevelClose,
       .configure_bounds = toplevelConfigureBounds,
-      .wm_capabilities = toplevelWmCapabilities,
+      .wm_capabilities = auxiliaryToplevelWmCapabilities,
   };
 
   bool createAuxiliaryToplevel(State& state, AuxiliaryToplevel& window, const char* title, int width, int height) {
@@ -558,7 +585,7 @@ namespace {
     } else if (std::strcmp(interface, wl_shm_interface.name) == 0) {
       state.shm = static_cast<wl_shm*>(wl_registry_bind(registry, name, &wl_shm_interface, 1));
     } else if (std::strcmp(interface, xdg_wm_base_interface.name) == 0) {
-      const uint32_t wanted = state.logSuspended ? 6U : 1U;
+      const uint32_t wanted = state.logSuspended ? 6U : (state.logWmCapabilities ? 5U : 1U);
       state.wmBase = static_cast<xdg_wm_base*>(
           wl_registry_bind(registry, name, &xdg_wm_base_interface, std::min(version, wanted))
       );
@@ -793,6 +820,7 @@ int main(int argc, char** argv) {
   state.requestMaximizedAfterFrame = std::getenv("REQUEST_MAXIMIZED_AFTER_FRAME") != nullptr;
   state.logConfigures = std::getenv("LOG_CONFIGURES") != nullptr;
   state.logSuspended = std::getenv("LOG_SUSPENDED") != nullptr;
+  state.logWmCapabilities = std::getenv("LOG_WM_CAPABILITIES") != nullptr;
   state.requestFullscreen = std::getenv("REQUEST_FULLSCREEN") != nullptr;
   state.requestHdr = std::getenv("COLOR_HDR") != nullptr;
   state.requestWindowsScrgb = std::getenv("COLOR_WINDOWS_SCRGB") != nullptr;

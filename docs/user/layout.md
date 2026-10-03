@@ -353,6 +353,10 @@ visible area.
 
 ### Maximize and fullscreen
 
+Umbriel does not support a minimized window state and does not advertise one to
+applications. Move windows to another workspace or use a
+[scratchpad](scratchpad.md) when they should stay running out of view.
+
 `window-toggle-fullscreen` fills the complete output, ignoring struts and panel
 exclusive zones.
 

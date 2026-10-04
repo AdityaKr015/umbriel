@@ -46,6 +46,9 @@ namespace umbriel {
     [[nodiscard]] const XwaylandOutputs& outputs() const { return *m_outputs; }
     // X pixels per layout unit in `surface`: the scale its X11 window is drawn at. 1 for every other surface.
     [[nodiscard]] double surfaceScale(wlr_surface* surface) const;
+    // Cursor surfaces have no wlr_xwayland_surface role. Identify them by the
+    // Wayland client owned by this Xwayland server instead.
+    [[nodiscard]] bool ownsSurface(const wlr_surface* surface) const;
     // Whether an xdg-output manager global may be advertised to `client`.
     [[nodiscard]] bool advertiseOutputManager(const wl_client* client, const wl_global* global) const;
     // Republishes the X screen and moves every X11 window to match it.

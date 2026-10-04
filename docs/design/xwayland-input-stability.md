@@ -76,6 +76,46 @@ that tradeoff to a real Xwayland-to-native transfer and lets wlroots restore
 normal X focus when the seat returns to Xwayland. This is the same externally
 observable state as the previously working xwayland-satellite path.
 
+## Xwayland theme cursors use output-native images
+
+Xwayland submits X11 cursors as scale-1 Wayland surfaces. wlroots correctly
+scales an arbitrary client surface to the output, but it cannot recover the
+semantic Xcursor name needed to load the theme's image for that output scale.
+The result is a correctly sized but visibly blurred cursor on scaled outputs.
+
+Umbriel promotes a cursor surface only when all of these conditions hold:
+
+- The surface belongs to Umbriel's Xwayland Wayland client. Native Wayland
+  cursor surfaces are never candidates.
+- The surface uses buffer scale 1, the normal transform, and no viewport. Its
+  dimensions, hotspot, and ARGB8888 pixels exactly match an image in the
+  configured theme at scale 1. RGB values under fully transparent pixels are
+  ignored because those channels are undefined.
+- Any animation frame may supply the match, and the previously matched
+  semantic name wins when aliases share an image.
+
+The compositor then gives wlroots the matched name. wlroots loads the theme
+image for each output scale, so the cursor stays sharp without changing the
+X11 application's cursor size. Unmatched images remain ordinary client-owned
+surfaces, preserving custom game cursors and application animation. Cursor
+commits and cursor-theme reloads re-run the classification in both directions.
+
+The incoming Xwayland buffer is copied during the surface's `client_commit`
+signal. At that point the source buffer is still readable; wlroots may reuse an
+existing uploaded texture and release that source before the later `commit`
+signal. Once a surface is promoted or otherwise detached by cursor hiding or
+an Umbriel cursor override, Umbriel also completes its frame callback so
+Xwayland can submit the next cursor image. Visible raw surfaces retain
+wlroots' normal output pacing.
+
+This deliberately stays inside the compositor. Sway and wlroots preserve raw
+client cursor surfaces and already provide the named, output-scale-aware path
+used after a match. Hyprland's global Xwayland scaling work requires a patched
+X server. Raising `XCURSOR_SIZE` for the whole session, as can be done around
+xwayland-satellite, also changes applications that already account for scale.
+Neither approach can safely distinguish a theme cursor from a custom one, and
+application-specific rules would only move that ambiguity into configuration.
+
 ## X11 games can retain stale input after a windowed resize round trip
 
 A fake-fullscreen game (borderless window at output size) that receives a
@@ -141,3 +181,13 @@ X11 window to a native client, and requires X core focus and
 client receives keys, the old X11 client does not, and returning to X11 restores
 both focus channels and key delivery. Run it as
 `just check focus/xwayland_native_handoff`.
+
+Theme cursor identity is covered by
+[`tests/unit/xcursor_matcher.cpp`](../../tests/unit/xcursor_matcher.cpp),
+including padded rows, transparent pixels, exact hotspots, aliases, and
+animation frames. The live Xwayland path is covered by
+[`tests/harness/checks/input/xwayland_cursor_promotion.sh`](../../tests/harness/checks/input/xwayland_cursor_promotion.sh).
+It uses a deterministic two-size Xcursor theme on a scale-2 headless output and
+checks promotion, custom-image and hotspot rejection, reload reclassification,
+native Wayland exclusion, and focus re-entry. Run it as
+`just check input/xwayland_cursor_promotion`.

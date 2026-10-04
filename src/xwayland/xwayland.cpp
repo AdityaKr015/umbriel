@@ -117,6 +117,15 @@ namespace umbriel {
     return found != m_windows.end() ? (*found)->scale() : 1.0;
   }
 
+  bool Xwayland::ownsSurface(const wlr_surface* surface) const {
+    return surface != nullptr
+        && surface->resource != nullptr
+        && m_wlr != nullptr
+        && m_wlr->server != nullptr
+        && m_wlr->server->client != nullptr
+        && wl_resource_get_client(surface->resource) == m_wlr->server->client;
+  }
+
   bool Xwayland::advertiseOutputManager(const wl_client* client, const wl_global* global) const {
     return m_outputs->advertise(client, global, m_wlr->server != nullptr ? m_wlr->server->client : nullptr);
   }

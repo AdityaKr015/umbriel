@@ -36,7 +36,7 @@ Direct project dependencies. Transitive dependencies are owned by their providin
 | Memory allocation | `jemalloc` (optional, glibc) |
 | Config | `tomlplusplus` |
 | JSON (IPC) | `nlohmann/json` |
-| Xwayland | wlroots' Xwayland server (`Xwayland` spawned on demand), `xcb`, `xcb-icccm`, `xcb-ewmh` |
+| Xwayland | wlroots' Xwayland server (`Xwayland` spawned on demand), `xcb`, `xcb-icccm`, `xcb-ewmh`, and test-only `xcb-render` |
 
 ## Development Commands
 
@@ -148,6 +148,10 @@ An instance has one output unless the check asks for more with a `# harness: out
 `output/disable`, `output/dpms`, and `output/two_output_containment` use. Output count is fixed when the compositor
 starts, so it cannot be a runtime config change. Single-output instances are what `session/action_dispatch` relies on to
 assert that directional output actions are rejected when there is nowhere to move.
+
+A check that needs deterministic Xcursor images declares `# harness: xcursor-theme=true`. The harness creates an
+isolated theme with distinct nominal sizes 24 and 48, exports its path and name, and writes the matching cursor
+configuration before the compositor starts.
 
 A headless session starts with no keyboard, so the harness connects a keyboard-only helper to each instance before
 its check runs and keeps it through teardown, the way a real session always has one. Without it the seat's keyboard

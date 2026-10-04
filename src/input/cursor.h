@@ -9,6 +9,7 @@
 #include <vector>
 #include <wayland-server-core.h>
 
+struct wlr_buffer;
 struct wlr_cursor;
 struct wl_event_source;
 struct wlr_input_device;
@@ -156,7 +157,7 @@ namespace umbriel {
     // position and timer-driven motion.
     void handleDataDragStarted();
     void handleDataDragEnded();
-    void setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY);
+    void setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY, wl_client* owner);
     void setXcursor(const char* name);
     bool beginMove(View* view, uint32_t button);
     bool beginResize(View* view, uint32_t edges, uint32_t button);
@@ -194,6 +195,19 @@ namespace umbriel {
     // (overview drag). nullptr restores the client cursor.
     void overrideCursor(const char* name) { setCompositorCursor(name); }
     [[nodiscard]] bool compositorOwnsCursor() const { return m_compositorOwnsCursor; }
+#ifdef UMBRIEL_TEST_IPC
+    struct RenderedCursorStateForTest {
+      uint32_t textureWidth = 0;
+      uint32_t textureHeight = 0;
+      uint32_t renderWidth = 0;
+      uint32_t renderHeight = 0;
+    };
+
+    [[nodiscard]] std::string clientCursorSourceForTest() const;
+    [[nodiscard]] std::string clientCursorNameForTest() const { return m_clientCursorShape; }
+    [[nodiscard]] bool clientCursorFromXwaylandForTest() const { return m_clientCursorFromXwayland; }
+    [[nodiscard]] std::optional<RenderedCursorStateForTest> renderedCursorStateForTest() const;
+#endif
 
     // The only ways compositor code may change pointer focus. While a client holds an implicit grab (any button down,
     // no client drag) focus stays on the surface that received the press: wlroots drops its pressed-button bookkeeping
@@ -207,9 +221,10 @@ namespace umbriel {
     void clearPointerFocusOverridingGrab();
     // Record the cursor shape the focused client asked for, so a compositor
     // override can hand it back without making the client resend it.
-    void setCursorShape(const char* name);
-    // Pointer focus moved: the recorded client cursor belonged to the old
-    // focus, and an empty focus falls back to the default cursor.
+    void setCursorShape(const char* name, wl_client* owner);
+    // Pointer focus moved: keep cursor state while focus remains within its
+    // owning Wayland client. Otherwise forget it, and let an empty focus fall
+    // back to the default cursor.
     void notePointerFocusChange(wlr_surface* newSurface);
 
   private:
@@ -291,8 +306,15 @@ namespace umbriel {
     // Re-resolve pointer focus against the surface under the cursor.
     void refreshPointerFocus();
     void applyClientCursor();
+    void handleClientCursorCommit();
+    void captureXwaylandCursorImage(wlr_buffer* buffer);
+    [[nodiscard]] std::optional<std::string> matchXwaylandCursor() const;
+    void finishClientCursorFrame() const;
     void forgetClientCursor();
+    static void onClientCursorOwnerDestroy(wl_listener* listener, void* data);
     static void onClientCursorDestroy(wl_listener* listener, void* data);
+    static void onClientCursorClientCommit(wl_listener* listener, void* data);
+    static void onClientCursorCommit(wl_listener* listener, void* data);
     void noteActivity();
     void updateHideTimer();
     void hideCursor();
@@ -344,14 +366,19 @@ namespace umbriel {
     std::string m_compositorCursorName;
     // What the focused client last asked the cursor to be, replayed when a
     // compositor override ends. Wayland scopes a cursor to the pointer focus,
-    // so this is forgotten when focus moves.
+    // so this is forgotten when focus moves to another client.
     bool m_clientCursorKnown = false;
+    wl_client* m_clientCursorOwner = nullptr;
     // Set for a client cursor surface, empty for a cursor-shape name. A known
     // client cursor with neither is the client hiding the cursor.
     wlr_surface* m_clientCursorSurface = nullptr;
     int32_t m_clientCursorHotspotX = 0;
     int32_t m_clientCursorHotspotY = 0;
     std::string m_clientCursorShape;
+    bool m_clientCursorFromXwayland = false;
+    std::vector<uint8_t> m_clientCursorPixels;
+    uint32_t m_clientCursorImageWidth = 0;
+    uint32_t m_clientCursorImageHeight = 0;
     wl_event_source* m_hideTimer = nullptr;
     wl_event_source* m_hotCornerTimer = nullptr;
     wl_event_source* m_dataDragEdgeScrollTimer = nullptr;
@@ -378,7 +405,10 @@ namespace umbriel {
     wl_listener m_tabletToolProximity{};
     wl_listener m_tabletToolTip{};
     wl_listener m_tabletToolButton{};
+    wl_listener m_clientCursorOwnerDestroy{};
     wl_listener m_clientCursorDestroy{};
+    wl_listener m_clientCursorClientCommit{};
+    wl_listener m_clientCursorCommit{};
   };
 
 } // namespace umbriel

@@ -23,6 +23,7 @@ unit_tests = [
   ['keyboard-layout', ['unit/keyboard_layout.cpp'], []],
   ['surface-layouts', ['unit/surface_layouts.cpp'], []],
   ['shortcut-keysym', ['unit/shortcut_keysym.cpp'], []],
+  ['xcursor-matcher', ['unit/xcursor_matcher.cpp'], []],
   ['output-direction', ['unit/output_direction.cpp'], []],
   ['output-identity', ['unit/output_identity.cpp'], []],
   ['output-mode-selection', ['unit/output_mode_selection.cpp'], []],
@@ -342,6 +343,22 @@ xwayland_focus_client = executable(
   dependencies: [xcb_dep],
 )
 
+# Harness pair that proves only Xwayland-owned theme cursor surfaces are
+# promoted to compositor Xcursors. The X11 fixture also supplies an unmatched
+# custom cursor, while the native fixture supplies matching theme pixels as an
+# ownership control.
+xwayland_cursor_client = executable(
+  'xwayland-cursor-client',
+  ['harness/clients/xwayland_cursor_client.cpp'],
+  dependencies: [xcb_dep, xcb_render_dep, wlroots_dep],
+)
+
+wayland_cursor_client = executable(
+  'wayland-cursor-client',
+  ['harness/clients/wayland_cursor_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
+  dependencies: [wayland_client_dep, wlroots_dep],
+)
+
 # Harness helper that sends complete test or apply transactions through
 # wlr-output-management, including logical output disable and re-enable.
 output_management_client = executable(
@@ -400,5 +417,7 @@ harness_client_targets = [
   security_context_client,
   seat_log_client,
   xwayland_focus_client,
+  xwayland_cursor_client,
+  wayland_cursor_client,
   output_management_client,
 ]

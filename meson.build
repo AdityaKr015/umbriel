@@ -577,6 +577,7 @@ pure_sources = files(
   'src/input/keyboard_layout.cpp',
   'src/input/surface_layouts.cpp',
   'src/input/shortcut_keysym.cpp',
+  'src/input/xcursor_matcher.cpp',
   'src/layout/layout.cpp',
   'src/layout/layout_motion.cpp',
   'src/layout/scrolling.cpp',
@@ -763,6 +764,7 @@ umbriel = executable(
 
 # Unit tests and the harness clients check.sh drives.
 if build_tests
+  xcb_render_dep = dependency('xcb-render')
   subdir('tests')
   alias_target('unit-tests', unit_test_targets)
   alias_target('harness-clients', harness_client_targets)

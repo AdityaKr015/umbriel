@@ -1,6 +1,7 @@
 #include "server/ipc_commands.h"
 
 #include "config/config.h"
+#include "input/cursor.h"
 #include "layer/layer_surface.h"
 #include "output/output.h"
 #include "scene/effect_registry.h"
@@ -838,6 +839,28 @@ namespace umbriel {
     }
     return nlohmann::json{{"ok", {{"outputs", std::move(outputs)}}}};
   }
+
+  nlohmann::json IpcCommands::cursorState(Server& server, std::string_view /*arg*/) {
+    const Cursor* cursor = server.cursor();
+    nlohmann::json image = nullptr;
+    if (const std::optional<Cursor::RenderedCursorStateForTest> rendered = cursor->renderedCursorStateForTest()) {
+      image = {
+          {"texture_width", rendered->textureWidth},
+          {"texture_height", rendered->textureHeight},
+          {"render_width", rendered->renderWidth},
+          {"render_height", rendered->renderHeight},
+      };
+    }
+    return nlohmann::json{{
+        "ok",
+        {
+            {"source", cursor->clientCursorSourceForTest()},
+            {"name", cursor->clientCursorNameForTest()},
+            {"xwayland", cursor->clientCursorFromXwaylandForTest()},
+            {"image", std::move(image)},
+        },
+    }};
+  }
 #endif
 
   bool
@@ -908,6 +931,8 @@ namespace umbriel {
        &IpcCommands::planeCursor, nullptr},
       {"effect-frames", "", "count frames drawn for persistent effects per output", IpcCommandGroup::Harness, false,
        &IpcCommands::effectFrames, nullptr},
+      {"cursor-state", "", "inspect the current client cursor source (harness only)", IpcCommandGroup::Harness, false,
+       &IpcCommands::cursorState, nullptr},
 #endif
   };
 

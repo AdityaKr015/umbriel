@@ -33,6 +33,7 @@ namespace umbriel {
     static nlohmann::json rendererRecover(Server& server, std::string_view arg);
     static nlohmann::json planeCursor(Server& server, std::string_view arg);
     static nlohmann::json effectFrames(Server& server, std::string_view arg);
+    static nlohmann::json cursorState(Server& server, std::string_view arg);
 #endif
   };
 

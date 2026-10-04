@@ -27,6 +27,7 @@ Change the current workspace at runtime with
 gap = 8
 extent_presets = [0.333, 0.5, 0.667]
 new_exits_fullscreen = []  # "tiled", "floating", "pinned", "all", or an array such as ["tiled", "floating"]
+maximize_to_edges = false
 ```
 
 | Key | Default | Description |
@@ -365,3 +366,7 @@ gaps; floating windows fill the output's usable area.
 
 `window-toggle-maximize-to-edges` removes layout struts, gaps, and borders while
 leaving panel exclusive zones visible.
+
+With `maximize_to_edges` on, a window's own maximize button behaves like
+`window-toggle-maximize-to-edges` instead of `window-toggle-maximize`.
+Unmaximizing restores the previous tile; opening state is unaffected.

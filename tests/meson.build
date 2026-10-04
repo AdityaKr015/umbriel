@@ -252,7 +252,6 @@ popup_client = executable(
   dependencies: [wayland_client_dep],
 )
 
-
 # Harness helper whose whole content is drawn by a full-window desynchronized
 # wl_subsurface, the way Firefox presents its chrome and web content.
 subsurface_client = executable(
@@ -335,6 +334,14 @@ seat_log_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+# Harness helper that maps an X11 window, logs its keyboard events, and
+# reports the X input focus together with the root active-window property.
+xwayland_focus_client = executable(
+  'xwayland-focus-client',
+  ['harness/clients/xwayland_focus_client.cpp'],
+  dependencies: [xcb_dep],
+)
+
 # Harness helper that sends complete test or apply transactions through
 # wlr-output-management, including logical output disable and re-enable.
 output_management_client = executable(
@@ -392,5 +399,6 @@ harness_client_targets = [
   lock_client,
   security_context_client,
   seat_log_client,
+  xwayland_focus_client,
   output_management_client,
 ]

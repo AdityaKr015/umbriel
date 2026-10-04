@@ -2886,6 +2886,12 @@ namespace umbriel {
 
   void Server::notifyKeyboardEnter(wlr_surface* surface) {
     wlr_seat* seat = m_seat->wlr();
+    wlr_surface* previous = seat->keyboard_state.focused_surface;
+    const bool leavesXwayland = m_xwayland != nullptr
+        && previous != nullptr
+        && wlr_xwayland_surface_try_from_wlr_surface(previous) != nullptr
+        && surface != nullptr
+        && wlr_xwayland_surface_try_from_wlr_surface(surface) == nullptr;
 
     if (config().input.keyboard.trackLayout == TrackLayout::Window) {
       if (const auto state = keyboardLayoutState();
@@ -2913,6 +2919,9 @@ namespace umbriel {
     wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat);
     if (keyboard == nullptr) {
       wlr_seat_keyboard_notify_enter(seat, surface, nullptr, 0, nullptr);
+      if (leavesXwayland) {
+        m_xwayland->scheduleFocusClear();
+      }
       return;
     }
 
@@ -2928,6 +2937,9 @@ namespace umbriel {
     }
     if (consumed == nullptr || consumed->empty()) {
       wlr_seat_keyboard_notify_enter(seat, surface, keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+      if (leavesXwayland) {
+        m_xwayland->scheduleFocusClear();
+      }
       return;
     }
     std::array<uint32_t, WLR_KEYBOARD_KEYS_CAP> forwarded{};
@@ -2938,6 +2950,9 @@ namespace umbriel {
       }
     }
     wlr_seat_keyboard_notify_enter(seat, surface, forwarded.data(), count, &keyboard->modifiers);
+    if (leavesXwayland) {
+      m_xwayland->scheduleFocusClear();
+    }
   }
 
   void Server::forgetConsumedKeycodes() {

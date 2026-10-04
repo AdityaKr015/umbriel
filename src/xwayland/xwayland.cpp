@@ -8,10 +8,33 @@
 #include "wlr.h"
 #include "xwayland/window.h"
 
+#include <cstdlib>
+#include <cstring>
+
 namespace umbriel {
 
   namespace {
     constexpr Logger kLog("xwayland");
+
+    xcb_atom_t resolveAtom(const char* displayName, const char* name) {
+      if (displayName == nullptr) {
+        return XCB_ATOM_NONE;
+      }
+      xcb_connection_t* connection = xcb_connect(displayName, nullptr);
+      if (connection == nullptr || xcb_connection_has_error(connection) != 0) {
+        if (connection != nullptr) {
+          xcb_disconnect(connection);
+        }
+        return XCB_ATOM_NONE;
+      }
+      const xcb_intern_atom_cookie_t cookie =
+          xcb_intern_atom(connection, 0, static_cast<uint16_t>(std::strlen(name)), name);
+      xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, nullptr);
+      const xcb_atom_t atom = reply != nullptr ? reply->atom : static_cast<xcb_atom_t>(XCB_ATOM_NONE);
+      std::free(reply);
+      xcb_disconnect(connection);
+      return atom;
+    }
   } // namespace
 
   void grantConfigureRequest(wlr_xwayland_surface* xsurface, const wlr_xwayland_surface_configure_event* event) {
@@ -42,6 +65,7 @@ namespace umbriel {
     wl_signal_add(&m_wlr->events.ready, &m_ready);
     m_newSurface.notify = onNewSurface;
     wl_signal_add(&m_wlr->events.new_surface, &m_newSurface);
+    m_focusClearTimer = wl_event_loop_add_timer(wl_display_get_event_loop(server.display()), onFocusClearTimer, this);
     kLog.info("Xwayland listening on DISPLAY={}", m_wlr->display_name);
   }
 
@@ -54,6 +78,9 @@ namespace umbriel {
     wl_list_remove(&m_serverStart.link);
     wl_list_remove(&m_ready.link);
     wl_list_remove(&m_newSurface.link);
+    if (m_focusClearTimer != nullptr) {
+      wl_event_source_remove(m_focusClearTimer);
+    }
     wlr_xwayland_destroy(m_wlr);
   }
 
@@ -103,6 +130,14 @@ namespace umbriel {
     }
   }
 
+  void Xwayland::scheduleFocusClear() {
+    if (m_focusClearTimer != nullptr) {
+      // A zero Wayland timer is disarmed. One millisecond puts this on the next event-loop turn, after the current
+      // dispatch returns and wl_display_run flushes the native client's keyboard enter.
+      wl_event_source_timer_update(m_focusClearTimer, 1);
+    }
+  }
+
   void Xwayland::onServerStart(wl_listener* listener, void* /*data*/) {
     Xwayland* self = wl_container_of(listener, self, m_serverStart); // NOLINT(modernize-use-auto)
     wlr_xwayland_set_seat(self->m_wlr, self->m_server.seat()->wlr());
@@ -118,10 +153,43 @@ namespace umbriel {
     self->handleNewSurface(static_cast<wlr_xwayland_surface*>(data));
   }
 
-  void Xwayland::handleReady() { kLog.info("Xwayland ready on DISPLAY={}", m_wlr->display_name); }
+  int Xwayland::onFocusClearTimer(void* data) {
+    auto* self = static_cast<Xwayland*>(data);
+    wlr_surface* focused = self->m_server.seat()->wlr()->keyboard_state.focused_surface;
+    if (focused != nullptr && wlr_xwayland_surface_try_from_wlr_surface(focused) == nullptr) {
+      self->clearFocus();
+    }
+    return 0;
+  }
+
+  void Xwayland::handleReady() {
+    m_netActiveWindow = resolveAtom(m_wlr->display_name, "_NET_ACTIVE_WINDOW");
+    if (m_netActiveWindow == XCB_ATOM_NONE) {
+      kLog.warn("could not resolve _NET_ACTIVE_WINDOW");
+    }
+    kLog.info("Xwayland ready on DISPLAY={}", m_wlr->display_name);
+  }
 
   void Xwayland::handleNewSurface(wlr_xwayland_surface* xsurface) {
     m_windows.push_back(std::make_unique<XwaylandWindow>(m_server, *this, xsurface));
+  }
+
+  void Xwayland::clearFocus() {
+    xcb_connection_t* connection = wlr_xwayland_get_xwm_connection(m_wlr);
+    if (connection == nullptr) {
+      return;
+    }
+    constexpr xcb_window_t kNoWindow = XCB_WINDOW_NONE;
+    xcb_set_input_focus(connection, XCB_INPUT_FOCUS_NONE, kNoWindow, XCB_CURRENT_TIME);
+    if (m_netActiveWindow != XCB_ATOM_NONE) {
+      xcb_screen_iterator_t screens = xcb_setup_roots_iterator(xcb_get_setup(connection));
+      if (screens.rem != 0) {
+        xcb_change_property(
+            connection, XCB_PROP_MODE_REPLACE, screens.data->root, m_netActiveWindow, XCB_ATOM_WINDOW, 32, 1, &kNoWindow
+        );
+      }
+    }
+    xcb_flush(connection);
   }
 
 } // namespace umbriel

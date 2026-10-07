@@ -1,9 +1,10 @@
 #pragma once
 
 namespace umbriel {
-  // A client's maximize request targets the edges when already edges-maximized, or when configured.
-  [[nodiscard]] constexpr bool maximizeRequestTargetsEdges(bool edgesActive, bool configTargetsEdges) {
-    return edgesActive || configTargetsEdges;
+  // A maximize request targets the edges when already active or configured; an unmaximize exits the active mode.
+  [[nodiscard]] constexpr bool
+  maximizeRequestTargetsEdges(bool requestedMaximized, bool edgesActive, bool configTargetsEdges) {
+    return requestedMaximized ? (edgesActive || configTargetsEdges) : edgesActive;
   }
 
 } // namespace umbriel

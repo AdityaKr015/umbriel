@@ -369,4 +369,6 @@ leaving panel exclusive zones visible.
 
 With `maximize_to_edges` on, a window's own maximize button behaves like
 `window-toggle-maximize-to-edges` instead of `window-toggle-maximize`.
-Unmaximizing restores the previous tile; opening state is unaffected.
+Unmaximizing runs that toggle in reverse: the edges are left first, and a
+window whose column is also at full width leaves the column on the next
+unmaximize. Opening state is unaffected.

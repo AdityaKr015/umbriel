@@ -8,6 +8,7 @@ source "$UMBRIEL_HARNESS_LIB"
 readonly CLIENT="${UMBRIEL_UNMAP_CLIENT:-./build-debug/tests/unmap-client}"
 readonly COLUMN_LOG="$UMBRIEL_RUNTIME_DIR/client-maximize-column.log"
 readonly RESTORED_LOG="$UMBRIEL_RUNTIME_DIR/client-maximize-restored.log"
+readonly FIRST_LOG="$UMBRIEL_RUNTIME_DIR/client-maximize-restored-first.log"
 
 field_of() {
   "$UMBRIEL" windows --json | jq -r --arg title "$1" --arg field "$2" '.[] | select(.title == $title) | .[$field]'
@@ -134,7 +135,7 @@ stop_client
 env LOG_CONFIGURES=1 MAXIMIZE_ON_STDIN=1 REQUEST_MAXIMIZED_AFTER_MAP=1 RESIZE_FILL_COLOR=0xFF5577AA \
   "$CLIENT" client-maximize-restored 640 480 <&"$control_fd" > "$RESTORED_LOG" 2>&1 &
 CLIENT_PID=$!
-  await_lines "$RESTORED_LOG" mapped 1
+await_lines "$RESTORED_LOG" mapped 1
 wait_for_field client-maximize-restored w 1280
 wait_for_field client-maximize-restored h 720
 send_command M "$RESTORED_LOG" 'unmaximize-requested$'
@@ -143,4 +144,16 @@ send_command m "$RESTORED_LOG" 'maximize-requested$'
 wait_for_field client-maximize-restored w 1280
 stop_client
 
-echo "client maximize targets column width by default (1264x704), edges when configured (1280x720), and unmaximize restores the tile (628x704)"
+# A client that restores maximize before its first commit reaches the same state: the opening configure already carries
+# the edge size, so it opens maximized to the edges and one unmaximize restores the tile.
+env LOG_CONFIGURES=1 MAXIMIZE_ON_STDIN=1 REQUEST_MAXIMIZED=1 RESIZE_FILL_COLOR=0xFF5577AA \
+  "$CLIENT" client-maximize-restored-first 640 480 <&"$control_fd" > "$FIRST_LOG" 2>&1 &
+CLIENT_PID=$!
+await_lines "$FIRST_LOG" mapped 1
+wait_for_field client-maximize-restored-first w 1280
+wait_for_field client-maximize-restored-first h 720
+send_command M "$FIRST_LOG" 'unmaximize-requested$'
+wait_for_field client-maximize-restored-first w 628
+stop_client
+
+echo "client maximize targets column width by default (1264x704), edges when configured (1280x720) for post-map and restored requests and unmaximize restores the tile (628x704)"

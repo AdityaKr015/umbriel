@@ -43,17 +43,20 @@ struct tracy_data* tracy_gpu_context_new(struct fx_renderer* renderer);
 
 /**
  * Messaging
+ *
+ * Formatting runs only while a profiler is connected; the client is built with
+ * TRACY_ON_DEMAND, so a disconnected message would be discarded anyway.
  */
 
 #define TRACY_MESSAGE(...)                                                                                             \
-  TRACY_FN({                                                                                                           \
+  TRACY_FN(if (TracyCIsConnected) {                                                                                    \
     int len = snprintf(NULL, 0, __VA_ARGS__) + 1;                                                                      \
     char str[len];                                                                                                     \
     snprintf(str, len, __VA_ARGS__);                                                                                   \
     TracyCMessage(str, len);                                                                                           \
   })
 #define TRACY_MESSAGE_COLOR(color, ...)                                                                                \
-  TRACY_FN({                                                                                                           \
+  TRACY_FN(if (TracyCIsConnected) {                                                                                    \
     int len = snprintf(NULL, 0, __VA_ARGS__) + 1;                                                                      \
     char str[len];                                                                                                     \
     snprintf(str, len, __VA_ARGS__);                                                                                   \
@@ -67,18 +70,19 @@ struct tracy_data* tracy_gpu_context_new(struct fx_renderer* renderer);
 
 #define TRACY_ZONE_START TRACY_FN(TracyCZone(ctx, true))
 #define TRACY_ZONE_START_N(name) TRACY_FN(TracyCZoneN(ctx, name, true))
-#define TRACY_ZONE_END TRACY_FN(TRACY_ZONE_TEXT_f("Success On Line: %d", __LINE__) TracyCZoneEnd(ctx);)
-// Ends the zone without text, for zones too short to absorb the formatting.
-#define TRACY_ZONE_END_QUIET TRACY_FN(TracyCZoneEnd(ctx);)
+#define TRACY_ZONE_END TRACY_FN(TracyCZoneEnd(ctx);)
 #define TRACY_ZONE_END_FAIL TRACY_FN(TRACY_ZONE_TEXT_f("Fail On Line: %d", __LINE__) TracyCZoneEnd(ctx);)
 
 /**
  * Zone Helpers
+ *
+ * The formatting variants run only for an active zone, which TRACY_ON_DEMAND
+ * makes false while no profiler is connected, so a draw pays no snprintf then.
  */
 
 #define TRACY_ZONE_TEXT(txt, size) TRACY_FN(TracyCZoneText(ctx, txt, size);)
 #define TRACY_ZONE_TEXT_f(...)                                                                                         \
-  TRACY_FN({                                                                                                           \
+  TRACY_FN(if (ctx.active) {                                                                                           \
     int len = snprintf(NULL, 0, __VA_ARGS__) + 1;                                                                      \
     char str[len];                                                                                                     \
     snprintf(str, len, __VA_ARGS__);                                                                                   \
@@ -86,7 +90,7 @@ struct tracy_data* tracy_gpu_context_new(struct fx_renderer* renderer);
   })
 #define TRACY_ZONE_NAME(txt, size) TRACY_FN(TracyCZoneName(ctx, txt, size);)
 #define TRACY_ZONE_NAME_f(...)                                                                                         \
-  TRACY_FN({                                                                                                           \
+  TRACY_FN(if (ctx.active) {                                                                                           \
     int len = snprintf(NULL, 0, __VA_ARGS__) + 1;                                                                      \
     char str[len];                                                                                                     \
     snprintf(str, len, __VA_ARGS__);                                                                                   \

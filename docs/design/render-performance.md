@@ -192,10 +192,10 @@ umbrielfx adds these zones for effect costs:
 | `draw_animation_texture` (CPU and GPU) | [`fx_pass.c:691`](../../umbrielfx/render/fx_renderer/fx_pass.c) | Every effect program draw: animation slots, border, window, screen, and cursor effects, border light, and the shadow of a slot program | |
 
 `tracy-csvexport -u` prints each CPU zone event with its text in the `value`
-column, and `-g` prints each GPU zone event. These zones end with
-`TRACY_ZONE_END_QUIET`, which adds no text. `draw_animation_texture`, like the
-other render-pass zones, ends with `TRACY_BOTH_ZONES_END`, which appends a
-`Success On Line` line to its text.
+column, and `-g` prints each GPU zone event. Zone text is formatted only while
+a profiler is connected, so a disconnected `tracy` build pays no formatting per
+draw. A render-pass zone that ends on a failure path carries a `Fail On Line`
+text; a successful one carries only the labels its draw adds.
 
 ## Workloads
 

@@ -456,8 +456,9 @@ an ASan build therefore describes an allocator nothing uses; configure with `-Dj
 
 ### Profiling
 
-`tracy` mode is a release build with `-Dtracy=enabled`. It compiles the Tracy zones in umbrielfx's render pass and
-in the compositor's per-frame path; every other build mode compiles them to nothing.
+`tracy` mode is a release build with `-Dtracy=enabled`, debug info, and frame pointers, so Tracy's sampling can walk
+call stacks. It compiles the Tracy zones in umbrielfx's render pass and in the compositor's per-frame path; every
+other build mode compiles them to nothing.
 
 ```sh
 just tracy                                     # build build-tracy/umbriel

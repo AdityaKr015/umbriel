@@ -26,7 +26,9 @@ configure m=mode install_prefix=prefix:
         ;;
       tracy)
         # Packaged Tracy clients are the no-op stub; build one under ~/.local.
-        args+=(--buildtype=release -Db_lto=true -Dtracy=enabled)
+        # Debug info and frame pointers give Tracy's sampling usable call stacks.
+        args+=(--buildtype=release -Db_lto=true -Dtracy=enabled -Ddebug=true)
+        args+=(-Dc_args=-fno-omit-frame-pointer -Dcpp_args=-fno-omit-frame-pointer)
         args+=(-Dpkg_config_path="$HOME/.local/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}")
         ;;
       debug)

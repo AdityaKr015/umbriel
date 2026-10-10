@@ -248,5 +248,8 @@ void fx_renderer_fail_target_copies_for_test(struct wlr_renderer* renderer, bool
 void fx_renderer_fail_effect_capture_for_test(struct wlr_renderer* renderer, bool fail);
 // Exists for tests/effects.c and the animation-capture-fail harness IPC: makes every animation capture fail.
 void fx_renderer_fail_animation_capture_for_test(struct wlr_renderer* renderer, bool fail);
+// Exists for the blur-composite-split harness IPC: draws backdrop blur's final upsample into an effect buffer and
+// composites that, as fx_render_pass_add_blur does when it cannot draw the upsample into the pass target directly.
+void fx_renderer_split_blur_composite_for_test(struct wlr_renderer* renderer, bool split);
 
 #endif

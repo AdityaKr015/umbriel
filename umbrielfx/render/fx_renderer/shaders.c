@@ -13,7 +13,6 @@
 #include "GLES2/gl2.h"
 #include "blur1_frag_src.h"
 #include "blur2_frag_src.h"
-#include "blur2_with_effects_frag_src.h"
 #include "border_frag_src.h"
 #include "box_shadow_frag_src.h"
 #include "common_vert_src.h"
@@ -381,26 +380,15 @@ bool link_blur1_program(struct blur_shader* shader) {
   return true;
 }
 
-bool link_blur2_program(struct blur_shader* shader) {
-  GLuint prog;
-  shader->program = prog = link_program(blur2_frag_src);
-  if (!shader->program) {
-    return false;
-  }
-  shader->proj = glGetUniformLocation(prog, "proj");
-  shader->tex = glGetUniformLocation(prog, "tex");
-  shader->pos_attrib = glGetAttribLocation(prog, "pos");
-  shader->tex_proj = glGetUniformLocation(prog, "tex_proj");
-  shader->radius = glGetUniformLocation(prog, "radius");
-  shader->halfpixel = glGetUniformLocation(prog, "halfpixel");
-  shader->sample_bounds = glGetUniformLocation(prog, "sample_bounds");
+// Links one variant of blur2.frag and loads the uniforms every variant shares.
+static bool link_blur2_variant(struct blur2_with_effects_shader* shader, bool effects, bool composite, bool corners) {
+  GLchar frag_src_part[8192];
+  GLchar frag_src[12288];
+  snprintf(frag_src_part, sizeof(frag_src_part), blur2_frag_src, effects, composite, corners);
+  snprintf(frag_src, sizeof(frag_src), "%s\n%s\n", frag_src_part, corners ? corner_alpha_frag_src : "");
 
-  return true;
-}
-
-bool link_blur2_with_effects_program(struct blur2_with_effects_shader* shader) {
   GLuint prog;
-  shader->base.program = prog = link_program(blur2_with_effects_frag_src);
+  shader->base.program = prog = link_program(frag_src);
   if (!shader->base.program) {
     return false;
   }
@@ -418,6 +406,44 @@ bool link_blur2_with_effects_program(struct blur2_with_effects_shader* shader) {
   shader->brightness = glGetUniformLocation(prog, "brightness");
   shader->contrast = glGetUniformLocation(prog, "contrast");
   shader->saturation = glGetUniformLocation(prog, "saturation");
+
+  return true;
+}
+
+bool link_blur2_program(struct blur_shader* shader) {
+  struct blur2_with_effects_shader variant;
+  if (!link_blur2_variant(&variant, false, false, false)) {
+    return false;
+  }
+  *shader = variant.base;
+  return true;
+}
+
+bool link_blur2_with_effects_program(struct blur2_with_effects_shader* shader) {
+  return link_blur2_variant(shader, true, false, false);
+}
+
+bool link_blur2_composite_program(struct blur2_composite_shader* shader, bool effects, bool corners) {
+  if (!link_blur2_variant(&shader->blur, effects, true, corners)) {
+    return false;
+  }
+  GLuint prog = shader->blur.base.program;
+  shader->alpha = glGetUniformLocation(prog, "alpha");
+  shader->clamp_level = glGetUniformLocation(prog, "clamp_level");
+
+  shader->corners.size = glGetUniformLocation(prog, "size");
+  shader->corners.position = glGetUniformLocation(prog, "position");
+  shader->corners.radius.top_left = glGetUniformLocation(prog, "radius_top_left");
+  shader->corners.radius.top_right = glGetUniformLocation(prog, "radius_top_right");
+  shader->corners.radius.bottom_left = glGetUniformLocation(prog, "radius_bottom_left");
+  shader->corners.radius.bottom_right = glGetUniformLocation(prog, "radius_bottom_right");
+
+  shader->corners.clip_size = glGetUniformLocation(prog, "clip_size");
+  shader->corners.clip_position = glGetUniformLocation(prog, "clip_position");
+  shader->corners.clip_radius.top_left = glGetUniformLocation(prog, "clip_radius_top_left");
+  shader->corners.clip_radius.top_right = glGetUniformLocation(prog, "clip_radius_top_right");
+  shader->corners.clip_radius.bottom_left = glGetUniformLocation(prog, "clip_radius_bottom_left");
+  shader->corners.clip_radius.bottom_right = glGetUniformLocation(prog, "clip_radius_bottom_right");
 
   return true;
 }

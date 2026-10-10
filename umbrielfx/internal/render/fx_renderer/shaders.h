@@ -217,4 +217,24 @@ struct blur2_with_effects_shader {
 
 bool link_blur2_with_effects_program(struct blur2_with_effects_shader* shader);
 
+// The final blur upsample drawn straight into the pass target. The effects
+// uniforms are -1 without blur effects, the corner ones without corners.
+struct blur2_composite_shader {
+  struct blur2_with_effects_shader blur;
+  GLint alpha;
+  GLint clamp_level;
+
+  struct {
+    GLint size;
+    GLint position;
+    struct shader_corner_radii radius;
+
+    GLint clip_size;
+    GLint clip_position;
+    struct shader_corner_radii clip_radius;
+  } corners;
+};
+
+bool link_blur2_composite_program(struct blur2_composite_shader* shader, bool effects, bool corners);
+
 #endif

@@ -620,6 +620,18 @@ namespace umbriel {
       beginFrameWait(connection, FrameWait::Drawn, IpcCommands::clockAdvance(*m_server, arg).dump());
       return std::nullopt;
     }
+    if (cmd == "blur-composite-split") {
+      if (!req.contains("arg") || !req["arg"].is_string()) {
+        return R"({"err":"malformed request"})";
+      }
+      nlohmann::json reply = IpcCommands::blurCompositeSplit(*m_server, req["arg"].get_ref<const std::string&>());
+      if (reply.contains("err")) {
+        return reply.dump();
+      }
+      // A frozen animation still holds its frame, so a check can compare both composites at one instant.
+      beginFrameWait(connection, FrameWait::Drawn, reply.dump());
+      return std::nullopt;
+    }
 #endif
     const IpcCommandSpec* spec = findIpcCommand(cmd);
     if (spec == nullptr) {

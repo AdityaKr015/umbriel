@@ -2608,9 +2608,13 @@ static void render_blur_segments(
 }
 
 // Blurs the fx_options current_buffer content and returns the blurred framebuffer.
-// Returns NULL when the blur parameters reach 0.
-static struct fx_framebuffer*
-get_main_buffer_blur(struct fx_gles_render_pass* pass, struct fx_render_blur_pass_options* fx_options) {
+// Returns NULL when the blur parameters reach 0. A non-NULL final_upsample
+// leaves the last upsample to the caller: the returned framebuffer then holds
+// the half-resolution level, and final_upsample receives the blur parameters
+// with the strength applied.
+static struct fx_framebuffer* get_main_buffer_blur(
+    struct fx_gles_render_pass* pass, struct fx_render_blur_pass_options* fx_options, struct blur_data* final_upsample
+) {
   if (pass->fx_offscreen_buffers == NULL) {
     wlr_log(WLR_ERROR, "FX Pass offscreen buffers not initialized. Skipping getting blur...");
     return NULL;
@@ -2704,12 +2708,16 @@ get_main_buffer_blur(struct fx_gles_render_pass* pass, struct fx_render_blur_pas
   }
 
   // Upscale
-  for (int i = blur_data.num_passes - 1; i >= 0; --i) {
+  const int last_upsample = final_upsample != NULL ? 1 : 0;
+  for (int i = blur_data.num_passes - 1; i >= last_upsample; --i) {
     // when upsampling we make the region twice as big; the final pass also applies the blur effects
     wlr_region_scale(&scaled_damage, &damage, 1.0f / (1 << i));
     render_blur_segments(
         pass, fx_options, &renderer->shaders.blur2, i == 0 ? &renderer->shaders.blur2_with_effects : NULL, 1 << (i + 1)
     );
+  }
+  if (final_upsample != NULL) {
+    *final_upsample = blur_data;
   }
 
   pixman_region32_fini(&scaled_damage);
@@ -2736,6 +2744,117 @@ static bool optimized_buffer_ready(const struct fx_gles_render_pass* pass, const
       && buffer->drm_format == offscreen_buffer_format(pass, false);
 }
 
+// True when fx_render_pass_add_texture would draw the full-resolution blur
+// level with nothing beyond the alpha, corners, clipped region and blending
+// that render_blur_composite reproduces.
+static bool
+blur_composite_is_copy(const struct fx_gles_render_pass* pass, const struct fx_render_texture_options* options) {
+  const struct wlr_render_texture_options* base = &options->base;
+  struct wlr_color_primaries srgb;
+  wlr_color_primaries_from_named(&srgb, WLR_COLOR_NAMED_PRIMARIES_SRGB);
+  return !pass->buffer->renderer->split_blur_composite_for_test
+      && options->discard_transparent <= 0.0f
+      && wlr_fbox_empty(&options->sample_box)
+      && base->wait_timeline == NULL
+      && (pass->has_color_transform
+          || base->transfer_function == 0
+          || base->transfer_function == WLR_COLOR_TRANSFER_FUNCTION_SRGB)
+      && (base->primaries == NULL || color_primaries_equal(base->primaries, &srgb))
+      && (base->luminance_multiplier == NULL || *base->luminance_multiplier == 1.0f);
+}
+
+// Draws the final blur upsample from the half-resolution level straight into
+// the pass target, with what fx_render_pass_add_texture would apply when
+// compositing the full-resolution level: alpha, corners, clipped region,
+// blending and the clip.
+static void render_blur_composite(
+    struct fx_gles_render_pass* pass, struct fx_render_blur_pass_options* fx_options, struct fx_framebuffer* level,
+    struct fx_texture* texture, struct blur_data* blur_data
+) {
+  const struct fx_render_texture_options* tex_options = &fx_options->tex_options;
+  const struct wlr_render_texture_options* options = &tex_options->base;
+  struct fx_renderer* renderer = pass->buffer->renderer;
+
+  const bool effects = blur_data_should_parameters_blur_effects(blur_data);
+  const bool corners =
+      !fx_corner_fradii_is_empty(&tex_options->corners) || clipped_fregion_is_valid(&fx_options->clipped_region);
+  struct blur2_composite_shader* shader = effects
+      ? (corners ? &renderer->shaders.blur2_with_effects_composite_corners
+                 : &renderer->shaders.blur2_with_effects_composite)
+      : (corners ? &renderer->shaders.blur2_composite_corners : &renderer->shaders.blur2_composite);
+
+  const int width = texture->wlr_texture.width;
+  const int height = texture->wlr_texture.height;
+  const struct wlr_box dst_box = {.width = width, .height = height};
+  const struct wlr_box* clip_box = wlr_box_empty(tex_options->clip_box) ? &dst_box : tex_options->clip_box;
+
+  TRACY_BOTH_ZONES_START(renderer);
+  push_fx_debug(renderer);
+
+  setup_blending(options->blend_mode);
+
+  pixman_region32_t clip_region;
+  if (options->clip) {
+    pixman_region32_init(&clip_region);
+    pixman_region32_copy(&clip_region, options->clip);
+  } else {
+    pixman_region32_init_rect(&clip_region, dst_box.x, dst_box.y, dst_box.width, dst_box.height);
+  }
+  const struct wlr_box clipped_region_box = fx_options->clipped_region.area;
+  struct fx_corner_fradii clipped_region_corners = fx_options->clipped_region.corners;
+  apply_clip_region(&clip_region, &clipped_region_box, &clipped_region_corners);
+  render_pass_mark_updated(pass, &dst_box, &clip_region);
+
+  struct blur_shader* blur = &shader->blur.base;
+  glUseProgram(blur->program);
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(texture->target, texture->tex);
+  glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(texture->target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+  glUniform1i(blur->tex, 0);
+  glUniform1f(blur->radius, blur_data->radius);
+  // The half-resolution level occupies the top-left of the full-size texture.
+  const int sample_width = width / 2 + width % 2;
+  const int sample_height = height / 2 + height % 2;
+  glUniform4f(
+      blur->sample_bounds, 0.5f / width, 0.5f / height, (sample_width - 0.5f) / width, (sample_height - 0.5f) / height
+  );
+  glUniform2f(blur->halfpixel, 0.5f / (width * 2.0f), 0.5f / (height * 2.0f));
+  if (effects) {
+    glUniform1f(shader->blur.noise, blur_data->noise);
+    glUniform1f(shader->blur.brightness, blur_data->brightness);
+    glUniform1f(shader->blur.contrast, blur_data->contrast);
+    glUniform1f(shader->blur.saturation, blur_data->saturation);
+    glUniform1i(shader->blur.linear, pass->has_color_transform);
+  }
+
+  glUniform1f(shader->alpha, wlr_render_texture_options_get_alpha(options));
+  // The full-resolution level would share the half-resolution level's format.
+  glUniform1i(shader->clamp_level, level->drm_format != DRM_FORMAT_ABGR16161616F);
+  if (corners) {
+    glUniform2f(shader->corners.size, clip_box->width, clip_box->height);
+    glUniform2f(shader->corners.position, clip_box->x, clip_box->y);
+    uniform_corner_radii_set(&shader->corners.radius, &tex_options->corners);
+
+    glUniform2f(shader->corners.clip_size, clipped_region_box.width, clipped_region_box.height);
+    glUniform2f(shader->corners.clip_position, clipped_region_box.x, clipped_region_box.y);
+    uniform_corner_radii_set(&shader->corners.clip_radius, &clipped_region_corners);
+  }
+
+  set_proj_matrix(blur->proj, pass->projection_matrix, &dst_box);
+  set_tex_matrix(blur->tex_proj, WL_OUTPUT_TRANSFORM_NORMAL, &(struct wlr_fbox){.width = 1, .height = 1});
+
+  render(&dst_box, &clip_region, blur->pos_attrib);
+  pixman_region32_fini(&clip_region);
+
+  glBindTexture(texture->target, 0);
+
+  pop_fx_debug(renderer);
+  TRACY_BOTH_ZONES_END;
+}
+
 void fx_render_pass_add_blur(struct fx_gles_render_pass* pass, struct fx_render_blur_pass_options* fx_options) {
   if (pass->fx_offscreen_buffers == NULL) {
     wlr_log(WLR_ERROR, "FX Pass offscreen buffers not initialized. Skipping blur...");
@@ -2757,7 +2876,13 @@ void fx_render_pass_add_blur(struct fx_gles_render_pass* pass, struct fx_render_
       && optimized_buffer_ready(pass, fbos->optimized_blur_buffer)
       && optimized_buffer_ready(pass, fbos->optimized_no_blur_buffer);
   struct fx_framebuffer* buffer = NULL;
+  // The final upsample draws straight into the pass target unless the
+  // optimized buffer already holds the finished blur or the composite would do
+  // more than copy it.
+  const bool fuse = (!use_optimized || has_strength) && blur_composite_is_copy(pass, tex_options);
+  struct blur_data final_upsample = {0};
   TRACY_ZONE_TEXT_f("Use Optimized Blur: %d", fx_options->use_optimized_blur);
+  TRACY_ZONE_TEXT_f("Fused Composite: %d", fuse);
   if (!use_optimized || has_strength) {
     // Render the blur into its own buffer
     struct fx_render_blur_pass_options blur_options = *fx_options;
@@ -2768,7 +2893,7 @@ void fx_render_pass_add_blur(struct fx_gles_render_pass* pass, struct fx_render_
     } else {
       blur_options.current_buffer = animation_backdrop(pass);
     }
-    buffer = get_main_buffer_blur(pass, &blur_options);
+    buffer = get_main_buffer_blur(pass, &blur_options, fuse ? &final_upsample : NULL);
   } else {
     buffer = fbos->optimized_blur_buffer;
   }
@@ -2798,27 +2923,31 @@ void fx_render_pass_add_blur(struct fx_gles_render_pass* pass, struct fx_render_
     stencil_mask_close(true);
   }
 
-  // Draw the blurred texture
-  tex_options->base.dst_box = (struct wlr_box){
-      .x = 0,
-      .y = 0,
-      .width = buffer->buffer->width,
-      .height = buffer->buffer->height,
-  };
-  tex_options->base.src_box = (struct wlr_fbox){
-      .x = 0,
-      .y = 0,
-      .width = buffer->buffer->width,
-      .height = buffer->buffer->height,
-  };
-  tex_options->base.texture = &blur_texture->wlr_texture;
-  if (pass->has_color_transform) {
-    tex_options->base.transfer_function = WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR;
+  if (fuse) {
+    render_blur_composite(pass, fx_options, buffer, blur_texture, &final_upsample);
+  } else {
+    // Draw the blurred texture
+    tex_options->base.dst_box = (struct wlr_box){
+        .x = 0,
+        .y = 0,
+        .width = buffer->buffer->width,
+        .height = buffer->buffer->height,
+    };
+    tex_options->base.src_box = (struct wlr_fbox){
+        .x = 0,
+        .y = 0,
+        .width = buffer->buffer->width,
+        .height = buffer->buffer->height,
+    };
+    tex_options->base.texture = &blur_texture->wlr_texture;
+    if (pass->has_color_transform) {
+      tex_options->base.transfer_function = WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR;
+    }
+    // since we're capturing from the fbo, transform will always be normal
+    tex_options->base.transform = WL_OUTPUT_TRANSFORM_NORMAL;
+    tex_options->clipped_region = fx_options->clipped_region;
+    fx_render_pass_add_texture(pass, tex_options);
   }
-  // since we're capturing from the fbo, transform will always be normal
-  tex_options->base.transform = WL_OUTPUT_TRANSFORM_NORMAL;
-  tex_options->clipped_region = fx_options->clipped_region;
-  fx_render_pass_add_texture(pass, tex_options);
 
   wlr_texture_destroy(&blur_texture->wlr_texture);
 
@@ -2882,7 +3011,7 @@ bool fx_render_pass_add_optimized_blur(
     struct fx_render_blur_pass_options blur_options = *fx_options;
     blur_options.current_buffer = backdrop;
     blur_options.tex_options.base.clip = &clip;
-    fx_buffer = get_main_buffer_blur(pass, &blur_options);
+    fx_buffer = get_main_buffer_blur(pass, &blur_options, NULL);
   }
   if (fx_buffer != NULL) {
     // Render the newly blurred content into the blur_buffer
@@ -3017,6 +3146,10 @@ void fx_renderer_fail_animation_capture_for_test(struct wlr_renderer* renderer, 
 
 void fx_renderer_fail_effect_capture_for_test(struct wlr_renderer* renderer, bool fail) {
   fx_get_renderer(renderer)->fail_effect_capture_for_test = fail;
+}
+
+void fx_renderer_split_blur_composite_for_test(struct wlr_renderer* renderer, bool split) {
+  fx_get_renderer(renderer)->split_blur_composite_for_test = split;
 }
 
 static const char* reset_status_str(GLenum status) {

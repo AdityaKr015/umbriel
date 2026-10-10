@@ -107,6 +107,10 @@ static inline void free_shaders(struct fx_renderer* renderer) {
   glDeleteProgram(renderer->shaders.blur1.program);
   glDeleteProgram(renderer->shaders.blur2.program);
   glDeleteProgram(renderer->shaders.blur2_with_effects.base.program);
+  glDeleteProgram(renderer->shaders.blur2_composite.blur.base.program);
+  glDeleteProgram(renderer->shaders.blur2_composite_corners.blur.base.program);
+  glDeleteProgram(renderer->shaders.blur2_with_effects_composite.blur.base.program);
+  glDeleteProgram(renderer->shaders.blur2_with_effects_composite_corners.blur.base.program);
   glDeleteProgram(renderer->effect_light_program);
   pop_fx_debug(renderer);
 }
@@ -536,6 +540,22 @@ static bool link_shaders(struct fx_renderer* renderer) {
   }
   if (!link_blur2_with_effects_program(&renderer->shaders.blur2_with_effects)) {
     wlr_log(WLR_ERROR, "Could not link blur2_with_effects shader");
+    goto error;
+  }
+  if (!link_blur2_composite_program(&renderer->shaders.blur2_composite, false, false)) {
+    wlr_log(WLR_ERROR, "Could not link blur2_composite shader");
+    goto error;
+  }
+  if (!link_blur2_composite_program(&renderer->shaders.blur2_composite_corners, false, true)) {
+    wlr_log(WLR_ERROR, "Could not link blur2_composite_corners shader");
+    goto error;
+  }
+  if (!link_blur2_composite_program(&renderer->shaders.blur2_with_effects_composite, true, false)) {
+    wlr_log(WLR_ERROR, "Could not link blur2_with_effects_composite shader");
+    goto error;
+  }
+  if (!link_blur2_composite_program(&renderer->shaders.blur2_with_effects_composite_corners, true, true)) {
+    wlr_log(WLR_ERROR, "Could not link blur2_with_effects_composite_corners shader");
     goto error;
   }
 

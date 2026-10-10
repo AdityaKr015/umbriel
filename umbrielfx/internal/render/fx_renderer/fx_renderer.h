@@ -251,6 +251,10 @@ struct fx_renderer {
     struct blur_shader blur1;
     struct blur_shader blur2;
     struct blur2_with_effects_shader blur2_with_effects;
+    struct blur2_composite_shader blur2_composite;
+    struct blur2_composite_shader blur2_composite_corners;
+    struct blur2_composite_shader blur2_with_effects_composite;
+    struct blur2_composite_shader blur2_with_effects_composite_corners;
   } shaders;
 
   bool animation_shadow_attempted;
@@ -261,6 +265,8 @@ struct fx_renderer {
   bool fail_target_copies_for_test;
   bool fail_effect_capture_for_test;
   bool fail_animation_capture_for_test;
+  // Set only through fx_renderer_split_blur_composite_for_test.
+  bool split_blur_composite_for_test;
   struct fx_effect_shader* animation_shadow_horizontal;
   struct fx_effect_shader* animation_shadow_vertical;
 

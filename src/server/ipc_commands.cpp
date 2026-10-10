@@ -1182,6 +1182,17 @@ namespace umbriel {
     return nlohmann::json{{"ok", nullptr}};
   }
 
+  nlohmann::json IpcCommands::blurCompositeSplit(Server& server, std::string_view arg) {
+    if (arg != "on" && arg != "off") {
+      return nlohmann::json{{"err", "expected on or off"}};
+    }
+    fx_renderer_split_blur_composite_for_test(server.renderer(), arg == "on");
+    for (const auto& output : server.outputs()) {
+      output->scheduleFullFrame();
+    }
+    return nlohmann::json{{"ok", nullptr}};
+  }
+
   nlohmann::json IpcCommands::rendererRecover(Server& server, std::string_view /*arg*/) {
     server.emitRendererLostForTest();
     server.emitRendererLostForTest();
@@ -1299,6 +1310,9 @@ namespace umbriel {
        IpcCommandGroup::Harness, true, &IpcCommands::swipeForTest, nullptr},
       {"animation-capture-fail", "<on|off>", "inject animation capture failure (harness only)",
        IpcCommandGroup::Harness, true, &IpcCommands::animationCaptureFail, nullptr},
+      {"blur-composite-split", "<on|off>",
+       "composite backdrop blur through an effect buffer and wait until every output has drawn it (harness only)",
+       IpcCommandGroup::Harness, true, &IpcCommands::blurCompositeSplit, nullptr, 35},
       {"renderer-recover", "", "emit renderer loss and exercise recovery", IpcCommandGroup::Harness, false,
        &IpcCommands::rendererRecover, nullptr},
       {"plane-cursor", "<output> <x> <y> <visible> <image> [width height hotspot_x hotspot_y]",

@@ -256,6 +256,12 @@ namespace umbriel {
     std::optional<bool> m_lastPresentationPresented;
     std::optional<uint32_t> m_lastPresentationFlags;
     uint32_t m_trackedPresentationCommitSeq = 0;
+#ifdef TRACY_ENABLE
+    const char* m_tracyIntervalPlot = nullptr;
+    const char* m_tracyVblankPlot = nullptr;
+    int64_t m_tracyLastPresentNs = 0;
+    unsigned m_tracyLastPresentSeq = 0;
+#endif
     TearingCommitRecovery m_tearingRecovery;
     int m_deferredWidth = 0;
     int m_deferredHeight = 0;

@@ -181,6 +181,12 @@ scanned-out frames from composited ones: a scanned-out frame has a frame mark
 and no render-pass zones. Build and capture instructions are in
 [CONTRIBUTING.md](../../CONTRIBUTING.md#profiling).
 
+Two plots per output come from `Output::handlePresent` and show whether frames
+reached the screen: `<output> present interval ms`, the time between presented
+frames, and `<output> vblanks per present`, the vblank counter's step between
+them. While frames keep coming, a step above 1 is a missed vblank. The vblank
+plot is absent on backends without a vblank counter, such as headless.
+
 umbrielfx adds these zones for effect costs:
 
 | Zone | Where | Fires | Text |

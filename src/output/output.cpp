@@ -42,6 +42,10 @@ extern "C" {
 #include <drm_fourcc.h>
 #include <format>
 
+#ifdef TRACY_ENABLE
+#include <set>
+#endif
+
 namespace umbriel {
 
   namespace {
@@ -78,6 +82,15 @@ namespace umbriel {
       }
       return {.x = sceneOutput.x, .y = sceneOutput.y, .width = width, .height = height};
     }
+
+#ifdef TRACY_ENABLE
+    // Tracy keeps a plot's name pointer and reads it while a capture runs, so
+    // the per-output names live for the rest of the process.
+    const char* tracyPlotName(std::string name) {
+      static std::set<std::string> names;
+      return names.insert(std::move(name)).first->c_str();
+    }
+#endif
 
   } // namespace
 
@@ -1805,6 +1818,24 @@ namespace umbriel {
 
   void Output::handlePresent(void* data) {
     const auto* event = static_cast<const wlr_output_event_present*>(data);
+#ifdef TRACY_ENABLE
+    if (event->presented) {
+      if (m_tracyIntervalPlot == nullptr) {
+        m_tracyIntervalPlot = tracyPlotName(std::format("{} present interval ms", m_output->name));
+        m_tracyVblankPlot = tracyPlotName(std::format("{} vblanks per present", m_output->name));
+      }
+      const int64_t whenNs = static_cast<int64_t>(event->when.tv_sec) * 1'000'000'000 + event->when.tv_nsec;
+      if (m_tracyLastPresentNs != 0) {
+        TracyPlot(m_tracyIntervalPlot, static_cast<double>(whenNs - m_tracyLastPresentNs) / 1e6);
+      }
+      // Above 1 while frames keep coming, the output repeated a vblank: a missed frame.
+      if (event->seq != 0 && m_tracyLastPresentSeq != 0) {
+        TracyPlot(m_tracyVblankPlot, static_cast<int64_t>(event->seq - m_tracyLastPresentSeq));
+      }
+      m_tracyLastPresentNs = whenNs;
+      m_tracyLastPresentSeq = event->seq;
+    }
+#endif
     if (SessionLock* lock = m_server->sessionLock()) {
       lock->handleOutputPresent(*this, event->commit_seq, event->presented);
     }

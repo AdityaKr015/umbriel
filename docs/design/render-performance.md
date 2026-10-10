@@ -187,6 +187,11 @@ frames, and `<output> vblanks per present`, the vblank counter's step between
 them. While frames keep coming, a step above 1 is a missed vblank. The vblank
 plot is absent on backends without a vblank counter, such as headless.
 
+The GPU zone `fx_render_pass` spans a whole render pass, from
+`fx_begin_buffer_pass` to the last command `render_pass_submit` issues, so its
+length is the pass's GPU time. Both GPU zones end before the flush or fence that
+submits the pass.
+
 umbrielfx adds these zones for effect costs:
 
 | Zone | Where | Fires | Text |

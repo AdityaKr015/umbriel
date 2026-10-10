@@ -2,6 +2,7 @@
 #define SCENE_FX_RENDER_PASS_H
 
 #include "render/egl.h"
+#include "render/tracy.h"
 #include "types/fx/clipped_region.h"
 
 #include <GLES2/gl2.h>
@@ -64,6 +65,10 @@ struct fx_gles_render_pass {
   // The target's unfiltered composition was copied into the output buffer's
   // effect capture; it becomes readable once the pass submits.
   bool effect_capture_saved;
+#ifdef TRACY_ENABLE
+  // Spans the pass's GPU work from begin to the end of submit's commands.
+  struct tracy_gpu_zone_context frame_gpu_zone;
+#endif
 };
 
 bool fx_render_pass_begin_animation(struct fx_gles_render_pass* pass);

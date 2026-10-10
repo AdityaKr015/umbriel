@@ -436,7 +436,12 @@ static bool render_pass_submit(struct wlr_render_pass* wlr_pass) {
   struct fx_render_timer* timer = pass->timer;
   bool ok = false;
 
-  TRACY_BOTH_ZONES_START(pass->buffer->renderer);
+  TRACY_ZONE_START;
+  TRACY_GPU_ZONE_START(renderer);
+  // The GPU zones end before the flush or fence: an end query issued after it
+  // would run with the next frame's commands and stretch the zone to about one
+  // refresh period.
+  TRACY_FN(bool gpu_zones_open = true;)
   push_fx_debug(renderer);
   if (pass->require_animation_success && (pass->animation_failed || glGetError() != GL_NO_ERROR)) {
     goto out;
@@ -468,6 +473,8 @@ static bool render_pass_submit(struct wlr_render_pass* wlr_pass) {
     // get end-of-CPU-work time in CPU time domain
     clock_gettime(CLOCK_MONOTONIC, &timer->cpu_end);
   }
+
+  TRACY_FN(tracy_gpu_zone_end(&gpu_ctx); tracy_gpu_zone_end(&pass->frame_gpu_zone); gpu_zones_open = false;)
 
   if (pass->signal_timeline != NULL) {
     EGLSyncKHR sync = wlr_egl_create_sync(renderer->egl, -1);
@@ -523,7 +530,11 @@ out:
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
   pop_fx_debug(renderer);
-  TRACY_BOTH_ZONES_END;
+  TRACY_FN(if (gpu_zones_open) {
+    tracy_gpu_zone_end(&gpu_ctx);
+    tracy_gpu_zone_end(&pass->frame_gpu_zone);
+  })
+  TRACY_ZONE_END;
   TRACY_GPU_ZONE_COLLECT(renderer);
 
   wlr_egl_restore_context(&pass->prev_ctx);
@@ -3144,6 +3155,9 @@ struct fx_gles_render_pass* fx_begin_buffer_pass(
   glViewport(0, 0, wlr_buffer->width, wlr_buffer->height);
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
   glDisable(GL_SCISSOR_TEST);
+  TRACY_FN(
+      tracy_gpu_zone_begin(renderer->tracy_data, &pass->frame_gpu_zone, __LINE__, __FILE__, __func__, "fx_render_pass");
+  )
 
   pop_fx_debug(renderer);
   return pass;

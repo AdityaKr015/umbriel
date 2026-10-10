@@ -194,6 +194,11 @@ static struct wlr_render_pass* begin_buffer_pass_with_output(
   }
 
   TRACY_BOTH_ZONES_END;
+  // Opened after this function's zone ends: GPU zones must nest, and this one
+  // stays open until render_pass_submit.
+  TRACY_FN(
+      tracy_gpu_zone_begin(renderer->tracy_data, &pass->frame_gpu_zone, __LINE__, __FILE__, __func__, "fx_render_pass");
+  )
 
   return &pass->base;
 }

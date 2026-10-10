@@ -3155,9 +3155,6 @@ struct fx_gles_render_pass* fx_begin_buffer_pass(
   glViewport(0, 0, wlr_buffer->width, wlr_buffer->height);
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
   glDisable(GL_SCISSOR_TEST);
-  TRACY_FN(
-      tracy_gpu_zone_begin(renderer->tracy_data, &pass->frame_gpu_zone, __LINE__, __FILE__, __func__, "fx_render_pass");
-  )
 
   pop_fx_debug(renderer);
   return pass;

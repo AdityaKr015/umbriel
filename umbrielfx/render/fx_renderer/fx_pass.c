@@ -2686,7 +2686,7 @@ get_main_buffer_blur(struct fx_gles_render_pass* pass, struct fx_render_blur_pas
       fx_options->tex_options.base.src_box.y
   );
   TRACY_ZONE_TEXT_f("Ignore Alpha: %f", fx_options->ignore_alpha);
-  TRACY_ZONE_TEXT_f("Discard Transparent: %d", fx_options->tex_options.discard_transparent);
+  TRACY_ZONE_TEXT_f("Discard Transparent: %f", fx_options->tex_options.discard_transparent);
   TRACY_ZONE_TEXT_f("Use Optimized Blur: %d", fx_options->use_optimized_blur);
   TRACY_ZONE_TEXT_f("Blur Options:");
   TRACY_ZONE_TEXT_f("\tNum Blur Passes: %d", fx_options->blur_data->num_passes);
@@ -2858,7 +2858,7 @@ bool fx_render_pass_add_optimized_blur(
       fx_options->tex_options.base.src_box.y
   );
   TRACY_ZONE_TEXT_f("Ignore Alpha: %f", fx_options->ignore_alpha);
-  TRACY_ZONE_TEXT_f("Discard Transparent: %d", fx_options->tex_options.discard_transparent);
+  TRACY_ZONE_TEXT_f("Discard Transparent: %f", fx_options->tex_options.discard_transparent);
   TRACY_ZONE_TEXT_f("Use Optimized Blur: %d", fx_options->use_optimized_blur);
   TRACY_ZONE_TEXT_f("Blur Options:");
   TRACY_ZONE_TEXT_f("\tNum Blur Passes: %d", fx_options->blur_data->num_passes);

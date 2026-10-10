@@ -7,6 +7,7 @@ extern "C" {
 
 #include "config/config.h"
 #include "core/log.h"
+#include "core/tracy.h"
 #include "input/cursor.h"
 #include "input/event_time.h"
 #include "input/gesture_physics.h"
@@ -516,6 +517,7 @@ namespace umbriel {
   }
 
   void Overview::layoutOutput(OutputState& state) {
+    UMBRIEL_ZONE("Overview::layoutOutput");
     PreviewMetrics metrics{};
     if (!previewMetrics(state, *m_server, zoom(), metrics)) {
       return;
@@ -1534,6 +1536,7 @@ namespace umbriel {
   }
 
   void Overview::buildState() {
+    UMBRIEL_ZONE("Overview::buildState");
     m_tree = m_server->overviewTree();
     for (const auto& output : m_server->outputs()) {
       WorkspaceGroup* group = output->workspaceGroup();
@@ -1571,6 +1574,7 @@ namespace umbriel {
   // -: open/close
 
   bool Overview::beginPresentation() {
+    UMBRIEL_ZONE("Overview::beginPresentation");
     if (m_active) {
       return true;
     }
@@ -1666,6 +1670,7 @@ namespace umbriel {
   }
 
   void Overview::open() {
+    UMBRIEL_ZONE("Overview::open");
     if (m_active) {
       if (ScratchpadManager* scratchpad = m_server->scratchpadManager()) {
         scratchpad->hideAll();

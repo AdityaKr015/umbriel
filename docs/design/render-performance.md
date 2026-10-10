@@ -173,8 +173,11 @@ require a running-session check.
 
 A `tracy` build carries CPU zones at those boundaries through
 [`src/core/tracy.h`](../../src/core/tracy.h): `Output::handleFrame`,
-`Output::flushDirty`, `Output::render`, `Server::tickAnimations`, and
-`WineColorManager::applySurfaceDescriptions`. umbrielfx carries paired CPU and
+`Output::flushDirty`, `Output::render` (split into `Output::buildState` and
+`Output::commitState`), `Server::tickAnimations`,
+`WineColorManager::applySurfaceDescriptions`, and the overview's setup:
+`Overview::open`, `Overview::beginPresentation`, `Overview::buildState`, and
+`Overview::layoutOutput`. umbrielfx carries paired CPU and
 GPU zones across its render pass. Every `wlr_scene_output_build_state` exit
 emits a frame mark, including the scanout one, so a capture separates
 scanned-out frames from composited ones: a scanned-out frame has a frame mark

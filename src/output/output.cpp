@@ -1661,7 +1661,11 @@ namespace umbriel {
         sceneOptions.workspace_from = m_workspaceGroup->revealRoot(false);
         sceneOptions.workspace_to = m_workspaceGroup->revealRoot(true);
       }
-      const bool built = wlr_scene_output_build_state(m_sceneOutput, &state, &sceneOptions);
+      bool built = false;
+      {
+        UMBRIEL_ZONE("Output::buildState");
+        built = wlr_scene_output_build_state(m_sceneOutput, &state, &sceneOptions);
+      }
       if (!built && sceneOptions.require_animation_success) {
         // Reject the incomplete frame and resume native slide at the same progress.
         m_workspaceGroup->abandonReveal();
@@ -1704,7 +1708,10 @@ namespace umbriel {
           }
         }
 
-        commitOk = wlr_output_commit_state(m_output, &state);
+        {
+          UMBRIEL_ZONE("Output::commitState");
+          commitOk = wlr_output_commit_state(m_output, &state);
+        }
         if (hasBuffer) {
           m_tearingRecovery.recordCommit(commitTearing, commitOk);
         }

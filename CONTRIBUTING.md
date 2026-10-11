@@ -418,7 +418,9 @@ taking control of a seat.
   The file is deliberately unfiltered (`src/core/log.cpp:270`); only the console
   honours the build's minimum level, which is debug for debug and ASan builds and
   info for release (`src/core/log.cpp:21-25`). So a release session still records
-  debug diagnostics to the file while keeping stderr quiet. The first startup
+  debug diagnostics to the file while keeping stderr quiet. wlroots messages
+  (`[wlr]`) are recorded from info up; set `UMBRIEL_WLR_DEBUG=1` before starting
+  the compositor to include wlroots debug output as well. The first startup
   record includes the release version and commit revision, which helps identify
   the exact binary behind a report.
 

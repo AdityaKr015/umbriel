@@ -348,9 +348,10 @@ int main(int argc, char** argv) {
   }
 
   initLogFile();
-  // Take everything: the log file is unfiltered and only the console honours
-  // the build's minimum level.
-  wlr_log_init(WLR_DEBUG, wlrLogHandler);
+  // wlroots debug output is mostly per-frame scan-out and buffer chatter, so it stays opt-in.
+  const char* wlrDebug = std::getenv("UMBRIEL_WLR_DEBUG");
+  const bool wlrDebugEnabled = wlrDebug != nullptr && std::strcmp(wlrDebug, "1") == 0;
+  wlr_log_init(wlrDebugEnabled ? WLR_DEBUG : WLR_INFO, wlrLogHandler);
 
   raiseFileDescriptorLimit();
 

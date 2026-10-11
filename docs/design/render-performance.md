@@ -307,10 +307,12 @@ carries the effect and B a workload that stays the same. Transient animations
 are off (`[animation] enabled = false`), blur is off, and the effect is toggled
 by editing the configuration and running `umbriel msg config-reload`.
 
-- **Scanout.** A shows an ordinary desktop with several visible windows, so it
-  never scans out. B runs an eligible fullscreen client, such as
-  `vkmark --fullscreen --present-mode fifo`, whose `render list` zone reads
-  `1`, and `~/.cache/umbriel/umbriel.log` shows `Direct scan-out enabled`.
+- **Scanout.** The scan-out messages are wlroots debug output, so this run
+  starts the compositor with `UMBRIEL_WLR_DEBUG=1`. A shows an ordinary desktop
+  with several visible windows, so it never scans out. B runs an eligible
+  fullscreen client, such as `vkmark --fullscreen --present-mode fifo`, whose
+  `render list` zone reads `1`, and `~/.cache/umbriel/umbriel.log` shows
+  `Direct scan-out enabled`.
   Toggling A's effect at least three times must add no
   `Direct scan-out disabled` after that line. The log rotates at 1 MiB and
   keeps one previous file, so the check reads both, oldest first:

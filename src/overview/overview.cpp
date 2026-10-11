@@ -76,7 +76,8 @@ namespace umbriel {
       return out;
     }
     // A scene buffer's opaque region is in its destination coordinates, so a scaled copy of a surface needs the
-    // surface's region scaled with it. Edges round inward: a pixel the opaque area only partly covers stays see-through.
+    // surface's region scaled with it. Edges round inward: a pixel the opaque area only partly covers stays
+    // see-through.
     void setScaledOpaqueRegion(
         wlr_scene_buffer* buffer, const pixman_region32_t& source, int sourceWidth, int sourceHeight, int destWidth,
         int destHeight

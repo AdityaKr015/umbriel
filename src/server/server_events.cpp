@@ -1157,7 +1157,6 @@ namespace umbriel {
     watch->destroy.notify = onIdleInhibitorDestroy;
     wl_signal_add(&inhibitor->events.destroy, &watch->destroy);
     self->updateIdleInhibit();
-    kLog.debug("idle inhibitor added");
   }
 
   void Server::onIdleInhibitorDestroy(wl_listener* listener, void* /*data*/) {
@@ -1167,7 +1166,6 @@ namespace umbriel {
     wl_list_remove(&watch->destroy.link);
     delete watch;
     server->updateIdleInhibit();
-    kLog.debug("idle inhibitor removed");
   }
 
   void Server::onNewImageCopySession(wl_listener* listener, void* data) {
@@ -1587,6 +1585,10 @@ namespace umbriel {
       if (inhibited) {
         break;
       }
+    }
+    if (inhibited != m_idleInhibited) {
+      m_idleInhibited = inhibited;
+      kLog.debug("idle {}", inhibited ? "inhibited" : "no longer inhibited");
     }
     wlr_idle_notifier_v1_set_inhibited(m_idleNotifier, inhibited);
   }

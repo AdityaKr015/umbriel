@@ -215,6 +215,7 @@ namespace umbriel {
     wlr_scene_optimized_blur* m_optimizedBlur = nullptr;
     std::unique_ptr<WorkspaceGroup> m_workspaceGroup;
     wlr_box m_localUsableArea{};
+    wlr_box m_loggedUsableArea{};
     int m_arrangedLayoutX = 0;
     int m_arrangedLayoutY = 0;
 

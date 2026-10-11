@@ -694,6 +694,7 @@ namespace umbriel {
     wlr_idle_inhibit_manager_v1* m_idleInhibitManager = nullptr;
     wlr_keyboard_shortcuts_inhibit_manager_v1* m_shortcutsInhibitManager = nullptr;
     wlr_idle_notifier_v1* m_idleNotifier = nullptr;
+    bool m_idleInhibited = false;
     wlr_xdg_activation_v1* m_xdgActivation = nullptr;
     wlr_gamma_control_manager_v1* m_gammaManager = nullptr;
     wlr_output_manager_v1* m_outputManager = nullptr;

@@ -1274,10 +1274,18 @@ namespace umbriel {
     m_server->scheduleIpcLayersEvent();
     m_server->scheduleIpcOutputsEvent();
     const wlr_box layoutUsableArea = this->usableArea();
-    kLog.debug(
-        "{} usable={}x{}+{}+{}", m_output->name, layoutUsableArea.width, layoutUsableArea.height, layoutUsableArea.x,
-        layoutUsableArea.y
-    );
+    // Arrangement runs on every layer commit; only a changed result is worth a line.
+    const wlr_box& logged = m_loggedUsableArea;
+    if (layoutUsableArea.x != logged.x
+        || layoutUsableArea.y != logged.y
+        || layoutUsableArea.width != logged.width
+        || layoutUsableArea.height != logged.height) {
+      m_loggedUsableArea = layoutUsableArea;
+      kLog.debug(
+          "{} usable={}x{}+{}+{}", m_output->name, layoutUsableArea.width, layoutUsableArea.height, layoutUsableArea.x,
+          layoutUsableArea.y
+      );
+    }
     if (m_workspaceGroup != nullptr && m_workspaceGroup->active() != nullptr) {
       m_workspaceGroup->active()->markArrange(false);
     }

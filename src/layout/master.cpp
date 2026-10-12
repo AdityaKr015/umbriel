@@ -915,8 +915,13 @@ namespace umbriel {
     if (!widthAdjustable() || visualArea(columnIndex) == nullptr) {
       return false;
     }
-    const double next = nextFractionPreset(m_config->extentPresets, widthFraction(columnIndex), direction);
-    return setWidthFraction(columnIndex, next);
+    return cycleFractionPreset(
+        m_config->extentPresets,
+        widthFraction(columnIndex),
+        direction,
+        [&](double fraction) { return setWidthFraction(columnIndex, fraction); },
+        [&] { return widthFraction(columnIndex); }
+    );
   }
 
   bool MasterStackLayout::toggleFullWidth(int columnIndex) {

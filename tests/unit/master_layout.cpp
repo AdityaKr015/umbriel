@@ -255,6 +255,20 @@ UMBRIEL_TEST(cycleWidthWalksThePresets) {
   CHECK(std::abs(fixture.layout.widthFraction(0) - 1.0 / 3.0) < 1e-9);
 }
 
+UMBRIEL_TEST(cycleWidthWrapsWhenTheNextPresetIsOutOfReach) {
+  // A centered side column tops out at 0.45, short of the 0.5 preset.
+  Fixture fixture;
+  fixture.config.master.position = umbriel::MasterPosition::Center;
+  fixture.addViews(3);
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 0.225) < 1e-9);
+  CHECK(fixture.layout.cycleWidth(0, 1));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 1.0 / 3.0) < 1e-9);
+  CHECK(fixture.layout.cycleWidth(0, 1));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 0.45) < 1e-9);
+  CHECK(fixture.layout.cycleWidth(0, 1));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 1.0 / 3.0) < 1e-9);
+}
+
 UMBRIEL_TEST(toggleFullWidthExpandsAndRestores) {
   Fixture fixture;
   fixture.addViews(2);

@@ -205,6 +205,27 @@ namespace umbriel {
     return presets.front();
   }
 
+  // Steps a layout extent to the next preset. `apply` sets a fraction, clamped to what the layout can realize, and
+  // returns false when the extent is not adjustable; `realized` reads the fraction back. A preset past that range
+  // leaves the extent where it was and would be picked again on every step, so a step that does not move the extent
+  // wraps instead.
+  template <typename Apply, typename Realized>
+  bool cycleFractionPreset(
+      const std::vector<double>& presets, double current, int direction, Apply&& apply, Realized&& realized
+  ) {
+    const double next = nextFractionPreset(presets, current, direction);
+    if (!apply(next)) {
+      return false;
+    }
+    const bool stepped = direction < 0 ? next < current : next > current;
+    const double now = realized();
+    const bool stalled = direction < 0 ? now >= current - kFractionEpsilon : now <= current + kFractionEpsilon;
+    if (stepped && stalled) {
+      apply(direction < 0 ? presets.back() : presets.front());
+    }
+    return true;
+  }
+
   // Layout-owned interactive resize session. Cursor feeds a pointer delta; the session mutates only its layout's
   // geometry state (split ratios, width fractions, row weights). Protocol calls and arrange() stay in Cursor.
   struct ResizeGrab {

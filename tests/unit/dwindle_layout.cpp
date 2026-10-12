@@ -817,6 +817,19 @@ UMBRIEL_TEST(cycleWidthBackWalksThePresetsInReverse) {
   CHECK(std::abs(fixture.layout.targetBox(stub(0)).width - static_cast<int>(span * (2.0 / 3.0))) <= 2);
 }
 
+UMBRIEL_TEST(cycleWidthWrapsWhenTheNextPresetIsOutOfReach) {
+  // A split share tops out at 0.9, short of the 1.0 preset.
+  Fixture fixture;
+  fixture.config.extentPresets = {0.5, 1.0};
+  fixture.addLeaves(2);
+  fixture.layout.arrange(kUsable);
+  CHECK(fixture.layout.setWidthFraction(0, 0.5));
+  CHECK(fixture.layout.cycleWidth(0, 1));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 0.9) < 1e-9);
+  CHECK(fixture.layout.cycleWidth(0, 1));
+  CHECK(std::abs(fixture.layout.widthFraction(0) - 0.5) < 1e-9);
+}
+
 UMBRIEL_TEST(resizeEdgesComeFromTileThirds) {
   Fixture fixture;
   fixture.addLeaves(2);

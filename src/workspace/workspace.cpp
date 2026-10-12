@@ -1639,9 +1639,12 @@ namespace umbriel {
     if (m_focusedView != nullptr && m_focusedView->maximizedToEdges()) {
       m_focusedView->setMaximizedToEdges(false);
     }
-    const double current = m_layout->heightFraction(m_focusedView);
-    if (!m_layout->setHeightFraction(
-            m_focusedView, nextFractionPreset(m_layoutConfig.extentPresets, current, direction)
+    if (!cycleFractionPreset(
+            m_layoutConfig.extentPresets,
+            m_layout->heightFraction(m_focusedView),
+            direction,
+            [&](double fraction) { return m_layout->setHeightFraction(m_focusedView, fraction); },
+            [&] { return m_layout->heightFraction(m_focusedView); }
         )) {
       return false;
     }

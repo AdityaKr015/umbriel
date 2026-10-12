@@ -2905,9 +2905,7 @@ namespace umbriel {
         continue;
       }
       const auto column = static_cast<int>(index);
-      const auto x = static_cast<double>(scrolling->columnX(column, viewport));
-      const auto width = static_cast<double>(scrolling->columnWidth(column, viewport));
-      for (const double position : {std::clamp(x, 0.0, maximum), std::clamp(x + width - viewport, 0.0, maximum)}) {
+      for (const double position : scrolling->snapScrolls(column, viewport)) {
         const double distance = std::abs(position - projected);
         if (distance < bestDistance) {
           bestDistance = distance;

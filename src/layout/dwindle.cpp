@@ -691,9 +691,7 @@ namespace umbriel {
   bool DwindleLayout::cycleWidth(int columnIndex, int direction) {
     // Each step reads the splits afresh: applying a fraction can move outer splits, which the cached products miss.
     return cycleFractionPreset(
-        m_config->extentPresets,
-        widthFraction(columnIndex),
-        direction,
+        m_config->extentPresets, widthFraction(columnIndex), direction,
         [&](double fraction) { return setWidthFraction(columnIndex, fraction); },
         [&] { return widthFraction(columnIndex); }
     );

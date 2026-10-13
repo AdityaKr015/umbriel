@@ -916,9 +916,7 @@ namespace umbriel {
       return false;
     }
     return cycleFractionPreset(
-        m_config->extentPresets,
-        widthFraction(columnIndex),
-        direction,
+        m_config->extentPresets, widthFraction(columnIndex), direction,
         [&](double fraction) { return setWidthFraction(columnIndex, fraction); },
         [&] { return widthFraction(columnIndex); }
     );

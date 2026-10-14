@@ -566,6 +566,22 @@ UMBRIEL_TEST(directionalDropKeepsItsAxisWhenPreserveSplitIsOff) {
   CHECK(fixture.layout.targetBox(stub(0)).x != fixture.layout.targetBox(stub(1)).x);
 }
 
+UMBRIEL_TEST(toggledSplitSurvivesArrangeWhenPreserveSplitIsOff) {
+  Fixture fixture;
+  fixture.addLeaves(2);
+  fixture.layout.arrange(kUsable);
+  CHECK_EQ(fixture.layout.targetBox(stub(0)).y, fixture.layout.targetBox(stub(1)).y);
+
+  CHECK(fixture.layout.toggleSplit(stub(1)));
+  fixture.layout.arrange(kUsable);
+  fixture.layout.arrange(kUsable);
+
+  const wlr_box first = fixture.layout.targetBox(stub(0));
+  const wlr_box second = fixture.layout.targetBox(stub(1));
+  CHECK_EQ(first.x, second.x);
+  CHECK(first.y != second.y);
+}
+
 UMBRIEL_TEST(insertAtAGapSplitsThePrecedingLeaf) {
   Fixture fixture;
   fixture.addLeaves(3);

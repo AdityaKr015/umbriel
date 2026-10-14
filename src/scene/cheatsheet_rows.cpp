@@ -414,6 +414,7 @@ namespace {
     case A::WindowSwapDown:
     case A::LayoutMasterCountIncrease:
     case A::LayoutMasterCountDecrease:
+    case A::LayoutToggleSplit:
       return Group::MoveSize;
     case A::WindowClose:
     case A::ToggleFloating:

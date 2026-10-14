@@ -1301,6 +1301,16 @@ namespace umbriel {
       return true;
     }
 
+    bool actionLayoutToggleSplit(Server& server, const Keybind& /*bind*/, std::string* error) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        if (workspace->layoutMode() != LayoutMode::Dwindle) {
+          return reject(error, "layout-toggle-split requires the dwindle layout");
+        }
+        workspace->toggleDwindleSplit();
+      }
+      return true;
+    }
+
     template <bool Warp> bool actionWindowFocusId(Server& server, const Keybind& bind, std::string* error) {
       const auto* arg = payloadIf<WindowIdArg>(bind);
       if (arg == nullptr || arg->id.empty()) {
@@ -2197,6 +2207,7 @@ namespace umbriel {
         &actionColumnTabBar<0>,
         &actionScratchpadWindowShowStep<1>,
         &actionScratchpadWindowShowStep<-1>,
+        &actionLayoutToggleSplit,
     };
 
     consteval bool everyActionHasHandler() {

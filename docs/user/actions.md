@@ -125,6 +125,7 @@ Sizing rules per layout live in [Sizing behavior](layout.md#sizing-behavior).
 | `layout-scroll-left` | Scroll the strip toward its start |
 | `layout-scroll-right` | Scroll the strip toward its end |
 | `layout-scroll-up` | Scroll the strip toward its start |
+| `layout-toggle-split` | Toggle the focused tile's dwindle split direction |
 | `window-center` | Center the focused floating window on its output |
 | `window-consume-from-left` | Pull the left column's window into the focused column |
 | `window-consume-from-right` | Pull the right column's window into the focused column |
@@ -296,6 +297,7 @@ Column and extent actions adapt to the active layout:
 | Secondary extent | Changes a row | Adjusts vertical splits | Changes a row |
 | Layout scrolling | Pans the strip | No effect | No effect |
 | Master count | No effect | No effect | Moves a window between master and stack |
+| Toggle split | Refused | Flips the focused tile's split between side by side and stacked | Refused |
 | Tabs | Tabs the focused column | Refused | Tabs the focused master or stack area |
 
 See [Layout](layout.md) for geometry, directions, and resizing behavior.

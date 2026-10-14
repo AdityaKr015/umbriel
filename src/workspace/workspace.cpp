@@ -1484,6 +1484,15 @@ namespace umbriel {
     return true;
   }
 
+  bool Workspace::toggleDwindleSplit() {
+    DwindleLayout* dwindle = dwindleLayout();
+    if (dwindle == nullptr || !dwindle->toggleSplit(m_focusedView)) {
+      return false;
+    }
+    markArrange();
+    return true;
+  }
+
   bool Workspace::moveLaneAlongStrip(int direction) {
     View* destination = focusAlongStrip(direction);
     if (destination == nullptr) {

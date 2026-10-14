@@ -185,6 +185,7 @@ namespace umbriel {
     bool swapFocusedInDirection(bool horizontal, int direction);
     bool increaseMasterCount();
     bool decreaseMasterCount();
+    bool toggleDwindleSplit();
     bool cycleFocusedWidth(int direction);
     bool cycleFocusedHeight(int direction);
     bool setFocusedWidth(double fraction);

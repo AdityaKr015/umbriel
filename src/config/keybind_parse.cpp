@@ -274,6 +274,8 @@ namespace umbriel {
         {"layout-scroll-left", "", "Scroll the strip toward its start", KeybindAction::LayoutScrollLeft},
         {"layout-scroll-right", "", "Scroll the strip toward its end", KeybindAction::LayoutScrollRight},
         {"layout-scroll-up", "", "Scroll the strip toward its start", KeybindAction::LayoutScrollUp},
+        {"layout-toggle-split", "", "Toggle the focused tile's dwindle split direction",
+         KeybindAction::LayoutToggleSplit},
         {"output-disable", "<output>", "Remove an output from the desktop", KeybindAction::OutputDisable,
          ActionArgKind::Output},
         {"output-enable", "<output>", "Add an output to the desktop", KeybindAction::OutputEnable,

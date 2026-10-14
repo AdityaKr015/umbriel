@@ -485,6 +485,19 @@ namespace umbriel {
 
   bool DwindleLayout::moveViewVertical(View* view, int direction) { return moveView(view, false, direction); }
 
+  bool DwindleLayout::toggleSplit(View* view) {
+    Node* node = findNode(view);
+    if (node == nullptr || node->parent == nullptr) {
+      return false;
+    }
+    Node* parent = node->parent;
+    const bool horizontal =
+        parent->type == Node::AutoSplit ? parent->areaW >= parent->areaH : parent->type == Node::HSplit;
+    parent->type = horizontal ? Node::VSplit : Node::HSplit;
+    parent->locked = true;
+    return true;
+  }
+
   bool DwindleLayout::moveView(View* view, bool horizontal, int direction) {
     Node* node = findNode(view);
     if ((direction != -1 && direction != 1) || node == nullptr || node->parent == nullptr) {

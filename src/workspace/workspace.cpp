@@ -869,7 +869,14 @@ namespace umbriel {
       } else {
         // Floating views follow committed geometry; tiled ones follow the box
         // the layout assigned them.
-        const wlr_box sized = m_layout->columnOf(view) < 0 ? view->geometryBox() : tiledTargetBox(view, usable);
+        const bool inLayout = m_layout->columnOf(view) >= 0;
+        const wlr_box sized = inLayout ? tiledTargetBox(view, usable) : view->geometryBox();
+        // A view that just joined the layout has no slot until the pending arrange. Presenting the empty slot would
+        // erase the box it still shows, and that arrange would then place it like an opener instead of moving it.
+        if (inLayout && (sized.width <= 0 || sized.height <= 0)) {
+          view->setNodeEnabled(normallyVisible);
+          return;
+        }
         target = {node.x + m_slideOffsetX, node.y + m_slideOffsetY, sized.width, sized.height};
       }
     }

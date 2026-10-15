@@ -616,7 +616,7 @@ namespace umbriel {
       if (server.toggleKeyboardShortcutsInhibit()) {
         return true;
       }
-      return reject(error, "focused surface has no keyboard shortcuts inhibitor");
+      return reject(error, "keyboard shortcuts inhibition requires an unlocked focused surface");
     }
 
     bool actionSubmap(Server& server, const Keybind& bind, std::string* /*error*/) {

@@ -23,6 +23,7 @@ unit_tests = [
   ['modifier-tap', ['unit/modifier_tap.cpp'], []],
   ['keyboard-layout', ['unit/keyboard_layout.cpp'], []],
   ['surface-layouts', ['unit/surface_layouts.cpp'], []],
+  ['shortcuts-inhibit', ['unit/shortcuts_inhibit.cpp'], []],
   ['shortcut-keysym', ['unit/shortcut_keysym.cpp'], []],
   ['xcursor-matcher', ['unit/xcursor_matcher.cpp'], []],
   ['output-direction', ['unit/output_direction.cpp'], []],

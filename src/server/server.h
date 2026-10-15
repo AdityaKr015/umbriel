@@ -6,6 +6,7 @@
 #include "core/dirty.h"
 #include "input/lid_state.h"
 #include "input/modifier_tap.h"
+#include "input/shortcuts_inhibit.h"
 #include "input/surface_layouts.h"
 #include "output/enable_overrides.h"
 #include "scene/border_rect.h"
@@ -904,6 +905,7 @@ namespace umbriel {
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;
     std::vector<std::unique_ptr<ShortcutsInhibitorWatch>> m_shortcutsInhibitors;
+    ManualShortcutsInhibit m_manualShortcutsInhibit;
     SurfaceLayoutMemory m_surfaceLayouts;
     Keyboard* m_keyboardLayoutSource = nullptr;
     Keyboard* m_keyboardInputSource = nullptr;

@@ -846,6 +846,7 @@ namespace umbriel {
     // keyboard focus through. The Xwayland client itself goes with the other Wayland clients below.
     m_xwayland.reset();
     m_keyboards.clear();
+    m_manualShortcutsInhibit.clear();
     // The backend destroys physical input devices below, after the seat and cursor; detach their watchers first.
     for (const auto& pointer : m_pointers) {
       wl_list_remove(&pointer->destroy.link);

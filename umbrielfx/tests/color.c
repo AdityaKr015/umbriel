@@ -15,6 +15,7 @@ static bool submit_solid_frame(struct wlr_render_pass* pass, int width, int heig
 
 static float linear_to_pq(float value);
 static uint8_t to_u8(float value);
+static bool codes_close(const uint8_t actual[static 4], const uint8_t expected[static 4], int tolerance);
 
 // A scene buffer with unset primaries renders, and the scene's PQ output
 // transform reaches the renderer as PQ.
@@ -264,6 +265,290 @@ static uint16_t float_to_half(float value) {
     return sign | 0x7C00;
   }
   return sign | (exponent << 10) | (mantissa >> 13);
+}
+
+static void apply_matrix(float out[static 3], const float matrix[static 9], const float in[static 3]) {
+  for (size_t row = 0; row < 3; row++) {
+    out[row] = matrix[row * 3] * in[0] + matrix[row * 3 + 1] * in[1] + matrix[row * 3 + 2] * in[2];
+  }
+}
+
+static bool check_matrix_near(const float actual[static 9], const float expected[static 9], const char* label) {
+  for (size_t i = 0; i < 9; i++) {
+    if (!isfinite(actual[i]) || fabsf(actual[i] - expected[i]) > 0.0003f) {
+      fprintf(stderr, "FAIL: %s coefficient %zu expected %.6f, got %.6f\n", label, i, expected[i], actual[i]);
+      return false;
+    }
+  }
+  return true;
+}
+
+// These calculations need no renderer. In particular, a uniform dimming ramp
+// must retain its brightness instead of normalizing the adapted white to Y=1.
+static bool test_hdr_white_point_math(void) {
+  const float neutral[3] = {1.0f, 1.0f, 1.0f};
+  const float identity[9] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+  float matrix[9];
+  color_transform_sdr_white_point_matrix(matrix, neutral);
+  bool ok = check_matrix_near(matrix, identity, "neutral HDR white");
+
+  const float warm[3] = {1.0f, 0.8f, 0.5f};
+  // Bradford adaptation in linear sRGB from D65 to this warm white. The
+  // off-diagonal coefficients distinguish adaptation from RGB channel gains.
+  const float expected[9] = {
+      0.78192648f, 0.19335100f,  0.02472252f,  -0.00933757f, 0.60599629f,
+      0.00716862f, -0.01052950f, -0.03506980f, 0.25964044f,
+  };
+  color_transform_sdr_white_point_matrix(matrix, warm);
+  ok = check_matrix_near(matrix, expected, "warm Bradford adaptation") && ok;
+  const float reference[3] = {1.0f, 1.0f, 1.0f};
+  const float highlight[3] = {8.0f, 8.0f, 8.0f};
+  float adapted_reference[3], adapted_highlight[3];
+  apply_matrix(adapted_reference, matrix, reference);
+  apply_matrix(adapted_highlight, matrix, highlight);
+  for (size_t channel = 0; channel < 3; channel++) {
+    ok = check(
+             fabsf(adapted_reference[channel] - srgb_to_linear(warm[channel])) < 0.0003f,
+             "adapted reference white decodes the SDR endpoint in linear light"
+         )
+        && ok;
+    ok = check(
+             fabsf(adapted_highlight[channel] - 8.0f * adapted_reference[channel]) < 0.0003f,
+             "HDR highlights retain their ratio to reference white"
+         )
+        && ok;
+  }
+  ok = check(adapted_highlight[0] > 1.0f, "HDR white adaptation retains highlight headroom") && ok;
+
+  const float dim[3] = {0.5f, 0.5f, 0.5f};
+  const float dim_level = srgb_to_linear(0.5f);
+  const float dim_matrix[9] = {dim_level, 0.0f, 0.0f, 0.0f, dim_level, 0.0f, 0.0f, 0.0f, dim_level};
+  color_transform_sdr_white_point_matrix(matrix, dim);
+  ok = check_matrix_near(matrix, dim_matrix, "uniform SDR dimming endpoint") && ok;
+
+  const float black[3] = {0.0f, 0.0f, 0.0f};
+  const float zero[9] = {0};
+  color_transform_sdr_white_point_matrix(matrix, black);
+  return check_matrix_near(matrix, zero, "black SDR endpoint") && ok;
+}
+
+static float pq_to_linear(float value) {
+  const float c1 = 0.8359375f;
+  const float c2 = 18.8515625f;
+  const float c3 = 18.6875f;
+  const float m = 78.84375f;
+  const float n = 0.1593017578125f;
+  const float powered = powf(value, 1.0f / m);
+  return powf(fmaxf(powered - c1, 0.0f) / (c2 - c3 * powered), 1.0f / n);
+}
+
+static bool render_white_point_scene(
+    struct fixture* fixture, struct wlr_scene_output* scene_output, bool hdr, uint8_t display[static 2][4],
+    uint8_t capture[static 2][4]
+) {
+  const int cursor_locks = fixture->output->software_cursor_locks;
+  struct wlr_output_state state;
+  wlr_output_state_init(&state);
+  const struct wlr_output_image_description description = {
+      .primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
+      .transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
+  };
+  bool ok = check(wlr_output_state_set_image_description(&state, hdr ? &description : NULL), "stage test output mode");
+  const struct wlr_scene_output_state_options options = {.capture_sdr = true};
+  ok = ok && check(wlr_scene_output_build_state(scene_output, &state, &options), "render white-point scene");
+  ok = check(fixture->output->software_cursor_locks == cursor_locks, "pending HDR frame restores live cursor policy")
+      && ok;
+  if (ok) {
+    ok = check(state.buffer != NULL, "white-point render produces a buffer");
+  }
+  for (size_t sample = 0; ok && sample < 2; sample++) {
+    const int x = sample == 0 ? TEST_WIDTH / 4 : TEST_WIDTH * 3 / 4;
+    ok = fixture_read_display_pixel(fixture, state.buffer, x, TEST_HEIGHT / 2, display[sample])
+        && fixture_read_pixel(fixture, state.buffer, x, TEST_HEIGHT / 2, capture[sample]);
+  }
+  if (ok) {
+    // Headless outputs do not advertise HDR. Present the rendered buffer while
+    // leaving the test description pending, as in test_scene_unset_primaries.
+    // This consumes the frame's damage so the next setter must schedule it.
+    struct wlr_output_state present = state;
+    present.committed &= ~WLR_OUTPUT_STATE_IMAGE_DESCRIPTION;
+    ok = check(wlr_output_commit_state(fixture->output, &present), "present white-point test buffer");
+  }
+  wlr_output_state_finish(&state);
+  return ok;
+}
+
+static bool check_white_point_pixels(
+    const uint8_t display[static 2][4], const float white[static 3], const uint8_t source_codes[static 2]
+) {
+  // Linear sRGB to BT.2020, independently rounded from the standard primary
+  // conversion. A neutral source becomes this target white before PQ encoding.
+  const float to_bt2020[9] = {
+      0.627404f, 0.329283f, 0.043313f, 0.069097f, 0.919540f, 0.011362f, 0.016392f, 0.088013f, 0.895595f,
+  };
+  const float linear_white[3] = {
+      srgb_to_linear(white[0]),
+      srgb_to_linear(white[1]),
+      srgb_to_linear(white[2]),
+  };
+  float target_white[3];
+  apply_matrix(target_white, to_bt2020, linear_white);
+  bool ok = true;
+  for (size_t sample = 0; sample < 2; sample++) {
+    const float absolute_light = pq_to_linear(source_codes[sample] / 255.0f);
+    for (size_t channel = 0; channel < 3; channel++) {
+      const int expected = to_u8(linear_to_pq(target_white[channel] * absolute_light));
+      const int actual = display[sample][2 - channel];
+      if (abs(actual - expected) > 2) {
+        fprintf(
+            stderr, "FAIL: PQ sample %zu channel %zu expected %d from linear adaptation, got %d\n", sample, channel,
+            expected, actual
+        );
+        ok = false;
+      }
+    }
+  }
+  return ok;
+}
+
+// Exercise the scene's output transform with tagged PQ content, unchanged
+// capture values, and white-point changes while the source stays still.
+static bool test_hdr_white_point(struct fixture* fixture) {
+  bool ok = true;
+  struct wlr_scene* scene = NULL;
+  struct wlr_buffer* source = NULL;
+  struct wlr_output_state enable;
+  wlr_output_state_init(&enable);
+  wlr_output_state_set_enabled(&enable, true);
+  wlr_output_state_set_custom_mode(&enable, TEST_WIDTH, TEST_HEIGHT, 0);
+  const bool enabled = wlr_output_commit_state(fixture->output, &enable);
+  wlr_output_state_finish(&enable);
+  if (!check(enabled, "enable white-point scene output")) {
+    return false;
+  }
+
+  source = create_output_buffer(fixture, DRM_FORMAT_ABGR8888, TEST_WIDTH, TEST_HEIGHT);
+  if (!check(source != NULL, "allocate tagged PQ scene source")) {
+    return false;
+  }
+  const uint8_t source_codes[2] = {to_u8(linear_to_pq(203.0f / 10000.0f)), to_u8(linear_to_pq(1000.0f / 10000.0f))};
+  struct wlr_render_pass* paint = wlr_renderer_begin_buffer_pass(fixture->renderer, source, NULL);
+  if (!check(paint != NULL, "begin tagged PQ source paint")) {
+    ok = false;
+    goto out;
+  }
+  for (size_t sample = 0; sample < 2; sample++) {
+    const float code = source_codes[sample] / 255.0f;
+    wlr_render_pass_add_rect(
+        paint,
+        &(struct wlr_render_rect_options){
+            .box = {.x = sample * (TEST_WIDTH / 2), .width = TEST_WIDTH / 2, .height = TEST_HEIGHT},
+            .color = {.r = code, .g = code, .b = code, .a = 1.0f},
+            .blend_mode = WLR_RENDER_BLEND_MODE_NONE,
+        }
+    );
+  }
+  if (!check(wlr_render_pass_submit(paint), "paint PQ reference white and highlight")) {
+    ok = false;
+    goto out;
+  }
+
+  scene = wlr_scene_create();
+  struct wlr_scene_output* scene_output = scene != NULL ? wlr_scene_output_create(scene, fixture->output) : NULL;
+  struct wlr_scene_buffer* content = scene != NULL ? wlr_scene_buffer_create(&scene->tree, source) : NULL;
+  if (!check(scene_output != NULL && content != NULL, "create tagged PQ scene")) {
+    ok = false;
+    goto out;
+  }
+  wlr_scene_output_set_direct_scanout_enabled(scene_output, false);
+  wlr_scene_output_set_sdr_white_level(scene_output, 203.0f);
+  wlr_scene_buffer_set_transfer_function(content, WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ);
+  wlr_scene_buffer_set_primaries(content, WLR_COLOR_NAMED_PRIMARIES_BT2020);
+  uint8_t baseline[2][4], baseline_capture[2][4], shown[2][4], captured[2][4];
+  const float neutral[3] = {1.0f, 1.0f, 1.0f};
+  // Allocate the headless output's swapchain in its supported SDR mode before
+  // rendering pending HDR descriptions through that same swapchain.
+  if (!render_white_point_scene(fixture, scene_output, false, shown, captured)) {
+    ok = false;
+    goto out;
+  }
+  if (!render_white_point_scene(fixture, scene_output, true, baseline, baseline_capture)) {
+    ok = false;
+    goto out;
+  }
+  ok = check_white_point_pixels(baseline, neutral, source_codes) && ok;
+  ok = check(!wlr_scene_output_needs_frame(scene_output), "presented static scene has no pending frame") && ok;
+
+  const float warm[3] = {1.0f, 0.8f, 0.5f};
+  wlr_scene_output_set_hdr_white_point(scene_output, warm);
+  ok = check(wlr_scene_output_needs_frame(scene_output), "warming a static scene schedules a new frame") && ok;
+  // Reject the target format after the pending HDR cursor policy is selected.
+  // A failed transition must leave the running SDR output's lock count intact.
+  const int cursor_locks = fixture->output->software_cursor_locks;
+  struct wlr_output_state rejected;
+  wlr_output_state_init(&rejected);
+  const struct wlr_output_image_description hdr_description = {
+      .primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
+      .transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
+  };
+  wlr_output_state_set_image_description(&rejected, &hdr_description);
+  wlr_output_state_set_render_format(&rejected, DRM_FORMAT_INVALID);
+  ok = check(!wlr_scene_output_build_state(scene_output, &rejected, NULL), "invalid target rejects an HDR frame") && ok;
+  ok = check(
+           fixture->output->software_cursor_locks == cursor_locks,
+           "failed HDR frame restores the running output's cursor locks"
+       )
+      && ok;
+  wlr_output_state_finish(&rejected);
+  if (!render_white_point_scene(fixture, scene_output, true, shown, captured)) {
+    ok = false;
+    goto out;
+  }
+  ok = check_white_point_pixels(shown, warm, source_codes) && ok;
+  for (size_t sample = 0; sample < 2; sample++) {
+    ok = check(codes_close(captured[sample], baseline_capture[sample], 1), "warming leaves SDR capture neutral") && ok;
+  }
+  ok = check(shown[1][2] > shown[0][2] + 20, "warm HDR highlight remains brighter than reference white") && ok;
+
+  const float warmer[3] = {1.0f, 0.65f, 0.3f};
+  wlr_scene_output_set_hdr_white_point(scene_output, warmer);
+  if (!render_white_point_scene(fixture, scene_output, true, shown, captured)) {
+    ok = false;
+    goto out;
+  }
+  ok = check_white_point_pixels(shown, warmer, source_codes) && ok;
+
+  wlr_scene_output_set_hdr_white_point(scene_output, neutral);
+  ok = check(wlr_scene_output_needs_frame(scene_output), "resetting warmth schedules a new frame") && ok;
+  if (!render_white_point_scene(fixture, scene_output, true, shown, captured)) {
+    ok = false;
+    goto out;
+  }
+  for (size_t sample = 0; sample < 2; sample++) {
+    ok = check(codes_close(shown[sample], baseline[sample], 1), "reset restores the original HDR display values") && ok;
+  }
+
+  if (!render_white_point_scene(fixture, scene_output, false, baseline, baseline_capture)) {
+    ok = false;
+    goto out;
+  }
+  wlr_scene_output_set_hdr_white_point(scene_output, warm);
+  if (!render_white_point_scene(fixture, scene_output, false, shown, captured)) {
+    ok = false;
+    goto out;
+  }
+  for (size_t sample = 0; sample < 2; sample++) {
+    ok = check(codes_close(shown[sample], baseline[sample], 1), "HDR white point leaves SDR rendering unchanged") && ok;
+  }
+
+out:
+  if (scene != NULL) {
+    wlr_scene_node_destroy(&scene->tree.node);
+  }
+  if (source != NULL) {
+    wlr_buffer_drop(source);
+  }
+  return ok;
 }
 
 static struct wlr_color_transform*
@@ -1776,6 +2061,10 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
+  if (strcmp(argv[1], "hdr-white-point-math") == 0) {
+    return test_hdr_white_point_math() ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+
   struct fixture fixture;
   if (!fixture_init(&fixture)) {
     fprintf(stderr, "SKIP: no FP16-capable DRM render node\n");
@@ -1788,6 +2077,8 @@ int main(int argc, char* argv[]) {
     ok = test_implicit_srgb_target(&fixture);
   } else if (strcmp(argv[1], "scene-unset-primaries") == 0) {
     ok = test_scene_unset_primaries(&fixture);
+  } else if (strcmp(argv[1], "hdr-white-point") == 0) {
+    ok = test_hdr_white_point(&fixture);
   } else if (strcmp(argv[1], "sdr-curve-consistency") == 0) {
     ok = test_sdr_curve_consistency(&fixture);
   } else if (strcmp(argv[1], "optimized-blur-sdr-curve") == 0) {

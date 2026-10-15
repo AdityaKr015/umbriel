@@ -189,6 +189,7 @@ namespace umbriel {
     void setHdrFallbackReason(std::string_view reason);
     void setBitDepthFallbackReason(std::string_view reason);
     void updateSceneSdrWhite();
+    void updateSceneHdrWhitePoint(wlr_gamma_control_v1* control);
     void armFrameRetry();
     void armEffectFrame(uint64_t nowMsec);
     // Render locks other than this output's animation lock.

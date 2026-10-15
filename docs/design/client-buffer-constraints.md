@@ -115,6 +115,40 @@ distinction between retryable preparation failures and backend rejection. The
 headless color-management check covers policy entry and release, but a real HDR
 monitor is still required to validate the KMS transition.
 
+## HDR white-point adjustment
+
+Gamma-control clients use the same interface in SDR and HDR. In HDR,
+`hdrWhitePointFromGamma` extracts the normalized, sRGB-encoded endpoint from
+each channel's latest gamma ramp. A missing table is neutral, while dimmed or
+black endpoints retain their requested brightness. Identity ramps sampled with
+either `i / (N - 1)` or `i / N` are recognized across every entry, allowing one
+16-bit unit of rounding. This prevents the latter sampling style's sub-white
+endpoint from enabling an adjustment when the full ramp is neutral. A custom
+curve with the same sub-white endpoint remains an adjustment.
+
+UmbrielFX decodes those endpoints to linear sRGB and derives a Bradford
+adaptation from D65 to the requested white without normalizing away its
+luminance. The adaptation is composed with the existing output matrix before
+PQ encoding. It preserves HDR highlight headroom instead of clipping the image
+to SDR white; individual channel brightness changes with the requested warmth.
+The full LUT curvature is never applied to PQ values. Umbriel retains the
+client's latest full table, which is applied again on return to SDR.
+
+Changing the white point invalidates the output transform, damages the whole
+output, and schedules a frame. A non-neutral adjustment on a PQ output disables
+direct scanout and locks software cursors so the cursor receives the same
+display transform. State building sets the cursor policy from the pending
+output description before collecting cursors, then restores the live policy
+until commit. Commits, neutral restoration, SDR transitions, disabled outputs,
+and destruction balance that lock.
+
+The SDR capture sidecar is generated before this display transform and excludes
+the adjustment. Export-DMA-BUF retains the adjusted native HDR representation.
+Math and render checks cover extraction, adaptation, HDR transitions, and the
+unadjusted SDR capture. Physical HDR display verification must also check warm
+and neutral transitions, highlight gradients, cursor matching, and return to
+SDR with the full gamma curve restored.
+
 ## Implicit scene-buffer primaries
 
 A raw `wlr_scene_buffer` uses zero primaries as an internal unset sentinel.

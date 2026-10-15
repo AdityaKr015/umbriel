@@ -429,6 +429,17 @@ namespace umbriel {
     }
     const float sdrWhite = hdrActive() ? configuredSdrWhite() : 0.0F;
     wlr_scene_output_set_sdr_white_level(m_sceneOutput, sdrWhite);
+    updateSceneHdrWhitePoint(wlr_gamma_control_manager_v1_get_control(m_server->gammaManager(), m_output));
+  }
+
+  void Output::updateSceneHdrWhitePoint(wlr_gamma_control_v1* control) {
+    if (m_sceneOutput == nullptr) {
+      return;
+    }
+    const auto white = hdrWhitePointFromGamma(
+        control != nullptr ? control->table : nullptr, control != nullptr ? control->ramp_size : 0
+    );
+    wlr_scene_output_set_hdr_white_point(m_sceneOutput, white.data());
   }
 
   wlr_scene_rect* Output::createConfiguredFrameMask(const wlr_output_state& state) const {
@@ -1334,10 +1345,11 @@ namespace umbriel {
     }
   }
 
-  void Output::onGammaChanged(wlr_gamma_control_v1* /*control*/) {
+  void Output::onGammaChanged(wlr_gamma_control_v1* control) {
+    updateSceneHdrWhitePoint(control);
     if (hdrActive()) {
-      // wlroots has already retained the client's latest table. Keep it for
-      // the next SDR transition without applying an SDR LUT to HDR output.
+      // The scene applies the requested white point before PQ encoding.
+      // Keep the full table for SDR instead of applying it to PQ values.
       m_gammaDirty = false;
       return;
     }

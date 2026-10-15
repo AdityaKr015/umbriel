@@ -13,7 +13,7 @@ when the render list holds exactly one entry, no color transform applies, no
 gamma LUT upload is pending, SDR capture is off, and damage highlighting is off
 (`:5392-5396`).
 
-The fork adds three conditions upstream does not have:
+The fork adds four conditions upstream does not have:
 
 - A transient animation slot anywhere in the scene vetoes scanout (`:4702`).
   The same predicate also disables visibility and opaque culling (`:5260`,
@@ -29,6 +29,12 @@ The fork adds three conditions upstream does not have:
 - A node's `visible` region must equal its full rect (`:4710-4722`), because
   scanout bypasses `node->visible`. An ancestor tree clip therefore forces
   composition even when nothing overlaps the node.
+- A non-neutral HDR white-point adjustment on a PQ output vetoes direct
+  scanout. It also requires software cursors so the whole displayed image
+  receives the same transform. Restoring neutral white or returning to SDR
+  releases this constraint. The adjustment is folded into the existing output
+  matrix before PQ encoding, without an extra render pass. See
+  [HDR white-point adjustment](client-buffer-constraints.md#hdr-white-point-adjustment).
 
 Umbriel holds `wlr_output_lock_attach_render` while an output animates
 ([`output.cpp:1343-1346`](../../src/output/output.cpp)) and vetoes tearing for

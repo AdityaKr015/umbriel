@@ -97,6 +97,13 @@ bool color_transform_compose(struct wlr_color_transform** result, struct wlr_col
 void wlr_color_primaries_to_xyz(const struct wlr_color_primaries* primaries, float matrix[static 9]);
 
 /**
+ * Adapt linear sRGB to the white specified by normalized sRGB-encoded RGB.
+ * The Bradford transform retains the requested white's luminance as well as
+ * its chromaticity, so a dimmed or black white point remains dimmed or black.
+ */
+void color_transform_sdr_white_point_matrix(float matrix[static 9], const float white[static 3]);
+
+/**
  * Get default luminances for a transfer function.
  */
 void wlr_color_transfer_function_get_default_luminance(

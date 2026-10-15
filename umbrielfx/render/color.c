@@ -3,6 +3,7 @@
 #include "util/matrix.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wlr/render/color.h>
@@ -380,6 +381,51 @@ void wlr_color_primaries_to_xyz(const struct wlr_color_primaries* primaries, flo
       S[2] * b[1], S[0] * r[2], S[1] * g[2], S[2] * b[2],
   };
   memcpy(matrix, result, sizeof(result));
+}
+
+void color_transform_sdr_white_point_matrix(float matrix[static 9], const float white[static 3]) {
+  if (white[0] == 1.0f && white[1] == 1.0f && white[2] == 1.0f) {
+    wlr_matrix_identity(matrix);
+    return;
+  }
+
+  float target_rgb[3];
+  for (size_t i = 0; i < 3; ++i) {
+    assert(isfinite(white[i]) && white[i] >= 0.0f && white[i] <= 1.0f);
+    target_rgb[i] = white[i] <= 0.04045f ? white[i] / 12.92f : powf((white[i] + 0.055f) / 1.055f, 2.4f);
+  }
+
+  float rgb_to_xyz[9], xyz_to_rgb[9];
+  wlr_color_primaries_to_xyz(&COLOR_PRIMARIES_SRGB, rgb_to_xyz);
+  matrix_invert(xyz_to_rgb, rgb_to_xyz);
+
+  float source_rgb[3] = {1.0f, 1.0f, 1.0f};
+  float source_xyz[3], target_xyz[3];
+  multiply_matrix_vector(source_xyz, rgb_to_xyz, source_rgb);
+  multiply_matrix_vector(target_xyz, rgb_to_xyz, target_rgb);
+
+  // Bradford cone response space. Keeping XYZ absolute here preserves the
+  // brightness requested by gamma-control clients instead of normalizing it.
+  float bradford[9] = {
+      0.8951f, 0.2664f, -0.1614f, -0.7502f, 1.7135f, 0.0367f, 0.0389f, -0.0685f, 1.0296f,
+  };
+  float bradford_inverse[9], source_cones[3], target_cones[3];
+  matrix_invert(bradford_inverse, bradford);
+  multiply_matrix_vector(source_cones, bradford, source_xyz);
+  multiply_matrix_vector(target_cones, bradford, target_xyz);
+
+  float adapted_cones[9];
+  for (size_t row = 0; row < 3; ++row) {
+    const float scale = target_cones[row] / source_cones[row];
+    for (size_t col = 0; col < 3; ++col) {
+      adapted_cones[row * 3 + col] = bradford[row * 3 + col] * scale;
+    }
+  }
+
+  float adaptation_xyz[9], adaptation_rgb[9];
+  wlr_matrix_multiply(adaptation_xyz, bradford_inverse, adapted_cones);
+  wlr_matrix_multiply(adaptation_rgb, xyz_to_rgb, adaptation_xyz);
+  wlr_matrix_multiply(matrix, adaptation_rgb, rgb_to_xyz);
 }
 
 void wlr_color_primaries_transform_absolute_colorimetric(

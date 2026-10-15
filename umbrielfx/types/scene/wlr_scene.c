@@ -15,6 +15,7 @@
 #include "umbrielfx/types/fx/clipped_region.h"
 #include "util/array.h"
 #include "util/env.h"
+#include "util/matrix.h"
 #include "util/time.h"
 
 #include <assert.h>
@@ -4623,10 +4624,34 @@ void wlr_scene_output_acknowledge_damage_for_test(
   scene_output_acknowledge_damage(scene_output, state);
 }
 
+static bool scene_output_hdr_white_point_active(
+    const struct wlr_scene_output* scene_output, const struct wlr_output_image_description* description
+) {
+  return scene_output->hdr_white_point_active
+      && description != NULL
+      && description->transfer_function == WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ;
+}
+
+static void scene_output_update_hdr_white_point_cursor(
+    struct wlr_scene_output* scene_output, const struct wlr_output_image_description* description, bool enabled
+) {
+  const bool lock = enabled && scene_output_hdr_white_point_active(scene_output, description);
+  if (lock == scene_output->hdr_white_point_cursor_locked) {
+    return;
+  }
+
+  wlr_output_lock_software_cursors(scene_output->output, lock);
+  scene_output->hdr_white_point_cursor_locked = lock;
+}
+
 static void scene_output_handle_commit(struct wl_listener* listener, void* data) {
   struct wlr_scene_output* scene_output = wl_container_of(listener, scene_output, output_commit);
   struct wlr_output_event_commit* event = data;
   const struct wlr_output_state* state = event->state;
+
+  scene_output_update_hdr_white_point_cursor(
+      scene_output, scene_output->output->image_description, scene_output->output->enabled
+  );
 
   // if the output has been committed with a certain damage, we know that region
   // will be acknowledged by the backend so we don't need to keep track of it
@@ -4702,6 +4727,7 @@ struct wlr_scene_output* wlr_scene_output_create(struct wlr_scene* scene, struct
   scene_output->output = output;
   scene_output->scene = scene;
   scene_output->direct_scanout_enabled = true;
+  scene_output->hdr_white_point[0] = scene_output->hdr_white_point[1] = scene_output->hdr_white_point[2] = 1.0f;
   wlr_addon_init(&scene_output->addon, &output->addons, scene, &output_addon_impl);
 
   wlr_damage_ring_init(&scene_output->damage_ring);
@@ -4764,6 +4790,11 @@ static void highlight_region_destroy(struct highlight_region* damage) {
 void wlr_scene_output_destroy(struct wlr_scene_output* scene_output) {
   if (scene_output == NULL) {
     return;
+  }
+
+  if (scene_output->hdr_white_point_cursor_locked) {
+    wlr_output_lock_software_cursors(scene_output->output, false);
+    scene_output->hdr_white_point_cursor_locked = false;
   }
 
   wl_signal_emit_mutable(&scene_output->events.destroy, NULL);
@@ -4837,6 +4868,30 @@ void wlr_scene_output_set_sdr_white_level(struct wlr_scene_output* scene_output,
 
   scene_output->sdr_white_level = nits;
   scene_output->color_transform_dirty = true;
+  scene_output_damage_whole(scene_output);
+}
+
+void wlr_scene_output_set_hdr_white_point(struct wlr_scene_output* scene_output, const float srgb_white[static 3]) {
+  bool active = false;
+  bool changed = false;
+  for (size_t i = 0; i < 3; ++i) {
+    assert(isfinite(srgb_white[i]) && srgb_white[i] >= 0.0f && srgb_white[i] <= 1.0f);
+    active |= srgb_white[i] != 1.0f;
+    changed |= scene_output->hdr_white_point[i] != srgb_white[i];
+  }
+  if (!changed) {
+    scene_output_update_hdr_white_point_cursor(
+        scene_output, scene_output->output->image_description, scene_output->output->enabled
+    );
+    return;
+  }
+
+  memcpy(scene_output->hdr_white_point, srgb_white, sizeof(scene_output->hdr_white_point));
+  scene_output->hdr_white_point_active = active;
+  scene_output->color_transform_dirty = true;
+  scene_output_update_hdr_white_point_cursor(
+      scene_output, scene_output->output->image_description, scene_output->output->enabled
+  );
   scene_output_damage_whole(scene_output);
 }
 
@@ -5338,6 +5393,11 @@ static bool scene_output_combine_color_transforms(
     wlr_color_primaries_from_named(&primaries, img_desc->primaries);
     float matrix[9];
     wlr_color_primaries_transform_absolute_colorimetric(&primaries_srgb, &primaries, matrix);
+    if (scene_output_hdr_white_point_active(scene_output, img_desc)) {
+      float white_point_matrix[9];
+      color_transform_sdr_white_point_matrix(white_point_matrix, scene_output->hdr_white_point);
+      wlr_matrix_multiply(matrix, matrix, white_point_matrix);
+    }
 
     struct wlr_color_luminances srgb_lum, dst_lum;
     wlr_color_transfer_function_get_default_luminance(WLR_COLOR_TRANSFER_FUNCTION_SRGB, &srgb_lum);
@@ -5540,7 +5600,7 @@ static void render_background(
   );
 }
 
-bool wlr_scene_output_build_state(
+static bool scene_output_build_state(
     struct wlr_scene_output* scene_output, struct wlr_output_state* state,
     const struct wlr_scene_output_state_options* options
 ) {
@@ -5753,6 +5813,7 @@ bool wlr_scene_output_build_state(
   if (!options->capture_sdr
       && options->color_transform == NULL
       && !render_gamma_lut
+      && !scene_output_hdr_white_point_active(scene_output, output_pending_image_description(output, state))
       && list_len == 1
       && debug_damage != WLR_SCENE_DEBUG_DAMAGE_HIGHLIGHT) {
     scanout_result = scene_entry_try_direct_scanout(&list_data[0], state, &render_data);
@@ -6108,6 +6169,21 @@ bool wlr_scene_output_build_state(
 
   TRACY_MARK_FRAME;
   return true;
+}
+
+bool wlr_scene_output_build_state(
+    struct wlr_scene_output* scene_output, struct wlr_output_state* state,
+    const struct wlr_scene_output_state_options* options
+) {
+  struct wlr_output* output = scene_output->output;
+  const bool enabled = state->committed & WLR_OUTPUT_STATE_ENABLED ? state->enabled : output->enabled;
+  // Lock before collecting cursors for a pending HDR frame, then restore the
+  // live output's policy until commit. Unlocking does not immediately restore
+  // a hardware plane, so the pending frame keeps its composited cursor.
+  scene_output_update_hdr_white_point_cursor(scene_output, output_pending_image_description(output, state), enabled);
+  const bool success = scene_output_build_state(scene_output, state, options);
+  scene_output_update_hdr_white_point_cursor(scene_output, output->image_description, output->enabled);
+  return success;
 }
 
 int64_t wlr_scene_timer_get_duration_ns(struct wlr_scene_timer* timer) {

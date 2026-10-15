@@ -374,6 +374,9 @@ struct wlr_scene_output {
     bool direct_scanout_enabled;
     // A screen or cursor effect is set on this output.
     bool output_effects_configured;
+    float hdr_white_point[3];
+    bool hdr_white_point_active;
+    bool hdr_white_point_cursor_locked;
   } WLR_PRIVATE;
 };
 
@@ -961,6 +964,15 @@ void wlr_scene_output_set_direct_scanout_enabled(struct wlr_scene_output* scene_
  * luminance.
  */
 void wlr_scene_output_set_sdr_white_level(struct wlr_scene_output* scene_output, float nits);
+
+/**
+ * Set the HDR display white point from normalized sRGB-encoded RGB values.
+ * The neutral value is {1, 1, 1}. Only PQ outputs are adjusted. The adjustment
+ * changes the display transform, preserving HDR highlight range and leaving
+ * the SDR capture view unchanged. A non-neutral adjustment requires composition
+ * and software cursors. Changing the value fully damages and schedules output.
+ */
+void wlr_scene_output_set_hdr_white_point(struct wlr_scene_output* scene_output, const float srgb_white[3]);
 
 struct wlr_scene_output_state_options {
   struct wlr_scene_timer* timer;

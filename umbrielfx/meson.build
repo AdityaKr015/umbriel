@@ -203,6 +203,8 @@ if build_tests
   foreach case_name : [
     'implicit-srgb-target',
     'scene-unset-primaries',
+    'hdr-white-point-math',
+    'hdr-white-point',
     'sdr-curve-consistency',
     'optimized-blur-sdr-curve',
     'optimized-blur-encoded-cache',

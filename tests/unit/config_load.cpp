@@ -128,14 +128,14 @@ UMBRIEL_TEST(defaultConfigLookupPrefersUserThenSystem) {
   const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(nullptr));
+  store.load(nullptr);
 
   CHECK_EQ(store.rootPath(), systemConfig);
   CHECK_EQ(store.config().layout.gap, 17);
   CHECK(!store.fileMissing());
 
   tree.write("user/umbriel/config.toml", "[layout]\ngap = 19\n");
-  CHECK(store.load(nullptr));
+  store.load(nullptr);
 
   CHECK_EQ(store.rootPath(), userConfig);
   CHECK_EQ(store.config().layout.gap, 19);
@@ -153,7 +153,7 @@ UMBRIEL_TEST(implicitConfigReloadAdoptsAndReleasesHigherPriorityUserPath) {
   const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(nullptr));
+  store.load(nullptr);
 
   CHECK_EQ(store.rootPath(), systemConfig);
   CHECK_EQ(store.config().layout.gap, 17);
@@ -184,7 +184,7 @@ UMBRIEL_TEST(malformedNewUserConfigKeepsActiveSystemConfigAndRetriesAfterCorrect
   const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(nullptr));
+  store.load(nullptr);
   const uint64_t generation = store.generation();
 
   tree.write("user/umbriel/config.toml", "[layout\n");
@@ -218,7 +218,7 @@ UMBRIEL_TEST(implicitConfigReloadKeepsCandidatesCapturedAtInitialLoad) {
   const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(nullptr));
+  store.load(nullptr);
   const std::vector<std::filesystem::path> initialWatchPaths = store.watchPaths();
 
   tree.write("changed-user/umbriel/config.toml", "[layout]\ngap = 29\n");
@@ -244,7 +244,7 @@ UMBRIEL_TEST(explicitConfigReloadStaysPinnedWhenUserConfigAppears) {
 
   ConfigStore& store = umbriel::configStore();
   const std::string explicitPath = explicitConfig.string();
-  CHECK(store.load(explicitPath.c_str()));
+  store.load(explicitPath.c_str());
 
   CHECK_EQ(store.rootPath(), explicitConfig);
   CHECK_EQ(store.config().layout.gap, 23);
@@ -3260,100 +3260,57 @@ surprise = true
   CHECK(containsDiagnostic(store, "unknown key drm.surprise"));
 }
 
-UMBRIEL_TEST(initialConfigErrorsDoNotCommitDefaults) {
-  const TempConfig file;
-  file.write("[drm]\nignored_pci_addresses = [\"invalid\"]\n");
+UMBRIEL_TEST(initialConfigErrorsStartWithDefaults) {
+  struct Case {
+    const char* config;
+    const char* diagnostic;
+  };
+  constexpr std::array cases{
+      Case{"workspace = \"invalid\"\n", "workspace must be a [[workspace]] array of tables"},
+      Case{"workspace =\n", "Error while parsing"},
+      Case{"[drm]\nignored_pci_addresses = [\"invalid\"]\n", "invalid drm.ignored_pci_addresses entry"},
+      Case{
+          "workspace = \"invalid\"\n\n[drm]\nignored_pci_addresses = [\"0000:01:00.0\"]\n",
+          "workspace must be a [[workspace]] array of tables"
+      },
+      Case{"[drm]\nignored_devices = [\"/dev/dri/card0\"\n", "Error while parsing array"},
+  };
+  for (const Case& entry : cases) {
+    const TempConfig file;
+    file.write(entry.config);
 
-  ConfigStore& store = umbriel::configStore();
-  const uint64_t generation = store.generation();
-  const umbriel::Config previous = store.config();
+    ConfigStore& store = umbriel::configStore();
+    const uint64_t generation = store.generation();
 
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
-  CHECK(store.config() == previous);
-  CHECK(containsDiagnostic(store, "invalid drm.ignored_pci_addresses entry"));
+    store.load(file.path().c_str());
+    CHECK_EQ(store.generation(), generation + 1);
+    CHECK(!store.config().drm.configured());
+    CHECK(containsDiagnostic(store, entry.diagnostic));
+  }
 }
 
-UMBRIEL_TEST(initialNonDrmErrorsKeepCompatibilityDefaults) {
-  const TempConfig file;
-  file.write("workspace = \"invalid\"\n");
-
-  ConfigStore& store = umbriel::configStore();
-  const uint64_t generation = store.generation();
-
-  CHECK(store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation + 1);
-  CHECK(!store.config().drm.configured());
-  CHECK(containsDiagnostic(store, "workspace must be a [[workspace]] array of tables"));
-}
-
-UMBRIEL_TEST(initialSyntaxErrorsFailClosedEvenWithoutRecognizableDrmPolicy) {
-  const TempConfig file;
-  file.write("workspace =\n");
-
-  ConfigStore& store = umbriel::configStore();
-  const uint64_t generation = store.generation();
-
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
-}
-
-UMBRIEL_TEST(initialErrorsCannotDiscardRequestedDrmPolicy) {
-  const TempConfig file;
-  file.write(R"(
-workspace = "invalid"
-
-[drm]
-ignored_pci_addresses = ["0000:01:00.0"]
-)");
-
-  ConfigStore& store = umbriel::configStore();
-  const uint64_t generation = store.generation();
-
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
-  CHECK(containsDiagnostic(store, "workspace must be a [[workspace]] array of tables"));
-}
-
-UMBRIEL_TEST(initialSyntaxErrorsCannotDiscardRequestedDrmPolicy) {
-  const TempConfig file;
-  file.write(R"(
-[drm]
-ignored_devices = ["/dev/dri/card0"
-)");
-
-  ConfigStore& store = umbriel::configStore();
-  const uint64_t generation = store.generation();
-
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
-  CHECK(containsDiagnostic(store, "Error while parsing array"));
-}
-
-UMBRIEL_TEST(initialIncludedSyntaxErrorsCannotDiscardRequestedDrmPolicy) {
+UMBRIEL_TEST(initialIncludedSyntaxErrorsStartWithDefaults) {
   const TempConfig file;
   file.write("[include]\nfiles = [\"" + file.includeName() + "\"]\n");
-  file.writeInclude(R"(
-[drm]
-ignored_pci_addresses = ["0000:01:00.0"
-)");
+  file.writeInclude("[drm]\nignored_pci_addresses = [\"0000:01:00.0\"\n");
 
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
 
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
+  store.load(file.path().c_str());
+  CHECK_EQ(store.generation(), generation + 1);
+  CHECK(!store.config().drm.configured());
   CHECK(containsDiagnostic(store, "Error while parsing array"));
 }
 
-UMBRIEL_TEST(invalidIncludeDirectivesCannotDiscardDrmPolicy) {
+UMBRIEL_TEST(invalidIncludeDirectivesKeepPreviousConfigOnReload) {
   const TempConfigTree tree;
   const std::filesystem::path root = tree.path("config.toml");
   tree.write("hardware.toml", "[drm]\nignored_pci_addresses = [\"0000:01:00.0\"]\n");
   tree.write("config.toml", "[include]\nfiles = [\"hardware.toml\"]\n");
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(root.c_str()));
+  store.load(root.c_str());
   const umbriel::Config previous = store.config();
   const uint64_t generation = store.generation();
 
@@ -3367,19 +3324,13 @@ UMBRIEL_TEST(invalidIncludeDirectivesCannotDiscardDrmPolicy) {
   for (const char* include : invalidIncludes) {
     tree.write("config.toml", include);
 
-    CHECK(!store.load(root.c_str()));
-    CHECK_EQ(store.generation(), generation);
-    CHECK(store.config() == previous);
-    CHECK(std::ranges::any_of(store.diagnostics(), [](const ConfigDiagnostic& diagnostic) {
-      return diagnostic.severity == ConfigDiagnostic::Severity::Error;
-    }));
     CHECK(!store.reload().success);
     CHECK_EQ(store.generation(), generation);
     CHECK(store.config() == previous);
   }
 }
 
-UMBRIEL_TEST(initialUnreadableConfigCannotSilentlyDiscardDrmPolicy) {
+UMBRIEL_TEST(initialUnreadableConfigStartsWithDefaults) {
   const TempConfig file;
   file.write("[drm]\nignored_devices = [\"/dev/dri/card0\"]\n");
   std::filesystem::permissions(file.path(), std::filesystem::perms::none);
@@ -3388,12 +3339,13 @@ UMBRIEL_TEST(initialUnreadableConfigCannotSilentlyDiscardDrmPolicy) {
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
 
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
+  store.load(file.path().c_str());
+  CHECK_EQ(store.generation(), generation + 1);
+  CHECK(!store.config().drm.configured());
   CHECK(containsDiagnostic(store, "File could not be opened for reading"));
 }
 
-UMBRIEL_TEST(initialInaccessibleConfigCannotSilentlyDiscardDrmPolicy) {
+UMBRIEL_TEST(initialInaccessibleConfigStartsWithDefaults) {
   const TempConfigTree tree;
   tree.write("restricted/config.toml", "[drm]\nignored_devices = [\"/dev/dri/card0\"]\n");
   const std::filesystem::path restricted = tree.path("restricted");
@@ -3402,11 +3354,10 @@ UMBRIEL_TEST(initialInaccessibleConfigCannotSilentlyDiscardDrmPolicy) {
 
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
-  const bool loaded = store.load(configPath.c_str());
+  store.load(configPath.c_str());
   std::filesystem::permissions(restricted, std::filesystem::perms::owner_all);
-
-  CHECK(!loaded);
-  CHECK_EQ(store.generation(), generation);
+  CHECK_EQ(store.generation(), generation + 1);
+  CHECK(!store.config().drm.configured());
   CHECK(containsDiagnostic(store, "cannot inspect config file"));
 }
 
@@ -3423,12 +3374,11 @@ UMBRIEL_TEST(defaultConfigLookupDoesNotSkipInaccessibleUserPolicy) {
 
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
-  const bool loaded = store.load(nullptr);
+  store.load(nullptr);
   std::filesystem::permissions(userConfig.parent_path(), std::filesystem::perms::owner_all);
-
-  CHECK(!loaded);
   CHECK_EQ(store.rootPath(), userConfig);
-  CHECK_EQ(store.generation(), generation);
+  CHECK_EQ(store.generation(), generation + 1);
+  CHECK(store.config().layout.gap != 17);
   CHECK(containsDiagnostic(store, "cannot inspect config file"));
 }
 
@@ -3439,8 +3389,9 @@ UMBRIEL_TEST(missingPolicyIncludeRequiresRootDrmIntentMarker) {
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
 
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
+  store.load(file.path().c_str());
+  CHECK_EQ(store.generation(), generation + 1);
+  CHECK(!store.config().drm.configured());
   CHECK(store.missingIncludes());
   CHECK(containsDiagnostic(store, "cannot safely load DRM policy while an include is missing"));
 }
@@ -3452,8 +3403,9 @@ UMBRIEL_TEST(missingOptionalPolicyIncludeRequiresRootDrmIntentMarker) {
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
 
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
+  store.load(file.path().c_str());
+  CHECK_EQ(store.generation(), generation + 1);
+  CHECK(!store.config().drm.configured());
   CHECK(!store.missingIncludes());
   CHECK(containsDiagnostic(store, "cannot safely load DRM policy while an include is missing"));
 }
@@ -3467,26 +3419,24 @@ UMBRIEL_TEST(inaccessibleIncludeCannotBeTreatedAsMissing) {
 
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
-  const bool loaded = store.load(tree.path("config.toml").c_str());
+  store.load(tree.path("config.toml").c_str());
   std::filesystem::permissions(restricted, std::filesystem::perms::owner_all);
-
-  CHECK(!loaded);
-  CHECK_EQ(store.generation(), generation);
+  CHECK_EQ(store.generation(), generation + 1);
+  CHECK(!store.config().drm.configured());
   CHECK(!store.missingIncludes());
   CHECK(containsDiagnostic(store, "cannot inspect included config file"));
 }
 
-UMBRIEL_TEST(initialMissingExplicitConfigFailsWithoutCommittingDefaults) {
+UMBRIEL_TEST(initialMissingExplicitConfigStartsWithDefaults) {
   const TempConfig file;
   std::filesystem::remove(file.path());
 
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
-  const umbriel::Config previous = store.config();
 
-  CHECK(!store.load(file.path().c_str()));
-  CHECK_EQ(store.generation(), generation);
-  CHECK(store.config() == previous);
+  store.load(file.path().c_str());
+  CHECK_EQ(store.generation(), generation + 1);
+  CHECK(store.fileMissing());
   CHECK(containsDiagnostic(store, "config file not found"));
 }
 
@@ -3808,7 +3758,7 @@ UMBRIEL_TEST(initialDuplicateEffectPresetsKeepCompatibilityDefaults) {
   ConfigStore& store = umbriel::configStore();
   const uint64_t generation = store.generation();
 
-  CHECK(store.load(tree.path("config.toml").c_str()));
+  store.load(tree.path("config.toml").c_str());
   CHECK_EQ(store.generation(), generation + 1);
   CHECK(store.config().effects.presets.empty());
   CHECK(std::ranges::any_of(store.diagnostics(), [](const ConfigDiagnostic& diagnostic) {
@@ -4169,7 +4119,7 @@ UMBRIEL_TEST(replaceAdoptsTheNewFileAndPinsLaterReloadsToIt) {
   tree.write("new.toml", "[layout]\ngap = 23\n");
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(tree.path("old.toml").c_str()));
+  store.load(tree.path("old.toml").c_str());
   const uint64_t generation = store.generation();
 
   std::string errors;
@@ -4198,7 +4148,7 @@ UMBRIEL_TEST(replaceMovesTheWatchSetToTheNewFileAndItsIncludes) {
   tree.write("new_config.toml", "[include]\nfiles = [\"new_inc.toml\"]\n");
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(tree.path("old_config.toml").c_str()));
+  store.load(tree.path("old_config.toml").c_str());
   CHECK(std::ranges::find(store.watchPaths(), tree.path("old_config.toml")) != store.watchPaths().end());
   CHECK(std::ranges::find(store.watchPaths(), tree.path("old_inc.toml")) != store.watchPaths().end());
 
@@ -4218,7 +4168,7 @@ UMBRIEL_TEST(replaceAcceptsAFileThatOnlyProducesWarnings) {
   tree.write("warn.toml", "invalid_key = true\n[layout]\ngap = 23\n");
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(tree.path("live.toml").c_str()));
+  store.load(tree.path("live.toml").c_str());
 
   std::string errors;
   const umbriel::ConfigReloadResult result = store.replace(tree.path("warn.toml"), errors);
@@ -4236,7 +4186,7 @@ UMBRIEL_TEST(replaceRejectsAMissingFileAndLeavesTheLiveStateUntouched) {
   const std::filesystem::path missing = tree.path("missing.toml");
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(tree.path("live.toml").c_str()));
+  store.load(tree.path("live.toml").c_str());
   const uint64_t generation = store.generation();
 
   std::string errors;
@@ -4263,7 +4213,7 @@ UMBRIEL_TEST(replaceRejectsABrokenFileAndLeavesTheLiveStateUntouched) {
   tree.write("broken.toml", "[layout\n");
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(tree.path("live.toml").c_str()));
+  store.load(tree.path("live.toml").c_str());
   const uint64_t generation = store.generation();
 
   std::string errors;
@@ -4287,7 +4237,7 @@ UMBRIEL_TEST(replaceRejectsSemanticErrorsAndPreservesTheLiveState) {
   tree.write("invalid.toml", "[include]\nfiles = [\"rejected_inc.toml\"]\n[[workspace]]\nname = \"chat\"\nindex = 3\n");
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(tree.path("live.toml").c_str()));
+  store.load(tree.path("live.toml").c_str());
   CHECK(store.missingIncludes());
   const auto previousConfig = store.config();
   const auto previousDiagnostics = store.diagnostics();
@@ -4330,7 +4280,7 @@ UMBRIEL_TEST(replaceRejectionRestoresPendingMissingIncludes) {
 
   ConfigStore& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
-  CHECK(store.load(file.path().c_str()));
+  store.load(file.path().c_str());
   const uint64_t generation = store.generation();
   CHECK(store.missingIncludes());
 
@@ -4352,7 +4302,7 @@ UMBRIEL_TEST(replaceRejectionDoesNotDisturbAnImplicitStore) {
   const ScopedEnvironment configDirs("XDG_CONFIG_DIRS", systemDir.string());
 
   ConfigStore& store = umbriel::configStore();
-  CHECK(store.load(nullptr));
+  store.load(nullptr);
   const uint64_t generation = store.generation();
 
   std::string errors;

@@ -70,10 +70,8 @@ namespace umbriel {
 
   ConfigParseOutcome parseConfig(Config& out, const std::filesystem::path& rootPath) {
     ConfigStore& store = configStore();
-    bool drmPolicyRequested = false;
     try {
       auto result = configmerge::mergeWithIncludes(rootPath);
-      drmPolicyRequested = hasRequestedDrmPolicy(result.merged);
       store.setMissingIncludes(result.missingIncludes);
       for (auto& diagnostic : result.diagnostics) {
         store.addDiagnostic(std::move(diagnostic));
@@ -85,12 +83,10 @@ namespace umbriel {
         emitDiag(
             ConfigDiagnostic::Severity::Error, nullptr, "cannot safely load DRM policy while an include is missing"
         );
-        return ConfigParseOutcome::Fatal;
+        return ConfigParseOutcome::Failed;
       }
       if (result.hadError) {
-        // Invalid syntax or include directives can hide DRM policy intent.
-        // Do not silently start with defaults or a partial exclusion list.
-        return ConfigParseOutcome::Fatal;
+        return ConfigParseOutcome::Failed;
       }
 
       Config loaded;
@@ -124,7 +120,7 @@ namespace umbriel {
         return d.severity == ConfigDiagnostic::Severity::Error;
       });
       if (hasErrors) {
-        return drmPolicyRequested ? ConfigParseOutcome::Fatal : ConfigParseOutcome::DefaultsAllowed;
+        return ConfigParseOutcome::Failed;
       }
 
       out = std::move(loaded);
@@ -134,7 +130,7 @@ namespace umbriel {
     } catch (...) {
       emitDiag(ConfigDiagnostic::Severity::Error, nullptr, "config load error: unknown error");
     }
-    return drmPolicyRequested ? ConfigParseOutcome::Fatal : ConfigParseOutcome::DefaultsAllowed;
+    return ConfigParseOutcome::Failed;
   }
 
   registry::Descriptions registry::describeConfig(const Config& values) {

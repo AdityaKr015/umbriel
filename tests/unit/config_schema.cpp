@@ -35,7 +35,7 @@ namespace {
       std::ofstream out(configPath());
       out << document;
     }
-    (void)umbriel::loadConfig(configPath().c_str());
+    umbriel::loadConfig(configPath().c_str());
     Loaded loaded{.config = umbriel::config(), .messages = {}};
     for (const auto& diagnostic : umbriel::configDiagnostics()) {
       loaded.messages.push_back(diagnostic.message);

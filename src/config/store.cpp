@@ -123,7 +123,7 @@ namespace umbriel {
             ConfigDiagnostic::Severity::Error, nullptr,
             std::format("cannot inspect config file {}: {}", rootPath.string(), reason)
         );
-        return ConfigParseOutcome::Fatal;
+        return ConfigParseOutcome::Failed;
       }
       return parseConfig(out, rootPath);
     }
@@ -190,7 +190,7 @@ namespace umbriel {
 
   bool configHasMissingIncludes() { return configStore().missingIncludes(); }
 
-  bool ConfigStore::load(const char* explicitPath) {
+  void ConfigStore::load(const char* explicitPath) {
     ConfigSelection selection;
     if (explicitPath != nullptr) {
       m_implicitCandidates.clear();
@@ -217,11 +217,7 @@ namespace umbriel {
       }
     }
     sortDiagnostics();
-    if (outcome == ConfigParseOutcome::Fatal || (missing && m_explicitPath)) {
-      return false;
-    }
     (void)commit(std::move(loaded), selection.root, missing);
-    return true;
   }
 
   ConfigReloadResult ConfigStore::replace(const std::filesystem::path& explicitPath, std::string& errors) {
@@ -300,7 +296,7 @@ namespace umbriel {
     return commit(std::move(loaded), selection.root, false);
   }
 
-  bool loadConfig(const char* explicitPath) { return configStore().load(explicitPath); }
+  void loadConfig(const char* explicitPath) { configStore().load(explicitPath); }
 
   ConfigReloadResult replaceConfig(const std::filesystem::path& explicitPath, std::string& errors) {
     return configStore().replace(explicitPath, errors);

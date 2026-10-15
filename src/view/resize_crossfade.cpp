@@ -1,5 +1,7 @@
 #include "view/resize_crossfade.h"
 
+#include "server/color_manager.h"
+
 // clang-format off
 #include <algorithm>
 #include <cmath>
@@ -19,7 +21,8 @@ namespace umbriel {
   ResizeCrossfade::~ResizeCrossfade() { discard(); }
 
   void ResizeCrossfade::capture(
-      wlr_scene_tree* viewTree, wlr_scene_node* above, wlr_surface* root, int width, int height, int radius
+      wlr_scene_tree* viewTree, wlr_scene_node* above, wlr_surface* root, int width, int height, int radius,
+      ColorManager* colorManager
   ) {
     discard();
     if (viewTree == nullptr || above == nullptr || root == nullptr || width <= 0 || height <= 0) {
@@ -37,9 +40,10 @@ namespace umbriel {
     struct Ctx {
       ResizeCrossfade* self;
       wlr_surface* root;
+      ColorManager* colorManager;
       int originX;
       int originY;
-    } ctx{this, root, viewTree->node.x, viewTree->node.y};
+    } ctx{this, root, colorManager, viewTree->node.x, viewTree->node.y};
     wlr_scene_node_for_each_buffer(
         &viewTree->node,
         [](wlr_scene_buffer* source, int sx, int sy, void* data) {
@@ -68,6 +72,9 @@ namespace umbriel {
           wlr_scene_buffer_set_luminance_multiplier(copy, source->luminance_multiplier);
           wlr_scene_buffer_set_color_encoding(copy, source->color_encoding);
           wlr_scene_buffer_set_color_range(copy, source->color_range);
+          if (ctx.colorManager != nullptr) {
+            ctx.colorManager->applySurfaceDescriptionToBuffer(sceneSurface->surface, copy);
+          }
           copy->point_accepts_input = rejectInput;
           ctx.self->m_buffers.push_back({
               .node = copy,

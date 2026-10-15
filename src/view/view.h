@@ -44,7 +44,7 @@ namespace umbriel {
 
   class Server;
   class ScratchpadManager;
-  class WineColorManager;
+  class ColorManager;
   class Workspace;
   enum class LayoutAttachOrigin;
   struct ResolvedWindowRule;
@@ -397,7 +397,7 @@ namespace umbriel {
   private:
     friend class Cursor;
     friend class ScratchpadManager;
-    friend class WineColorManager;
+    friend class ColorManager;
     friend class Output;
     friend class Server;
     friend class Popup;

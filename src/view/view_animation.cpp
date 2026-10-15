@@ -7,6 +7,7 @@
 #include "overview/overview.h"
 #include "scene/effect_registry.h"
 #include "scene/surface_blur.h"
+#include "server/color_manager.h"
 #include "server/server.h"
 #include "view/view.h"
 extern "C" {
@@ -998,11 +999,12 @@ namespace umbriel {
     // Copy surface buffers.
     struct CopyCtx {
       wlr_scene_tree* snap;
+      ColorManager* colorManager;
       int rootX;
       int rootY;
       int buffersCopied;
     };
-    CopyCtx ctx{content, m_contentTree->node.x, m_contentTree->node.y, 0};
+    CopyCtx ctx{content, m_server->colorManager(), m_contentTree->node.x, m_contentTree->node.y, 0};
     wlr_scene_node_for_each_buffer(
         &m_contentTree->node,
         [](wlr_scene_buffer* src, int sx, int sy, void* data) {
@@ -1030,6 +1032,11 @@ namespace umbriel {
           wlr_scene_buffer_set_luminance_multiplier(copy, src->luminance_multiplier);
           wlr_scene_buffer_set_color_encoding(copy, src->color_encoding);
           wlr_scene_buffer_set_color_range(copy, src->color_range);
+          if (c->colorManager != nullptr) {
+            if (wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(src)) {
+              c->colorManager->applySurfaceDescriptionToBuffer(sceneSurface->surface, copy);
+            }
+          }
           ++c->buffersCopied;
         },
         &ctx

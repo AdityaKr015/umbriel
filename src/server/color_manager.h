@@ -12,16 +12,17 @@ namespace umbriel {
 
   class Server;
 
-  class WineColorManager {
+  class ColorManager {
   public:
-    explicit WineColorManager(Server& server);
-    ~WineColorManager();
+    explicit ColorManager(Server& server);
+    ~ColorManager();
 
-    WineColorManager(const WineColorManager&) = delete;
-    WineColorManager& operator=(const WineColorManager&) = delete;
+    ColorManager(const ColorManager&) = delete;
+    ColorManager& operator=(const ColorManager&) = delete;
 
     [[nodiscard]] bool valid() const;
     [[nodiscard]] wl_global* global() const;
+    [[nodiscard]] wl_global* compatibilityGlobal() const;
     [[nodiscard]] const wlr_image_description_v1_data* surfaceDescription(wlr_surface* surface) const;
     [[nodiscard]] bool surfaceRequiresHdrOutput(wlr_surface* surface) const;
     void applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const;

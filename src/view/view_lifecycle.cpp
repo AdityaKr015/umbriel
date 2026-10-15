@@ -735,7 +735,7 @@ namespace umbriel {
     }
     m_resizeCrossfade.capture(
         m_contentTree, toplevelSurfaceTreeNode(m_contentTree, surface), surface, m_presentedBox.width,
-        m_presentedBox.height, surfaceRadius()
+        m_presentedBox.height, surfaceRadius(), m_server->colorManager()
     );
   }
 

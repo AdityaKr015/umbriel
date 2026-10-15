@@ -24,8 +24,8 @@ extern "C" {
 #include "scene/effect_registry.h"
 #include "scene/hint_rect.h"
 #include "scene/text_buffer.h"
+#include "server/color_manager.h"
 #include "server/server.h"
-#include "server/wine_color_manager.h"
 #include "view/view.h"
 // clang-format off
 #include <algorithm>
@@ -848,6 +848,9 @@ namespace umbriel {
           wlr_scene_buffer_set_color_encoding(mirror->buffer, live->color_encoding);
           wlr_scene_buffer_set_color_range(mirror->buffer, live->color_range);
         }
+        if (ColorManager* colorManager = m_server->colorManager()) {
+          colorManager->applySurfaceDescriptionToBuffer(surface, mirror->buffer);
+        }
       }
     }
   }
@@ -989,11 +992,10 @@ namespace umbriel {
       wlr_scene_buffer_set_color_encoding(entry.buffer, source->color_encoding);
       wlr_scene_buffer_set_color_range(entry.buffer, source->color_range);
     }
-    // wlroots restores scene surfaces to its protocol-owned color state on
-    // every commit. Wine compatibility metadata is repaired at the render
-    // boundary, after this passive mirror has copied the transient state, so
+    // Scene surfaces reset their color state on every commit. This passive
+    // mirror may copy that state before the render boundary repairs it, so
     // apply the authoritative committed description directly to the mirror.
-    if (WineColorManager* colorManager = entry.card->overview->m_server->wineColorManager()) {
+    if (ColorManager* colorManager = entry.card->overview->m_server->colorManager()) {
       colorManager->applySurfaceDescriptionToBuffer(surface, entry.buffer);
     }
   }
@@ -1193,6 +1195,9 @@ namespace umbriel {
       wlr_scene_buffer_set_luminance_multiplier(copy, source->luminance_multiplier);
       wlr_scene_buffer_set_color_encoding(copy, source->color_encoding);
       wlr_scene_buffer_set_color_range(copy, source->color_range);
+      if (ColorManager* colorManager = m_server->colorManager()) {
+        colorManager->applySurfaceDescriptionToBuffer(entry->surface, copy);
+      }
       wlr_scene_buffer_set_filter_mode(copy, WLR_SCALE_FILTER_BILINEAR);
       ++buffersCopied;
     }

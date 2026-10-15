@@ -33,7 +33,6 @@ struct wlr_allocator;
 struct wlr_backend;
 struct wlr_box;
 struct wlr_compositor;
-struct wlr_color_manager_v1;
 struct wlr_content_type_manager_v1;
 struct wlr_image_description_v1_data;
 struct wlr_ext_foreign_toplevel_handle_v1;
@@ -128,7 +127,7 @@ namespace umbriel {
   class ConfigWatcher;
   class InputMethodRelay;
   class Gestures;
-  class WineColorManager;
+  class ColorManager;
   class SyncobjUnmapRelease;
   class HintRect;
   class Keyboard;
@@ -175,12 +174,11 @@ namespace umbriel {
     // The security-context metadata for a restricted client, or null for a
     // client on the ordinary socket.
     [[nodiscard]] const wlr_security_context_v1_state* clientSecurityContext(const wl_client* client) const;
-    [[nodiscard]] wlr_color_manager_v1* colorManager() const { return m_colorManager; }
     [[nodiscard]] wlr_export_dmabuf_manager_v1* exportDmabufManager() const { return m_exportDmabufManager; }
     // True while a live cursor session is attached to a capture source of this output.
     [[nodiscard]] bool hasCopyCaptureFor(const wlr_output* output) const;
     [[nodiscard]] wlr_tearing_control_manager_v1* tearingControlManager() const { return m_tearingControlManager; }
-    [[nodiscard]] WineColorManager* wineColorManager() const { return m_wineColorManager.get(); }
+    [[nodiscard]] ColorManager* colorManager() const { return m_colorManager.get(); }
     [[nodiscard]] const wlr_image_description_v1_data* surfaceImageDescription(wlr_surface* surface) const;
     [[nodiscard]] const wlr_image_description_v1_data* surfaceTreeHdrDescription(wlr_surface* surface) const;
     void updateColorPreferences();
@@ -664,10 +662,9 @@ namespace umbriel {
     wlr_compositor* m_compositor = nullptr;
     wlr_output_layout* m_outputLayout = nullptr;
     wlr_scene* m_scene = nullptr;
-    wlr_color_manager_v1* m_colorManager = nullptr;
     wlr_content_type_manager_v1* m_contentTypeManager = nullptr;
     wlr_security_context_manager_v1* m_securityContextManager = nullptr;
-    std::unique_ptr<WineColorManager> m_wineColorManager;
+    std::unique_ptr<ColorManager> m_colorManager;
     std::unique_ptr<SyncobjUnmapRelease> m_syncobjUnmapRelease;
     EffectRegistry m_effects;
     EffectSelection m_effectSelection;

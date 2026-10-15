@@ -22,9 +22,9 @@
 #include "scene/config_banner.h"
 #include "scene/node.h"
 #include "scene/quit_confirm.h"
+#include "server/color_manager.h"
 #include "server/ipc.h"
 #include "server/server.h"
-#include "server/wine_color_manager.h"
 #include "view/view.h"
 #include "wlr.h"
 #include "workspace/scratchpad.h"
@@ -1560,11 +1560,9 @@ namespace umbriel {
       m_animationRenderLocked = animationsActive;
     }
 
-    // wlroots only knows about descriptions owned by its color manager and resets
-    // compatibility-managed Wine buffers to SDR on every surface commit. Restore
-    // their descriptions at the render boundary so no frame can observe that
-    // transient default state.
-    if (WineColorManager* colorManager = m_server->wineColorManager()) {
+    // Scene surfaces reset their color state on every commit. Apply Umbriel's
+    // committed protocol state at the render boundary before composing a frame.
+    if (ColorManager* colorManager = m_server->colorManager()) {
       colorManager->applySurfaceDescriptions();
     }
 

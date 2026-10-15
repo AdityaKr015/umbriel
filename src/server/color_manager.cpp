@@ -1,8 +1,9 @@
-#include "server/wine_color_manager.h"
+#include "server/color_manager.h"
 
 #include "color-management-v1-server-protocol.h"
 #include "core/tracy.h"
 #include "output/output.h"
+#include "server/color_description.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -33,19 +34,6 @@ namespace umbriel {
     constexpr uint32_t kProtocolVersion = 2;
 #endif
     constexpr uint32_t kDefaultSdrWhite = 203;
-
-    struct Luminances {
-      float min = 0.2F;
-      float max = 80.0F;
-      float reference = 80.0F;
-    };
-
-    struct Description {
-      wlr_image_description_v1_data data{};
-      Luminances luminances;
-      float luminanceMultiplier = 1.0F;
-      bool requiresHdrOutput = false;
-    };
 
     std::string readProcessFile(pid_t pid, std::string_view name, bool binary = false) {
       std::ifstream stream(
@@ -102,86 +90,36 @@ namespace umbriel {
     float decodeCoordinate(int32_t value) { return static_cast<float>(value) / 1'000'000.0F; }
     int32_t encodeCoordinate(float value) { return static_cast<int32_t>(std::lround(value * 1'000'000.0F)); }
 
-    Luminances defaultLuminances(uint32_t transferFunction) {
-      switch (transferFunction) {
-      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ:
-        return {.min = 0.005F, .max = 10000.0F, .reference = 203.0F};
-      case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_BT1886:
-        return {.min = 0.01F, .max = 100.0F, .reference = 100.0F};
-      default:
-        return {};
-      }
-    }
-
-    bool primariesEqual(const wlr_color_primaries& left, const wlr_color_primaries& right) {
-      return left.red.x == right.red.x
-          && left.red.y == right.red.y
-          && left.green.x == right.green.x
-          && left.green.y == right.green.y
-          && left.blue.x == right.blue.x
-          && left.blue.y == right.blue.y
-          && left.white.x == right.white.x
-          && left.white.y == right.white.y;
-    }
-
-    bool descriptionsEqual(const Description& left, const Description& right) {
-      const auto& a = left.data;
-      const auto& b = right.data;
-      return a.tf_named == b.tf_named
-          && a.primaries_named == b.primaries_named
-          && a.has_mastering_display_primaries == b.has_mastering_display_primaries
-          && (!a.has_mastering_display_primaries
-              || primariesEqual(a.mastering_display_primaries, b.mastering_display_primaries))
-          && a.has_mastering_luminance == b.has_mastering_luminance
-          && (!a.has_mastering_luminance
-              || (a.mastering_luminance.min == b.mastering_luminance.min
-                  && a.mastering_luminance.max == b.mastering_luminance.max))
-          && a.max_cll == b.max_cll
-          && a.max_fall == b.max_fall
-          && left.luminances.min == right.luminances.min
-          && left.luminances.max == right.luminances.max
-          && left.luminances.reference == right.luminances.reference
-          && left.luminanceMultiplier == right.luminanceMultiplier
-          && left.requiresHdrOutput == right.requiresHdrOutput;
-    }
-
-    bool primariesSet(const wlr_color_primaries& primaries) {
-      return primaries.red.x != 0.0F
-          || primaries.red.y != 0.0F
-          || primaries.green.x != 0.0F
-          || primaries.green.y != 0.0F
-          || primaries.blue.x != 0.0F
-          || primaries.blue.y != 0.0F
-          || primaries.white.x != 0.0F
-          || primaries.white.y != 0.0F;
-    }
-
   } // namespace
 
-  struct WineColorManager::Impl {
+  struct ColorManager::Impl {
     struct ImageDescription {
       wl_resource* resource = nullptr;
-      Description description;
+      ColorDescription description;
       bool informationAllowed = false;
     };
 
     struct ParametricCreator {
       Impl* manager = nullptr;
       wl_resource* resource = nullptr;
-      Description description;
+      ColorDescription description;
       bool transferFunctionSet = false;
       bool primariesSet = false;
+    };
+
+    struct SurfaceState {
+      ColorDescription description;
+      bool set = false;
     };
 
     struct Surface {
       Impl* manager = nullptr;
       wl_resource* resource = nullptr;
       wlr_surface* surface = nullptr;
-      Description pendingDescription;
-      Description currentDescription;
-      bool pendingSet = false;
-      bool currentSet = false;
-      bool wlrDestroying = false;
+      wlr_surface_synced synced{};
+      SurfaceState pending;
+      SurfaceState current;
+      SurfaceState applied;
       wl_listener commit{};
       wl_listener map{};
       wl_listener unmap{};
@@ -192,7 +130,8 @@ namespace umbriel {
       Impl* manager = nullptr;
       wl_resource* resource = nullptr;
       wlr_surface* surface = nullptr;
-      Description preferred;
+      ColorDescription preferred;
+      uint64_t identity = 0;
       wl_listener destroy{};
     };
 
@@ -200,6 +139,7 @@ namespace umbriel {
       Impl* manager = nullptr;
       wl_resource* resource = nullptr;
       wlr_output* output = nullptr;
+      ColorDescription description;
       wl_listener commit{};
       wl_listener destroy{};
     };
@@ -229,7 +169,9 @@ namespace umbriel {
         return;
       }
 
-      global = wl_global_create(server.display(), &wp_color_manager_v1_interface, kProtocolVersion, this, handleBind);
+      global = wl_global_create(server.display(), &wp_color_manager_v1_interface, 2, this, handleBind);
+      compatibilityGlobal =
+          wl_global_create(server.display(), &wp_color_manager_v1_interface, kProtocolVersion, this, handleBind);
     }
 
     ~Impl() {
@@ -237,19 +179,16 @@ namespace umbriel {
         wl_global_destroy(global);
         global = nullptr;
       }
+      if (compatibilityGlobal != nullptr) {
+        wl_global_destroy(compatibilityGlobal);
+        compatibilityGlobal = nullptr;
+      }
       while (!outputs.empty()) {
         auto* output = *outputs.begin();
         destroyManagedOutput(output, true);
       }
       while (!surfaces.empty()) {
-        auto* surface = surfaces.begin()->second;
-        wl_resource_set_user_data(surface->resource, nullptr);
-        wl_list_remove(&surface->commit.link);
-        wl_list_remove(&surface->map.link);
-        wl_list_remove(&surface->unmap.link);
-        wl_list_remove(&surface->destroy.link);
-        surfaces.erase(surfaces.begin());
-        delete surface;
+        destroySurface(surfaces.begin()->second, true);
       }
       while (!feedbacks.empty()) {
         auto* feedback = *feedbacks.begin();
@@ -342,13 +281,15 @@ namespace umbriel {
 
       wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_PARAMETRIC);
       wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_SET_MASTERING_DISPLAY_PRIMARIES);
-      wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_EXTENDED_TARGET_VOLUME);
-      wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_SCRGB);
+      if (ColorManager::clientNeedsCompatibility(client)) {
+        wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_EXTENDED_TARGET_VOLUME);
+        wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_SCRGB);
 #ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
-      if (wl_resource_get_version(resource) >= WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION) {
-        wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_BT2100);
-      }
+        if (wl_resource_get_version(resource) >= WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION) {
+          wp_color_manager_v1_send_supported_feature(resource, WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_BT2100);
+        }
 #endif
+      }
       wp_color_manager_v1_send_supported_intent(resource, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL);
       for (const wp_color_manager_v1_transfer_function transferFunction : manager->transferFunctions) {
         if (wp_color_manager_v1_transfer_function_is_valid(transferFunction, wl_resource_get_version(resource))) {
@@ -382,6 +323,7 @@ namespace umbriel {
           .manager = manager,
           .resource = resource,
           .output = output,
+          .description = manager->descriptionForOutput(output),
       };
       managed->commit.notify = handleOutputCommit;
       wl_signal_add(&output->events.commit, &managed->commit);
@@ -405,11 +347,8 @@ namespace umbriel {
     static void handleOutputCommit(wl_listener* listener, void* data) {
       ManagedOutput* output;
       output = wl_container_of(listener, output, commit);
-      const auto* event = static_cast<wlr_output_event_commit*>(data);
-      if ((event->state->committed & WLR_OUTPUT_STATE_IMAGE_DESCRIPTION) != 0) {
-        wp_color_management_output_v1_send_image_description_changed(output->resource);
-        wlr_output_schedule_done(output->output);
-      }
+      (void)data;
+      output->manager->updateOutputDescription(output);
     }
 
     static void handleWlrOutputDestroy(wl_listener* listener, void*) {
@@ -450,10 +389,25 @@ namespace umbriel {
       auto* managed = new Surface{};
       managed->manager = manager;
       managed->surface = surface;
+      static const wlr_surface_synced_impl syncedImplementation{
+          .state_size = sizeof(SurfaceState),
+          .init_state = [](void* state) { *static_cast<SurfaceState*>(state) = {}; },
+          .finish_state = nullptr,
+          .move_state = nullptr,
+          .commit = nullptr,
+      };
+      if (!wlr_surface_synced_init(
+              &managed->synced, surface, &syncedImplementation, &managed->pending, &managed->current
+          )) {
+        delete managed;
+        wl_client_post_no_memory(client);
+        return;
+      }
       managed->resource = wl_resource_create(
           client, &wp_color_management_surface_v1_interface, wl_resource_get_version(managerResource), id
       );
       if (managed->resource == nullptr) {
+        wlr_surface_synced_finish(&managed->synced);
         delete managed;
         wl_client_post_no_memory(client);
         return;
@@ -501,8 +455,8 @@ namespace umbriel {
         );
         return;
       }
-      surface->pendingDescription = imageDescription->description;
-      surface->pendingSet = true;
+      surface->pending.description = imageDescription->description;
+      surface->pending.set = true;
     }
 
     static void handleSurfaceUnsetImageDescription(wl_client*, wl_resource* resource) {
@@ -511,16 +465,16 @@ namespace umbriel {
         wl_resource_post_error(resource, WP_COLOR_MANAGEMENT_SURFACE_V1_ERROR_INERT, "surface is inert");
         return;
       }
-      surface->pendingSet = false;
+      surface->pending.set = false;
     }
 
     static void handleSurfaceCommit(wl_listener* listener, void*) {
       Surface* surface;
       surface = wl_container_of(listener, surface, commit);
-      const bool changed = surface->currentSet != surface->pendingSet
-          || (surface->pendingSet && !descriptionsEqual(surface->currentDescription, surface->pendingDescription));
-      surface->currentDescription = surface->pendingDescription;
-      surface->currentSet = surface->pendingSet;
+      const bool changed = surface->current.set != surface->applied.set
+          || (surface->current.set
+              && !colorDescriptionsEqual(surface->current.description, surface->applied.description));
+      surface->applied = surface->current;
       if (changed) {
         surface->manager->refreshSurfaceHdr(surface->surface);
       }
@@ -541,24 +495,29 @@ namespace umbriel {
     static void handleWlrSurfaceDestroy(wl_listener* listener, void*) {
       Surface* surface;
       surface = wl_container_of(listener, surface, destroy);
-      surface->wlrDestroying = true;
-      wl_resource_destroy(surface->resource);
+      destroySurface(surface, true);
     }
 
     static void handleSurfaceResourceDestroy(wl_resource* resource) {
       auto* surface = static_cast<Surface*>(wl_resource_get_user_data(resource));
+      destroySurface(surface, false);
+    }
+
+    static void destroySurface(Surface* surface, bool destroying) {
       if (surface == nullptr) {
         return;
       }
+      wl_resource_set_user_data(surface->resource, nullptr);
       wl_list_remove(&surface->commit.link);
       wl_list_remove(&surface->map.link);
       wl_list_remove(&surface->unmap.link);
       wl_list_remove(&surface->destroy.link);
+      wlr_surface_synced_finish(&surface->synced);
       surface->manager->surfaces.erase(surface->surface);
-      if (!surface->wlrDestroying) {
+      if (!destroying) {
         surface->manager->applySurfaceColor(surface->surface, nullptr);
+        surface->manager->refreshSurfaceHdr(surface->surface);
       }
-      surface->manager->refreshSurfaceHdr(surface->surface);
       delete surface;
     }
 
@@ -578,6 +537,7 @@ namespace umbriel {
         return;
       }
       feedback->preferred = manager->preferredDescription(feedback->surface);
+      feedback->identity = ++manager->lastIdentity;
       feedback->destroy.notify = handleFeedbackSurfaceDestroy;
       wl_signal_add(&feedback->surface->events.destroy, &feedback->destroy);
       wl_resource_set_implementation(
@@ -592,7 +552,7 @@ namespace umbriel {
         wl_resource_post_error(resource, WP_COLOR_MANAGEMENT_SURFACE_FEEDBACK_V1_ERROR_INERT, "surface is inert");
         return;
       }
-      feedback->manager->createReadyImageDescription(resource, id, feedback->preferred, true);
+      feedback->manager->createReadyImageDescription(resource, id, feedback->preferred, true, feedback->identity);
     }
 
     static void handleFeedbackSurfaceDestroy(wl_listener* listener, void*) {
@@ -666,7 +626,8 @@ namespace umbriel {
         );
         return;
       }
-      if (!contains(
+      if (!wp_color_manager_v1_transfer_function_is_valid(transferFunction, wl_resource_get_version(resource))
+          || !contains(
               creator->manager->transferFunctions, static_cast<wp_color_manager_v1_transfer_function>(transferFunction)
           )) {
         wl_resource_post_error(
@@ -675,7 +636,7 @@ namespace umbriel {
         return;
       }
       creator->description.data.tf_named = transferFunction;
-      creator->description.luminances = defaultLuminances(transferFunction);
+      creator->description.luminances = defaultColorLuminances(transferFunction);
       creator->transferFunctionSet = true;
     }
 
@@ -779,9 +740,15 @@ namespace umbriel {
       delete static_cast<ParametricCreator*>(wl_resource_get_user_data(resource));
     }
 
-    static void handleCreateWindowsScrgb(wl_client*, wl_resource* managerResource, uint32_t id) {
+    static void handleCreateWindowsScrgb(wl_client* client, wl_resource* managerResource, uint32_t id) {
+      if (!ColorManager::clientNeedsCompatibility(client)) {
+        wl_resource_post_error(
+            managerResource, WP_COLOR_MANAGER_V1_ERROR_UNSUPPORTED_FEATURE, "Windows-scRGB is not advertised"
+        );
+        return;
+      }
       auto* manager = static_cast<Impl*>(wl_resource_get_user_data(managerResource));
-      Description description;
+      ColorDescription description;
       description.data.tf_named = WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_LINEAR;
       description.data.primaries_named = WP_COLOR_MANAGER_V1_PRIMARIES_SRGB;
       description.luminances = {.min = 0.0F, .max = 10000.0F, .reference = 203.0F};
@@ -791,12 +758,18 @@ namespace umbriel {
     }
 
 #ifdef WP_COLOR_MANAGER_V1_CREATE_WINDOWS_BT2100_SINCE_VERSION
-    static void handleCreateWindowsBt2100(wl_client*, wl_resource* managerResource, uint32_t id) {
+    static void handleCreateWindowsBt2100(wl_client* client, wl_resource* managerResource, uint32_t id) {
+      if (!ColorManager::clientNeedsCompatibility(client)) {
+        wl_resource_post_error(
+            managerResource, WP_COLOR_MANAGER_V1_ERROR_UNSUPPORTED_FEATURE, "Windows BT.2100 is not advertised"
+        );
+        return;
+      }
       auto* manager = static_cast<Impl*>(wl_resource_get_user_data(managerResource));
-      Description description;
+      ColorDescription description;
       description.data.tf_named = WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ;
       description.data.primaries_named = WP_COLOR_MANAGER_V1_PRIMARIES_BT2020;
-      description.luminances = defaultLuminances(description.data.tf_named);
+      description.luminances = defaultColorLuminances(description.data.tf_named);
       description.requiresHdrOutput = true;
       manager->createReadyImageDescription(managerResource, id, description, false);
     }
@@ -809,8 +782,15 @@ namespace umbriel {
     }
 
     void createReadyImageDescription(
-        wl_resource* parent, uint32_t id, const Description& description, bool informationAllowed
+        wl_resource* parent, uint32_t id, const ColorDescription& description, bool informationAllowed,
+        uint64_t identity = 0
     ) {
+      if (!wp_color_manager_v1_transfer_function_is_valid(description.data.tf_named, wl_resource_get_version(parent))) {
+        createFailedImageDescription(
+            parent, id, WP_IMAGE_DESCRIPTION_V1_CAUSE_LOW_VERSION, "transfer function requires a newer protocol version"
+        );
+        return;
+      }
       auto* imageDescription = new ImageDescription{
           .description = description,
           .informationAllowed = informationAllowed,
@@ -827,7 +807,7 @@ namespace umbriel {
           imageDescription->resource, &imageDescriptionImplementation(), imageDescription,
           handleImageDescriptionResourceDestroy
       );
-      sendReady(imageDescription->resource, ++lastIdentity);
+      sendReady(imageDescription->resource, identity != 0 ? identity : ++lastIdentity);
     }
 
     static void createFailedImageDescription(wl_resource* parent, uint32_t id, uint32_t cause, const char* message) {
@@ -872,7 +852,7 @@ namespace umbriel {
         return;
       }
 
-      const Description& description = imageDescription->description;
+      const ColorDescription& description = imageDescription->description;
       wlr_color_primaries primaryCoordinates{};
       wlr_color_primaries_from_named(
           &primaryCoordinates,
@@ -935,73 +915,67 @@ namespace umbriel {
       delete static_cast<ImageDescription*>(wl_resource_get_user_data(resource));
     }
 
-    Description descriptionForOutput(wlr_output* output) const {
-      Description description;
-      description.data.tf_named = WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22;
-      description.data.primaries_named = WP_COLOR_MANAGER_V1_PRIMARIES_SRGB;
-      if (output->image_description == nullptr) {
-        return description;
-      }
-
-      const wlr_output_image_description& outputDescription = *output->image_description;
-      description.data.tf_named = wlr_color_manager_v1_transfer_function_from_wlr(outputDescription.transfer_function);
-      description.data.primaries_named = wlr_color_manager_v1_primaries_from_wlr(outputDescription.primaries);
-      description.luminances = defaultLuminances(description.data.tf_named);
-      if (const Output* managedOutput = server.outputFromWlr(output)) {
-        description.luminances.reference = managedOutput->configuredSdrWhite();
-      }
-      if (primariesSet(outputDescription.mastering_display_primaries)) {
-        description.data.has_mastering_display_primaries = true;
-        description.data.mastering_display_primaries = outputDescription.mastering_display_primaries;
-      }
-      if (outputDescription.mastering_luminance.max > outputDescription.mastering_luminance.min) {
-        description.data.has_mastering_luminance = true;
-        description.data.mastering_luminance = {
-            .min = static_cast<float>(outputDescription.mastering_luminance.min),
-            .max = static_cast<float>(outputDescription.mastering_luminance.max),
-        };
-      }
-      description.data.max_cll = static_cast<uint32_t>(std::lround(outputDescription.max_cll));
-      description.data.max_fall = static_cast<uint32_t>(std::lround(outputDescription.max_fall));
-      return description;
+    ColorDescription descriptionForOutput(wlr_output* output) const {
+      const Output* managedOutput = server.outputFromWlr(output);
+      const float sdrWhite = managedOutput != nullptr ? managedOutput->configuredSdrWhite() : kDefaultSdrWhite;
+      return outputColorDescription(output->image_description, sdrWhite);
     }
 
-    Description preferredDescription(wlr_surface* surface) const {
-      Output* output = nullptr;
+    ColorDescription preferredDescription(wlr_surface* surface) const {
+      wlr_output* preferred = nullptr;
       if (View* view = View::fromSurface(wlr_surface_get_root_surface(surface)); view != nullptr) {
-        output = view->currentOutput();
+        if (Output* output = view->currentOutput()) {
+          preferred = output->wlr();
+        }
       }
-      if (output == nullptr) {
-        output = server.outputFromWlr(server.preferredOutput());
+      // A surface crossing outputs may need HDR even when its main output is
+      // SDR. Include subsurfaces and layer clients through actual membership.
+      wlr_output* selected = nullptr;
+      wlr_surface_output* membership;
+      wl_list_for_each(membership, &surface->current_outputs, link) {
+        wlr_output* candidate = membership->output;
+        if (selected == nullptr
+            || (selected->image_description == nullptr && candidate->image_description != nullptr)
+            || (candidate == preferred && candidate->image_description != nullptr)) {
+          selected = candidate;
+        }
       }
-      if (output != nullptr && output->hdrActive()) {
-        return descriptionForOutput(output->wlr());
+      if (selected == nullptr) {
+        selected = preferred != nullptr ? preferred : server.preferredOutput();
       }
-      Description description;
-      description.data.tf_named = WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22;
-      description.data.primaries_named = WP_COLOR_MANAGER_V1_PRIMARIES_SRGB;
-      if (output != nullptr) {
-        description.luminances.reference = output->configuredSdrWhite();
+      return selected != nullptr ? descriptionForOutput(selected) : outputColorDescription(nullptr, kDefaultSdrWhite);
+    }
+
+    void updateOutputDescription(ManagedOutput* output) {
+      ColorDescription description = descriptionForOutput(output->output);
+      if (colorDescriptionsEqual(description, output->description)) {
+        return;
       }
-      return description;
+      output->description = description;
+      wp_color_management_output_v1_send_image_description_changed(output->resource);
+      wlr_output_schedule_done(output->output);
     }
 
     void updatePreferredDescriptions() {
+      for (ManagedOutput* output : outputs) {
+        updateOutputDescription(output);
+      }
       for (SurfaceFeedback* feedback : feedbacks) {
-        Description preferred = preferredDescription(feedback->surface);
-        if (descriptionsEqual(preferred, feedback->preferred)) {
+        ColorDescription preferred = preferredDescription(feedback->surface);
+        if (colorDescriptionsEqual(preferred, feedback->preferred)) {
           continue;
         }
         feedback->preferred = preferred;
-        const uint64_t identity = ++lastIdentity;
+        feedback->identity = ++lastIdentity;
         if (wl_resource_get_version(feedback->resource)
             >= WP_COLOR_MANAGEMENT_SURFACE_FEEDBACK_V1_PREFERRED_CHANGED2_SINCE_VERSION) {
           wp_color_management_surface_feedback_v1_send_preferred_changed2(
-              feedback->resource, static_cast<uint32_t>(identity >> 32), static_cast<uint32_t>(identity)
+              feedback->resource, static_cast<uint32_t>(feedback->identity >> 32),
+              static_cast<uint32_t>(feedback->identity)
           );
         } else {
           wp_color_management_surface_feedback_v1_send_preferred_changed(
-              feedback->resource, static_cast<uint32_t>(identity)
+              feedback->resource, static_cast<uint32_t>(feedback->identity)
           );
         }
       }
@@ -1020,7 +994,7 @@ namespace umbriel {
       }
     }
 
-    void applySurfaceColor(wlr_surface* surface, const Description* description) {
+    void applySurfaceColor(wlr_surface* surface, const ColorDescription* description) {
       struct ApplyContext {
         wlr_surface* surface;
         wlr_color_transfer_function transferFunction;
@@ -1058,6 +1032,7 @@ namespace umbriel {
     }
 
     void applySurfaceDescriptions() {
+      updatePreferredDescriptions();
       struct ApplyContext {
         const std::unordered_map<wlr_surface*, Surface*>* surfaces;
       } context{.surfaces = &surfaces};
@@ -1074,11 +1049,13 @@ namespace umbriel {
             if (found == context->surfaces->end()) {
               return;
             }
-            if (!found->second->currentSet) {
+            if (!found->second->current.set) {
+              wlr_scene_buffer_set_transfer_function(buffer, WLR_COLOR_TRANSFER_FUNCTION_SRGB);
+              wlr_scene_buffer_set_primaries(buffer, WLR_COLOR_NAMED_PRIMARIES_SRGB);
               wlr_scene_buffer_set_luminance_multiplier(buffer, 1.0F);
               return;
             }
-            const Description& currentDescription = found->second->currentDescription;
+            const ColorDescription& currentDescription = found->second->current.description;
             const wlr_image_description_v1_data& description = currentDescription.data;
             wlr_scene_buffer_set_transfer_function(
                 buffer,
@@ -1103,10 +1080,16 @@ namespace umbriel {
         return;
       }
       const auto found = surfaces.find(surface);
-      if (found == surfaces.end() || !found->second->currentSet) {
+      if (found == surfaces.end()) {
         return;
       }
-      const Description& currentDescription = found->second->currentDescription;
+      if (!found->second->current.set) {
+        wlr_scene_buffer_set_transfer_function(buffer, WLR_COLOR_TRANSFER_FUNCTION_SRGB);
+        wlr_scene_buffer_set_primaries(buffer, WLR_COLOR_NAMED_PRIMARIES_SRGB);
+        wlr_scene_buffer_set_luminance_multiplier(buffer, 1.0F);
+        return;
+      }
+      const ColorDescription& currentDescription = found->second->current.description;
       const wlr_image_description_v1_data& description = currentDescription.data;
       wlr_scene_buffer_set_transfer_function(
           buffer,
@@ -1123,6 +1106,7 @@ namespace umbriel {
 
     Server& server;
     wl_global* global = nullptr;
+    wl_global* compatibilityGlobal = nullptr;
     uint64_t lastIdentity = 0;
     std::vector<wp_color_manager_v1_transfer_function> transferFunctions;
     std::vector<wp_color_manager_v1_primaries> primaries;
@@ -1131,37 +1115,38 @@ namespace umbriel {
     std::unordered_set<ManagedOutput*> outputs;
   };
 
-  WineColorManager::WineColorManager(Server& server) : m_impl(std::make_unique<Impl>(server)) {}
-  WineColorManager::~WineColorManager() = default;
+  ColorManager::ColorManager(Server& server) : m_impl(std::make_unique<Impl>(server)) {}
+  ColorManager::~ColorManager() = default;
 
-  bool WineColorManager::valid() const { return m_impl->global != nullptr; }
-  wl_global* WineColorManager::global() const { return m_impl->global; }
+  bool ColorManager::valid() const { return m_impl->global != nullptr && m_impl->compatibilityGlobal != nullptr; }
+  wl_global* ColorManager::global() const { return m_impl->global; }
+  wl_global* ColorManager::compatibilityGlobal() const { return m_impl->compatibilityGlobal; }
 
-  const wlr_image_description_v1_data* WineColorManager::surfaceDescription(wlr_surface* surface) const {
+  const wlr_image_description_v1_data* ColorManager::surfaceDescription(wlr_surface* surface) const {
     const auto found = m_impl->surfaces.find(surface);
-    return found != m_impl->surfaces.end() && found->second->currentSet ? &found->second->currentDescription.data
-                                                                        : nullptr;
+    return found != m_impl->surfaces.end() && found->second->current.set ? &found->second->current.description.data
+                                                                         : nullptr;
   }
 
-  bool WineColorManager::surfaceRequiresHdrOutput(wlr_surface* surface) const {
+  bool ColorManager::surfaceRequiresHdrOutput(wlr_surface* surface) const {
     const auto found = m_impl->surfaces.find(surface);
     return found != m_impl->surfaces.end()
-        && found->second->currentSet
-        && found->second->currentDescription.requiresHdrOutput;
+        && found->second->current.set
+        && found->second->current.description.requiresHdrOutput;
   }
 
-  void WineColorManager::applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const {
+  void ColorManager::applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const {
     m_impl->applySurfaceDescriptionToBuffer(surface, buffer);
   }
 
-  void WineColorManager::applySurfaceDescriptions() {
-    UMBRIEL_ZONE("WineColorManager::applySurfaceDescriptions");
+  void ColorManager::applySurfaceDescriptions() {
+    UMBRIEL_ZONE("ColorManager::applySurfaceDescriptions");
     m_impl->applySurfaceDescriptions();
   }
 
-  void WineColorManager::updatePreferredDescriptions() { m_impl->updatePreferredDescriptions(); }
+  void ColorManager::updatePreferredDescriptions() { m_impl->updatePreferredDescriptions(); }
 
-  bool WineColorManager::clientNeedsCompatibility(const wl_client* client) {
+  bool ColorManager::clientNeedsCompatibility(const wl_client* client) {
     auto* target = const_cast<wl_client*>(client);
     if (wl_listener* memo = wl_client_get_destroy_listener(target, onWineClientDestroy); memo != nullptr) {
       WineClientProbe* probe;

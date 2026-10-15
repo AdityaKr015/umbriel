@@ -35,6 +35,7 @@ unit_tests = [
   ['output-format-sequence', ['unit/output_format_sequence.cpp'], []],
   ['output-gamma-transition', ['unit/output_gamma_transition.cpp'], []],
   ['hdr-metadata', ['unit/hdr_metadata.cpp'], [umbriel_core_dep]],
+  ['color-description', ['unit/color_description.cpp'], [umbriel_core_dep]],
   ['hdr-format', ['unit/hdr_format.cpp'], []],
   ['sdr-format', ['unit/sdr_format.cpp'], []],
   ['layout-struts', ['unit/layout_struts.cpp'], []],
@@ -347,6 +348,18 @@ security_context_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+color_feedback_client = executable(
+  'color-feedback-client',
+  [
+    'harness/clients/color_feedback_client.cpp',
+    xdg_shell_client_h,
+    xdg_shell_client_c,
+    color_management_client_h,
+    color_management_client_c,
+  ],
+  dependencies: [wayland_client_dep],
+)
+
 # Harness helper that logs the seat input events a window receives, for input state checks.
 seat_log_client = executable(
   'seat-log-client',
@@ -440,6 +453,7 @@ capture_client = executable(
 )
 
 harness_client_targets = [
+  color_feedback_client,
   pixel_probe,
   capture_client,
   pointer_client,

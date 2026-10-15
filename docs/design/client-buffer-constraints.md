@@ -166,6 +166,32 @@ Output color LUTs are cached as renderer-local textures keyed by the immutable
 LUT transform. Reusing an output transform therefore reuses its uploaded
 texture, while transform and renderer destruction both release the cache entry.
 
+## Client color descriptions
+
+Umbriel's `ColorManager` owns the color-management protocol for native and Wine
+clients. Native clients receive a version 2 global with the ordinary supported
+feature set. Wine clients receive a separately filtered compatibility global
+that also exposes Windows-scRGB and, when available, Windows BT.2100. Both
+globals share surface state and the scene repair pass.
+
+Surface descriptions use `wlr_surface_synced` so cached commits and synchronized
+subsurfaces apply color metadata with the matching buffer. Destroying a
+`wl_surface` leaves its color-management resource inert. Surface preferences
+follow actual output membership, preferring an HDR output when a surface spans
+SDR and HDR outputs.
+
+For an active PQ output, output descriptions and preferred surface descriptions
+advertise the configured `sdr_white` as their reference luminance. The primary
+PQ range remains 0.005 to 10000 cd/m²; EDID primaries and luminance limits
+describe the independent target color volume. SDR output descriptions retain
+their nominal 80 cd/m² reference white.
+
+Description comparisons include reference luminance. A reload that changes only
+`sdr_white` therefore notifies output-description and surface-feedback clients
+while HDR is active, even when the transfer function and primaries stay the
+same. Clients obtain the updated values by requesting a new immutable
+description. Unchanged descriptions produce no notification.
+
 ## Windows-scRGB luminance
 
 Windows-scRGB and generic extended-linear content share the same transfer
@@ -183,16 +209,14 @@ the normalized reference white to the configured output `sdr_white` level.
 Buffers using this multiplier cannot use direct scanout because scanout would
 bypass the conversion.
 
-## Overview color mirrors
+## Scene color mirrors and snapshots
 
-Overview cards use raw scene buffers that mirror each committed surface. A
-normal scene surface is reset to wlroots' protocol-owned color state on every
-commit. Umbriel repairs Wine compatibility descriptions at the render
-boundary, but a raw overview mirror is not a scene surface and is not included
-in that repair pass.
+Scene surfaces reset their color state on every commit. Umbriel's color manager
+repairs their committed transfer function, primaries, and luminance multiplier
+at the render boundary for native and Wine clients.
 
-After copying ordinary scene-buffer properties, the overview must therefore
-apply the compatibility manager's authoritative committed transfer function,
-primaries, and luminance multiplier directly to its mirror. Otherwise a game
-commit while overview is open reinterprets Windows scRGB as SDR and loses PQ
-BT.2020 metadata.
+Overview cards, desktop mirrors, close snapshots, and resize snapshots use raw
+scene buffers outside that repair pass. Their copy paths therefore apply the
+manager's authoritative committed description directly after copying scene
+properties. This preserves PQ BT.2020 and Windows-scRGB metadata even when a
+copy is created between a surface commit and the next render boundary.

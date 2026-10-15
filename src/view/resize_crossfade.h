@@ -13,6 +13,8 @@ struct wlr_surface;
 
 namespace umbriel {
 
+  class ColorManager;
+
   // The frame a layout-sized view showed before it committed its new size, faded out above the live buffers so the
   // content eases into the new size instead of switching in one frame. The frozen buffers are scaled into the presented
   // box exactly like the live ones, so both layers always share a size.
@@ -26,7 +28,10 @@ namespace umbriel {
     // Clone the enabled buffers of `root`'s surface tree under `viewTree`, stacked directly above `above` and hidden
     // until start(). They currently fill a `width` x `height` box at the view-tree origin. Replaces any earlier
     // capture.
-    void capture(wlr_scene_tree* viewTree, wlr_scene_node* above, wlr_surface* root, int width, int height, int radius);
+    void capture(
+        wlr_scene_tree* viewTree, wlr_scene_node* above, wlr_surface* root, int width, int height, int radius,
+        ColorManager* colorManager
+    );
     // Show the captured frame and fade it out. Does nothing without a pending capture.
     void start(int durationMs, const AnimationCurve& curve);
     // Advance the fade; true while it runs. The capture is released on the tick that completes it.

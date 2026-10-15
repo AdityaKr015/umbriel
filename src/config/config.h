@@ -942,6 +942,8 @@ namespace umbriel {
       // Present outputs to X11 clients at their physical resolution, so they render at native size instead of being
       // upscaled on scaled outputs. Requires restart.
       bool xwaylandNativeResolution = false;
+      // Run an XSETTINGS manager in Xwayland that announces the X screen scale and cursor theme. Requires restart.
+      bool xwaylandXsettings = true;
       // Show the keybinds cheatsheet overlay on startup.
       bool showCheatsheet = true;
       // Honor activation requests by focusing and revealing the target window.

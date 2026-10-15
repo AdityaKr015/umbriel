@@ -178,6 +178,7 @@ export UMBRIEL_SEAT_LOG_CLIENT="$CLIENT_DIR/seat-log-client"
 export UMBRIEL_XWAYLAND_FOCUS_CLIENT="$CLIENT_DIR/xwayland-focus-client"
 export UMBRIEL_XWAYLAND_SELECTION_CLIENT="$CLIENT_DIR/xwayland-selection-client"
 export UMBRIEL_XWAYLAND_CURSOR_CLIENT="$CLIENT_DIR/xwayland-cursor-client"
+export UMBRIEL_XSETTINGS_CLIENT="$CLIENT_DIR/xsettings-client"
 export UMBRIEL_WAYLAND_CURSOR_CLIENT="$CLIENT_DIR/wayland-cursor-client"
 export UMBRIEL_OUTPUT_MANAGEMENT_CLIENT="$CLIENT_DIR/output-management-client"
 export UMBRIEL_PIXEL_PROBE="$CLIENT_DIR/pixel-probe"
@@ -334,12 +335,14 @@ row() {
 
 # No autostart, no Xwayland, no cheatsheet: a check wants a bare compositor, and
 # each of those would spawn processes outside the container. A check that needs
-# X11 opts in with `# harness: xwayland=true` in its header.
+# X11 opts in with `# harness: xwayland=true` in its header, or with
+# `# harness: xwayland=native` for xwayland_native_resolution, which needs a restart.
 write_default_config() {
   local xwayland=$2 cursor_theme=$3
   cat > "$1" << EOF
 [general]
-xwayland = $xwayland
+xwayland = $([[ $xwayland == false ]] && echo false || echo true)
+xwayland_native_resolution = $([[ $xwayland == native ]] && echo true || echo false)
 show_cheatsheet = false
 autostart = []
 EOF
@@ -369,11 +372,9 @@ check_keyboard() {
 }
 
 check_xwayland() {
-  if sed -n '2,12p' "$CHECKS_DIR/$1.sh" | grep -q '^# harness: xwayland=true'; then
-    echo true
-  else
-    echo false
-  fi
+  local declared
+  declared=$(sed -n '2,12p' "$CHECKS_DIR/$1.sh" | sed -n 's/^# harness: xwayland=\(true\|native\)$/\1/p' | head -1)
+  echo "${declared:-false}"
 }
 
 check_xcursor_theme() {
@@ -540,7 +541,7 @@ start_instance() {
   export UMBRIEL_LOG=$log
   export UMBRIEL_CONFIG=$config
   UMBRIEL_HARNESS_DISPLAY=
-  if [[ $xwayland == true ]]; then
+  if [[ $xwayland != false ]]; then
     local display_waited_ms=0
     while [[ -z $UMBRIEL_HARNESS_DISPLAY ]]; do
       UMBRIEL_HARNESS_DISPLAY=$(sed -n 's/.*Xwayland listening on DISPLAY=\([^ ]*\).*/\1/p' "$log" | tail -1)

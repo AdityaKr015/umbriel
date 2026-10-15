@@ -1,6 +1,7 @@
 #pragma once
 
 #include "xwayland/outputs.h"
+#include "xwayland/xsettings.h"
 
 #include <cstdint>
 #include <memory>
@@ -14,6 +15,7 @@ struct wlr_xcursor_manager;
 struct wlr_xwayland;
 struct wlr_xwayland_surface;
 struct wlr_xwayland_surface_configure_event;
+struct xcb_connection_t;
 
 namespace umbriel {
 
@@ -38,7 +40,7 @@ namespace umbriel {
     // The value children get as DISPLAY.
     [[nodiscard]] const char* displayName() const;
     // The cursor X clients see over their windows until they set their own. The buffer belongs to `manager`, so this
-    // must run again before a replaced manager is destroyed.
+    // must run again before a replaced manager is destroyed. Also republishes the cursor theme in XSETTINGS.
     void applyCursor(wlr_xcursor_manager* manager);
     // Called by a window whose X11 surface was destroyed; deletes it.
     void forget(XwaylandWindow* window);
@@ -68,13 +70,25 @@ namespace umbriel {
     void handleNewSurface(wlr_xwayland_surface* xsurface);
     void handleKeyboardFocusChange(void* data);
     void clearFocus();
+    // Owns the XSETTINGS selection of the running Xwayland and publishes the current settings in it.
+    void startXsettings(uint32_t selectionAtom, uint32_t managerAtom);
+    // Rewrites the settings property when the values announced to X11 clients changed.
+    void publishXsettings();
 
     Server& m_server;
     wlr_xwayland* m_wlr = nullptr;
     bool m_nativeResolution = false;
+    bool m_xsettingsEnabled = true;
     std::unique_ptr<XwaylandOutputs> m_outputs;
     std::vector<std::unique_ptr<XwaylandWindow>> m_windows;
     uint32_t m_netActiveWindow = 0;
+    // The XSETTINGS manager lives on the window manager's connection, so it neither keeps the lazy Xwayland running
+    // nor outlives it. `m_xsettingsConnection` tells whether the window belongs to the current Xwayland.
+    xcb_connection_t* m_xsettingsConnection = nullptr;
+    uint32_t m_xsettingsWindow = 0;
+    uint32_t m_xsettingsSettingsAtom = 0;
+    uint32_t m_xsettingsSerial = 0;
+    XsettingsValues m_xsettings;
     wl_event_source* m_focusClearTimer = nullptr;
     wl_event_source* m_selectionRefreshTimer = nullptr;
     wl_listener m_serverStart{};

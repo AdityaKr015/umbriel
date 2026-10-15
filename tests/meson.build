@@ -8,6 +8,7 @@ unit_tests = [
   ['scene-node', ['unit/scene_node.cpp'], []],
   ['scene-clip', ['unit/scene_clip.cpp'], [wayland_server_dep]],
   ['xwayland-outputs', ['unit/xwayland_outputs.cpp'], [umbriel_core_dep]],
+  ['xwayland-xsettings', ['unit/xwayland_xsettings.cpp'], []],
   ['presentation', ['unit/presentation.cpp'], [umbriel_core_dep]],
   ['animation', ['unit/animation.cpp'], [umbriel_core_dep]],
   ['application-scope', ['unit/application_scope.cpp'], [umbriel_core_dep], [], ['-Wl,--wrap=umbrielCloseRange']],
@@ -388,6 +389,13 @@ xwayland_cursor_client = executable(
   dependencies: [xcb_dep, xcb_render_dep, wlroots_dep],
 )
 
+# Reads the XSETTINGS manager's selection and settings property on DISPLAY.
+xsettings_client = executable(
+  'xsettings-client',
+  ['harness/clients/xsettings_client.cpp'],
+  dependencies: [xcb_dep],
+)
+
 wayland_cursor_client = executable(
   'wayland-cursor-client',
   ['harness/clients/wayland_cursor_client.cpp', xdg_shell_client_h, xdg_shell_client_c],
@@ -455,6 +463,7 @@ harness_client_targets = [
   xwayland_focus_client,
   xwayland_selection_client,
   xwayland_cursor_client,
+  xsettings_client,
   wayland_cursor_client,
   output_management_client,
 ]

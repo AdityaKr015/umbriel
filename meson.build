@@ -647,6 +647,7 @@ pure_sources = files(
   'src/view/effects_rules.cpp',
   'src/view/floating.cpp',
   'src/view/drag_physics.cpp',
+  'src/xwayland/xsettings.cpp',
 )
 
 umbriel_pure_deps = [

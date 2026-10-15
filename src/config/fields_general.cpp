@@ -280,6 +280,7 @@ namespace umbriel {
           ),
           boolean("xwayland", &G::xwayland),
           boolean("xwayland_native_resolution", &G::xwaylandNativeResolution),
+          boolean("xwayland_xsettings", &G::xwaylandXsettings),
           boolean("show_cheatsheet", &G::showCheatsheet),
           boolean("focus_on_activate", &G::focusOnActivate),
           boolean("honor_restored_maximize", &G::honorRestoredMaximize),

@@ -183,7 +183,7 @@ namespace {
 
   void supportedIntent(void*, wp_color_manager_v1*, uint32_t) {}
   void supportedFeature(void*, wp_color_manager_v1*, uint32_t feature) {
-    std::println("{{\"event\":\"feature\",\"value\":{}}}", feature);
+    std::println(R"({{"event":"feature","value":{}}})", feature);
   }
   void supportedTransfer(void*, wp_color_manager_v1*, uint32_t) {}
   void supportedPrimaries(void*, wp_color_manager_v1*, uint32_t) {}
@@ -273,7 +273,7 @@ namespace {
     wl_buffer_destroy(buffer);
     if (!state.mapped) {
       state.mapped = true;
-      std::println("{{\"event\":\"mapped\"}}");
+      std::println(R"({{"event":"mapped"}})");
       std::fflush(stdout);
     }
     return true;
@@ -352,11 +352,11 @@ int main(int argc, char** argv) {
     std::println(stderr, "color-feedback-client: missing required globals");
     return 1;
   }
-  std::println("{{\"event\":\"manager\",\"version\":{}}}", state.managerVersion);
+  std::println(R"({{"event":"manager","version":{}}})", state.managerVersion);
   if (argc == 2 && std::strcmp(argv[1], "windows-scrgb") == 0) {
     wp_color_manager_v1_create_windows_scrgb(state.manager);
     if (expectProtocolError(state, &wp_color_manager_v1_interface, WP_COLOR_MANAGER_V1_ERROR_UNSUPPORTED_FEATURE)) {
-      std::println("{{\"event\":\"unsupported_feature\"}}");
+      std::println(R"({{"event":"unsupported_feature"}})");
       return 0;
     }
     std::println(stderr, "color-feedback-client: native Windows scRGB request was not rejected as unsupported");
@@ -368,7 +368,7 @@ int main(int argc, char** argv) {
     if (std::strcmp(argv[1], "duplicate") == 0) {
       wp_color_manager_v1_get_surface(state.manager, state.surface);
       if (expectProtocolError(state, &wp_color_manager_v1_interface, WP_COLOR_MANAGER_V1_ERROR_SURFACE_EXISTS)) {
-        std::println("{{\"event\":\"surface_exists\"}}");
+        std::println(R"({{"event":"surface_exists"}})");
         return 0;
       }
     } else {
@@ -377,7 +377,7 @@ int main(int argc, char** argv) {
       if (expectProtocolError(
               state, &wp_color_management_surface_v1_interface, WP_COLOR_MANAGEMENT_SURFACE_V1_ERROR_INERT
           )) {
-        std::println("{{\"event\":\"surface_inert\"}}");
+        std::println(R"({{"event":"surface_inert"}})");
         return 0;
       }
     }
@@ -523,7 +523,7 @@ int main(int argc, char** argv) {
         }
       }
       std::println(
-          "{{\"event\":\"snapshot\",\"label\":\"{}\",\"output_changes\":{},\"preferred_changes\":{}}}", label,
+          R"({{"event":"snapshot","label":"{}","output_changes":{},"preferred_changes":{}}})", label,
           state.outputChanges, state.preferredChanges
       );
       std::fflush(stdout);

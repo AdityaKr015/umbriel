@@ -101,7 +101,7 @@ UMBRIEL_TEST(hdrWhitePointAllowsSingleUnitIdentityRoundingPerChannel) {
     if (i > 0) {
       --table[i];
     }
-    const uint16_t steppedSample = static_cast<uint16_t>(65536 * i / size);
+    const auto steppedSample = static_cast<uint16_t>(65536 * i / size);
     table[size + i] = static_cast<uint16_t>(steppedSample + (i % 2 == 0 ? 0 : 1));
   }
   checkWhitePoint(hdrWhitePointFromGamma(table.data(), size), {1.0F, 1.0F, 40000.0F / 65535.0F});

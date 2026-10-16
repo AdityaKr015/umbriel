@@ -34,7 +34,7 @@ struct fx_effect_shader {
   GLuint program;
   GLint proj, tex_proj, position, tex, sample_matrix;
   GLint previous_tex, previous_sample_matrix;
-  GLint incoming_tex;
+  GLint incoming_tex, audio_tex;
   GLint progress, linear_progress, direction, random_seed;
   GLint size, scale, expand;
   bool shape_preserving;
@@ -111,7 +111,7 @@ struct fx_effect_composite {
   const float* corner_radius;                // tl, tr, br, bl logical px for umbriel_corner_radius; may be NULL
   const float* pointer;                      // umbriel_pointer, uv in the drawn box; NULL unless a cursor kind
   const struct fx_cursor_path* pointer_path;
-  const float* audio; // umbriel_audio level and availability; NULL supplies zero
+  const float* audio; // bands followed by availability; NULL supplies zero
 };
 
 // Pops the capture begun by fx_render_pass_begin_animation and draws it

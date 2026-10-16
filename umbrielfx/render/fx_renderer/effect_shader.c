@@ -8,6 +8,8 @@
 #include <string.h>
 #include <wlr/util/log.h>
 
+_Static_assert(FX_AUDIO_BANDS == 64, "audio shader coordinates require 64 bands");
+
 // Shared by every kind. Its names are the shared preamble contract.
 static const char kPreamble[] =
     "precision highp float;\n"
@@ -25,9 +27,17 @@ static const char kPreamble[] =
     "uniform vec2 umbriel_size;\n"
     "uniform float umbriel_scale;\n"
     "uniform float umbriel_time;\n"
-    "uniform vec2 umbriel_audio;\n"
-    "float umbriel_audio_level() { return umbriel_audio.x; }\n"
-    "float umbriel_audio_available() { return umbriel_audio.y; }\n"
+    "uniform sampler2D umbriel_audio_bands;\n"
+    "uniform float umbriel_audio_ready;\n"
+    "float umbriel_audio_available() { return umbriel_audio_ready; }\n"
+    "float umbriel_audio_entry(float index) {\n"
+    "  return texture2D(umbriel_audio_bands, vec2((index + 0.5) / 64.0, 0.5)).r;\n"
+    "}\n"
+    "float umbriel_audio_spectrum(float position) {\n"
+    "  float index = clamp(position, 0.0, 1.0) * 63.0;\n"
+    "  float low = floor(index);\n"
+    "  return mix(umbriel_audio_entry(low), umbriel_audio_entry(min(low + 1.0, 63.0)), index - low);\n"
+    "}\n"
     "uniform vec2 umbriel_expand;\n"
     "uniform vec4 umbriel_palette[4];\n"
     "uniform int umbriel_palette_count;\n"
@@ -410,6 +420,7 @@ struct fx_effect_shader* fx_effect_shader_create(
   shader->position = glGetAttribLocation(shader->program, "pos");
   shader->tex = glGetUniformLocation(shader->program, "umbriel_texture");
   shader->sample_matrix = glGetUniformLocation(shader->program, "umbriel_sample_matrix");
+  shader->audio_tex = glGetUniformLocation(shader->program, "umbriel_audio_bands");
   shader->incoming_tex = glGetUniformLocation(shader->program, "umbriel_incoming_texture");
   shader->previous_tex = glGetUniformLocation(shader->program, "umbriel_previous_texture");
   shader->previous_sample_matrix = glGetUniformLocation(shader->program, "umbriel_previous_sample_matrix");

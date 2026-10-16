@@ -798,11 +798,40 @@ static void draw_animation_texture(
   struct fx_texture* texture = fx_get_texture(wlr_texture);
   glUseProgram(shader->program);
   fx_effect_shader_bind_parameters(shader, parameters);
-  struct fx_uniform audio_input = {.name = "umbriel_audio", .type = FX_UNIFORM_VEC2, .count = 1};
-  if (audio != NULL) {
-    memcpy(audio_input.floats, audio, 2 * sizeof(*audio));
+  static const float silent_audio[FX_AUDIO_VALUES] = {0};
+  const float* audio_input = audio != NULL ? audio : silent_audio;
+  if (shader->audio_tex >= 0) {
+    struct fx_offscreen_buffers* output = pass->fx_offscreen_buffers;
+    if (output == NULL) {
+      pass->animation_failed = true;
+      TRACY_BOTH_ZONES_END;
+      return;
+    }
+    uint8_t bands[FX_AUDIO_BANDS];
+    for (unsigned i = 0; i < FX_AUDIO_BANDS; i++) {
+      bands[i] = (uint8_t)lroundf(fminf(1.0f, fmaxf(0.0f, audio_input[i])) * 255.0f);
+    }
+    glActiveTexture(GL_TEXTURE3);
+    if (output->audio_texture == 0) {
+      glGenTextures(1, &output->audio_texture);
+      glBindTexture(GL_TEXTURE_2D, output->audio_texture);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, FX_AUDIO_BANDS, 1, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, bands);
+    } else {
+      glBindTexture(GL_TEXTURE_2D, output->audio_texture);
+      if (memcmp(output->audio_bands, bands, sizeof(bands)) != 0) {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, FX_AUDIO_BANDS, 1, GL_LUMINANCE, GL_UNSIGNED_BYTE, bands);
+      }
+    }
+    memcpy(output->audio_bands, bands, sizeof(bands));
+    glUniform1i(shader->audio_tex, 3);
   }
-  fx_effect_shader_bind_uniform(shader, &audio_input);
+  fx_effect_shader_bind_uniform_data(
+      shader, "umbriel_audio_ready", FX_UNIFORM_FLOAT, 1, &audio_input[FX_AUDIO_BANDS], sizeof(*audio_input)
+  );
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, texture->tex);
   const GLint filter =
@@ -918,6 +947,11 @@ static void draw_animation_texture(
     render_pass_mark_updated(pass, box, clip);
   }
   render(box, clip, shader->position);
+  if (shader->audio_tex >= 0) {
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+  }
   if (shader->incoming_tex >= 0) {
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, 0);

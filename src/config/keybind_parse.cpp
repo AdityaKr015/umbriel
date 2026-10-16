@@ -513,6 +513,17 @@ namespace umbriel {
     }
   }
 
+  uint32_t canonicalMouseButton(uint32_t button) {
+    switch (button) {
+    case BTN_BACK:
+      return BTN_SIDE;
+    case BTN_FORWARD:
+      return BTN_EXTRA;
+    default:
+      return button;
+    }
+  }
+
   bool parseChord(std::string_view chord, Keybind& output) {
     output = Keybind{};
 

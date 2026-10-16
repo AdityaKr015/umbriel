@@ -368,6 +368,10 @@ namespace umbriel {
   // Canonical name for an evdev BTN_* code, or nullptr for a button Umbriel does not name.
   [[nodiscard]] const char* mouseButtonName(uint32_t button);
 
+  // The BTN_* code binds store for a pressed button. Mice report their thumb buttons as either BTN_SIDE/BTN_EXTRA or
+  // BTN_BACK/BTN_FORWARD; both pairs map to BTN_SIDE/BTN_EXTRA.
+  [[nodiscard]] uint32_t canonicalMouseButton(uint32_t button);
+
   // Parse a chord such as "Mod+Shift+h", "Ctrl+Alt+Delete", "Mod+WheelUp", "Mod+MouseBack", or "submap[resize],Escape".
   // Only the trigger fields are written; the action is set separately by parseAction. Returns false and leaves `output`
   // default-constructed on any malformed input.

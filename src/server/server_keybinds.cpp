@@ -363,7 +363,7 @@ namespace umbriel {
         continue;
       }
       // Non-mouse binds carry 0 here, which never equals a BTN_* code.
-      if (bind.mouseButton != button) {
+      if (bind.mouseButton != canonicalMouseButton(button)) {
         continue;
       }
       const uint32_t expected = bind.modifiers | (bind.useMod ? modKey() : 0);

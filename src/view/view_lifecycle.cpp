@@ -371,12 +371,20 @@ namespace umbriel {
     }
 
     // Opening state is compositor-owned. Clients may restore a saved maximized
-    // flag during this transition; only an explicit window rule overrides the
-    // layout's initial size.
+    // flag during this transition; only an explicit window rule or an honored
+    // restore overrides the layout's initial size. A tiled restore under the
+    // workspace's client_maximize = "edges" lands in the edges, above any rule column.
     const bool ruleMaximized = !openingParented() && rule.defaultMaximize && *rule.defaultMaximize;
     const bool restoredMaximized = config().general.honorRestoredMaximize && requestedMaximized();
-    if (!assignedScratchpad && (ruleMaximized || restoredMaximized)) {
+    const bool restoreToEdges = restoredMaximized
+        && m_tiled
+        && m_workspace != nullptr
+        && m_workspace->layoutConfig().clientMaximize == ClientMaximize::Edges;
+    if (!assignedScratchpad && (ruleMaximized || (restoredMaximized && !restoreToEdges))) {
       setMaximized(true);
+    }
+    if (!assignedScratchpad && restoreToEdges) {
+      setMaximizedToEdges(true);
     }
 
     // After default_maximize so maximize-to-edges wins the column, but before
@@ -822,9 +830,13 @@ namespace umbriel {
       const bool wantFullscreen = openingInScratchpad
           ? scratchpadConfig.fullscreen
           : requestedFullscreen() || (rule.defaultFullscreen && *rule.defaultFullscreen);
+      const bool layoutMaximizeToEdges =
+          (target != nullptr ? target->layoutConfig().clientMaximize : config().layout.clientMaximize)
+          == ClientMaximize::Edges;
       const bool wantMaximizeToEdges = openingInScratchpad
           ? !wantFullscreen && scratchpadConfig.maximize
-          : rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges;
+          : (rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges)
+              || (config().general.honorRestoredMaximize && requestedMaximized() && layoutMaximizeToEdges);
       const bool wantMaximized = openingInScratchpad
           ? wantMaximizeToEdges
           : (!openingParented() && rule.defaultMaximize && *rule.defaultMaximize)

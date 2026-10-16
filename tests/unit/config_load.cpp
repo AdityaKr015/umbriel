@@ -2512,6 +2512,24 @@ UMBRIEL_TEST(restoredMaximizePolicyLoadsAndDefaultsOff) {
   CHECK(!store.config().general.honorRestoredMaximize);
 }
 
+UMBRIEL_TEST(layoutClientMaximizeLoadsGloballyAndPerWorkspace) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[layout]\nclient_maximize = \"edges\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().layout.clientMaximize == umbriel::ClientMaximize::Edges);
+
+  file.write("[layout]\n\n[[workspace]]\nname = \"dev\"\nlayout.client_maximize = \"edges\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().layout.clientMaximize == umbriel::ClientMaximize::Column);
+  CHECK(
+      store.config().workspaceRules.size() == 1
+      && store.config().workspaceRules[0].layout.clientMaximize == umbriel::ClientMaximize::Edges
+  );
+}
+
 UMBRIEL_TEST(screencastDynamicConfirmationDefaultsOnAndCanBeDisabled) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

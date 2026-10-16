@@ -47,6 +47,14 @@ namespace umbriel {
       return choices;
     }
 
+    const registry::Choices<ClientMaximize>& clientMaximizeModes() {
+      static const registry::Choices<ClientMaximize> choices{
+          {.name = "column", .value = ClientMaximize::Column},
+          {.name = "edges", .value = ClientMaximize::Edges},
+      };
+      return choices;
+    }
+
     const registry::Choices<NewTabPosition>& newTabPositions() {
       static const registry::Choices<NewTabPosition> choices{
           {.name = "end", .value = NewTabPosition::End},
@@ -211,6 +219,7 @@ namespace umbriel {
                 }
               }
           ),
+          choice("client_maximize", &L::clientMaximize, clientMaximizeModes()),
           table("scrolling", &L::scrolling, scrolling),
           table("dwindle", &L::dwindle, dwindle),
           table("master", &L::master, master),

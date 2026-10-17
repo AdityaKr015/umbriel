@@ -3332,7 +3332,11 @@ static void scene_entry_render(struct render_list_entry* entry, const struct ren
     wlr_color_primaries_from_named(&primaries, named_primaries);
 
     struct wlr_color_luminances src_lum, srgb_lum;
-    wlr_color_transfer_function_get_default_luminance(scene_buffer->transfer_function, &src_lum);
+    enum wlr_color_transfer_function source_tf = scene_buffer->transfer_function;
+    if (source_tf == 0) {
+      source_tf = WLR_COLOR_TRANSFER_FUNCTION_SRGB;
+    }
+    wlr_color_transfer_function_get_default_luminance(source_tf, &src_lum);
     if (scene_buffer->transfer_function == WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ
         && data->output->sdr_white_level > 0.0f) {
       src_lum.reference = data->output->sdr_white_level;
@@ -5154,15 +5158,21 @@ static bool color_management_is_scanout_allowed(
     return img_desc == NULL;
   }
 
+  // Untagged surfaces retain named sRGB primaries. Keep their SDR scanout
+  // eligibility without treating them as explicitly tagged in the renderer.
+  enum wlr_color_transfer_function transfer_function = buffer->transfer_function;
+  if (transfer_function == 0) {
+    transfer_function = WLR_COLOR_TRANSFER_FUNCTION_SRGB;
+  }
+
   // If the output has colorimetry information, the buffer must match it for
   // direct scanout to be allowed.
   if (img_desc != NULL) {
-    return img_desc->transfer_function == buffer->transfer_function && img_desc->primaries == buffer->primaries;
+    return img_desc->transfer_function == transfer_function && img_desc->primaries == buffer->primaries;
   }
   // If the output doesn't have an image description, only the implicit
   // sRGB color space can be scanned out without conversion.
-  return buffer->transfer_function == WLR_COLOR_TRANSFER_FUNCTION_SRGB
-      && buffer->primaries == WLR_COLOR_NAMED_PRIMARIES_SRGB;
+  return transfer_function == WLR_COLOR_TRANSFER_FUNCTION_SRGB && buffer->primaries == WLR_COLOR_NAMED_PRIMARIES_SRGB;
 }
 
 enum scene_direct_scanout_result {

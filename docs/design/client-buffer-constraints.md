@@ -153,14 +153,43 @@ SDR with the full gamma curve restored.
 
 A raw `wlr_scene_buffer` uses zero primaries as an internal unset sentinel.
 This can remain visible while a new surface or a copied snapshot enters an
-animation, before protocol color metadata has been applied. Unset colorimetry
-has the same rendering meaning as implicit sRGB.
+animation, before protocol color metadata has been applied. Unset primaries use
+the sRGB primaries.
 
 The scene render boundary snapshots the named value and resolves zero to sRGB
 before calling `wlr_color_primaries_from_named`. The converter remains strict
 for invalid named values. `color-scene-unset-primaries` builds a composited
 frame from a raw scene buffer and covers this boundary; removing the resolution
 causes the check to abort in the converter.
+
+## Explicit surface transfer functions
+
+A scene buffer's zero transfer function means unspecified SDR. Surface helpers
+retain that sentinel when a client has no committed color description, including
+after unsetting or destroying its color object. Snapshot and overview copies
+preserve it. The renderer selects the pass's SDR curve only for unspecified
+content: gamma 2.2 on PQ or gamma 2.2 outputs, piecewise sRGB otherwise.
+
+Explicit transfer functions retain their meaning. In particular, protocol v2's
+`compound_power_2_4` maps to `WLR_COLOR_TRANSFER_FUNCTION_SRGB` and must use the
+piecewise curve even on a PQ output. This is distinct from the deprecated,
+ambiguous protocol `srgb` identifier. Gamma 2.2, PQ, and linear descriptions are
+also decoded as declared. Compositor colors still follow the pass's SDR policy.
+
+The scene boundary resolves the unspecified transfer function to sRGB only when
+looking up nominal SDR luminance. Direct scanout also recognizes unspecified
+SDR with sRGB primaries on an sRGB target, preserving its existing eligibility.
+Neither operation replaces the sentinel passed to the renderer.
+
+`color-scene-unset-primaries` checks pixel transitions from unspecified SDR to
+explicit piecewise sRGB and back on PQ. `color-sdr-curve-consistency` checks
+explicit and implicit decoding independently from compositor colors and verifies
+both SDR capture paths. On PQ outputs, captures retain the pass's gamma 2.2
+encoding, so an explicit piecewise source can produce different captured code
+values while preserving its decoded luminance. The `render/color_transfer`
+harness check uses real protocol v2 descriptions across top-level and
+synchronized or independent subsurface commits, including color-object
+destruction and recreation.
 
 ## HDR capture view
 

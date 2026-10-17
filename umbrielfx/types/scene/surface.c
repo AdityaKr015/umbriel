@@ -279,7 +279,7 @@ bool wlr_scene_set_surface_color_resolver(
 
 void wlr_scene_surface_update_color(struct wlr_scene_surface* scene_surface) {
   struct wlr_scene_surface_color_state state = {
-      .transfer_function = WLR_COLOR_TRANSFER_FUNCTION_SRGB,
+      .transfer_function = 0,
       .primaries = WLR_COLOR_NAMED_PRIMARIES_SRGB,
       .luminance_multiplier = 1.0f,
   };

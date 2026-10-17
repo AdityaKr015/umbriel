@@ -1039,7 +1039,7 @@ namespace umbriel {
         return;
       }
       if (!found->second->current.set) {
-        wlr_scene_buffer_set_transfer_function(buffer, WLR_COLOR_TRANSFER_FUNCTION_SRGB);
+        wlr_scene_buffer_set_transfer_function(buffer, static_cast<wlr_color_transfer_function>(0));
         wlr_scene_buffer_set_primaries(buffer, WLR_COLOR_NAMED_PRIMARIES_SRGB);
         wlr_scene_buffer_set_luminance_multiplier(buffer, 1.0F);
         return;

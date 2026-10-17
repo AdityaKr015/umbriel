@@ -583,6 +583,7 @@ void wlr_scene_tree_set_clip(struct wlr_scene_tree* tree, const struct wlr_box* 
 struct wlr_scene_surface* wlr_scene_surface_create(struct wlr_scene_tree* parent, struct wlr_surface* surface);
 
 struct wlr_scene_surface_color_state {
+  // Zero leaves the transfer function unspecified and follows output SDR policy.
   enum wlr_color_transfer_function transfer_function;
   enum wlr_color_named_primaries primaries;
   float luminance_multiplier;
@@ -956,6 +957,10 @@ void wlr_scene_buffer_set_corner_radii(struct wlr_scene_buffer* scene_buffer, st
  */
 void wlr_scene_buffer_set_corner_box(struct wlr_scene_buffer* scene_buffer, const struct wlr_box* box);
 
+/**
+ * Set the buffer's declared transfer function. Zero follows output SDR policy;
+ * WLR_COLOR_TRANSFER_FUNCTION_SRGB explicitly selects the piecewise sRGB curve.
+ */
 void wlr_scene_buffer_set_transfer_function(
     struct wlr_scene_buffer* scene_buffer, enum wlr_color_transfer_function transfer_function
 );

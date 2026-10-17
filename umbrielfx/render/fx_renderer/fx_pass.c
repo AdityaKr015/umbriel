@@ -2053,9 +2053,10 @@ void fx_render_pass_add_texture(struct fx_gles_render_pass* pass, const struct f
   const float lum_multiplier = options->luminance_multiplier != NULL ? *options->luminance_multiplier : 1.0f;
   const bool primaries_passthrough =
       options->primaries == NULL || color_primaries_equal(options->primaries, &primaries_srgb);
-  // Untagged and sRGB-tagged content is SDR content, decoded with sdr_tf.
+  // Only untagged content inherits the pass's SDR curve. Explicit sRGB is
+  // the piecewise curve requested by compound_power_2_4 in color-management-v1.
   enum wlr_color_transfer_function source_tf = options->transfer_function;
-  if (source_tf == 0 || source_tf == WLR_COLOR_TRANSFER_FUNCTION_SRGB) {
+  if (source_tf == 0) {
     source_tf = pass->sdr_tf;
   }
   const enum wlr_color_transfer_function target_tf =

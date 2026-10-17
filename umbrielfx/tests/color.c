@@ -14,11 +14,12 @@ static bool submit_solid_frame(struct wlr_render_pass* pass, int width, int heig
 }
 
 static float linear_to_pq(float value);
+static float srgb_to_linear(float value);
 static uint8_t to_u8(float value);
 static bool codes_close(const uint8_t actual[static 4], const uint8_t expected[static 4], int tolerance);
 
-// A scene buffer with unset primaries renders, and the scene's PQ output
-// transform reaches the renderer as PQ.
+// Unset scene colorimetry renders, explicit SDR metadata changes its PQ
+// interpretation, and unsetting it restores the output's default curve.
 static bool test_scene_unset_primaries(struct fixture* fixture) {
   bool ok = true;
   struct wlr_scene* scene = NULL;
@@ -39,9 +40,21 @@ static bool test_scene_unset_primaries(struct fixture* fixture) {
     return false;
   }
 
+  const float grey[4] = {16.0f / 255.0f, 16.0f / 255.0f, 16.0f / 255.0f, 1.0f};
   struct wlr_render_pass* source_pass = wlr_renderer_begin_buffer_pass(fixture->renderer, source, NULL);
-  if (!check(source_pass != NULL, "begin scene source pass")
-      || !check(submit_solid_frame(source_pass, TEST_WIDTH, TEST_HEIGHT, 0.25f), "submit scene source pass")) {
+  if (!check(source_pass != NULL, "begin scene source pass")) {
+    ok = false;
+    goto out;
+  }
+  wlr_render_pass_add_rect(
+      source_pass,
+      &(struct wlr_render_rect_options){
+          .box = {.width = TEST_WIDTH, .height = TEST_HEIGHT},
+          .color = {.r = grey[0], .g = grey[1], .b = grey[2], .a = 1.0f},
+          .blend_mode = WLR_RENDER_BLEND_MODE_NONE,
+      }
+  );
+  if (!check(wlr_render_pass_submit(source_pass), "submit scene source pass")) {
     ok = false;
     goto out;
   }
@@ -76,15 +89,49 @@ static bool test_scene_unset_primaries(struct fixture* fixture) {
       && ok;
   wlr_output_state_finish(&render_state);
 
+  wlr_scene_output_set_sdr_white_level(scene_output, 203.0f);
+  const struct {
+    const char* name;
+    enum wlr_color_transfer_function transfer_function;
+  } metadata[] = {
+      {"untagged scene buffer", 0},
+      {"explicit sRGB scene buffer", WLR_COLOR_TRANSFER_FUNCTION_SRGB},
+      {"scene buffer after unsetting sRGB", 0},
+      {"explicit gamma 2.2 scene buffer", WLR_COLOR_TRANSFER_FUNCTION_GAMMA22},
+  };
+  for (size_t i = 0; i < sizeof(metadata) / sizeof(metadata[0]); i++) {
+    wlr_scene_buffer_set_transfer_function(scene_buffer, metadata[i].transfer_function);
+    wlr_output_state_init(&render_state);
+    wlr_output_state_set_image_description(
+        &render_state,
+        &(struct wlr_output_image_description){
+            .primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
+            .transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
+        }
+    );
+    uint8_t shown[4] = {0};
+    built = wlr_scene_output_build_state(scene_output, &render_state, NULL)
+        && render_state.buffer != NULL
+        && fixture_read_display_pixel(fixture, render_state.buffer, TEST_WIDTH / 2, TEST_HEIGHT / 2, shown);
+    wlr_output_state_finish(&render_state);
+    const float linear = metadata[i].transfer_function == WLR_COLOR_TRANSFER_FUNCTION_SRGB ? srgb_to_linear(grey[0])
+                                                                                           : powf(grey[0], 2.2f);
+    const int expected = to_u8(linear_to_pq(linear * 203.0f / 10000.0f));
+    if (!check(built, metadata[i].name)) {
+      ok = false;
+    } else if (abs((int)shown[2] - expected) > 1) {
+      fprintf(stderr, "%s on PQ: shows %u, expected %d\n", metadata[i].name, shown[2], expected);
+      ok = false;
+    }
+  }
+
   // On a PQ output, the transform the scene builds from the image description
   // must reach the renderer as PQ, so a 16/255 rect decodes with gamma 2.2.
   // The opaque rect covers the buffer; it checks the transform, not the buffer.
-  const float grey[4] = {16.0f / 255.0f, 16.0f / 255.0f, 16.0f / 255.0f, 1.0f};
   if (!check(wlr_scene_rect_create(&scene->tree, TEST_WIDTH, TEST_HEIGHT, grey) != NULL, "create PQ scene rect")) {
     ok = false;
     goto out;
   }
-  wlr_scene_output_set_sdr_white_level(scene_output, 203.0f);
   wlr_output_state_init(&render_state);
   wlr_output_state_set_image_description(
       &render_state,
@@ -635,10 +682,9 @@ static bool render_sdr_on(
   return wlr_render_pass_submit(pass) && saved;
 }
 
-// SDR content on a PQ or gamma 2.2 output decodes with one curve whether a
-// client drew it, untagged or tagged sRGB, or the compositor did, and both SDR
-// capture paths encode with that curve, so a capture returns the original
-// value. On a gamma 2.2 output the content also shows unchanged.
+// Untagged SDR and compositor colors use the output's gamma 2.2 policy on PQ
+// and gamma 2.2 outputs. Explicit SDR metadata keeps its own decoding curve.
+// Both SDR capture paths encode the resulting linear values with gamma 2.2.
 static bool test_sdr_curve_consistency(struct fixture* fixture) {
   bool ok = true;
   const uint8_t level = 16;
@@ -651,10 +697,15 @@ static bool test_sdr_curve_consistency(struct fixture* fixture) {
     goto out;
   }
 
-  const int pq_shown = to_u8(linear_to_pq(powf(level / 255.0f, 2.2f) * 203.0f / 10000.0f));
-  const int pq_piecewise = to_u8(linear_to_pq(srgb_to_linear(level / 255.0f) * 203.0f / 10000.0f));
+  const float gamma_linear = powf(level / 255.0f, 2.2f);
+  const float srgb_linear = srgb_to_linear(level / 255.0f);
+  const int pq_shown = to_u8(linear_to_pq(gamma_linear * 203.0f / 10000.0f));
+  const int pq_piecewise = to_u8(linear_to_pq(srgb_linear * 203.0f / 10000.0f));
+  const int srgb_captured = to_u8(powf(srgb_linear, 1.0f / 2.2f));
   ok = check(pq_piecewise - pq_shown >= 3, "test level separates gamma 2.2 from piecewise sRGB on PQ") && ok;
+  ok = check(srgb_captured - level >= 3, "capture separates explicit sRGB from inherited gamma 2.2") && ok;
   const enum wlr_color_transfer_function pq = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ;
+  const enum wlr_color_transfer_function gamma22 = WLR_COLOR_TRANSFER_FUNCTION_GAMMA22;
   const struct {
     const char* name;
     enum wlr_color_transfer_function texture_tf, output_tf;
@@ -664,7 +715,16 @@ static bool test_sdr_curve_consistency(struct fixture* fixture) {
       {"effect capture on PQ", 0, pq, true},
       {"SDR capture of sRGB-tagged content on PQ", WLR_COLOR_TRANSFER_FUNCTION_SRGB, pq, false},
       {"effect capture of sRGB-tagged content on PQ", WLR_COLOR_TRANSFER_FUNCTION_SRGB, pq, true},
-      {"SDR capture on gamma 2.2", 0, WLR_COLOR_TRANSFER_FUNCTION_GAMMA22, false},
+      {"SDR capture after unsetting sRGB on PQ", 0, pq, false},
+      {"effect capture after unsetting sRGB on PQ", 0, pq, true},
+      {"SDR capture of gamma 2.2 content on PQ", gamma22, pq, false},
+      {"effect capture of gamma 2.2 content on PQ", gamma22, pq, true},
+      {"SDR capture on gamma 2.2", 0, gamma22, false},
+      {"effect capture on gamma 2.2", 0, gamma22, true},
+      {"SDR capture of sRGB-tagged content on gamma 2.2", WLR_COLOR_TRANSFER_FUNCTION_SRGB, gamma22, false},
+      {"effect capture of sRGB-tagged content on gamma 2.2", WLR_COLOR_TRANSFER_FUNCTION_SRGB, gamma22, true},
+      {"SDR capture of gamma 2.2 content on gamma 2.2", gamma22, gamma22, false},
+      {"effect capture of gamma 2.2 content on gamma 2.2", gamma22, gamma22, true},
   };
   const char* sides[] = {"texture", "rect"};
   for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -700,14 +760,18 @@ static bool test_sdr_curve_consistency(struct fixture* fixture) {
         ok = false;
         continue;
       }
-      const int expected = cases[i].output_tf == pq ? pq_shown : level;
+      const bool explicit_srgb = side == 0 && cases[i].texture_tf == WLR_COLOR_TRANSFER_FUNCTION_SRGB;
+      const int expected_capture = explicit_srgb ? srgb_captured : level;
+      const int expected = cases[i].output_tf == pq ? (explicit_srgb ? pq_piecewise : pq_shown) : expected_capture;
       if (abs((int)shown[2] - expected) > 1) {
         fprintf(stderr, "%s for %s: shows %u, expected %d\n", sides[side], cases[i].name, shown[2], expected);
         ok = false;
       }
       const uint8_t captured = pixels[(y * TEST_WIDTH + x) * 4];
-      if (abs((int)captured - level) > 1) {
-        fprintf(stderr, "%s for %s: captured %u, expected %u\n", sides[side], cases[i].name, captured, level);
+      if (abs((int)captured - expected_capture) > 1) {
+        fprintf(
+            stderr, "%s for %s: captured %u, expected %d\n", sides[side], cases[i].name, captured, expected_capture
+        );
         ok = false;
       }
     }

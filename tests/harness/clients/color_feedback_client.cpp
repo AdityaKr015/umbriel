@@ -47,6 +47,8 @@ namespace {
     wp_color_management_surface_feedback_v1* feedback = nullptr;
     wp_color_management_surface_v1* colorSurface = nullptr;
     wp_image_description_v1* surfaceDescription = nullptr;
+    wp_image_description_v1* gammaDescription = nullptr;
+    wp_image_description_v1* selectedDescription = nullptr;
     wl_surface* surface = nullptr;
     wl_surface* colorTarget = nullptr;
     wl_subsurface* colorSubsurface = nullptr;
@@ -65,6 +67,9 @@ namespace {
     bool mapped = false;
     bool running = true;
     bool desynchronized = false;
+    bool tagged = true;
+    bool compound = false;
+    uint32_t fillColor = 0xFF777777U;
     std::deque<Description> descriptions;
   };
 
@@ -256,15 +261,17 @@ namespace {
       return false;
     }
     auto* pixels = static_cast<uint32_t*>(mapping);
-    std::ranges::fill_n(pixels, static_cast<size_t>(state.width) * static_cast<size_t>(state.height), 0xFF777777U);
+    std::ranges::fill_n(pixels, static_cast<size_t>(state.width) * static_cast<size_t>(state.height), state.fillColor);
     munmap(mapping, static_cast<size_t>(size));
     wl_shm_pool* pool = wl_shm_create_pool(state.shm, fd, size);
     wl_buffer* buffer = wl_shm_pool_create_buffer(pool, 0, state.width, state.height, stride, WL_SHM_FORMAT_XRGB8888);
     wl_shm_pool_destroy(pool);
     close(fd);
-    wp_color_management_surface_v1_set_image_description(
-        state.colorSurface, state.surfaceDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
-    );
+    if (state.tagged) {
+      wp_color_management_surface_v1_set_image_description(
+          state.colorSurface, state.selectedDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
+      );
+    }
     if (state.colorSubsurface != nullptr) {
       wl_surface_attach(state.colorTarget, buffer, 0, 0);
       wl_surface_damage_buffer(state.colorTarget, 0, 0, state.width, state.height);
@@ -308,7 +315,7 @@ namespace {
   void surfaceDescriptionFailed(void* data, wp_image_description_v1*, uint32_t, const char* message) {
     auto& state = *static_cast<State*>(data);
     state.failed = true;
-    std::println(stderr, "color-feedback-client: PQ description failed: {}", message);
+    std::println(stderr, "color-feedback-client: surface description failed: {}", message);
   }
   void surfaceDescriptionReady(void* data, wp_image_description_v1*, uint32_t) {
     static_cast<State*>(data)->ready = true;
@@ -344,6 +351,18 @@ namespace {
 
 int main(int argc, char** argv) {
   State state;
+  bool subsurface = false;
+  for (int i = 1; i < argc; ++i) {
+    if (std::strcmp(argv[i], "compound") == 0) {
+      state.compound = true;
+      state.fillColor = 0xFF101010U;
+    } else if (std::strcmp(argv[i], "untagged") == 0) {
+      state.tagged = false;
+    } else if (std::strcmp(argv[i], "subsurface") == 0 || std::strcmp(argv[i], "subsurface-desync") == 0) {
+      subsurface = true;
+      state.desynchronized = std::strcmp(argv[i], "subsurface-desync") == 0;
+    }
+  }
   if (argc == 2 && std::strcmp(argv[1], "v1") == 0) {
     state.requestedVersion = 1;
   }
@@ -401,14 +420,13 @@ int main(int argc, char** argv) {
   observeDescription(state, wp_color_management_output_v1_get_image_description(state.colorOutput), "output", 0);
   state.surface = wl_compositor_create_surface(state.compositor);
   state.colorTarget = state.surface;
-  if (argc == 2 && (std::strcmp(argv[1], "subsurface") == 0 || std::strcmp(argv[1], "subsurface-desync") == 0)) {
+  if (subsurface) {
     if (state.subcompositor == nullptr) {
       std::println(stderr, "color-feedback-client: missing subcompositor");
       return 1;
     }
     state.colorTarget = wl_compositor_create_surface(state.compositor);
     state.colorSubsurface = wl_subcompositor_get_subsurface(state.subcompositor, state.colorTarget, state.surface);
-    state.desynchronized = std::strcmp(argv[1], "subsurface-desync") == 0;
     if (state.desynchronized) {
       wl_subsurface_set_desync(state.colorSubsurface);
     }
@@ -421,14 +439,34 @@ int main(int argc, char** argv) {
   );
   state.colorSurface = wp_color_manager_v1_get_surface(state.manager, state.colorTarget);
   wp_image_description_creator_params_v1* params = wp_color_manager_v1_create_parametric_creator(state.manager);
-  wp_image_description_creator_params_v1_set_tf_named(params, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ);
-  wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020);
+  wp_image_description_creator_params_v1_set_tf_named(
+      params,
+      state.compound ? WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_COMPOUND_POWER_2_4
+                     : WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ
+  );
+  wp_image_description_creator_params_v1_set_primaries_named(
+      params, state.compound ? WP_COLOR_MANAGER_V1_PRIMARIES_SRGB : WP_COLOR_MANAGER_V1_PRIMARIES_BT2020
+  );
   state.surfaceDescription = wp_image_description_creator_params_v1_create(params);
+  state.selectedDescription = state.surfaceDescription;
   wp_image_description_v1_add_listener(state.surfaceDescription, &kSurfaceDescriptionListener, &state);
   while (!state.ready && !state.failed && wl_display_dispatch(state.display) >= 0) {
   }
   if (!state.ready) {
     return 1;
+  }
+  if (state.compound) {
+    state.ready = false;
+    params = wp_color_manager_v1_create_parametric_creator(state.manager);
+    wp_image_description_creator_params_v1_set_tf_named(params, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22);
+    wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_SRGB);
+    state.gammaDescription = wp_image_description_creator_params_v1_create(params);
+    wp_image_description_v1_add_listener(state.gammaDescription, &kSurfaceDescriptionListener, &state);
+    while (!state.ready && !state.failed && wl_display_dispatch(state.display) >= 0) {
+    }
+    if (!state.ready) {
+      return 1;
+    }
   }
   if (state.requestedVersion == 1) {
     observeDescription(state, wp_color_management_surface_feedback_v1_get_preferred(state.feedback), "preferred", 0);
@@ -489,14 +527,20 @@ int main(int argc, char** argv) {
           wl_surface_commit(state.surface);
         }
       } else if (std::strcmp(label, "unset") == 0) {
+        state.tagged = false;
         wp_color_management_surface_v1_unset_image_description(state.colorSurface);
         wl_surface_commit(state.colorTarget);
         if (state.colorSubsurface != nullptr && !state.desynchronized) {
           wl_surface_commit(state.surface);
         }
-      } else if (std::strcmp(label, "tag") == 0) {
+      } else if (
+          std::strcmp(label, "tag") == 0 || (state.gammaDescription != nullptr && std::strcmp(label, "gamma22") == 0)
+      ) {
+        state.tagged = true;
+        state.selectedDescription =
+            std::strcmp(label, "gamma22") == 0 ? state.gammaDescription : state.surfaceDescription;
         wp_color_management_surface_v1_set_image_description(
-            state.colorSurface, state.surfaceDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
+            state.colorSurface, state.selectedDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
         );
         wl_surface_commit(state.colorTarget);
         if (state.colorSubsurface != nullptr && !state.desynchronized) {
@@ -515,6 +559,7 @@ int main(int argc, char** argv) {
         wl_surface_commit(state.colorTarget);
         wl_surface_commit(state.surface);
       } else if (std::strcmp(label, "destroy") == 0 || std::strcmp(label, "destroy-only") == 0) {
+        state.tagged = false;
         wp_color_management_surface_v1_destroy(state.colorSurface);
         state.colorSurface = nullptr;
         if (std::strcmp(label, "destroy") == 0) {
@@ -524,6 +569,8 @@ int main(int argc, char** argv) {
           }
         }
       } else if (std::strcmp(label, "recreate") == 0) {
+        state.tagged = true;
+        state.selectedDescription = state.surfaceDescription;
         state.colorSurface = wp_color_manager_v1_get_surface(state.manager, state.colorTarget);
         wp_color_management_surface_v1_set_image_description(
             state.colorSurface, state.surfaceDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL

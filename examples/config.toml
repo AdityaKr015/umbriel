@@ -23,10 +23,9 @@ files = []
 # Optional session examples. XWayland support is enabled by default.
 # https://docs.noctalia.dev/umbriel/configuration/#general
 #
-# [general]
+[general]
 # autostart = ["noctalia", "kitty"]
-# xwayland = false
-#
+# xwayland = fals
 # Sharp X11 apps and games on scaled outputs; they see physical resolutions.
 # xwayland_native_resolution = true
 # Umbriel announces the X11 interface scale and cursor theme through XSETTINGS.

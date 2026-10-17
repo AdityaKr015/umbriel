@@ -15,11 +15,14 @@ gamma LUT upload is pending, SDR capture is off, and damage highlighting is off
 
 The fork adds four conditions upstream does not have:
 
-- A transient animation slot anywhere in the scene vetoes scanout (`:4702`).
-  The same predicate also disables visibility and opaque culling (`:5260`,
-  `:687`) and forces whole-output damage (`:5342-5344`). It is scene-global,
-  not per output and not per subtree, so one animating node changes the cost
-  of every frame on every output until it settles.
+- A transient animation slot anywhere in the scene vetoes scanout. The same
+  predicate also disables visibility and opaque culling and forces
+  whole-output damage. It is scene-global, not per output and not per subtree,
+  so one animating node changes the cost of every frame on every output until
+  it settles. A bounded slot is exempt: a transient slot whose program is
+  shape-preserving, such as the built-in open and close fade, damages only its
+  node's bounds, keeps culling outside its subtree, and vetoes scanout only on
+  outputs whose render list holds part of that subtree.
 - A persistent effect visible on the output vetoes scanout there (`:4703`).
   `render_data.persistent_visible` (`:5301-5318`) is set when a render-list
   entry sits under a node carrying a window, overlay, or border-effect slot, or

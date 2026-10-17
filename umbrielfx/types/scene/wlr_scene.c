@@ -199,8 +199,12 @@ struct scene_animation {
   struct wlr_box output_clip;
   // Populated-slot classes. Transient slots keep the scene-wide conservative
   // policy; persistent slots only ever affect their own subtree and outputs.
+  // Bounded slots are transient slots whose programs are all shape-preserving
+  // and pointwise: their result stays inside the node's bounds, so they only
+  // damage, uncull, and veto scanout for their own subtree and outputs.
   bool transient;
   bool persistent;
+  bool bounded;
   bool in_place;
   struct scene_light* light;
 };
@@ -211,6 +215,7 @@ struct scene_effects {
   struct wl_list animations; // scene_animation.link
   unsigned transient;
   unsigned persistent;
+  unsigned bounded;
   struct wlr_scene_tree* light_layer;
   struct wl_listener light_layer_destroy;
 };
@@ -260,30 +265,40 @@ static struct scene_effects* scene_effects_get(struct wlr_scene* scene, bool cre
   return effects;
 }
 
+static bool slot_bounded(unsigned slot, const struct fx_effect_shader* shader) {
+  return !fx_slot_persistent(slot) && !fx_slot_expands(slot) && shader != NULL && shader->shape_preserving;
+}
+
 static void scene_animation_classify(struct scene_animation* animation) {
   animation->transient = false;
   animation->persistent = false;
   animation->in_place = false;
+  bool bounded = false;
   for (unsigned slot = 0; slot < FX_ANIMATION_SLOTS; slot++) {
     if (animation->shaders[slot] == NULL) {
       continue;
     }
     if (fx_slot_persistent(slot)) {
       animation->persistent = true;
+    } else if (slot_bounded(slot, animation->shaders[slot])) {
+      bounded = true;
     } else {
       animation->transient = true;
     }
     animation->in_place |= fx_slot_in_place(slot);
   }
+  animation->bounded = bounded && !animation->transient;
 }
 
 static void scene_effects_recount(struct scene_effects* effects) {
   effects->transient = 0;
   effects->persistent = 0;
+  effects->bounded = 0;
   struct scene_animation* animation;
   wl_list_for_each(animation, &effects->animations, link) {
     effects->transient += animation->transient;
     effects->persistent += animation->persistent;
+    effects->bounded += animation->bounded;
   }
 }
 
@@ -739,7 +754,9 @@ create_corner_location_region(struct fx_corner_radii corners, int x, int y, int 
 static void scene_node_opaque_region(
     const struct scene_effects* effects, struct wlr_scene_node* node, int x, int y, pixman_region32_t* opaque
 ) {
-  if (effects != NULL && (effects->transient > 0 || (effects->persistent > 0 && effect_over_node(node) != NULL))) {
+  if (effects != NULL
+      && (effects->transient > 0
+          || ((effects->persistent > 0 || effects->bounded > 0) && effect_over_node(node) != NULL))) {
     return;
   }
   int width, height;
@@ -886,6 +903,7 @@ struct render_data {
   // The scene's effect state for this frame, NULL when it has none. Nothing may
   // add or remove slots while entries render: output_sample listeners run then.
   struct scene_effects* effects;
+  // A transient effect draws on this output this frame: any scene-wide one, or a bounded one in the render list.
   bool transient_effects;
   // A persistent effect draws on this output this frame: veto scanout and keep effect buffers.
   bool persistent_visible;
@@ -1287,7 +1305,7 @@ static bool node_above_layer(struct wlr_scene_node* node, struct wlr_scene_tree*
 static bool transient_ancestor(struct wlr_scene_node* node) {
   for (struct wlr_scene_tree* parent = node->parent; parent != NULL; parent = parent->node.parent) {
     struct scene_animation* animation = scene_animation_get(&parent->node);
-    if (animation != NULL && animation->transient) {
+    if (animation != NULL && (animation->transient || animation->bounded)) {
       return true;
     }
   }
@@ -1770,6 +1788,11 @@ void wlr_scene_node_set_animation(
   if (previous == shader && !restarted && parameters_equal_now) {
     return;
   }
+  // An empty slot changes nothing drawn; keep its parameters for a later bind's restart test.
+  if (previous == NULL && shader == NULL) {
+    animation->parameters[slot] = next;
+    return;
+  }
   // Transient slots update the scene root below. Preserve the changed subtree
   // identity for callers tracking only a background layer.
   scene_node_note_update(node);
@@ -1788,11 +1811,13 @@ void wlr_scene_node_set_animation(
   }
   const bool was_transient = animation->transient;
   const bool was_persistent = animation->persistent;
+  const bool was_bounded = animation->bounded;
   scene_animation_classify(animation);
   const bool presence_changed = previous == NULL
       || shader == NULL
       || was_transient != animation->transient
-      || was_persistent != animation->persistent;
+      || was_persistent != animation->persistent
+      || was_bounded != animation->bounded;
   const bool transient_now = animation->transient;
   struct scene_effects* effects = scene_effects_get(animation->scene, false);
   if (effects != NULL) {
@@ -1804,15 +1829,16 @@ void wlr_scene_node_set_animation(
   if (!populated) {
     scene_effect_damage(node, previous_expand);
     scene_animation_destroy(&animation->addon);
-    if (fx_slot_persistent(slot)) {
+    if (!was_transient) {
       scene_node_update(node, NULL);
     } else {
       scene_node_update(&scene->tree.node, NULL);
     }
     return;
   }
-  if (transient_now || (previous != NULL && !fx_slot_persistent(slot) && shader == NULL)) {
+  if (transient_now || was_transient) {
     // Progress can change arbitrary texels, so damage the complete scene while custom effects run.
+    // Bounded slots fall through: their program only reads and writes texels inside the node.
     scene_node_update(&scene->tree.node, NULL);
   } else if (presence_changed) {
     scene_effect_damage(node, previous_expand);
@@ -5743,6 +5769,7 @@ static bool scene_output_build_state(
   struct scene_effects* effects = scene_effects_get(scene_output->scene, false);
   const bool transient_effects = effects != NULL && effects->transient > 0;
   const bool persistent_effects = effects != NULL && effects->persistent > 0;
+  const bool bounded_effects = effects != NULL && effects->bounded > 0;
 
   bool render_gamma_lut = false;
   if (wlr_output_get_gamma_size(output) == 0 && output->renderer->features.output_color_transform) {
@@ -5796,7 +5823,7 @@ static bool scene_output_build_state(
       .highlight_transparent_region = scene_output->scene->highlight_transparent_region,
       .fractional_scale = floor(render_data.scale) != render_data.scale,
       .background_color = scene_output->scene->background_color,
-      .persistent_effects = persistent_effects,
+      .persistent_effects = persistent_effects || bounded_effects,
       .effect_expand = scene_effects_max_expand(effects),
   };
   // A leaf whose own box misses the output can still reach it with an expand margin; the iterator tests each leaf's
@@ -5855,7 +5882,16 @@ static bool scene_output_build_state(
     render_data.persistent_visible = true;
     in_place_visible = true;
   }
-  if (!transient_effects && !render_data.persistent_visible) {
+  if (bounded_effects && !render_data.transient_effects) {
+    for (int i = 0; i < list_len; i++) {
+      const struct scene_animation* animation = effect_over_node(list_data[i].node);
+      if (animation != NULL && animation->bounded) {
+        render_data.transient_effects = true;
+        break;
+      }
+    }
+  }
+  if (!render_data.transient_effects && !render_data.persistent_visible) {
     fx_renderer_clear_animation_buffers(output);
   }
 
@@ -6124,7 +6160,7 @@ static bool scene_output_build_state(
     pixman_region32_fini(&original_damage);
   }
 
-  if (fx_pass->has_blur || transient_effects || render_data.persistent_visible) {
+  if (fx_pass->has_blur || render_data.transient_effects || render_data.persistent_visible) {
     TRACY_ZONE_START_N("fx_render_pass_init_offscreen_buffers");
     TRACY_ZONE_TEXT(output->name, strlen(output->name));
     const bool initialized = fx_render_pass_init_offscreen_buffers(render_pass, output);

@@ -20,12 +20,13 @@ files = []
 
 # ==============================================================================
 # General
-
 # Optional session examples. XWayland support is enabled by default.
 # https://docs.noctalia.dev/umbriel/configuration/#general
+#
 # [general]
 # autostart = ["noctalia", "kitty"]
 # xwayland = false
+#
 # Sharp X11 apps and games on scaled outputs; they see physical resolutions.
 # xwayland_native_resolution = true
 # Umbriel announces the X11 interface scale and cursor theme through XSETTINGS.
@@ -34,28 +35,27 @@ files = []
 
 # ==============================================================================
 # Lid events
-
 # Remove the laptop panel from the desktop while the lid is closed, then
 # restore it when the lid opens. Replace eDP-1 with the name from
 # `umbriel outputs`.
 # https://docs.noctalia.dev/umbriel/configuration/#events
+#
 # [events]
 # lid_close = "umbriel msg output-disable:eDP-1"
 # lid_open = "umbriel msg output-enable:eDP-1"
 
 # ==============================================================================
 # Screencast
-
 # By default, the first target-changing action during an active share asks for
 # confirmation. Disable that protection only if immediate keybind changes are
 # preferred.
 # https://docs.noctalia.dev/umbriel/configuration/#screencast
+#
 # [screencast]
 # disable_dynamic_confirmation = true
 
 # ==============================================================================
 # Outputs
-
 # Outputs are machine-specific. Run `umbriel outputs` to find names and modes.
 # https://docs.noctalia.dev/umbriel/outputs/
 #
@@ -70,6 +70,7 @@ files = []
 # Appearance
 # Blur uses a smaller radius than the built-in default.
 # https://docs.noctalia.dev/umbriel/appearance/
+#
 [appearance.blur]
 radius = 3
 
@@ -83,6 +84,7 @@ radius = 3
 # scale with overview zoom. Include a bundled preset (adjust /usr for the
 # package prefix), then select it by name.
 # https://docs.noctalia.dev/umbriel/effects/
+#
 # [include]
 # files = ["/usr/share/umbriel/effects/border/pulse/effect.toml"]
 # For a cursor tail, include /usr/share/umbriel/effects/cursor/trail/effect.toml
@@ -93,6 +95,7 @@ radius = 3
 # external effect-audio v2 producer with 64 spectrum bands. Umbriel does not capture audio.
 # Pools accept matching presets defined/included separately. This one-member
 # example uses the bundled pulse preset; add other border names to choose.
+#
 # [effects.pool.borders]
 # kind = "border"
 # choose = ["pulse"]
@@ -102,7 +105,7 @@ radius = 3
 # "Mod+Shift+E" = "effect-border-cycle:borders"
 # "Mod+Ctrl+E" = "effect-border-toggle"
 # "Mod+Alt+E" = "effect-border-reset"
-
+#
 # [effects]
 # border = "pulse"
 
@@ -110,14 +113,17 @@ radius = 3
 # Input
 # Enable NumLock when a physical keyboard connects.
 # https://docs.noctalia.dev/umbriel/input/
+#
 [input.keyboard]
 numlock_toggle = true
 
 # Focus can follow the pointer across tiled, floating, and pinned windows.
+#
 # [input.focus]
 # follows_mouse = true
 
 # Confine touch input to one display.
+#
 # [input.touch]
 # enabled = true
 # map_to_output = "eDP-1"

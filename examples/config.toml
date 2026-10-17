@@ -259,11 +259,11 @@ default_extent_fraction = 0.5
 # Rules combine in order, with later values overriding earlier ones.
 # https://docs.noctalia.dev/umbriel/window-rules/
 
-# Blur windows using the non-optimized path so translucent windows include
-# overlapping windows behind them.
+# Blur windows over the cached wallpaper blur. Set blur_optimized = false to
+# include overlapping windows behind them, at a GPU cost on every frame that
+# moves anything behind them.
 [[window_rule]]
 blur = true
-blur_optimized = false
 
 [[window_rule]]
 match.app_id = "^dev.noctalia.Noctalia$"
@@ -327,7 +327,6 @@ match.namespace = "^noctalia-(bar-[^\"]+|notification|dock|panel|attached-panel|
 blur = true
 blur_ignore_alpha = 0.5
 blur_popups = true
-blur_optimized = false
 
 # ==============================================================================
 # Overview

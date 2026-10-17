@@ -112,10 +112,13 @@ namespace umbriel {
         return false;
       };
 
-      // SDR8. The last resort, so it is committed without a test, retrying once without VRR.
+      // Test SDR8 too, so a rejected swapchain reaches capability fallbacks
+      // instead of becoming a retryable scene-build failure.
       const auto trySdr8Formats = [&]() -> bool {
         for (const bool vrr : vrrPasses(params.tryVrrOn)) {
-          ops.stageSdr(DRM_FORMAT_XRGB8888, vrr);
+          if (!ops.stageSdr(DRM_FORMAT_XRGB8888, vrr) || !ops.test()) {
+            continue;
+          }
           if (commitStaged(FormatTier::Sdr8, DRM_FORMAT_XRGB8888, vrr)) {
             return true;
           }

@@ -88,11 +88,18 @@ rendered frame together. Output creation also creates its scene output before
 initial configuration, preserving this invariant when DRM outputs are recreated
 after resume.
 
-Failures before the backend commit are retryable. A pending-state copy failure,
-scene build failure, missing buffer, or temporary neutral-mask failure stops the
+All three format tiers, including 8-bit SDR, use backend pretests before scene
+building. On DRM, wlroots prepares and tests a buffer when the pending
+state requires one. A rejected pretest advances the format, VRR, or preferred-mode
+fallback sequence. Testing the final 8-bit candidate prevents a rejected primary
+swapchain from surfacing only as a scene build failure and suppressing mode
+fallback.
+
+After an accepted pretest, a pending-state copy failure, scene build failure,
+missing buffer, or temporary neutral-mask failure remains retryable. It stops the
 format sequence without trying SDR, VRR, or mode fallbacks. The requested policy
-remains pending for the delayed frame retry because none of these failures proves
-that the staged output format is unsupported.
+remains pending for the delayed frame retry because none of these preparation
+failures proves that the staged output format is unsupported.
 
 A backend commit failure is instead treated as a rejection and retains the
 existing format fallback behavior. If a fallback commits successfully,

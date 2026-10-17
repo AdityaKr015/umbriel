@@ -50,7 +50,7 @@ namespace umbriel {
     [[nodiscard]] Output* output() const;
 
     [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Overlays; }
-    bool tickAnimations(uint64_t nowMsec) override;
+    bool tickAnimations(double nowMsec) override;
     [[nodiscard]] bool hasActiveAnimations() const override { return m_fade.animating(); }
     [[nodiscard]] bool animatesOn(const Output* output) const override;
 

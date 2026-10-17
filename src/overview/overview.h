@@ -78,7 +78,7 @@ namespace umbriel {
 
     [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Overlays; }
     // Advances the zoom and workspace-row animations; returns true while either is still running.
-    bool tickAnimations(uint64_t nowMsec) override;
+    bool tickAnimations(double nowMsec) override;
     [[nodiscard]] bool hasActiveAnimations() const override;
     // The overview zooms every output at once.
     [[nodiscard]] bool animatesOn(const Output* /*output*/) const override { return true; }

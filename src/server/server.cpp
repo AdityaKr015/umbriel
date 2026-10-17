@@ -1567,7 +1567,7 @@ namespace umbriel {
     applyPresentation();
   }
 
-  bool Server::CloseSnapshot::tickAnimations(uint64_t nowMsec) {
+  bool Server::CloseSnapshot::tickAnimations(double nowMsec) {
     const bool movedAlpha = m_alpha.tick(nowMsec);
     const bool movedSlide = m_slide.tick(nowMsec);
     bindAnimationEffect(&m_tree->node, m_event, m_alpha, -1.0F);
@@ -1621,7 +1621,7 @@ namespace umbriel {
 
   void Server::unregisterAnimatable(Animatable* animatable) { std::erase(m_animatables, animatable); }
 
-  bool Server::tickAnimations(uint64_t nowMsec) {
+  bool Server::tickAnimations(double nowMsec) {
     UMBRIEL_ZONE("Server::tickAnimations");
     // Outputs tick at their own vblank instants, which interleave. Animation state is shared, so an earlier instant
     // than the last tick never moves it backwards.
@@ -1679,14 +1679,16 @@ namespace umbriel {
     }
   } // namespace
 
-  uint64_t Server::animationClockMsec() const { return animationFrameClockMsec(monotonicClockMsec()); }
+  uint64_t Server::animationClockMsec() const {
+    return static_cast<uint64_t>(animationFrameClockMsec(static_cast<double>(monotonicClockMsec())));
+  }
 
-  uint64_t Server::animationFrameClockMsec(uint64_t monotonicMsec) const {
+  double Server::animationFrameClockMsec(double monotonicMsec) const {
 #ifdef UMBRIEL_TEST_IPC
     if (m_frozenAnimationClockMsec) {
-      return *m_frozenAnimationClockMsec;
+      return static_cast<double>(*m_frozenAnimationClockMsec);
     }
-    return static_cast<uint64_t>(static_cast<int64_t>(monotonicMsec) + m_animationClockOffsetMsec);
+    return monotonicMsec + static_cast<double>(m_animationClockOffsetMsec);
 #else
     return monotonicMsec;
 #endif
@@ -1718,7 +1720,7 @@ namespace umbriel {
       }
     }
     m_lastAnimTickMsec = 0;
-    tickAnimations(*m_frozenAnimationClockMsec);
+    tickAnimations(static_cast<double>(*m_frozenAnimationClockMsec));
     *m_frozenAnimationClockMsec += ms;
     for (const auto& output : m_outputs) {
       wlr_output_schedule_frame(output->wlr());

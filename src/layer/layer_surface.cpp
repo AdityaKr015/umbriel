@@ -121,7 +121,7 @@ namespace umbriel {
     }
   }
 
-  bool LayerSurface::tickAnimations(uint64_t nowMsec) {
+  bool LayerSurface::tickAnimations(double nowMsec) {
     const bool ticked = m_fade.tick(nowMsec);
     if (m_scene != nullptr) {
       bindAnimationEffect(&m_scene->tree->node, AnimationEvent::Layers, m_fade);

@@ -1194,7 +1194,7 @@ namespace umbriel {
     wlr_output_schedule_frame(m_group->output()->wlr());
   }
 
-  bool Workspace::tickLayoutMotion(uint64_t nowMsec) {
+  bool Workspace::tickLayoutMotion(double nowMsec) {
     const bool positionTicked = m_motion.progress.tick(nowMsec);
     const bool sizeTicked = m_motion.size.tick(nowMsec);
     // A carried-speed spring settles on its own solver; stop it once no member's pixel can change. One progress unit
@@ -2999,7 +2999,7 @@ namespace umbriel {
     wlr_output_schedule_frame(m_output->wlr());
   }
 
-  bool WorkspaceGroup::tickAnimations(uint64_t nowMsec) {
+  bool WorkspaceGroup::tickAnimations(double nowMsec) {
     const bool ticked = m_slideAnim.tick(nowMsec);
     if (ticked && m_slideAnim.animating() && m_slideAnim.curve().easing == Easing::Spring) {
       // One step is `extent` pixels, so a spring that can no longer move a pixel has already landed there: end it

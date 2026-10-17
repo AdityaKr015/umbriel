@@ -49,7 +49,7 @@ namespace umbriel {
     m_animH.snap(height);
   }
 
-  bool ViewPresentation::tick(uint64_t nowMsec) {
+  bool ViewPresentation::tick(double nowMsec) {
     const bool movedW = m_animW.tick(nowMsec);
     const bool movedH = m_animH.tick(nowMsec);
     // A carried-speed spring settles on its own solver; stop it once no pixel can change.

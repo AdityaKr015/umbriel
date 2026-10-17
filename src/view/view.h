@@ -403,7 +403,7 @@ namespace umbriel {
     void setSceneParent(wlr_scene_tree* parent);
     // Advances this view's animations; returns true while any is still running.
     [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Views; }
-    bool tickAnimations(uint64_t nowMsec) override;
+    bool tickAnimations(double nowMsec) override;
     [[nodiscard]] bool hasActiveAnimations() const override;
     [[nodiscard]] bool animatesOn(const Output* output) const override;
 
@@ -807,7 +807,7 @@ namespace umbriel {
     ViewEffects m_effects;
     ViewPresentation m_presentation;
     DragPhysics m_dragPhysics;
-    uint64_t m_dragPhysicsMsec = 0; // animation clock at the sheet's last tick
+    double m_dragPhysicsMsec = 0; // animation clock at the sheet's last tick
     // The frame-local grab and the content tree's drawn bounds the sheet was last fitted to.
     double m_dragGrabX = 0;
     double m_dragGrabY = 0;

@@ -208,6 +208,17 @@ UMBRIEL_TEST(animatedValueReportsItsCurvesSpeed) {
   CHECK(std::abs(value.velocity() - 100.0) < 0.5);
 }
 
+UMBRIEL_TEST(animatedValueKeepsSubMillisecondTime) {
+  // Frames tick at vblank instants that fall between milliseconds; the timeline must not round them away.
+  umbriel::AnimatedValue value;
+  value.retarget(100.0, 10, umbriel::Easing::Linear);
+  CHECK(value.tick(1000.0));
+  CHECK(value.tick(1000.5));
+  CHECK(std::abs(value.current() - 5.0) < 1e-9);
+  CHECK(value.tick(1006.06));
+  CHECK(std::abs(value.current() - 60.6) < 1e-6);
+}
+
 UMBRIEL_TEST(interruptedSpringRetargetKeepsItsSpeed) {
   const umbriel::AnimationCurve spring{
       .easing = umbriel::Easing::Spring, .spring = {.damping = 1.0, .stiffness = 900.0, .mass = 1.0}

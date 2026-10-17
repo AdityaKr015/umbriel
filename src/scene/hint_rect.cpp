@@ -92,7 +92,7 @@ namespace umbriel {
     m_output = nullptr;
   }
 
-  bool HintRect::tickAnimations(uint64_t nowMsec) {
+  bool HintRect::tickAnimations(double nowMsec) {
     const bool alphaTicked = m_alpha.tick(nowMsec);
     const bool xTicked = m_x.tick(nowMsec);
     const bool yTicked = m_y.tick(nowMsec);

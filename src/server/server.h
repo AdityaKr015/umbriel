@@ -237,18 +237,19 @@ namespace umbriel {
 
     // Central animation tick: advances every registered owner once per msec and
     // reports whether anything is still animating.
-    bool tickAnimations(uint64_t nowMsec);
+    bool tickAnimations(double nowMsec);
     void flushPendingViewOpacities();
     [[nodiscard]] bool animationsActive() const;
     [[nodiscard]] bool animationsActiveFor(const Output* output) const;
     // No animation is running, no workspace has an arrange waiting for the next frame, and every mapped window has
     // committed its latest configure.
     [[nodiscard]] bool settled() const;
-    // Milliseconds on the clock every animation ticks from. It follows the monotonic clock unless a test build froze
-    // it.
+    // Whole milliseconds on the clock every animation ticks from, for timers and effect time. It follows the monotonic
+    // clock unless a test build froze it.
     [[nodiscard]] uint64_t animationClockMsec() const;
-    // The animation clock at a CLOCK_MONOTONIC instant, such as an output's latest vblank.
-    [[nodiscard]] uint64_t animationFrameClockMsec(uint64_t monotonicMsec) const;
+    // The animation clock, in fractional milliseconds, at a CLOCK_MONOTONIC instant such as an output's latest vblank.
+    // Frames tick from it, so motion steps keep sub-millisecond spacing.
+    [[nodiscard]] double animationFrameClockMsec(double monotonicMsec) const;
 #ifdef UMBRIEL_TEST_IPC
     void freezeAnimationClock();
     // Moves a frozen clock forward and schedules a frame on every output. False when the clock is not frozen.
@@ -747,8 +748,8 @@ namespace umbriel {
     };
     std::vector<BindCooldown> m_bindCooldowns;
     std::vector<std::string> m_activeSubmaps;
-    // Same-msec dedupe: several outputs can call tickAnimations per vblank.
-    uint64_t m_lastAnimTickMsec = 0;
+    // The last tick's instant: an output's earlier one is skipped, and several outputs can tick per vblank.
+    double m_lastAnimTickMsec = 0;
     std::chrono::steady_clock::time_point m_startTime;
 
     // A fading copy of a closed window's scene tree. Owns that tree and destroys it once the fade completes.
@@ -767,7 +768,7 @@ namespace umbriel {
       void present(int canvasX, int canvasY, bool visible);
 
       [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Overlays; }
-      bool tickAnimations(uint64_t nowMsec) override;
+      bool tickAnimations(double nowMsec) override;
       [[nodiscard]] bool hasActiveAnimations() const override { return m_alpha.animating() || m_slide.animating(); }
       [[nodiscard]] bool animatesOn(const Output* output) const override { return m_output == output; }
 

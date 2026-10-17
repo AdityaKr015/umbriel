@@ -248,7 +248,7 @@ namespace umbriel {
     // The running motion's progress, for the windows_move shader; null when no motion runs.
     [[nodiscard]] const AnimatedValue* layoutMotionValue() const;
     // Advances the motion; true while it is still running.
-    bool tickLayoutMotion(uint64_t nowMsec);
+    bool tickLayoutMotion(double nowMsec);
     [[nodiscard]] bool layoutMotionActive() const { return m_motion.progress.animating() || !m_motion.views.empty(); }
 
   private:
@@ -407,7 +407,7 @@ namespace umbriel {
     void cancelReveal();
     // Advances the workspace slide; returns true while it is still running.
     [[nodiscard]] AnimationPhase animationPhase() const override { return AnimationPhase::Workspaces; }
-    bool tickAnimations(uint64_t nowMsec) override;
+    bool tickAnimations(double nowMsec) override;
     [[nodiscard]] bool hasActiveAnimations() const override;
     [[nodiscard]] bool animatesOn(const Output* output) const override { return m_output == output; }
 

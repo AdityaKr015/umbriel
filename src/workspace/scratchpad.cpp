@@ -62,7 +62,7 @@ namespace umbriel {
     }
   }
 
-  bool ScratchpadManager::tickAnimations(uint64_t nowMsec) {
+  bool ScratchpadManager::tickAnimations(double nowMsec) {
     bool movedBackdrop = false;
     for (auto& [output, fade] : m_backdropFades) {
       if (fade.tick(nowMsec)) {

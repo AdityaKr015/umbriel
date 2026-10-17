@@ -1851,7 +1851,7 @@ namespace umbriel {
     scheduleFrames();
   }
 
-  bool Overview::tickAnimations(uint64_t nowMsec) {
+  bool Overview::tickAnimations(double nowMsec) {
     bool active = m_dropHint != nullptr && m_dropHint->tickAnimations(nowMsec);
     const bool zoomTicked = m_zoomAnim.tick(nowMsec);
     if (zoomTicked && m_zoomAnim.animating() && m_zoomAnim.curve().easing == Easing::Spring) {

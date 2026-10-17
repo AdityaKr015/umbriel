@@ -434,7 +434,7 @@ namespace umbriel {
     if (m_dragPhysics.active()) {
       if (!wasActive) {
         // Integration starts at the motion that wakes the sheet.
-        m_dragPhysicsMsec = m_server->animationClockMsec();
+        m_dragPhysicsMsec = static_cast<double>(m_server->animationClockMsec());
       }
       scheduleFrame();
     }
@@ -821,7 +821,7 @@ namespace umbriel {
     }
   }
 
-  bool View::tickAnimations(uint64_t nowMsec) {
+  bool View::tickAnimations(double nowMsec) {
     bool active = false;
 
     // Disable sibling size animations during a tiled resize, so they do not
@@ -924,9 +924,10 @@ namespace umbriel {
         m_dragPhysics = DragPhysics{};
       } else if (m_dragPhysics.active()) {
         fitDragPhysics(false);
-        const auto elapsed = static_cast<int64_t>(nowMsec - m_dragPhysicsMsec);
-        m_dragPhysicsMsec = nowMsec;
-        active = m_dragPhysics.tick(static_cast<double>(elapsed) / 1000.0) || active;
+        // The vblank a frame ticks from can precede the instant the sheet woke, so a step never runs backwards.
+        const double elapsed = std::max(0.0, nowMsec - m_dragPhysicsMsec);
+        m_dragPhysicsMsec = std::max(m_dragPhysicsMsec, nowMsec);
+        active = m_dragPhysics.tick(elapsed / 1000.0) || active;
       }
     }
     syncAnimationEffects();

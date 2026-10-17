@@ -1595,7 +1595,8 @@ namespace umbriel {
     // latency and other outputs' rendering do not make motion steps uneven.
     const uint64_t nowNs = static_cast<uint64_t>(now.tv_sec) * 1'000'000'000 + static_cast<uint64_t>(now.tv_nsec);
     const uint64_t vblankNs = latestVblankNs(nowNs, m_lastPresentNs, m_refreshNs);
-    m_server->tickAnimations(m_server->animationFrameClockMsec(vblankNs != 0 ? vblankNs / 1'000'000 : nowMsec));
+    const uint64_t sampleNs = vblankNs != 0 ? vblankNs : nowNs;
+    m_server->tickAnimations(m_server->animationFrameClockMsec(static_cast<double>(sampleNs) / 1e6));
     if (stampEffectTime && m_outputEffectsTimed) {
       applyOutputEffects();
     }

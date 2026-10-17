@@ -861,7 +861,7 @@ namespace umbriel {
 
   double AnimatedValue::progress() const { return m_progress; }
 
-  bool AnimatedValue::tick(uint64_t nowMsec) {
+  bool AnimatedValue::tick(double nowMsec) {
     if (!m_animating) {
       return false;
     }
@@ -869,13 +869,11 @@ namespace umbriel {
       m_startMsec = nowMsec;
     }
 
-    const uint64_t elapsed = nowMsec - std::min(nowMsec, m_startMsec);
+    const double elapsed = std::max(0.0, nowMsec - m_startMsec);
 
     if (m_physics) {
       double velocity = 0.0;
-      m_current = solveSpringPhysics(
-          m_from, m_target, m_initialVelocity, static_cast<double>(elapsed) / 1000.0, m_curve.spring, &velocity
-      );
+      m_current = solveSpringPhysics(m_from, m_target, m_initialVelocity, elapsed / 1000.0, m_curve.spring, &velocity);
       m_velocity = velocity;
       const double span = m_target - m_from;
       m_progress = span != 0.0 ? std::clamp((m_current - m_from) / span, 0.0, 1.0) : 1.0;
@@ -886,7 +884,7 @@ namespace umbriel {
       return true;
     }
 
-    const double linear = std::clamp(static_cast<double>(elapsed) / static_cast<double>(m_durationMsec), 0.0, 1.0);
+    const double linear = std::clamp(elapsed / static_cast<double>(m_durationMsec), 0.0, 1.0);
     m_progress = linear;
 
     if (linear >= 1.0) {
@@ -970,7 +968,7 @@ namespace umbriel {
 
   double AnimatedColor::progress() const { return m_progress; }
 
-  bool AnimatedColor::tick(uint64_t nowMsec) {
+  bool AnimatedColor::tick(double nowMsec) {
     if (!m_animating) {
       return false;
     }
@@ -978,8 +976,8 @@ namespace umbriel {
       m_startMsec = nowMsec;
     }
 
-    const uint64_t elapsed = nowMsec - std::min(nowMsec, m_startMsec);
-    const double linear = std::clamp(static_cast<double>(elapsed) / static_cast<double>(m_durationMsec), 0.0, 1.0);
+    const double elapsed = std::max(0.0, nowMsec - m_startMsec);
+    const double linear = std::clamp(elapsed / static_cast<double>(m_durationMsec), 0.0, 1.0);
     m_progress = linear;
 
     if (linear >= 1.0) {

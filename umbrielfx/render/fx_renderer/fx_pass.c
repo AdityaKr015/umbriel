@@ -3240,7 +3240,8 @@ static const char* reset_status_str(GLenum status) {
 struct fx_gles_render_pass* fx_begin_buffer_pass(
     struct fx_framebuffer* buffer, struct wlr_egl_context* prev_ctx, struct fx_render_timer* timer,
     struct wlr_drm_syncobj_timeline* signal_timeline, uint64_t signal_point,
-    struct wlr_color_transform* color_transform, struct fx_offscreen_buffers* output_buffers
+    struct wlr_color_transform* color_transform, struct fx_offscreen_buffers* output_buffers,
+    enum wlr_color_transfer_function pq_sdr_transfer
 ) {
   struct fx_renderer* renderer = buffer->renderer;
   struct wlr_buffer* wlr_buffer = buffer->buffer;
@@ -3277,7 +3278,9 @@ struct fx_gles_render_pass* fx_begin_buffer_pass(
       free(pass);
       return NULL;
     }
-    if (state.tf == WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ || state.tf == WLR_COLOR_TRANSFER_FUNCTION_GAMMA22) {
+    if (state.tf == WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ) {
+      sdr_tf = pq_sdr_transfer;
+    } else if (state.tf == WLR_COLOR_TRANSFER_FUNCTION_GAMMA22) {
       sdr_tf = WLR_COLOR_TRANSFER_FUNCTION_GAMMA22;
     }
     struct wlr_allocator* allocator = output_buffers != NULL ? output_buffers->allocator : renderer->allocator;

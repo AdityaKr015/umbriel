@@ -34,6 +34,7 @@ namespace umbriel {
 
   enum class FormatTier : uint8_t;
   enum class HdrMode;
+  enum class SdrTransfer;
   class Server;
   class View;
   class WorkspaceGroup;
@@ -114,6 +115,7 @@ namespace umbriel {
     [[nodiscard]] const std::string& hdrFallbackReason() const { return m_hdrFallbackReason; }
     [[nodiscard]] float configuredSdrWhite() const;
     [[nodiscard]] float sdrWhite() const;
+    [[nodiscard]] SdrTransfer configuredSdrTransfer() const;
     void setRuntimeSdrWhite(float nits);
     [[nodiscard]] int configuredBitDepth() const;
     [[nodiscard]] const std::string& bitDepthFallbackReason() const { return m_bitDepthFallbackReason; }

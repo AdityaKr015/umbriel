@@ -52,11 +52,14 @@ is destroyed.
 - Unprofiled SDR outputs, implicit surfaces, and compositor-defined colors use
   the sRGB transfer curve. On PQ and gamma 2.2 outputs, implicit surfaces and
   compositor-defined colors decode with gamma 2.2, and SDR captures encode with
-  it. Explicit transfer functions retain their declared meaning, including the
-  piecewise sRGB curve requested by `compound_power_2_4`. Scene buffers keep zero
-  as the unspecified transfer function so the renderer can distinguish it from
-  explicit sRGB. Color-managed SDR clients are offered gamma 2.2 and their
-  tagged buffers are converted through the linear FP16 path.
+  it by default. A PQ output can select piecewise sRGB with `sdr_transfer`, which
+  applies consistently to implicit content, compositor colors, effect controls,
+  and SDR capture encoding. The policy lives in an output addon independent of
+  renderer resources. Explicit transfer functions retain their declared meaning,
+  including the piecewise sRGB curve requested by `compound_power_2_4`. Scene
+  buffers keep zero as the unspecified transfer function so the renderer can
+  distinguish it from explicit sRGB. Color-managed SDR clients are offered
+  gamma 2.2 and their tagged buffers are converted through the linear FP16 path.
 - A window's desktop and capture scenes share its `wlr_surface`, so
   `types/scene/surface.c` updates only its own scene's output memberships and
   skips suspended outputs when picking the frame-pacing output. Otherwise

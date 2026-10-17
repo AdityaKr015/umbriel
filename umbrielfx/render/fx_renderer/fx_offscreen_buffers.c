@@ -9,6 +9,56 @@
 #include <wlr/util/addon.h>
 #include <wlr/util/log.h>
 
+struct output_sdr_transfer {
+  struct wlr_addon addon;
+  enum wlr_color_transfer_function transfer_function;
+};
+
+static void output_sdr_transfer_destroy(struct wlr_addon* addon) {
+  struct output_sdr_transfer* state = wl_container_of(addon, state, addon);
+  wlr_addon_finish(addon);
+  free(state);
+}
+
+static const struct wlr_addon_interface output_sdr_transfer_impl = {
+    .name = "umbrielfx_output_sdr_transfer",
+    .destroy = output_sdr_transfer_destroy,
+};
+
+enum wlr_color_transfer_function fx_output_get_sdr_transfer_function(struct wlr_output* output) {
+  struct wlr_addon* addon = wlr_addon_find(&output->addons, output, &output_sdr_transfer_impl);
+  if (addon == NULL) {
+    return WLR_COLOR_TRANSFER_FUNCTION_GAMMA22;
+  }
+  struct output_sdr_transfer* state = wl_container_of(addon, state, addon);
+  return state->transfer_function;
+}
+
+bool fx_output_set_sdr_transfer_function(
+    struct wlr_output* output, enum wlr_color_transfer_function transfer_function
+) {
+  if (transfer_function != WLR_COLOR_TRANSFER_FUNCTION_GAMMA22
+      && transfer_function != WLR_COLOR_TRANSFER_FUNCTION_SRGB) {
+    return false;
+  }
+  struct wlr_addon* addon = wlr_addon_find(&output->addons, output, &output_sdr_transfer_impl);
+  if (addon == NULL && transfer_function == WLR_COLOR_TRANSFER_FUNCTION_GAMMA22) {
+    return true;
+  }
+  struct output_sdr_transfer* state;
+  if (addon != NULL) {
+    state = wl_container_of(addon, state, addon);
+  } else {
+    state = calloc(1, sizeof(*state));
+    if (state == NULL) {
+      return false;
+    }
+    wlr_addon_init(&state->addon, &output->addons, output, &output_sdr_transfer_impl);
+  }
+  state->transfer_function = transfer_function;
+  return true;
+}
+
 static void drop_framebuffer(struct fx_framebuffer** buffer) {
   if (*buffer == NULL) {
     return;

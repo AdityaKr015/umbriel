@@ -1836,6 +1836,291 @@ static bool render_cached_blur_frame(
   return wlr_render_pass_submit(pass) && ok;
 }
 
+static bool check_sdr_transfer_pixels(
+    struct fixture* fixture, struct wlr_buffer* target, enum wlr_color_transfer_function policy,
+    enum wlr_color_transfer_function source_tf, enum wlr_color_transfer_function output_tf, const char* label
+) {
+  const float encoded = 16.0f / 255.0f;
+  const float inherited = policy == WLR_COLOR_TRANSFER_FUNCTION_SRGB ? srgb_to_linear(encoded) : powf(encoded, 2.2f);
+  const float source = source_tf == WLR_COLOR_TRANSFER_FUNCTION_SRGB ? srgb_to_linear(encoded)
+      : source_tf == WLR_COLOR_TRANSFER_FUNCTION_GAMMA22             ? powf(encoded, 2.2f)
+                                                                     : inherited;
+  uint8_t captured[TEST_WIDTH * TEST_HEIGHT * 4] = {0};
+  bool ok = check(read_buffer(fixture, target, DRM_FORMAT_ABGR8888, TEST_WIDTH * 4, captured), label);
+  for (size_t side = 0; side < 2; side++) {
+    const int x = side == 0 ? TEST_WIDTH / 4 : TEST_WIDTH * 3 / 4, y = TEST_HEIGHT / 2;
+    const float linear = side == 0 ? source : inherited;
+    const int display_expected = output_tf == WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ
+        ? to_u8(linear_to_pq(linear * 203.0f / 10000.0f))
+        : output_tf == WLR_COLOR_TRANSFER_FUNCTION_SRGB ? to_u8(linear_to_srgb(linear))
+                                                        : to_u8(powf(linear, 1.0f / 2.2f));
+    const int capture_expected =
+        policy == WLR_COLOR_TRANSFER_FUNCTION_SRGB ? to_u8(linear_to_srgb(linear)) : to_u8(powf(linear, 1.0f / 2.2f));
+    uint8_t shown[4] = {0};
+    ok = fixture_read_display_pixel(fixture, target, x, y, shown) && ok;
+    const uint8_t capture_value = captured[(y * TEST_WIDTH + x) * 4];
+    if (abs((int)shown[2] - display_expected) > 1 || abs((int)capture_value - capture_expected) > 1) {
+      fprintf(
+          stderr, "%s %s: display %u expected %d, capture %u expected %d\n", label, side == 0 ? "texture" : "rect",
+          shown[2], display_expected, capture_value, capture_expected
+      );
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+static void acknowledge_scene_damage(struct wlr_scene_output* output) {
+  struct wlr_output_state state;
+  wlr_output_state_init(&state);
+  wlr_output_state_set_damage(&state, &output->pending_commit_damage);
+  wlr_scene_output_acknowledge_damage_for_test(output, &state);
+  wlr_output_state_finish(&state);
+}
+
+static bool test_sdr_transfer_policy(struct fixture* fixture) {
+  bool ok = true;
+  const uint8_t grey[4] = {16, 16, 16, 255};
+  const struct wlr_render_color color = {.r = 16.0f / 255.0f, .g = 16.0f / 255.0f, .b = 16.0f / 255.0f, .a = 1};
+  const enum wlr_color_transfer_function pq = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ;
+  const enum wlr_color_transfer_function gamma22 = WLR_COLOR_TRANSFER_FUNCTION_GAMMA22;
+  const enum wlr_color_transfer_function srgb = WLR_COLOR_TRANSFER_FUNCTION_SRGB;
+  const enum wlr_color_transfer_function sources[] = {0, srgb, gamma22};
+  struct fixture outputs[2] = {*fixture, *fixture};
+  outputs[1].output = wlr_headless_add_output(fixture->backend, TEST_WIDTH, TEST_HEIGHT);
+  struct wlr_scene* scene = wlr_scene_create();
+  struct wlr_scene_output* scene_outputs[2] = {0};
+  struct wlr_scene_optimized_blur* optimized[2] = {0};
+  struct wlr_buffer* targets[2] = {0};
+  uint8_t hdr_pixels[2][2][4] = {0};
+  struct wlr_texture* fill = wlr_texture_from_pixels(fixture->renderer, DRM_FORMAT_ABGR8888, 4, 1, 1, grey);
+  if (!check(outputs[1].output != NULL && scene != NULL && fill != NULL, "create SDR transfer fixtures")
+      || !check(
+          wlr_output_init_render(outputs[1].output, fixture->allocator, fixture->renderer), "initialize second output"
+      )) {
+    ok = false;
+    goto out;
+  }
+  for (size_t output = 0; output < 2; output++) {
+    struct wlr_output_state enable;
+    wlr_output_state_init(&enable);
+    wlr_output_state_set_enabled(&enable, true);
+    wlr_output_state_set_custom_mode(&enable, TEST_WIDTH, TEST_HEIGHT, 60000);
+    bool enabled = wlr_output_commit_state(outputs[output].output, &enable);
+    wlr_output_state_finish(&enable);
+    if (!check(enabled, "enable SDR transfer output")) {
+      ok = false;
+      goto out;
+    }
+    scene_outputs[output] = wlr_scene_output_create(scene, outputs[output].output);
+    targets[output] = create_output_buffer(fixture, DRM_FORMAT_ABGR8888, TEST_WIDTH, TEST_HEIGHT);
+    if (!check(scene_outputs[output] != NULL && targets[output] != NULL, "create output-local SDR transfer target")) {
+      ok = false;
+      goto out;
+    }
+    wlr_scene_output_set_position(scene_outputs[output], output * TEST_WIDTH, 0);
+  }
+  const float scene_color[4] = {color.r, color.g, color.b, color.a};
+  if (!check(
+          wlr_scene_rect_create(&scene->tree, 2 * TEST_WIDTH, TEST_HEIGHT, scene_color) != NULL, "create scene backdrop"
+      )) {
+    ok = false;
+    goto out;
+  }
+  for (size_t output = 0; output < 2; output++) {
+    optimized[output] = wlr_scene_optimized_blur_create(&scene->tree, TEST_WIDTH, TEST_HEIGHT);
+    if (!check(optimized[output] != NULL, "create output-local optimized blur")) {
+      ok = false;
+      goto out;
+    }
+    wlr_scene_node_set_position(&optimized[output]->node, output * TEST_WIDTH, 0);
+  }
+  struct wlr_scene_blur* blur = wlr_scene_blur_create(&scene->tree, 2 * TEST_WIDTH, TEST_HEIGHT);
+  struct wlr_scene_border* border = wlr_scene_border_create(&scene->tree, scene_color, scene_color);
+  if (!check(blur != NULL && border != NULL, "create scene blur and compositor border")) {
+    ok = false;
+    goto out;
+  }
+  wlr_scene_blur_set_should_only_blur_bottom_layer(blur, true);
+  wlr_scene_border_set_geometry(
+      border, 2 * TEST_WIDTH, TEST_HEIGHT, 2, 0,
+      (struct clipped_region){.area = {2, 2, 2 * TEST_WIDTH - 4, TEST_HEIGHT - 4}}, (struct fx_corner_radii){0},
+      (struct fx_corner_radii){0}
+  );
+  wlr_scene_set_blur_data(scene, 1, 1, 0, 1, 1, 1);
+  ok = check(!wlr_scene_output_set_sdr_transfer_function(scene_outputs[0], pq), "reject unsupported SDR curve") && ok;
+
+  for (size_t round = 0; round < 2; round++) {
+    enum wlr_color_transfer_function policies[2] = {round == 0 ? gamma22 : srgb, round == 0 ? srgb : gamma22};
+    for (size_t output = 0; output < 2; output++) {
+      acknowledge_scene_damage(scene_outputs[output]);
+      ok = check(
+               wlr_scene_output_set_sdr_transfer_function(
+                   scene_outputs[output], fx_output_get_sdr_transfer_function(outputs[output].output)
+               ) && pixman_region32_empty(&scene_outputs[output]->pending_commit_damage),
+               "setting the same curve adds no scene damage"
+           )
+          && ok;
+    }
+    for (size_t output = 0; output < 2; output++) {
+      const struct wlr_box dot = {.width = 1, .height = 1};
+      wlr_scene_output_damage_box(scene_outputs[output], &dot);
+      if (fx_output_get_sdr_transfer_function(outputs[output].output) != policies[output]) {
+        if (round != 0) {
+          ok = check(!optimized[output]->dirty, "previous scene frame settled its optimized blur cache") && ok;
+        }
+        ok = check(
+                 wlr_scene_output_set_sdr_transfer_function(scene_outputs[output], policies[output]),
+                 "set output-local SDR transfer"
+             )
+            && ok;
+        const pixman_box32_t whole = {.x2 = TEST_WIDTH, .y2 = TEST_HEIGHT};
+        ok = check(
+                 pixman_region32_contains_rectangle(&scene_outputs[output]->pending_commit_damage, &whole)
+                     == PIXMAN_REGION_IN,
+                 "curve change expands partial damage to the complete output"
+             )
+            && ok;
+        ok = check(optimized[output]->dirty, "curve change marks the output's optimized blur for regeneration") && ok;
+      }
+      for (size_t source = 0; source < sizeof(sources) / sizeof(sources[0]); source++) {
+        for (size_t capture = 0; capture < 2; capture++) {
+          char label[160];
+          snprintf(
+              label, sizeof(label), "round %zu output %zu policy %u source %u capture %zu", round, output,
+              policies[output], sources[source], capture
+          );
+          if (!check(
+                  render_sdr_on(&outputs[output], targets[output], fill, &color, sources[source], pq, capture), label
+              )) {
+            ok = false;
+            continue;
+          }
+          ok =
+              check_sdr_transfer_pixels(&outputs[output], targets[output], policies[output], sources[source], pq, label)
+              && ok;
+        }
+      }
+      const enum wlr_color_transfer_function hdr_sources[] = {pq, WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR};
+      for (size_t source = 0; source < sizeof(hdr_sources) / sizeof(hdr_sources[0]); source++) {
+        ok = check(
+                 render_sdr_on(&outputs[output], targets[output], fill, &color, hdr_sources[source], pq, false),
+                 "render explicitly tagged HDR content"
+             )
+            && ok;
+        uint8_t shown[4] = {0};
+        ok =
+            fixture_read_display_pixel(&outputs[output], targets[output], TEST_WIDTH / 4, TEST_HEIGHT / 2, shown) && ok;
+        if (round == 0) {
+          memcpy(hdr_pixels[output][source], shown, sizeof(shown));
+        } else {
+          ok = check(
+                   codes_close(shown, hdr_pixels[output][source], 1),
+                   "explicit PQ and linear content remain unchanged after switching the SDR curve"
+               )
+              && ok;
+        }
+      }
+      if (policies[output] == srgb) {
+        ok =
+            check(
+                render_sdr_on(&outputs[output], targets[output], fill, &color, 0, gamma22, false), "render gamma target"
+            )
+            && ok;
+        ok = check_sdr_transfer_pixels(&outputs[output], targets[output], gamma22, 0, gamma22, "non-PQ target") && ok;
+        struct fx_offscreen_buffers* buffers = fx_offscreen_buffers_try_get(outputs[output].output);
+        if (check(buffers != NULL, "find output scratch storage")) {
+          fx_offscreen_buffers_destroy(buffers);
+          ok = check(
+                   fx_output_get_sdr_transfer_function(outputs[output].output) == srgb,
+                   "curve policy survives renderer scratch-storage destruction"
+               )
+              && ok;
+        } else {
+          ok = false;
+        }
+        ok = check(
+                 render_sdr_on(&outputs[output], targets[output], fill, &color, 0, pq, false),
+                 "recreate PQ scratch storage"
+             )
+            && ok;
+        ok = check_sdr_transfer_pixels(&outputs[output], targets[output], srgb, 0, pq, "recreated PQ storage") && ok;
+      }
+      ok = check(
+               render_sdr_on(&outputs[output], targets[output], fill, &color, 0, srgb, false),
+               "render unchanged SDR target"
+           )
+          && ok;
+      ok = check_sdr_transfer_pixels(&outputs[output], targets[output], srgb, 0, srgb, "non-HDR target") && ok;
+    }
+    bool stale = false;
+    for (size_t output = 0; output < 2; output++) {
+      ok = check(
+               render_cached_blur_frame(&outputs[output], targets[output], pq, true, &stale),
+               "render selected blur curve"
+           )
+          && ok;
+      uint8_t shown[4] = {0};
+      ok = fixture_read_display_pixel(&outputs[output], targets[output], TEST_WIDTH / 2, TEST_HEIGHT / 2, shown) && ok;
+      const float linear = policies[output] == srgb ? srgb_to_linear(16.0f / 255.0f) : powf(16.0f / 255.0f, 2.2f);
+      const int expected = to_u8(linear_to_pq(linear * 203.0f / 10000.0f));
+      ok = check(abs((int)shown[2] - expected) <= 1, "optimized blur uses its output's selected SDR curve") && ok;
+
+      wlr_scene_output_set_sdr_white_level(scene_outputs[output], 203);
+      struct wlr_output_state state;
+      wlr_output_state_init(&state);
+      wlr_output_state_set_image_description(
+          &state,
+          &(struct wlr_output_image_description){.primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020, .transfer_function = pq}
+      );
+      const struct wlr_scene_output_state_options options = {.capture_sdr = true};
+      bool built = wlr_scene_output_build_state(scene_outputs[output], &state, &options) && state.buffer != NULL;
+      ok = check(built, "build scene after selecting SDR curve") && ok;
+      if (built) {
+        const int samples[] = {1, TEST_WIDTH / 2, TEST_WIDTH - 1};
+        for (size_t sample = 0; sample < sizeof(samples) / sizeof(samples[0]); sample++) {
+          ok =
+              fixture_read_display_pixel(&outputs[output], state.buffer, samples[sample], TEST_HEIGHT / 2, shown) && ok;
+          ok = check(
+                   abs((int)shown[2] - expected) <= 1,
+                   "border and cached blur redraw with the selected curve outside the original partial damage"
+               )
+              && ok;
+        }
+        uint8_t capture[TEST_WIDTH * TEST_HEIGHT * 4];
+        ok = check(
+                 read_buffer(&outputs[output], state.buffer, DRM_FORMAT_ABGR8888, TEST_WIDTH * 4, capture),
+                 "read scene SDR capture"
+             )
+            && ok;
+        ok = check(
+                 abs((int)capture[((TEST_HEIGHT / 2) * TEST_WIDTH + TEST_WIDTH / 2) * 4] - 16) <= 1,
+                 "scene capture retains implicit SDR codes after switching curves"
+             )
+            && ok;
+      }
+      wlr_output_state_finish(&state);
+    }
+  }
+
+out:
+  if (scene != NULL) {
+    wlr_scene_node_destroy(&scene->tree.node);
+  }
+  for (size_t output = 0; output < 2; output++) {
+    if (targets[output] != NULL) {
+      wlr_buffer_drop(targets[output]);
+    }
+  }
+  if (fill != NULL) {
+    wlr_texture_destroy(fill);
+  }
+  if (outputs[1].output != NULL) {
+    wlr_output_destroy(outputs[1].output);
+  }
+  return ok;
+}
+
 // The optimized blur holds linear light decoded with the SDR curve of the pass
 // that rendered it. After an output switches from an sRGB transform to PQ,
 // both keep FP16 caches, so only the curve tells the old cache apart: a blur
@@ -2145,6 +2430,8 @@ int main(int argc, char* argv[]) {
     ok = test_hdr_white_point(&fixture);
   } else if (strcmp(argv[1], "sdr-curve-consistency") == 0) {
     ok = test_sdr_curve_consistency(&fixture);
+  } else if (strcmp(argv[1], "sdr-transfer-policy") == 0) {
+    ok = test_sdr_transfer_policy(&fixture);
   } else if (strcmp(argv[1], "optimized-blur-sdr-curve") == 0) {
     ok = test_optimized_blur_sdr_curve(&fixture);
   } else if (strcmp(argv[1], "optimized-blur-encoded-cache") == 0) {

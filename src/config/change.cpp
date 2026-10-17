@@ -50,6 +50,7 @@ namespace umbriel {
           && lhs.vrr == rhs.vrr
           && lhs.hdr == rhs.hdr
           && lhs.sdrWhite == rhs.sdrWhite
+          && lhs.sdrTransfer == rhs.sdrTransfer
           && lhs.bitDepth == rhs.bitDepth;
     }
 

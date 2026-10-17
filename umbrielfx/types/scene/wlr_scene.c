@@ -4949,6 +4949,39 @@ void wlr_scene_output_set_sdr_white_level(struct wlr_scene_output* scene_output,
   scene_output_damage_whole(scene_output);
 }
 
+static void scene_output_dirty_optimized_blur(struct wlr_scene_output* output, struct wlr_scene_node* node) {
+  if (node->type == WLR_SCENE_NODE_OPTIMIZED_BLUR) {
+    struct wlr_scene_optimized_blur* blur = wlr_scene_optimized_blur_from_node(node);
+    struct wlr_box bounds = {.width = blur->width, .height = blur->height};
+    struct wlr_box output_box = {.x = output->x, .y = output->y};
+    wlr_output_effective_resolution(output->output, &output_box.width, &output_box.height);
+    struct wlr_box overlap;
+    if (wlr_scene_node_coords(node, &bounds.x, &bounds.y) && wlr_box_intersection(&overlap, &bounds, &output_box)) {
+      wlr_scene_optimized_blur_mark_dirty(blur);
+    }
+  } else if (node->type == WLR_SCENE_NODE_TREE) {
+    struct wlr_scene_node* child;
+    struct wlr_scene_tree* tree = wlr_scene_tree_from_node(node);
+    wl_list_for_each(child, &tree->children, link) { scene_output_dirty_optimized_blur(output, child); }
+  }
+}
+
+bool wlr_scene_output_set_sdr_transfer_function(
+    struct wlr_scene_output* scene_output, enum wlr_color_transfer_function transfer_function
+) {
+  if (fx_output_get_sdr_transfer_function(scene_output->output) == transfer_function) {
+    return true;
+  }
+  if (!fx_output_set_sdr_transfer_function(scene_output->output, transfer_function)) {
+    return false;
+  }
+  fx_offscreen_buffers_invalidate_blend(scene_output->output);
+  fx_renderer_clear_output_effect_buffers(scene_output->output);
+  scene_output_dirty_optimized_blur(scene_output, &scene_output->scene->tree.node);
+  scene_output_damage_whole(scene_output);
+  return true;
+}
+
 void wlr_scene_output_set_hdr_white_point(struct wlr_scene_output* scene_output, const float srgb_white[static 3]) {
   bool active = false;
   bool changed = false;

@@ -241,6 +241,10 @@ namespace umbriel {
     Auto,
     Fullscreen,
   };
+  enum class SdrTransfer {
+    Gamma22,
+    Srgb,
+  };
   [[nodiscard]] constexpr std::string_view hdrModeName(HdrMode mode) {
     switch (mode) {
     case HdrMode::Off:
@@ -289,6 +293,7 @@ namespace umbriel {
     bool directScanout = true;
     HdrMode hdr = HdrMode::Off;
     float sdrWhite = 203.0F;
+    SdrTransfer sdrTransfer = SdrTransfer::Gamma22;
     std::optional<std::string> screenEffect; // "off" disables the default
     // Render bit depth for SDR output: 8 (default) or 10 for 10-bit SDR.
     int bitDepth = 8;

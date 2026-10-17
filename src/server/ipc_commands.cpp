@@ -480,11 +480,11 @@ namespace umbriel {
       for (const auto& output : ok.at("outputs")) {
         const std::string fallback = output.value("fallback_reason", "");
         std::println(
-            "output {}: HDR mode {}, requested {}, active {}, format {}, {}, {}, SDR white {} cd/m2",
+            "output {}: HDR mode {}, requested {}, active {}, format {}, {}, {}, SDR white {} cd/m2, SDR transfer {}",
             output.value("name", ""), output.value("hdr_mode", "off"),
             output.value("hdr_requested", false) ? "yes" : "no", output.value("hdr_active", false) ? "yes" : "no",
             output.value("render_format", "invalid"), output.value("transfer_function", "none"),
-            output.value("primaries", "none"), output.value("sdr_white", 0.0)
+            output.value("primaries", "none"), output.value("sdr_white", 0.0), output.value("sdr_transfer", "gamma22")
         );
 
         if (!fallback.empty()) {
@@ -907,6 +907,7 @@ namespace umbriel {
           {"transfer_function", description != nullptr ? transferFunctionName(description->transfer_function) : "none"},
           {"primaries", description != nullptr ? primariesName(description->primaries) : "none"},
           {"sdr_white", output->sdrWhite()},
+          {"sdr_transfer", output->configuredSdrTransfer() == SdrTransfer::Srgb ? "srgb" : "gamma22"},
           {"bit_depth", output->configuredBitDepth()},
           {"bit_depth_active", output->bitDepthActive()},
           {"bit_depth_fallback_reason", output->bitDepthFallbackReason()},

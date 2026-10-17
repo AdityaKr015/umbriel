@@ -19,6 +19,8 @@ struct fx_framebuffer;
 struct wlr_allocator;
 
 void fx_renderer_set_allocator(struct wlr_renderer* renderer, struct wlr_allocator* allocator);
+bool fx_output_set_sdr_transfer_function(struct wlr_output* output, enum wlr_color_transfer_function transfer_function);
+enum wlr_color_transfer_function fx_output_get_sdr_transfer_function(struct wlr_output* output);
 
 struct fx_pixel_format {
   uint32_t drm_format;

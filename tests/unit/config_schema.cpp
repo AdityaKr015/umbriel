@@ -237,6 +237,20 @@ UMBRIEL_TEST(listedValuesAreAccepted) {
   CHECK(tried > 50);
 }
 
+UMBRIEL_TEST(outputSdrTransferSchemaListsCanonicalValuesAndDefault) {
+  const auto descriptions = umbriel::registry::describeConfig(umbriel::Config{});
+  bool found = false;
+  for (const auto& key : descriptions) {
+    if (key.path == "output.<name>.sdr_transfer") {
+      found = true;
+      CHECK_EQ(key.type, std::string_view{"enum"});
+      CHECK(key.values == std::vector<std::string_view>({"gamma22", "srgb"}));
+      CHECK(key.defaultValue == "gamma22");
+    }
+  }
+  CHECK(found);
+}
+
 UMBRIEL_TEST(effectPoolSchemaReportsMembersPoliciesAndRequiredKind) {
   const auto descriptions = umbriel::registry::describeConfig(umbriel::Config{});
   bool kind = false;

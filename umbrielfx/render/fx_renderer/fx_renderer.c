@@ -163,7 +163,7 @@ static void fx_renderer_destroy(struct wlr_renderer* wlr_renderer) {
 
 static struct wlr_render_pass* begin_buffer_pass_with_output(
     struct wlr_renderer* wlr_renderer, struct wlr_buffer* wlr_buffer, const struct wlr_buffer_pass_options* options,
-    struct fx_offscreen_buffers* output_buffers
+    struct fx_offscreen_buffers* output_buffers, enum wlr_color_transfer_function pq_sdr_transfer
 ) {
   struct fx_renderer* renderer = fx_get_renderer(wlr_renderer);
 
@@ -189,7 +189,7 @@ static struct wlr_render_pass* begin_buffer_pass_with_output(
 
   struct fx_gles_render_pass* pass = fx_begin_buffer_pass(
       buffer, &prev_ctx, timer, options->signal_timeline, options->signal_point, options->color_transform,
-      output_buffers
+      output_buffers, pq_sdr_transfer
   );
   if (!pass) {
     wlr_egl_restore_context(&prev_ctx);
@@ -210,7 +210,8 @@ static struct wlr_render_pass* begin_buffer_pass_with_output(
 static struct wlr_render_pass* begin_buffer_pass(
     struct wlr_renderer* wlr_renderer, struct wlr_buffer* wlr_buffer, const struct wlr_buffer_pass_options* options
 ) {
-  struct wlr_render_pass* pass = begin_buffer_pass_with_output(wlr_renderer, wlr_buffer, options, NULL);
+  struct wlr_render_pass* pass =
+      begin_buffer_pass_with_output(wlr_renderer, wlr_buffer, options, NULL, WLR_COLOR_TRANSFER_FUNCTION_GAMMA22);
   // Outputs use fx_renderer_begin_output_buffer_pass. Other callers here render into buffers a client reads
   // (capture destinations); fx_framebuffer_copy clears the flag for its internal targets.
   if (pass != NULL && options->signal_timeline == NULL) {
@@ -243,7 +244,9 @@ struct wlr_render_pass* fx_renderer_begin_output_buffer_pass(
     fx_offscreen_buffers_invalidate_blend(output);
   }
 
-  return begin_buffer_pass_with_output(output->renderer, buffer, options, output_buffers);
+  return begin_buffer_pass_with_output(
+      output->renderer, buffer, options, output_buffers, fx_output_get_sdr_transfer_function(output)
+  );
 }
 
 GLuint fx_renderer_get_buffer_fbo(struct wlr_renderer* wlr_renderer, struct wlr_buffer* wlr_buffer) {

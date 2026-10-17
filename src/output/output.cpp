@@ -335,6 +335,11 @@ namespace umbriel {
 
   float Output::sdrWhite() const { return m_runtimeSdrWhite.value_or(configuredSdrWhite()); }
 
+  SdrTransfer Output::configuredSdrTransfer() const {
+    const OutputRule* rule = findOutputRule(config(), identity());
+    return rule != nullptr ? rule->sdrTransfer : SdrTransfer::Gamma22;
+  }
+
   void Output::setRuntimeSdrWhite(float nits) {
     if (m_runtimeSdrWhite && *m_runtimeSdrWhite == nits) {
       return;
@@ -486,6 +491,12 @@ namespace umbriel {
       m_workspaceGroup->abandonReveal();
     }
     const OutputRule* rule = findOutputRule(config(), identity());
+    const auto sdrTransfer = configuredSdrTransfer() == SdrTransfer::Srgb ? WLR_COLOR_TRANSFER_FUNCTION_SRGB
+                                                                          : WLR_COLOR_TRANSFER_FUNCTION_GAMMA22;
+    if (!wlr_scene_output_set_sdr_transfer_function(m_sceneOutput, sdrTransfer)) {
+      kLog.error("output '{}': failed to apply SDR transfer function", m_output->name);
+      return false;
+    }
     const std::optional<double> configuredScale = rule != nullptr ? rule->scale : std::nullopt;
     const bool enabled = desktopEnabled() && !m_dpmsOff;
     wlr_output_state state{};

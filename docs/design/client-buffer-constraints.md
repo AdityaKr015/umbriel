@@ -168,7 +168,8 @@ A scene buffer's zero transfer function means unspecified SDR. Surface helpers
 retain that sentinel when a client has no committed color description, including
 after unsetting or destroying its color object. Snapshot and overview copies
 preserve it. The renderer selects the pass's SDR curve only for unspecified
-content: gamma 2.2 on PQ or gamma 2.2 outputs, piecewise sRGB otherwise.
+content: the output's `sdr_transfer` choice on PQ, gamma 2.2 on gamma 2.2
+outputs, and piecewise sRGB otherwise. The PQ default remains gamma 2.2.
 
 Explicit transfer functions retain their meaning. In particular, protocol v2's
 `compound_power_2_4` maps to `WLR_COLOR_TRANSFER_FUNCTION_SRGB` and must use the
@@ -184,12 +185,27 @@ Neither operation replaces the sentinel passed to the renderer.
 `color-scene-unset-primaries` checks pixel transitions from unspecified SDR to
 explicit piecewise sRGB and back on PQ. `color-sdr-curve-consistency` checks
 explicit and implicit decoding independently from compositor colors and verifies
-both SDR capture paths. On PQ outputs, captures retain the pass's gamma 2.2
-encoding, so an explicit piecewise source can produce different captured code
+both SDR capture paths. On PQ outputs, captures use the pass's selected SDR
+encoding, so an explicitly tagged source can produce different captured code
 values while preserving its decoded luminance. The `render/color_transfer`
 harness check uses real protocol v2 descriptions across top-level and
 synchronized or independent subsurface commits, including color-object
 destruction and recreation.
+
+The per-output SDR policy is stored in a separate `wlr_output` addon. It survives
+renderer recovery and scratch-buffer recreation without extending shared
+wlroots structs. Configuration applies it before building an output's initial
+or reconfigured frame. A changed choice fully damages the output, invalidates
+the blend and capture generations, clears effect buffers, and marks intersecting
+optimized-blur nodes dirty. The blend and optimized-blur cache keys also include
+the selected curve. An unchanged choice adds no scene damage.
+
+`color-sdr-transfer-policy` renders two PQ outputs with opposite choices and
+swaps their policies. It checks explicit metadata, compositor colors, optimized
+blur, both SDR captures, redraw outside prior partial damage, and policy
+retention across scratch-buffer destruction. Non-PQ targets retain their
+existing curves. The `render/sdr_transfer` harness check covers per-output
+configuration reloads, default restoration, and unchanged SDR fallback pixels.
 
 ## HDR capture view
 
@@ -199,7 +215,8 @@ shared-memory capture is advertised as 8-bit and GLES converts the SDR sidecar
 during readback. The sidecar itself must continue to use the output buffer's
 DRM format because DMA-BUF capture may already have negotiated that 10-bit
 storage, and texture substitution must remain storage-compatible. Its stored
-values are Gamma 2.2 SDR even when its DRM format is 10-bit.
+values use the output's selected SDR transfer curve, gamma 2.2 by default, even
+when its DRM format is 10-bit.
 
 Each output owns one shared FP16 blend buffer and one shared SDR capture
 sidecar. Their lifetime is tied to that output, rather than to its swapchain

@@ -206,6 +206,7 @@ if build_tests
     'hdr-white-point-math',
     'hdr-white-point',
     'sdr-curve-consistency',
+    'sdr-transfer-policy',
     'optimized-blur-sdr-curve',
     'optimized-blur-encoded-cache',
     'optimized-blur-size-change',

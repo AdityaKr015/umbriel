@@ -22,6 +22,7 @@ using umbriel::ContentType;
 using umbriel::HdrMode;
 using umbriel::LayoutMode;
 using umbriel::ModifierKey;
+using umbriel::SdrTransfer;
 using umbriel::TrackLayout;
 using umbriel::VrrMode;
 using umbriel::WindowDragToggle;
@@ -1536,6 +1537,65 @@ UMBRIEL_TEST(outputHdrPolicyAndSdrWhiteLoad) {
   CHECK(store.reload().success);
   CHECK(store.config().outputs[0].hdr == HdrMode::Off);
   CHECK(containsDiagnostic(store, "ignoring output.DP-1.hdr"));
+}
+
+UMBRIEL_TEST(outputSdrTransferLoadsAndResetsToGamma22) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[output.DP-1]\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().outputs.size(), size_t{1});
+  CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Gamma22);
+
+  file.write("[output.DP-1]\nsdr_transfer = \"srgb\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Srgb);
+  CHECK(!containsDiagnostic(store, "output.DP-1.sdr_transfer"));
+
+  file.write("[output.DP-1]\nsdr_transfer = \"gamma22\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Gamma22);
+  CHECK(!containsDiagnostic(store, "output.DP-1.sdr_transfer"));
+
+  file.write("[output.DP-1]\nsdr_transfer = \"srgb\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Srgb);
+  file.write("[output.DP-1]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Gamma22);
+
+  file.write("[output.DP-1]\nsdr_transfer = \"srgb\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Srgb);
+  file.write("");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs.empty());
+  file.write("[output.DP-1]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Gamma22);
+}
+
+UMBRIEL_TEST(outputSdrTransferRejectsInvalidValuesWithoutUnknownKeyWarnings) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  for (const char* value : {"true", "1", "1.0", "[]", "{}", "\"gamma2.2\"", "\"sRGB\"", "\"linear\""}) {
+    file.write("[output.DP-1]\nsdr_transfer = \"srgb\"\n");
+    CHECK(store.reload().success);
+    CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Srgb);
+
+    file.write("[output.DP-1]\nhdr = \"on\"\nsdr_transfer = " + std::string(value) + "\n");
+    CHECK(store.reload().success);
+    CHECK_EQ(store.config().outputs.size(), size_t{1});
+    CHECK(store.config().outputs[0].hdr == HdrMode::On);
+    CHECK(store.config().outputs[0].sdrTransfer == SdrTransfer::Gamma22);
+    CHECK(containsDiagnostic(store, "ignoring output.DP-1.sdr_transfer"));
+    CHECK(containsDiagnostic(store, "expected \"gamma22\" or \"srgb\""));
+    CHECK(!containsDiagnostic(store, "unknown key"));
+  }
 }
 
 UMBRIEL_TEST(outputBitDepthLoadsAndDefaults8) {

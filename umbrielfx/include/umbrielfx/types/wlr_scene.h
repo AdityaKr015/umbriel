@@ -1009,6 +1009,17 @@ void wlr_scene_output_set_direct_scanout_enabled(struct wlr_scene_output* scene_
 void wlr_scene_output_set_sdr_white_level(struct wlr_scene_output* scene_output, float nits);
 
 /**
+ * Select the decoding curve for implicit SDR content and compositor colors on
+ * PQ outputs. Supports sRGB and gamma 2.2, with gamma 2.2 as the default.
+ * Explicit surface transfer functions and non-PQ outputs are unaffected.
+ * Changes invalidate output caches and fully damage and schedule the output.
+ * Returns false for an unsupported curve or allocation failure.
+ */
+bool wlr_scene_output_set_sdr_transfer_function(
+    struct wlr_scene_output* scene_output, enum wlr_color_transfer_function transfer_function
+);
+
+/**
  * Set the HDR display white point from normalized sRGB-encoded RGB values.
  * The neutral value is {1, 1, 1}. Only PQ outputs are adjusted. The adjustment
  * changes the display transform, preserving HDR highlight range and leaving

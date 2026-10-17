@@ -14,7 +14,8 @@ struct fx_render_rect_options fx_render_rect_options_default(const struct wlr_re
 struct fx_gles_render_pass* fx_begin_buffer_pass(
     struct fx_framebuffer* buffer, struct wlr_egl_context* prev_ctx, struct fx_render_timer* timer,
     struct wlr_drm_syncobj_timeline* signal_timeline, uint64_t signal_point,
-    struct wlr_color_transform* color_transform, struct fx_offscreen_buffers* output_buffers
+    struct wlr_color_transform* color_transform, struct fx_offscreen_buffers* output_buffers,
+    enum wlr_color_transfer_function pq_sdr_transfer
 );
 
 #endif

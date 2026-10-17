@@ -64,6 +64,7 @@ files = []
 # scale = 1.25
 # vrr = "fullscreen"
 # hdr = "auto"
+# sdr_transfer = "gamma22" # Or "srgb" for piecewise SDR decoding in HDR.
 
 # ==============================================================================
 # Appearance

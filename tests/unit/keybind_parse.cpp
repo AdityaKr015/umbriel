@@ -690,6 +690,13 @@ UMBRIEL_TEST(parsesWindowIdActions) {
   CHECK(parseAction("window-close:abc123", bind));
   CHECK(bind.action == KeybindAction::WindowClose);
   CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{"abc123"});
+  CHECK(parseAction("window-kill", bind));
+  CHECK(bind.action == KeybindAction::WindowKill);
+  CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{});
+  CHECK(parseAction("window-kill:abc123", bind));
+  CHECK(bind.action == KeybindAction::WindowKill);
+  CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{"abc123"});
+  CHECK(!parseAction("window-kill:", bind));
   CHECK(parseAction("window-focus:abc123", bind));
   CHECK(bind.action == KeybindAction::WindowFocusId);
   CHECK_EQ(umbriel::payloadIf<umbriel::WindowIdArg>(bind)->id, std::string{"abc123"});

@@ -31,6 +31,7 @@ namespace umbriel {
     None,
     Spawn,
     WindowClose,
+    WindowKill,
     SessionQuit,
     WindowFocusLeft,
     WindowFocusRight,

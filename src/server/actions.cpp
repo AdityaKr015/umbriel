@@ -19,10 +19,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
+#include <csignal>
+#include <cstring>
 #include <expected>
 #include <optional>
 #include <span>
 #include <string_view>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -765,6 +769,30 @@ namespace umbriel {
       }
       if (View* view = focusedWindow(server)) {
         view->requestClose();
+      }
+      return true;
+    }
+
+    bool actionWindowKill(Server& server, const Keybind& bind, std::string* error) {
+      View* view = nullptr;
+      if (const auto* arg = payloadIf<WindowIdArg>(bind); arg != nullptr && !arg->id.empty()) {
+        view = viewByForeignIdentifier(server, arg->id);
+        if (view == nullptr) {
+          return reject(error, "unknown window: " + arg->id);
+        }
+      } else {
+        view = focusedWindow(server);
+      }
+      if (view == nullptr) {
+        return true;
+      }
+      const pid_t pid = view->pid();
+      // Nonpositive PIDs signal process groups, and X11 clients can supply their own PID.
+      if (pid <= 1 || pid == getpid()) {
+        return reject(error, "window has no killable client process");
+      }
+      if (kill(pid, SIGKILL) != 0) {
+        return reject(error, std::string("failed to kill window process: ") + std::strerror(errno));
       }
       return true;
     }
@@ -2064,6 +2092,7 @@ namespace umbriel {
         nullptr,
         &actionSpawn,
         &actionWindowClose,
+        &actionWindowKill,
         &actionSessionQuit,
         &actionFocusAdjacent<-1>,
         &actionFocusAdjacent<1>,

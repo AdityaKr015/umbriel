@@ -426,6 +426,7 @@ namespace {
     case A::LayoutToggleSplit:
       return Group::MoveSize;
     case A::WindowClose:
+    case A::WindowKill:
     case A::ToggleFloating:
     case A::ToggleMaximize:
     case A::ToggleMaximizeToEdges:

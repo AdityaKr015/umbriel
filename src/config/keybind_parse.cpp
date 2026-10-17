@@ -365,6 +365,8 @@ namespace umbriel {
         {"window-focus-up", "", "Focus the next window up in the column", KeybindAction::WindowFocusUp},
         {"window-focus-warp", "<window-id>", "Focus or reveal a window and warp the cursor to it",
          KeybindAction::WindowFocusWarpId, ActionArgKind::WindowId},
+        {"window-kill", "[<window-id>]", "Kill the process owning the focused or given window",
+         KeybindAction::WindowKill, ActionArgKind::OptionalWindowId},
         {"window-modify-height-down", "<delta>", "Resize the focused window from its bottom edge",
          KeybindAction::WindowModifyHeightDown, ActionArgKind::FractionDelta},
         {"window-modify-height-up", "<delta>", "Resize the focused window from its top edge",

@@ -377,6 +377,7 @@ struct wlr_scene_output {
     float hdr_white_point[3];
     bool hdr_white_point_active;
     bool hdr_white_point_cursor_locked;
+    struct wl_listener output_destroy;
   } WLR_PRIVATE;
 };
 

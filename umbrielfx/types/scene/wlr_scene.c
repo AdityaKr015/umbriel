@@ -4704,6 +4704,18 @@ static void scene_output_handle_needs_frame(struct wl_listener* listener, void* 
   wlr_output_schedule_frame(scene_output->output);
 }
 
+// The scene output itself goes with the output's addons, after every destroy listener has run. Until then a listener
+// that moves nodes (such as a compositor rehoming a hidden workspace's windows) must not enter surfaces on the dying
+// output: wlr_surface_send_enter would register wlr_output listeners that the running emission never reaches, and
+// wlr_output_finish aborts on them. Leaving the scene's output list first keeps every later update away from it.
+static void scene_output_handle_output_destroy(struct wl_listener* listener, void* data) {
+  struct wlr_scene_output* scene_output = wl_container_of(listener, scene_output, output_destroy);
+  struct wlr_scene* scene = scene_output->scene;
+  scene_node_output_update(&scene->tree.node, &scene->outputs, scene_output, NULL);
+  wl_list_remove(&scene_output->link);
+  wl_list_init(&scene_output->link);
+}
+
 struct wlr_scene_output* wlr_scene_output_create(struct wlr_scene* scene, struct wlr_output* output) {
   struct wlr_scene_output* scene_output = calloc(1, sizeof(*scene_output));
   if (scene_output == NULL) {
@@ -4762,6 +4774,9 @@ struct wlr_scene_output* wlr_scene_output_create(struct wlr_scene* scene, struct
   scene_output->output_needs_frame.notify = scene_output_handle_needs_frame;
   wl_signal_add(&output->events.needs_frame, &scene_output->output_needs_frame);
 
+  scene_output->output_destroy.notify = scene_output_handle_output_destroy;
+  wl_signal_add(&output->events.destroy, &scene_output->output_destroy);
+
   scene_output_update_geometry(scene_output, false);
 
   return scene_output;
@@ -4801,6 +4816,7 @@ void wlr_scene_output_destroy(struct wlr_scene_output* scene_output) {
   wl_list_remove(&scene_output->output_commit.link);
   wl_list_remove(&scene_output->output_damage.link);
   wl_list_remove(&scene_output->output_needs_frame.link);
+  wl_list_remove(&scene_output->output_destroy.link);
   if (scene_output->in_timeline != NULL) {
     wlr_drm_syncobj_timeline_signal(scene_output->in_timeline, UINT64_MAX);
     wlr_drm_syncobj_timeline_unref(scene_output->in_timeline);

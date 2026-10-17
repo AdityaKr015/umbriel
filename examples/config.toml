@@ -328,6 +328,13 @@ blur = true
 blur_ignore_alpha = 0.5
 blur_popups = true
 
+# Panels, the dock, notifications and OSDs open over windows, so they blur the
+# live content behind them. The bar and desktop widgets sit on the wallpaper and
+# keep the cached wallpaper blur.
+[[layer_rule]]
+match.namespace = "^noctalia-(notification|dock|panel|attached-panel|osd)$"
+blur_optimized = false
+
 # ==============================================================================
 # Overview
 # Built-in overview and animation values are used. The top-left hot corner opens

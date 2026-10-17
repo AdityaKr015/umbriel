@@ -24,8 +24,7 @@
 // REPAINT_ON_STDIN makes R/G/B request a frame callback, then commit a fresh red/green/blue buffer.
 // FILL_COLOR=<ARGB> paints the buffer that colour (default 0xFF5577AA), so screenshots can tell windows apart.
 // RESIZE_FILL_COLOR=<ARGB> maps at the first configured size, then redraws at every later configured size in that
-// colour, the way a real client follows its tile. With RESIZE_ON_STDIN, a mapped client holds each such resize, ack
-// included, until an `r` arrives, then prints "resized": a client slow to redraw at its new size.
+// colour, the way a real client follows its tile.
 // LOG_SUSPENDED binds xdg-shell at version 6 and prints "suspended" and "resumed" whenever the toplevel's suspended
 // state changes.
 
@@ -149,8 +148,6 @@ namespace {
     int tearingHint = -1;
     uint32_t fillColor = 0xFF5577AA;
     std::optional<uint32_t> resizeFillColor;
-    bool resizeOnStdin = false;
-    std::optional<uint32_t> heldResizeSerial;
     int configuredWidth = 0;
     int configuredHeight = 0;
     const char* title = "unmap-client";
@@ -443,28 +440,8 @@ namespace {
 
   constexpr wl_callback_listener kMaximizeAfterFrameListener = {.done = maximizeAfterFrameDone};
 
-  void commitResize(State& state, uint32_t serial) {
-    xdg_surface_ack_configure(state.xdgSurface, serial);
-    state.fillColor = *state.resizeFillColor;
-    state.width = state.configuredWidth;
-    state.height = state.configuredHeight;
-    state.buffer = createBuffer(state, state.width, state.height);
-    wl_surface_attach(state.surface, state.buffer.resource, 0, 0);
-    wl_surface_damage_buffer(state.surface, 0, 0, state.width, state.height);
-    wl_surface_commit(state.surface);
-  }
-
   void xdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, uint32_t serial) {
     auto& state = *static_cast<State*>(data);
-    if (state.resizeOnStdin
-        && state.mapped
-        && state.resizeFillColor
-        && state.configuredWidth > 0
-        && state.configuredHeight > 0
-        && (state.configuredWidth != state.width || state.configuredHeight != state.height)) {
-      state.heldResizeSerial = serial;
-      return;
-    }
     xdg_surface_ack_configure(xdgSurface, serial);
     const bool followSize = state.resizeFillColor
         && state.configuredWidth > 0
@@ -909,11 +886,6 @@ int main(int argc, char** argv) {
     }
     state.resizeFillColor = static_cast<uint32_t>(value);
   }
-  state.resizeOnStdin = std::getenv("RESIZE_ON_STDIN") != nullptr;
-  if (state.resizeOnStdin && !state.resizeFillColor) {
-    std::println(stderr, "unmap-client: RESIZE_ON_STDIN needs RESIZE_FILL_COLOR");
-    return EXIT_FAILURE;
-  }
   if (argc > 2) {
     state.width = std::max(1, std::atoi(argv[2]));
   }
@@ -1167,7 +1139,7 @@ int main(int argc, char** argv) {
   }
   wl_surface_commit(state.surface);
 
-  if (!remapOnStdin && !updateOnStdin && !foreignParentOnStdin && !state.resizeOnStdin) {
+  if (!remapOnStdin && !updateOnStdin && !foreignParentOnStdin) {
     while (wl_display_dispatch(state.display) >= 0) {
     }
   } else {
@@ -1197,15 +1169,6 @@ int main(int argc, char** argv) {
               wl_callback_add_listener(state.repaintFrame, &kRepaintListener, &state);
               wl_surface_commit(state.surface);
             }
-          } else if (state.resizeOnStdin && command == 'r' && state.heldResizeSerial) {
-            commitResize(state, *state.heldResizeSerial);
-            state.heldResizeSerial.reset();
-            // The roundtrip returns once the compositor has handled the commit, so a check can sample right after.
-            if (wl_display_roundtrip(state.display) < 0) {
-              return EXIT_FAILURE;
-            }
-            std::println("resized");
-            std::fflush(stdout);
           } else if (command == 'a') {
             if (!activateFromFile(state, state.activationTokenFile)) {
               return EXIT_FAILURE;

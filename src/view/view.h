@@ -9,7 +9,6 @@
 #include "view/effects.h"
 #include "view/floating.h"
 #include "view/presentation.h"
-#include "view/resize_crossfade.h"
 
 #include <algorithm>
 #include <array>
@@ -432,7 +431,6 @@ namespace umbriel {
     // Take a size the client chose as the scheduled one, without sending a configure.
     void adoptScheduledSize(int width, int height);
     [[nodiscard]] bool configureSettled(uint32_t serial) const;
-    [[nodiscard]] bool pendingConfigureSettled(uint32_t serial) const;
     // Retire the floating size request once the client has answered it.
     [[nodiscard]] bool retireFloatingSizeRequest();
     [[nodiscard]] bool roleInitialized() const;
@@ -484,7 +482,6 @@ namespace umbriel {
     static int onLaunchPlacementTimeout(void* data);
     static void onRootSurfaceDestroy(wl_listener* listener, void* data);
     static void onCommit(wl_listener* listener, void* data);
-    static void onClientCommit(wl_listener* listener, void* data);
     static void onDestroy(wl_listener* listener, void* data);
     static void onRequestMove(wl_listener* listener, void* data);
     static void onRequestResize(wl_listener* listener, void* data);
@@ -508,8 +505,6 @@ namespace umbriel {
     void handleMap();
     void handleUnmap();
     void handleCommit(bool reconfigureOpeningState = false);
-    // Capture the outgoing frame when the client commits the size a layout motion requested.
-    void handleClientCommit();
     void setXdgTag(std::string_view tag);
     void syncContentType(wlr_surface* committedSurface = nullptr);
     void handleRequestMove(void* data);
@@ -811,7 +806,6 @@ namespace umbriel {
     bool m_tabHidden = false;
     ViewEffects m_effects;
     ViewPresentation m_presentation;
-    ResizeCrossfade m_resizeCrossfade;
     DragPhysics m_dragPhysics;
     uint64_t m_dragPhysicsMsec = 0; // animation clock at the sheet's last tick
     // The frame-local grab and the content tree's drawn bounds the sheet was last fitted to.
@@ -939,7 +933,6 @@ namespace umbriel {
     wl_listener m_unmap{};
     wl_listener m_rootSurfaceDestroy{};
     wl_listener m_commit{};
-    wl_listener m_clientCommit{};
     wl_listener m_destroy{};
     wl_listener m_requestMove{};
     wl_listener m_requestResize{};

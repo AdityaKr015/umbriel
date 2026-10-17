@@ -153,11 +153,6 @@ namespace umbriel {
     self->handleCommit();
   }
 
-  void View::onClientCommit(wl_listener* listener, void* /*data*/) {
-    View* self = wl_container_of(listener, self, m_clientCommit);
-    self->handleClientCommit();
-  }
-
   void View::onViewSurfaceCommit(wl_listener* listener, void* /*data*/) {
     ViewSurfaceWatch* watch;
     watch = wl_container_of(listener, watch, commit);
@@ -493,7 +488,6 @@ namespace umbriel {
       wl_event_source_remove(m_effectSelectionIdle);
       m_effectSelectionIdle = nullptr;
     }
-    m_resizeCrossfade.discard();
     Workspace* closingWorkspace = m_workspace;
     Cursor* cursor = m_server->cursor();
     wlr_seat* seat = m_server->seat()->wlr();
@@ -722,43 +716,8 @@ namespace umbriel {
     }
   }
 
-  void View::handleClientCommit() {
-    // The scene still shows the previous state here, so this is the last moment the outgoing frame can be cloned.
-    const auto& animation = config().animation;
-    wlr_surface* surface = rootSurface();
-    if (!m_mapped
-        || !m_tiled
-        || !m_onActiveWorkspace
-        || !m_tiledSizeRequest
-        || !layoutPresentationOwned()
-        || scheduledFullscreen()
-        || currentFullscreen()
-        || !animation.enabled
-        || !animation.windowsMove.enabled
-        || (surface->pending.committed & WLR_SURFACE_STATE_BUFFER) == 0
-        || surface->pending.buffer == nullptr
-        || (surface->pending.width == surface->current.width && surface->pending.height == surface->current.height)
-        || !pendingConfigureSettled(m_tiledSizeRequest->serial)) {
-      return;
-    }
-    m_resizeCrossfade.capture(
-        m_contentTree, toplevelSurfaceTreeNode(m_contentTree, surface), surface, m_presentedBox.width,
-        m_presentedBox.height, surfaceRadius(), m_server->colorManager()
-    );
-  }
-
   void View::handleCommit(bool reconfigureOpeningState) {
     UMBRIEL_ZONE("View::handleCommit");
-    if (m_resizeCrossfade.pending()) {
-      const auto& move = config().animation.windowsMove;
-      const int targetWidth = m_tiledSizeRequest ? m_tiledSizeRequest->width : m_presentedBox.width;
-      const int targetHeight = m_tiledSizeRequest ? m_tiledSizeRequest->height : m_presentedBox.height;
-      m_resizeCrossfade.start(
-          move.durationMs, move.curve, m_presentedBox.width, m_presentedBox.height, targetWidth, targetHeight
-      );
-      m_resizeCrossfade.applyOpacity(effectiveOpacity());
-      scheduleFrame();
-    }
     // Client transparency can change on any commit. An unmap commit reaches here after handleUnmap hid the backdrop.
     if (m_mapped) {
       m_presentation.setFullscreenOpaque(fullscreenOpaque());
@@ -1040,7 +999,6 @@ namespace umbriel {
   }
 
   void View::roleDestroyed() {
-    m_resizeCrossfade.discard();
     cancelFadeAnimation();
     cancelPositionAnimation();
     leaveForeignOutput();
@@ -1065,9 +1023,9 @@ namespace umbriel {
     clearViewSurfaceWatches();
 
     for (wl_listener* listener :
-         {&m_map, &m_unmap, &m_commit, &m_clientCommit, &m_destroy, &m_requestMove, &m_requestResize,
-          &m_requestMaximize, &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure,
-          &m_xRequestActivate, &m_xSetHints}) {
+         {&m_map, &m_unmap, &m_commit, &m_destroy, &m_requestMove, &m_requestResize, &m_requestMaximize,
+          &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure, &m_xRequestActivate,
+          &m_xSetHints}) {
       removeListener(*listener);
     }
     m_sceneTree->node.data = nullptr;

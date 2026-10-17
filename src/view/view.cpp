@@ -163,8 +163,8 @@ namespace umbriel {
 
     m_sceneTree = wlr_scene_tree_create(m_server->xdgTree());
     m_decoration.createShadow(m_sceneTree);
-    // The content tree's direct child is the root surface's subsurface tree for both roles; the effect, clip, and
-    // crossfade paths find the surface there.
+    // The content tree's direct child is the root surface's subsurface tree for both roles; the effect and clip paths
+    // find the surface there.
     if (m_toplevel != nullptr) {
       m_contentTree = wlr_scene_xdg_surface_create(m_sceneTree, m_toplevel->base);
       m_toplevel->base->data = m_contentTree;
@@ -211,8 +211,6 @@ namespace umbriel {
     watchViewSurfaceTree(surface);
     m_commit.notify = onCommit;
     wl_signal_add(&surface->events.commit, &m_commit);
-    m_clientCommit.notify = onClientCommit;
-    wl_signal_add(&surface->events.client_commit, &m_clientCommit);
 
     m_requestMove.notify = onRequestMove;
     m_requestResize.notify = onRequestResize;
@@ -303,9 +301,9 @@ namespace umbriel {
       }
     }
     for (wl_listener* listener :
-         {&m_map, &m_unmap, &m_commit, &m_clientCommit, &m_destroy, &m_requestMove, &m_requestResize,
-          &m_requestMaximize, &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure,
-          &m_xRequestActivate, &m_xSetHints}) {
+         {&m_map, &m_unmap, &m_commit, &m_destroy, &m_requestMove, &m_requestResize, &m_requestMaximize,
+          &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure, &m_xRequestActivate,
+          &m_xSetHints}) {
       removeListener(*listener);
     }
     if (m_rootSurfaceDestroy.link.next != nullptr) {

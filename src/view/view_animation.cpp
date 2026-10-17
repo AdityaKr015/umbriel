@@ -84,7 +84,6 @@ namespace umbriel {
     m_fadeAlpha = std::clamp(alpha, 0.0F, 1.0F);
     float effective = effectiveOpacity();
     wlr_scene_node_for_each_buffer(&m_contentTree->node, setCompositorOpacity, &effective);
-    m_resizeCrossfade.applyOpacity(effective);
     m_decoration.setBorderRawColor(m_borderColorAnim.current(), effective);
     // The analytic fallback still follows the lifecycle fade. Shader-shaped
     // shadows get their opacity from captured pixels instead of this multiplier.
@@ -113,7 +112,6 @@ namespace umbriel {
       return;
     }
     wlr_scene_node_for_each_buffer(&m_contentTree->node, setCompositorOpacity, &effective);
-    m_resizeCrossfade.applyOpacity(effective);
   }
 
   void View::flushPendingEffectiveOpacity() {
@@ -319,7 +317,6 @@ namespace umbriel {
     }
     m_layoutPresentationHeld = false;
     m_tiledSizeRequest.reset();
-    m_resizeCrossfade.discard();
     if (m_layoutMotion) {
       m_workspace->releaseLayoutMotion(this);
       m_layoutMotion = false;
@@ -908,13 +905,6 @@ namespace umbriel {
       setFadeAlpha(m_fadeAlpha);
       active = active || m_focusDim.animating();
     }
-    // A size-following fade ends with the size animation; one cancelled short of its target ends it here.
-    if (m_resizeCrossfade.followsSize() && !sizeAnimating()) {
-      m_resizeCrossfade.discard();
-    }
-    if (m_resizeCrossfade.tick(nowMsec)) {
-      active = true;
-    }
 
     if (m_borderColorAnim.tick(nowMsec)) {
       m_decoration.setBorderRawColor(m_borderColorAnim.current(), effectiveOpacity());
@@ -958,7 +948,6 @@ namespace umbriel {
         || m_fade.animating()
         || m_borderColorAnim.animating()
         || m_focusDim.animating()
-        || m_resizeCrossfade.active()
         || m_dragPhysics.active();
   }
 
@@ -1184,7 +1173,6 @@ namespace umbriel {
       // node positioned at the visible box origin.
       applyPresentedCrop(content, surfaceClip);
     }
-    m_resizeCrossfade.present(content.width, content.height);
     updateBorderGeometry(content.width, content.height);
     updateShadow();
     updateBlur(content.width, content.height);

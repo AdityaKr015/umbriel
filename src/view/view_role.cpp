@@ -228,10 +228,6 @@ namespace umbriel {
     return m_toplevel == nullptr || serialSettled(m_toplevel->base->current.configure_serial, serial);
   }
 
-  bool View::pendingConfigureSettled(uint32_t serial) const {
-    return m_toplevel == nullptr || serialSettled(m_toplevel->base->pending.configure_serial, serial);
-  }
-
   bool View::retireFloatingSizeRequest() {
     if (m_toplevel != nullptr) {
       return m_floating.retireSizeRequestIfSettled(m_toplevel->base->current.configure_serial);

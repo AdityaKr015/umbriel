@@ -661,6 +661,10 @@ namespace umbriel {
         const wlr_box box = layout->targetBox(v.get());
         entry["x"] = box.x;
         entry["y"] = box.y;
+      } else if (v->floating() && server.cursor()->isDraggingView(v.get())) {
+        // A floating drag moves its scene node before committing the saved target.
+        entry["x"] = v->sceneTree()->node.x;
+        entry["y"] = v->sceneTree()->node.y;
       } else {
         entry["x"] = v->layoutTargetX();
         entry["y"] = v->layoutTargetY();

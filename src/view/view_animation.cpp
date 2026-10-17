@@ -514,18 +514,20 @@ namespace umbriel {
   }
 
   void View::setPosition(int x, int y) {
-    m_posX.snap(x);
-    m_posY.snap(y);
-    m_positioned = true;
+    setLayoutTarget(x, y);
     setScenePosition(x, y);
   }
 
   void View::snapPosition(int x, int y) { setPosition(x, y); }
 
   void View::setLayoutTarget(int x, int y) {
+    const bool changed = layoutTargetX() != x || layoutTargetY() != y;
     m_posX.snap(x);
     m_posY.snap(y);
     m_positioned = true;
+    if (m_mapped && !m_tiled && changed) {
+      m_server->scheduleIpcWindowsEvent();
+    }
   }
 
   void View::presentTiledBox(const wlr_box& box) {
@@ -679,9 +681,18 @@ namespace umbriel {
     scheduleFrame();
   }
 
-  void View::setDragPosition(int x, int y) { setScenePosition(x, y); }
+  void View::setDragPosition(int x, int y) {
+    const bool changed = m_sceneTree->node.x != x || m_sceneTree->node.y != y;
+    setScenePosition(x, y);
+    if (m_mapped && !m_tiled && changed) {
+      m_server->scheduleIpcWindowsEvent();
+    }
+  }
 
   void View::animateTo(int x, int y) {
+    if (m_mapped && !m_tiled && (layoutTargetX() != x || layoutTargetY() != y)) {
+      m_server->scheduleIpcWindowsEvent();
+    }
     // First placement snaps: the node starts at the default (0,0) world origin, so animating would fly the window
     // across the layout on open. The fade-in covers the appear instead.
     const Overview* overview = m_server->overview();

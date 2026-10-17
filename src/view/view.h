@@ -820,6 +820,8 @@ namespace umbriel {
     wlr_box m_dragBounds{};
     bool m_dragSlotBound = false; // the content tree carries the drag slot
     wlr_box m_presentedBox{};
+    // Last committed content size considered for the windows event stream.
+    ClientSize m_ipcContentSize;
     // Last unscaled box supplied by the workspace. A tiled popin or zoom presents an inset inside this logical box,
     // so a later layout change must animate from the logical box rather than scaling the inset a second time.
     wlr_box m_presentedTiledBox{};

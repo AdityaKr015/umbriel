@@ -1026,6 +1026,13 @@ namespace umbriel {
     if (m_mapped && m_xsurface != nullptr) {
       syncXwaylandConfigure();
     }
+    const wlr_box content = committedContentBox();
+    if (content.width != m_ipcContentSize.width || content.height != m_ipcContentSize.height) {
+      m_ipcContentSize = {.width = content.width, .height = content.height};
+      if (m_mapped) {
+        m_server->scheduleIpcWindowsEvent();
+      }
+    }
   }
 
   void View::roleDestroyed() {

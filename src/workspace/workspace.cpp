@@ -953,6 +953,51 @@ namespace umbriel {
       return dx * dx + dy * dy;
     }
 
+    // The progress speed, per second, at which a restarted motion keeps its members moving as fast as they were: the
+    // least-squares fit of every member's current edge velocity onto its new span. Only members present in both
+    // motions count; 0 when nothing carries over.
+    template <typename Entries>
+    double carriedProgressSpeed(const Entries& previous, const Entries& next, double previousSpeed, bool size) {
+      if (previousSpeed == 0.0 || !std::isfinite(previousSpeed)) {
+        return 0.0;
+      }
+      double along = 0.0;
+      double squared = 0.0;
+      for (const auto& entry : next) {
+        const auto old =
+            std::ranges::find_if(previous, [&entry](const auto& candidate) { return candidate.view == entry.view; });
+        if (old == previous.end()) {
+          continue;
+        }
+        const std::array<double, 2> oldSpan = size
+            ? std::array<double, 2>{static_cast<double>(old->to.width - old->from.width),
+                                    static_cast<double>(old->to.height - old->from.height)}
+            : std::array<double, 2>{static_cast<double>(old->to.x - old->from.x),
+                                    static_cast<double>(old->to.y - old->from.y)};
+        const std::array<double, 2> newSpan = size
+            ? std::array<double, 2>{static_cast<double>(entry.to.width - entry.from.width),
+                                    static_cast<double>(entry.to.height - entry.from.height)}
+            : std::array<double, 2>{static_cast<double>(entry.to.x - entry.from.x),
+                                    static_cast<double>(entry.to.y - entry.from.y)};
+        for (size_t axis = 0; axis < 2; ++axis) {
+          along += oldSpan[axis] * previousSpeed * newSpan[axis];
+          squared += newSpan[axis] * newSpan[axis];
+        }
+      }
+      return squared > 0.0 ? along / squared : 0.0;
+    }
+
+    // Starts a 0 -> 1 motion timeline, from the carried speed when its curve is a spring that can use one.
+    void startTimeline(AnimatedValue& value, bool& physics, int durationMs, const AnimationCurve& curve, double speed) {
+      value.snap(0.0);
+      physics = curve.easing == Easing::Spring && speed > 0.0;
+      if (physics) {
+        value.settleSpring(1.0, curve.spring, speed);
+      } else {
+        value.retarget(1.0, durationMs, curve);
+      }
+    }
+
   } // namespace
 
   void Workspace::applyTiledMotion(const wlr_box& usable, bool animate, std::span<View* const> resized) {
@@ -1109,18 +1154,24 @@ namespace umbriel {
       return;
     }
 
+    // An interrupted motion hands its speed to the next one, so repeated actions bend the motion instead of stopping
+    // it and starting again from rest.
+    const auto& resize = animation.windowsResize;
+    const double positionSpeed = m_motion.progress.animating()
+        ? carriedProgressSpeed(m_motion.views, views, m_motion.progress.velocity(), false)
+        : 0.0;
+    const double sizeSpeed =
+        m_motion.size.animating() ? carriedProgressSpeed(m_motion.views, views, m_motion.size.velocity(), true) : 0.0;
     m_motion.views = std::move(views);
-    m_motion.progress.snap(0.0);
-    m_motion.progress.retarget(1.0, move.durationMs, move.curve);
+    startTimeline(m_motion.progress, m_motion.progressPhysics, move.durationMs, move.curve, positionSpeed);
     m_motion.geometryCurve.reset(move.curve);
     // Without windows_resize the size lands at once while the position still moves.
-    const auto& resize = animation.windowsResize;
     if (resize.enabled) {
-      m_motion.size.snap(0.0);
-      m_motion.size.retarget(1.0, resize.durationMs, resize.curve);
+      startTimeline(m_motion.size, m_motion.sizePhysics, resize.durationMs, resize.curve, sizeSpeed);
       m_motion.sizeCurve.reset(resize.curve);
     } else {
       m_motion.size.snap(1.0);
+      m_motion.sizePhysics = false;
     }
 
     for (size_t i = 0; i < m_motion.views.size(); ++i) {
@@ -1146,14 +1197,32 @@ namespace umbriel {
   bool Workspace::tickLayoutMotion(uint64_t nowMsec) {
     const bool positionTicked = m_motion.progress.tick(nowMsec);
     const bool sizeTicked = m_motion.size.tick(nowMsec);
+    // A carried-speed spring settles on its own solver; stop it once no member's pixel can change. One progress unit
+    // spans each member's whole travel, so the longest travel sets the pixel scale.
+    if (m_motion.progressPhysics || m_motion.sizePhysics) {
+      int travel = 1;
+      int resize = 1;
+      for (const LayoutMotion::ViewEntry& entry : m_motion.views) {
+        travel = std::max({travel, std::abs(entry.to.x - entry.from.x), std::abs(entry.to.y - entry.from.y)});
+        resize = std::max(
+            {resize, std::abs(entry.to.width - entry.from.width), std::abs(entry.to.height - entry.from.height)}
+        );
+      }
+      static_cast<void>(m_motion.progress.finishSpringTail(travel));
+      static_cast<void>(m_motion.size.finishSpringTail(resize));
+    }
     const bool running = m_motion.progress.animating() || m_motion.size.animating();
     const bool needsFinalPresentation = !running && !m_motion.views.empty();
     if (!positionTicked && !sizeTicked && !needsFinalPresentation) {
       return false;
     }
 
-    const double position = m_motion.geometryCurve.value(m_motion.progress.progress());
-    const double size = m_motion.size.animating() ? m_motion.sizeCurve.value(m_motion.size.progress()) : 1.0;
+    const auto timeline = [](const AnimatedValue& value, bool physics, const MonotonicEasing& curve) {
+      return physics ? std::clamp(value.current(), 0.0, 1.0) : curve.value(value.progress());
+    };
+    const double position = timeline(m_motion.progress, m_motion.progressPhysics, m_motion.geometryCurve);
+    const double size =
+        m_motion.size.animating() ? timeline(m_motion.size, m_motion.sizePhysics, m_motion.sizeCurve) : 1.0;
     for (const LayoutMotion::ViewEntry& entry : m_motion.views) {
       if (entry.view->mapped() && m_layout->columnOf(entry.view) >= 0) {
         entry.view->presentTiledBox(interpolateBox(entry.from, entry.to, position, size));

@@ -711,10 +711,15 @@ namespace umbriel {
       setPosition(x, y);
       return;
     }
-    // Animate from wherever the node visually is, not from the last target.
-    m_posX.snap(fromX);
+    // Animate from wherever the node visually is, not from the last target. A running tween already sits there and
+    // keeps its speed through the retarget.
+    if (!m_posX.animating()) {
+      m_posX.snap(fromX);
+    }
     m_posX.retarget(x, move.durationMs, move.curve);
-    m_posY.snap(fromY);
+    if (!m_posY.animating()) {
+      m_posY.snap(fromY);
+    }
     m_posY.retarget(y, move.durationMs, move.curve);
     scheduleFrame();
   }
@@ -828,6 +833,9 @@ namespace umbriel {
 
     const bool movedX = m_posX.tick(nowMsec);
     const bool movedY = m_posY.tick(nowMsec);
+    // A carried-speed spring settles on its own solver; stop it once no pixel can change.
+    static_cast<void>(m_posX.finishSpringTail(1.0));
+    static_cast<void>(m_posY.finishSpringTail(1.0));
     if (movedX || movedY) {
       const int cx = static_cast<int>(std::lround(m_posX.current()));
       const int cy = static_cast<int>(std::lround(m_posY.current()));

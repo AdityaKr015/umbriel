@@ -780,6 +780,12 @@ namespace umbriel {
   }
 
   void AnimatedValue::retarget(double to, int durationMs, const AnimationCurve& curve) {
+    // A spring interrupted mid-flight continues from its current speed instead of restarting from rest, so a new target
+    // bends the motion rather than stopping it for a frame.
+    if (curve.easing == Easing::Spring && m_animating && m_velocity != 0.0 && std::isfinite(m_velocity)) {
+      settleSpring(to, curve.spring, m_velocity);
+      return;
+    }
     const AnimationTransition transition = beginAnimationTransition();
     m_transitionId = transition.id;
     m_shaderSeed = transition.seed;
@@ -793,6 +799,7 @@ namespace umbriel {
     m_animating = true;
     m_physics = false;
     m_initialVelocity = 0.0;
+    m_velocity = 0.0;
   }
 
   void AnimatedValue::retarget(double to, int durationMs, std::string_view curveName) {
@@ -882,8 +889,6 @@ namespace umbriel {
     const double linear = std::clamp(static_cast<double>(elapsed) / static_cast<double>(m_durationMsec), 0.0, 1.0);
     m_progress = linear;
 
-    const double prevCurrent = m_current;
-
     if (linear >= 1.0) {
       m_current = m_target;
       m_velocity = 0.0;
@@ -894,8 +899,13 @@ namespace umbriel {
     const double eased = applyEasing(m_curve, linear);
     m_current = m_from + (m_target - m_from) * eased;
 
-    const double dtSec = std::max(0.001, static_cast<double>(elapsed) / 1000.0);
-    m_velocity = (m_current - prevCurrent) / dtSec;
+    // The curve's slope at this instant, in units per second, measured over one millisecond of curve time.
+    const double stepMs = 1.0;
+    const double before = std::max(0.0, linear - stepMs / static_cast<double>(m_durationMsec));
+    const double sloped = linear - before;
+    m_velocity = sloped > 0.0
+        ? (m_target - m_from) * (eased - applyEasing(m_curve, before)) / (sloped * m_durationMsec / 1000.0)
+        : 0.0;
 
     return true;
   }

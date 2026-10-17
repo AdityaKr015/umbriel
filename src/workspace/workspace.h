@@ -322,11 +322,15 @@ namespace umbriel {
         wlr_box to{};
         float direction = 1.0F;
       };
-      // windows_move drives position and windows_resize size; the motion runs until both have settled.
+      // windows_move drives position and windows_resize size; the motion runs until both have settled. A timeline
+      // restarted mid-flight with a spring carries the members' speed and runs the physics solver, whose value is the
+      // progress itself rather than a curve over time.
       AnimatedValue progress;
       MonotonicEasing geometryCurve;
+      bool progressPhysics = false;
       AnimatedValue size;
       MonotonicEasing sizeCurve;
+      bool sizePhysics = false;
       std::vector<ViewEntry> views;
     };
     LayoutMotion m_motion;

@@ -1623,7 +1623,9 @@ namespace umbriel {
 
   bool Server::tickAnimations(uint64_t nowMsec) {
     UMBRIEL_ZONE("Server::tickAnimations");
-    if (nowMsec == m_lastAnimTickMsec) {
+    // Outputs tick at their own vblank instants, which interleave. Animation state is shared, so an earlier instant
+    // than the last tick never moves it backwards.
+    if (nowMsec <= m_lastAnimTickMsec) {
       return animationsActive();
     }
     m_lastAnimTickMsec = nowMsec;
@@ -1677,14 +1679,16 @@ namespace umbriel {
     }
   } // namespace
 
-  uint64_t Server::animationClockMsec() const {
+  uint64_t Server::animationClockMsec() const { return animationFrameClockMsec(monotonicClockMsec()); }
+
+  uint64_t Server::animationFrameClockMsec(uint64_t monotonicMsec) const {
 #ifdef UMBRIEL_TEST_IPC
     if (m_frozenAnimationClockMsec) {
       return *m_frozenAnimationClockMsec;
     }
-    return static_cast<uint64_t>(static_cast<int64_t>(monotonicClockMsec()) + m_animationClockOffsetMsec);
+    return static_cast<uint64_t>(static_cast<int64_t>(monotonicMsec) + m_animationClockOffsetMsec);
 #else
-    return monotonicClockMsec();
+    return monotonicMsec;
 #endif
   }
 

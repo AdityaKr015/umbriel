@@ -245,6 +245,10 @@ namespace umbriel {
     HdrTransition m_hdrTransition;
     bool m_lastCommitTearing = false;
     bool m_trackingPresentation = false;
+    // Cadence of the last presented frame, which places this output's animation samples on its vblanks. 0 while
+    // unknown, including under adaptive sync, whose refresh varies.
+    uint64_t m_lastPresentNs = 0;
+    uint64_t m_refreshNs = 0;
     bool m_appliedConfiguredScale = false;
     wl_event_source* m_frameRetryTimer = nullptr;
     wl_event_source* m_effectFrameTimer = nullptr;

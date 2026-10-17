@@ -247,6 +247,8 @@ namespace umbriel {
     // Milliseconds on the clock every animation ticks from. It follows the monotonic clock unless a test build froze
     // it.
     [[nodiscard]] uint64_t animationClockMsec() const;
+    // The animation clock at a CLOCK_MONOTONIC instant, such as an output's latest vblank.
+    [[nodiscard]] uint64_t animationFrameClockMsec(uint64_t monotonicMsec) const;
 #ifdef UMBRIEL_TEST_IPC
     void freezeAnimationClock();
     // Moves a frozen clock forward and schedules a frame on every output. False when the clock is not frozen.

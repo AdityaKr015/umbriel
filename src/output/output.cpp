@@ -1591,7 +1591,11 @@ namespace umbriel {
       m_effectAudio = effects.audio();
       wlr_scene_output_set_effect_audio(m_sceneOutput, m_effectAudio.data());
     }
-    m_server->tickAnimations(m_server->animationClockMsec());
+    // Sample animations on this output's vblank cadence rather than when the frame event got dispatched, so event-loop
+    // latency and other outputs' rendering do not make motion steps uneven.
+    const uint64_t nowNs = static_cast<uint64_t>(now.tv_sec) * 1'000'000'000 + static_cast<uint64_t>(now.tv_nsec);
+    const uint64_t vblankNs = latestVblankNs(nowNs, m_lastPresentNs, m_refreshNs);
+    m_server->tickAnimations(m_server->animationFrameClockMsec(vblankNs != 0 ? vblankNs / 1'000'000 : nowMsec));
     if (stampEffectTime && m_outputEffectsTimed) {
       applyOutputEffects();
     }
@@ -1906,6 +1910,14 @@ namespace umbriel {
       m_tracyLastPresentSeq = event->seq;
     }
 #endif
+    if (event->presented) {
+      const bool fixedRefresh =
+          event->refresh > 0 && m_output->adaptive_sync_status != WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED;
+      m_lastPresentNs = fixedRefresh
+          ? static_cast<uint64_t>(event->when.tv_sec) * 1'000'000'000 + static_cast<uint64_t>(event->when.tv_nsec)
+          : 0;
+      m_refreshNs = fixedRefresh ? static_cast<uint64_t>(event->refresh) : 0;
+    }
     if (SessionLock* lock = m_server->sessionLock()) {
       lock->handleOutputPresent(*this, event->commit_seq, event->presented);
     }

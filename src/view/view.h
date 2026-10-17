@@ -85,6 +85,17 @@ namespace umbriel {
     void reclaimXwaylandFocus();
     // Tell the client nothing of it is visible, so it can stop drawing and animating; a no-op for X11 windows.
     void setSuspendedState(bool suspended);
+    // True once the client has been sent the suspended state; always false for X11 windows and xdg clients older than
+    // version 6, which cannot receive it.
+    [[nodiscard]] bool suspended() const;
+    // True while the latest configure is still queued, or sent but not yet acknowledged and committed. Always false for
+    // X11 windows, which acknowledge nothing.
+    [[nodiscard]] bool configureOutstanding() const;
+    // True while the shared scene draws the window: its frame and every ancestor are enabled.
+    [[nodiscard]] bool presented() const;
+    // Suspends a mapped window that is neither presented nor drawn off the scene, and resumes it otherwise. Callers
+    // schedule it through Server::scheduleSuspensionSync.
+    void syncSuspendedState();
     void setFullscreenState(bool fullscreen);
     void setMaximizedState(bool maximized);
     void requestClose();

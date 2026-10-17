@@ -107,9 +107,11 @@ namespace umbriel {
     uint64_t serial = 0;
   };
 
-  // Slow tick that ferries wl_surface.frame callbacks to toplevels that are mapped but not on the active workspace.
-  // wlroots' scene helper only walks enabled scene nodes, so a hidden view otherwise never receives another frame_done
-  // and a client that gates its game/network loop on the frame callback stalls. 10 Hz keeps such loops alive cheaply.
+  // Slow tick that ferries wl_surface.frame callbacks to mapped toplevels that are off the rendered scene but could not
+  // be told they are suspended (X11 windows and xdg clients older than version 6). wlroots' scene helper only walks
+  // enabled scene nodes, so such a view otherwise never receives another frame_done and a client that gates its
+  // game/network loop on the frame callback stalls. A suspended view gets none: clients such as Firefox detect
+  // occlusion only from a long callback gap, and a slow tick reads as a slow display that drops video frames.
   inline constexpr int kBackgroundFrameIntervalMs = 100;
   inline constexpr std::string_view kLaunchTokenEnvironment = "UMBRIEL_LAUNCH_TOKEN";
 
@@ -328,6 +330,12 @@ namespace umbriel {
     // Re-evaluate application idle inhibitors after a surface's presentation
     // visibility changes.
     void updateIdleInhibit();
+    // Re-derive every toplevel's suspended state once the current dispatch settles, so a transition that hides and
+    // shows a window within one dispatch never reaches the client.
+    void scheduleSuspensionSync();
+    // True while something draws `view`'s content off the shared scene (an overview card or a toplevel capture), so
+    // its client must keep drawing although its frame is hidden.
+    [[nodiscard]] bool viewRenderedOffscreen(const View& view) const;
     // Lock the next group on one physical keyboard, then synchronize matching
     // named layouts across the remaining keyboards.
     bool cycleKeyboardLayout();
@@ -528,6 +536,7 @@ namespace umbriel {
     static void onIpcOutputsIdle(void* data);
     static void onLayerKeyboardFocusChange(wl_listener* listener, void* data);
     static void onDisplacedRestoreIdle(void* data);
+    static void onSuspensionSyncIdle(void* data);
 
     void spawnCommand(const char* command, const char* description, bool withActivationToken, SpawnClass spawnClass);
 
@@ -850,6 +859,7 @@ namespace umbriel {
     wl_event_source* m_ipcOutputsIdle = nullptr;
     wl_event_source* m_lidStateReconcileIdle = nullptr;
     wl_event_source* m_displacedRestoreIdle = nullptr;
+    wl_event_source* m_suspensionSyncIdle = nullptr;
     // Coalesces renderer-loss notifications until their signal dispatch and
     // active render calls have unwound.
     wl_event_source* m_rendererRecoveryIdle = nullptr;

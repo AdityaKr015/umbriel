@@ -756,6 +756,10 @@ namespace umbriel {
       wl_event_source_remove(m_rendererRecoveryIdle);
       m_rendererRecoveryIdle = nullptr;
     }
+    if (m_suspensionSyncIdle != nullptr) {
+      wl_event_source_remove(m_suspensionSyncIdle);
+      m_suspensionSyncIdle = nullptr;
+    }
     if (m_protocolLogger != nullptr) {
       wl_protocol_logger_destroy(m_protocolLogger);
       m_protocolLogger = nullptr;
@@ -1690,11 +1694,7 @@ namespace umbriel {
       if (view->effectSelectionPending()) {
         return false;
       }
-      if (!view->mapped() || view->xwayland() || view->toplevel() == nullptr) {
-        continue;
-      }
-      const wlr_xdg_surface* surface = view->toplevel()->base;
-      if (surface->configure_idle != nullptr || surface->current.configure_serial != surface->scheduled_serial) {
+      if (view->mapped() && view->configureOutstanding()) {
         return false;
       }
     }

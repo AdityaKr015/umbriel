@@ -553,6 +553,7 @@ namespace umbriel {
       wlr_scene_node_set_enabled(&m_sceneTree->node, shown);
     }
     m_decoration.setShadowEnabled(shown);
+    m_server->scheduleSuspensionSync();
     if (!m_mapped) {
       return;
     }
@@ -581,9 +582,6 @@ namespace umbriel {
       return;
     }
     m_tabHidden = hidden;
-    // A client that honours it stops rendering while its tab is hidden; the background frame timer still keeps one that
-    // does not alive.
-    setSuspendedState(hidden);
     if (m_sceneTree != nullptr) {
       // A revealed tab shows exactly when its workspace does.
       setNodeEnabled(!hidden && m_mapped && m_onActiveWorkspace);
@@ -599,6 +597,7 @@ namespace umbriel {
     wlr_scene_node_set_enabled(&m_sceneTree->node, enabled);
     m_decoration.setShadowEnabled(enabled);
     m_server->updateIdleInhibit();
+    m_server->scheduleSuspensionSync();
   }
 
   void View::raiseToTop() {

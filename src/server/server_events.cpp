@@ -810,15 +810,17 @@ namespace umbriel {
     }
   }
 
-  // Sends frame callbacks to hidden-workspace toplevels (see kBackgroundFrameIntervalMs).
+  // Sends frame callbacks to toplevels off the rendered scene that could not be suspended (see
+  // kBackgroundFrameIntervalMs).
   int Server::onBackgroundFrameTimer(void* data) {
     auto* self = static_cast<Server*>(data);
     timespec now{};
     clock_gettime(CLOCK_MONOTONIC, &now);
 
     for (const auto& view : self->m_registry.all()) {
-      // A hidden tab is on the active workspace but, like a hidden workspace's windows, off the rendered scene.
-      if (!view->mapped() || (view->onActiveWorkspace() && !view->tabHidden())) {
+      // A presented view gets its callbacks from the outputs that draw it, including the outgoing workspace mid-slide.
+      // A suspended one gets them only to commit a configure it still owes, such as a resize while hidden.
+      if (!view->mapped() || view->presented() || (view->suspended() && !view->configureOutstanding())) {
         continue;
       }
       view->forEachSurface(
@@ -833,6 +835,34 @@ namespace umbriel {
       wl_event_source_timer_update(self->m_backgroundFrameTimer, kBackgroundFrameIntervalMs);
     }
     return 0;
+  }
+
+  void Server::scheduleSuspensionSync() {
+    if (m_stopping || m_suspensionSyncIdle != nullptr) {
+      return;
+    }
+    m_suspensionSyncIdle = wl_event_loop_add_idle(wl_display_get_event_loop(m_display), onSuspensionSyncIdle, this);
+    if (m_suspensionSyncIdle == nullptr) {
+      kLog.error("failed to register suspension sync idle source");
+    }
+  }
+
+  void Server::onSuspensionSyncIdle(void* data) {
+    auto* server = static_cast<Server*>(data);
+    server->m_suspensionSyncIdle = nullptr;
+    for (const auto& view : server->m_registry.all()) {
+      view->syncSuspendedState();
+    }
+  }
+
+  bool Server::viewRenderedOffscreen(const View& view) const {
+    if (m_overview != nullptr && m_overview->presentsLive(&view)) {
+      return true;
+    }
+    return view.m_captureSource != nullptr
+        && std::ranges::any_of(m_imageCopySessions, [&view](const std::unique_ptr<ImageCopySessionWatch>& watch) {
+             return watch->session != nullptr && watch->session->source == view.m_captureSource;
+           });
   }
 
   int Server::onStartupRulesTimer(void* data) {
@@ -1179,6 +1209,7 @@ namespace umbriel {
     watch->destroy.notify = onImageCopySessionDestroy;
     wl_signal_add(&session->events.destroy, &watch->destroy);
     self->m_imageCopySessions.push_back(std::move(watch));
+    self->scheduleSuspensionSync();
   }
 
   // The session's render lock is released after this signal; the frame it schedules runs from an idle, without it.
@@ -1193,6 +1224,7 @@ namespace umbriel {
     for (const auto& output : server->m_outputs) {
       output->scheduleEffectCaptureRelease();
     }
+    server->scheduleSuspensionSync();
   }
 
   void Server::onNewShortcutsInhibitor(wl_listener* listener, void* data) {

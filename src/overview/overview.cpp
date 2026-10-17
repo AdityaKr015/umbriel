@@ -1142,6 +1142,7 @@ namespace umbriel {
 
     // Animation schedules the first output frame. The passive card buffers then
     // pace clients from frames where their content was actually sampled.
+    m_server->scheduleSuspensionSync();
     return raw;
   }
 
@@ -1257,6 +1258,7 @@ namespace umbriel {
       card->surfaceTree = nullptr;
     }
     card->border = nullptr;
+    m_server->scheduleSuspensionSync();
   }
 
   void Overview::dropCard(View* view) {
@@ -1311,6 +1313,15 @@ namespace umbriel {
       }
     }
     return nullptr;
+  }
+
+  bool Overview::presentsLive(const View* view) const {
+    if (!m_active || view->presentationSuppressed()) {
+      return false;
+    }
+    return std::ranges::any_of(m_outputs, [view](const auto& state) {
+      return std::ranges::any_of(state->cards, [view](const auto& card) { return card->view == view; });
+    });
   }
 
   void Overview::renderCardShortcut(Card& card) {
@@ -1979,6 +1990,7 @@ namespace umbriel {
     m_shortcutAssignments.clear();
     m_shortcutLabelCapacity = 0;
     m_server->reconcileDynamicWorkspaces();
+    m_server->scheduleSuspensionSync();
   }
 
   // -: gesture

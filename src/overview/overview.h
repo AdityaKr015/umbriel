@@ -56,6 +56,8 @@ namespace umbriel {
     // Open and not already zooming back in: pointer/keyboard edits still apply. The IPC `overview` event reports this
     // as `open`, so clients drop overview-scoped surfaces while the windows are still hidden.
     [[nodiscard]] bool interactive() const { return m_active && !m_closing; }
+    // True while a card mirrors `view`, so its client must keep drawing although its real frame is hidden.
+    [[nodiscard]] bool presentsLive(const View* view) const;
 
     void toggle();
     void open();

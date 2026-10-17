@@ -65,11 +65,34 @@ namespace umbriel {
   }
 
   void View::setSuspendedState(bool suspended) {
-    // X11 has no such state: minimizing would tell the client it was iconified, which is not what a hidden tab is.
-    if (m_toplevel == nullptr || !m_toplevel->base->initialized || m_toplevel->scheduled.suspended == suspended) {
+    // X11 has no such state: minimizing would tell the client it was iconified, which is not what a hidden window is.
+    // An xdg client bound below version 6 never sees it either, so it keeps the background frame callbacks instead.
+    if (m_toplevel == nullptr
+        || !m_toplevel->base->initialized
+        || wl_resource_get_version(m_toplevel->resource) < XDG_TOPLEVEL_STATE_SUSPENDED_SINCE_VERSION
+        || m_toplevel->scheduled.suspended == suspended) {
       return;
     }
     wlr_xdg_toplevel_set_suspended(m_toplevel, suspended);
+  }
+
+  bool View::suspended() const { return m_toplevel != nullptr && m_toplevel->scheduled.suspended; }
+
+  bool View::presented() const {
+    if (m_sceneTree == nullptr) {
+      return false;
+    }
+    int x = 0;
+    int y = 0;
+    return wlr_scene_node_coords(&m_sceneTree->node, &x, &y);
+  }
+
+  void View::syncSuspendedState() {
+    // A tiled opener waits hidden only until the arrange that places it, so it is about to show, not hidden.
+    if (!m_mapped || m_tiledOpeningDeferred) {
+      return;
+    }
+    setSuspendedState(!presented() && !m_server->viewRenderedOffscreen(*this));
   }
 
   void View::setFullscreenState(bool fullscreen) {
@@ -191,6 +214,14 @@ namespace umbriel {
     m_xScheduled = {.width = width, .height = height};
     m_xConfigured.width = m_xsurface->width;
     m_xConfigured.height = m_xsurface->height;
+  }
+
+  bool View::configureOutstanding() const {
+    if (m_toplevel == nullptr) {
+      return false;
+    }
+    const wlr_xdg_surface* surface = m_toplevel->base;
+    return surface->configure_idle != nullptr || surface->current.configure_serial != surface->scheduled_serial;
   }
 
   bool View::configureSettled(uint32_t serial) const {

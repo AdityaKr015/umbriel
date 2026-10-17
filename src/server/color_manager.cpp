@@ -143,6 +143,12 @@ namespace umbriel {
       wl_listener destroy{};
     };
 
+    struct ManagedScene {
+      Impl* manager = nullptr;
+      wlr_scene* scene = nullptr;
+      wl_listener destroy{};
+    };
+
     explicit Impl(Server& server_) : server(server_) {
       size_t transferFunctionCount = 0;
       wp_color_manager_v1_transfer_function* rendererTransferFunctions =
@@ -168,7 +174,7 @@ namespace umbriel {
         return;
       }
 
-      if (!wlr_scene_set_surface_color_resolver(server.scene(), resolveSurfaceColor, this)) {
+      if (!registerScene(server.scene())) {
         return;
       }
       global = wl_global_create(server.display(), &wp_color_manager_v1_interface, 2, this, handleBind);
@@ -177,7 +183,9 @@ namespace umbriel {
     }
 
     ~Impl() {
-      wlr_scene_set_surface_color_resolver(server.scene(), nullptr, nullptr);
+      while (!scenes.empty()) {
+        unregisterScene(scenes.begin()->first);
+      }
       if (global != nullptr) {
         wl_global_destroy(global);
         global = nullptr;
@@ -197,6 +205,37 @@ namespace umbriel {
         auto* feedback = *feedbacks.begin();
         destroySurfaceFeedback(feedback, true);
       }
+    }
+
+    bool registerScene(wlr_scene* scene) {
+      if (scenes.contains(scene)) {
+        return true;
+      }
+      auto managed = std::make_unique<ManagedScene>();
+      managed->manager = this;
+      managed->scene = scene;
+      if (!wlr_scene_set_surface_color_resolver(scene, resolveSurfaceColor, this)) {
+        return false;
+      }
+      managed->destroy.notify = handleSceneDestroy;
+      wl_signal_add(&scene->tree.node.events.destroy, &managed->destroy);
+      scenes.emplace(scene, std::move(managed));
+      return true;
+    }
+
+    void unregisterScene(wlr_scene* scene) {
+      const auto found = scenes.find(scene);
+      if (found == scenes.end()) {
+        return;
+      }
+      wl_list_remove(&found->second->destroy.link);
+      wlr_scene_set_surface_color_resolver(scene, nullptr, nullptr);
+      scenes.erase(found);
+    }
+
+    static void handleSceneDestroy(wl_listener* listener, void*) {
+      ManagedScene* scene = wl_container_of(listener, scene, destroy);
+      scene->manager->unregisterScene(scene->scene);
     }
 
     template <typename Value> static bool contains(const std::vector<Value>& values, Value value) {
@@ -518,7 +557,9 @@ namespace umbriel {
       wlr_surface_synced_finish(&surface->synced);
       surface->manager->surfaces.erase(surface->surface);
       if (!destroying) {
-        surface->manager->refreshSurfaceColor(&surface->manager->server.scene()->tree.node, surface->surface);
+        for (const auto& entry : surface->manager->scenes) {
+          surface->manager->refreshSurfaceColor(&entry.first->tree.node, surface->surface);
+        }
         surface->manager->refreshSurfaceHdr(surface->surface);
       }
       delete surface;
@@ -1068,6 +1109,7 @@ namespace umbriel {
     std::unordered_map<wlr_surface*, Surface*> surfaces;
     std::unordered_set<SurfaceFeedback*> feedbacks;
     std::unordered_set<ManagedOutput*> outputs;
+    std::unordered_map<wlr_scene*, std::unique_ptr<ManagedScene>> scenes;
   };
 
   ColorManager::ColorManager(Server& server) : m_impl(std::make_unique<Impl>(server)) {}
@@ -1089,6 +1131,8 @@ namespace umbriel {
         && found->second->current.set
         && found->second->current.description.requiresHdrOutput;
   }
+
+  bool ColorManager::registerScene(wlr_scene* scene) { return m_impl->registerScene(scene); }
 
   void ColorManager::applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const {
     m_impl->applySurfaceDescriptionToBuffer(surface, buffer);

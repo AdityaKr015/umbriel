@@ -48,6 +48,7 @@ namespace {
     wp_color_management_surface_v1* colorSurface = nullptr;
     wp_image_description_v1* surfaceDescription = nullptr;
     wp_image_description_v1* gammaDescription = nullptr;
+    wp_image_description_v1* pqDescription = nullptr;
     wp_image_description_v1* selectedDescription = nullptr;
     wl_surface* surface = nullptr;
     wl_surface* colorTarget = nullptr;
@@ -467,6 +468,17 @@ int main(int argc, char** argv) {
     if (!state.ready) {
       return 1;
     }
+    state.ready = false;
+    params = wp_color_manager_v1_create_parametric_creator(state.manager);
+    wp_image_description_creator_params_v1_set_tf_named(params, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ);
+    wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020);
+    state.pqDescription = wp_image_description_creator_params_v1_create(params);
+    wp_image_description_v1_add_listener(state.pqDescription, &kSurfaceDescriptionListener, &state);
+    while (!state.ready && !state.failed && wl_display_dispatch(state.display) >= 0) {
+    }
+    if (!state.ready) {
+      return 1;
+    }
   }
   if (state.requestedVersion == 1) {
     observeDescription(state, wp_color_management_surface_feedback_v1_get_preferred(state.feedback), "preferred", 0);
@@ -534,11 +546,18 @@ int main(int argc, char** argv) {
           wl_surface_commit(state.surface);
         }
       } else if (
-          std::strcmp(label, "tag") == 0 || (state.gammaDescription != nullptr && std::strcmp(label, "gamma22") == 0)
+          std::strcmp(label, "tag") == 0
+          || (state.gammaDescription != nullptr && std::strcmp(label, "gamma22") == 0)
+          || (state.pqDescription != nullptr && std::strcmp(label, "pq") == 0)
       ) {
         state.tagged = true;
-        state.selectedDescription =
-            std::strcmp(label, "gamma22") == 0 ? state.gammaDescription : state.surfaceDescription;
+        if (std::strcmp(label, "gamma22") == 0) {
+          state.selectedDescription = state.gammaDescription;
+        } else if (std::strcmp(label, "pq") == 0) {
+          state.selectedDescription = state.pqDescription;
+        } else {
+          state.selectedDescription = state.surfaceDescription;
+        }
         wp_color_management_surface_v1_set_image_description(
             state.colorSurface, state.selectedDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
         );
@@ -552,7 +571,7 @@ int main(int argc, char** argv) {
         wl_surface_commit(state.colorTarget);
       } else if (state.colorSubsurface != nullptr && std::strcmp(label, "parent") == 0) {
         wp_color_management_surface_v1_set_image_description(
-            state.colorSurface, state.surfaceDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
+            state.colorSurface, state.selectedDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
         );
         wl_surface_commit(state.surface);
       } else if (state.colorSubsurface != nullptr && std::strcmp(label, "apply") == 0) {
@@ -578,6 +597,17 @@ int main(int argc, char** argv) {
         wl_surface_commit(state.colorTarget);
         if (state.colorSubsurface != nullptr && !state.desynchronized) {
           wl_surface_commit(state.surface);
+        }
+      } else if (std::strncmp(label, "color ", 6) == 0) {
+        unsigned color = 0;
+        char trailing = '\0';
+        if (std::sscanf(label + 6, "%x%c", &color, &trailing) != 1) {
+          std::println(stderr, "color-feedback-client: invalid color: {}", label);
+          return 1;
+        }
+        state.fillColor = static_cast<uint32_t>(color);
+        if (!present(state)) {
+          return 1;
         }
       }
       observeDescription(

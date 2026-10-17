@@ -2,6 +2,7 @@
 
 #include "config/config.h"
 #include "config/resolve.h"
+#include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
@@ -10,6 +11,7 @@
 #include "overview/overview.h"
 #include "scene/effect_registry.h"
 #include "scene/surface_blur.h"
+#include "server/color_manager.h"
 #include "server/server.h"
 extern "C" {
 #include <umbrielfx/render/effect.h>
@@ -28,6 +30,8 @@ extern "C" {
 
 namespace umbriel {
   namespace {
+    constexpr Logger kLog("view");
+
     bool sceneNodeShowsSurface(wlr_scene_node* node, wlr_surface* surface) {
       switch (node->type) {
       case WLR_SCENE_NODE_BUFFER: {
@@ -180,6 +184,14 @@ namespace umbriel {
     // second scene containing only the client surfaces so transparency cannot
     // reveal the wallpaper, another window, or compositor effects.
     m_captureScene = wlr_scene_create();
+    if (m_captureScene != nullptr) {
+      if (ColorManager* colorManager = m_server->colorManager();
+          colorManager != nullptr && !colorManager->registerScene(m_captureScene)) {
+        kLog.error("failed to register window capture color resolver");
+        wlr_scene_node_destroy(&m_captureScene->tree.node);
+        m_captureScene = nullptr;
+      }
+    }
     if (m_captureScene != nullptr) {
       m_captureScene->restack_xwayland_surfaces = false;
       if (m_toplevel != nullptr) {

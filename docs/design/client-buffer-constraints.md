@@ -305,11 +305,21 @@ both native and Wine clients. Unchanged descriptions and callback-only commits
 leave the existing color state intact. Synchronized subsurfaces resolve only
 their applied state, keeping cached metadata aligned with its buffer.
 
+`ColorManager` registers this resolver on the main scene and every isolated
+window capture scene before adding surfaces. Each registration follows the
+scene root's lifetime: root destruction removes its listener and resolver,
+and manager teardown clears the resolvers on any remaining roots before
+freeing their shared state. Window capture therefore resolves the same client
+metadata as the desktop while rendering only the captured client's surfaces.
+
 Destroying a color-management object refreshes matching scene surfaces
-immediately, including disabled scene trees, without requiring another surface
-commit. `render/color_damage` checks unchanged commits, delivered callbacks,
-real color transitions, object destruction, and synchronized and desynchronized
-subsurfaces through captured pixel damage.
+immediately across all registered scene roots, including disabled scene trees,
+without requiring another surface commit. `render/color_damage` checks unchanged
+commits, delivered callbacks, real color transitions, object destruction, and
+synchronized and desynchronized subsurfaces through captured pixel damage.
+`render/window_capture_color` compares numeric output and isolated window
+capture pixels through transfer-function and primaries changes, synchronized
+commits, color-object destruction without a commit, and client teardown.
 
 Overview cards, desktop mirrors, close snapshots, and resize snapshots use raw
 scene buffers outside the surface resolver. Their copy paths therefore apply the

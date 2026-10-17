@@ -26,7 +26,6 @@ namespace umbriel {
     [[nodiscard]] const wlr_image_description_v1_data* surfaceDescription(wlr_surface* surface) const;
     [[nodiscard]] bool surfaceRequiresHdrOutput(wlr_surface* surface) const;
     void applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const;
-    void applySurfaceDescriptions();
     void updatePreferredDescriptions();
 
     [[nodiscard]] static bool clientNeedsCompatibility(const wl_client* client);

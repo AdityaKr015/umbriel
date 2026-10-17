@@ -226,6 +226,80 @@ static int min(int a, int b) { return a < b ? a : b; }
 
 static int max(int a, int b) { return a > b ? a : b; }
 
+struct surface_color_resolver {
+  struct wlr_addon addon;
+  wlr_scene_surface_color_resolver_func_t resolve;
+  void* data;
+};
+
+static void surface_color_resolver_destroy(struct wlr_addon* addon) {
+  struct surface_color_resolver* resolver = wl_container_of(addon, resolver, addon);
+  wlr_addon_finish(addon);
+  free(resolver);
+}
+
+static const struct wlr_addon_interface surface_color_resolver_impl = {
+    .name = "scene_surface_color_resolver",
+    .destroy = surface_color_resolver_destroy,
+};
+
+static struct surface_color_resolver* surface_color_resolver_get(struct wlr_scene* scene) {
+  struct wlr_addon* addon =
+      wlr_addon_find(&scene->tree.node.addons, &surface_color_resolver_impl, &surface_color_resolver_impl);
+  if (addon == NULL) {
+    return NULL;
+  }
+  struct surface_color_resolver* resolver = wl_container_of(addon, resolver, addon);
+  return resolver;
+}
+
+bool wlr_scene_set_surface_color_resolver(
+    struct wlr_scene* scene, wlr_scene_surface_color_resolver_func_t resolve, void* data
+) {
+  struct surface_color_resolver* resolver = surface_color_resolver_get(scene);
+  if (resolve == NULL) {
+    if (resolver != NULL) {
+      surface_color_resolver_destroy(&resolver->addon);
+    }
+    return true;
+  }
+  if (resolver == NULL) {
+    resolver = calloc(1, sizeof(*resolver));
+    if (resolver == NULL) {
+      return false;
+    }
+    wlr_addon_init(
+        &resolver->addon, &scene->tree.node.addons, &surface_color_resolver_impl, &surface_color_resolver_impl
+    );
+  }
+  resolver->resolve = resolve;
+  resolver->data = data;
+  return true;
+}
+
+void wlr_scene_surface_update_color(struct wlr_scene_surface* scene_surface) {
+  struct wlr_scene_surface_color_state state = {
+      .transfer_function = WLR_COLOR_TRANSFER_FUNCTION_SRGB,
+      .primaries = WLR_COLOR_NAMED_PRIMARIES_SRGB,
+      .luminance_multiplier = 1.0f,
+  };
+  const struct wlr_image_description_v1_data* description =
+      wlr_surface_get_image_description_v1_data(scene_surface->surface);
+  if (description != NULL) {
+    state.transfer_function = wlr_color_manager_v1_transfer_function_to_wlr(description->tf_named);
+    state.primaries = wlr_color_manager_v1_primaries_to_wlr(description->primaries_named);
+  }
+
+  struct wlr_scene* scene = scene_node_get_root(&scene_surface->buffer->node);
+  struct surface_color_resolver* resolver = surface_color_resolver_get(scene);
+  if (resolver != NULL) {
+    resolver->resolve(scene_surface->surface, &state, resolver->data);
+  }
+  wlr_scene_buffer_set_transfer_function(scene_surface->buffer, state.transfer_function);
+  wlr_scene_buffer_set_primaries(scene_surface->buffer, state.primaries);
+  wlr_scene_buffer_set_luminance_multiplier(scene_surface->buffer, state.luminance_multiplier);
+}
+
 static void surface_reconfigure(struct wlr_scene_surface* scene_surface) {
   struct wlr_scene_buffer* scene_buffer = scene_surface->buffer;
   struct wlr_surface* surface = scene_surface->surface;
@@ -287,14 +361,6 @@ static void surface_reconfigure(struct wlr_scene_surface* scene_surface) {
     opacity = (float)alpha_modifier_state->multiplier;
   }
 
-  enum wlr_color_transfer_function tf = WLR_COLOR_TRANSFER_FUNCTION_SRGB;
-  enum wlr_color_named_primaries primaries = WLR_COLOR_NAMED_PRIMARIES_SRGB;
-  const struct wlr_image_description_v1_data* img_desc = wlr_surface_get_image_description_v1_data(surface);
-  if (img_desc != NULL) {
-    tf = wlr_color_manager_v1_transfer_function_to_wlr(img_desc->tf_named);
-    primaries = wlr_color_manager_v1_primaries_to_wlr(img_desc->primaries_named);
-  }
-
   enum wlr_color_encoding color_encoding = WLR_COLOR_ENCODING_NONE;
   enum wlr_color_range color_range = WLR_COLOR_RANGE_NONE;
   const struct wlr_color_representation_v1_surface_state* color_repr =
@@ -325,8 +391,7 @@ static void surface_reconfigure(struct wlr_scene_surface* scene_surface) {
   wlr_scene_buffer_set_dest_size(scene_buffer, dest_width, dest_height);
   wlr_scene_buffer_set_transform(scene_buffer, state->transform);
   wlr_scene_buffer_set_opacity(scene_buffer, opacity);
-  wlr_scene_buffer_set_transfer_function(scene_buffer, tf);
-  wlr_scene_buffer_set_primaries(scene_buffer, primaries);
+  wlr_scene_surface_update_color(scene_surface);
   wlr_scene_buffer_set_color_encoding(scene_buffer, color_encoding);
   wlr_scene_buffer_set_color_range(scene_buffer, color_range);
 

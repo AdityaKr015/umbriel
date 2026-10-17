@@ -50,18 +50,21 @@ namespace {
     wl_surface* surface = nullptr;
     wl_surface* colorTarget = nullptr;
     wl_subsurface* colorSubsurface = nullptr;
+    wl_callback* frame = nullptr;
     xdg_surface* xdgSurface = nullptr;
     xdg_toplevel* toplevel = nullptr;
     uint32_t managerVersion = 0;
     uint32_t requestedVersion = 2;
     unsigned outputChanges = 0;
     unsigned preferredChanges = 0;
+    unsigned frames = 0;
     int width = 320;
     int height = 240;
     bool ready = false;
     bool failed = false;
     bool mapped = false;
     bool running = true;
+    bool desynchronized = false;
     std::deque<Description> descriptions;
   };
 
@@ -319,6 +322,15 @@ namespace {
       .ready2 = surfaceDescriptionReady2,
   };
 
+  void frameDone(void* data, wl_callback* callback, uint32_t) {
+    auto& state = *static_cast<State*>(data);
+    wl_callback_destroy(callback);
+    state.frame = nullptr;
+    std::println(R"({{"event":"frame","count":{}}})", ++state.frames);
+    std::fflush(stdout);
+  }
+  constexpr wl_callback_listener kFrameListener{.done = frameDone};
+
   bool expectProtocolError(State& state, const wl_interface* expectedInterface, uint32_t expectedCode) {
     if (wl_display_roundtrip(state.display) >= 0) {
       return false;
@@ -389,13 +401,17 @@ int main(int argc, char** argv) {
   observeDescription(state, wp_color_management_output_v1_get_image_description(state.colorOutput), "output", 0);
   state.surface = wl_compositor_create_surface(state.compositor);
   state.colorTarget = state.surface;
-  if (argc == 2 && std::strcmp(argv[1], "subsurface") == 0) {
+  if (argc == 2 && (std::strcmp(argv[1], "subsurface") == 0 || std::strcmp(argv[1], "subsurface-desync") == 0)) {
     if (state.subcompositor == nullptr) {
       std::println(stderr, "color-feedback-client: missing subcompositor");
       return 1;
     }
     state.colorTarget = wl_compositor_create_surface(state.compositor);
     state.colorSubsurface = wl_subcompositor_get_subsurface(state.subcompositor, state.colorTarget, state.surface);
+    state.desynchronized = std::strcmp(argv[1], "subsurface-desync") == 0;
+    if (state.desynchronized) {
+      wl_subsurface_set_desync(state.colorSubsurface);
+    }
   }
   state.feedback = wp_color_manager_v1_get_surface_feedback(state.manager, state.surface);
   wp_color_management_surface_feedback_v1_add_listener(state.feedback, &kFeedbackListener, &state);
@@ -463,10 +479,19 @@ int main(int argc, char** argv) {
         continue;
       }
       label[std::strcspn(label, "\r\n")] = '\0';
-      if (std::strcmp(label, "unset") == 0) {
+      if (std::strcmp(label, "commit") == 0 || std::strcmp(label, "frame") == 0) {
+        if (std::strcmp(label, "frame") == 0 && state.frame == nullptr) {
+          state.frame = wl_surface_frame(state.colorTarget);
+          wl_callback_add_listener(state.frame, &kFrameListener, &state);
+        }
+        wl_surface_commit(state.colorTarget);
+        if (state.colorSubsurface != nullptr && !state.desynchronized) {
+          wl_surface_commit(state.surface);
+        }
+      } else if (std::strcmp(label, "unset") == 0) {
         wp_color_management_surface_v1_unset_image_description(state.colorSurface);
         wl_surface_commit(state.colorTarget);
-        if (state.colorSubsurface != nullptr) {
+        if (state.colorSubsurface != nullptr && !state.desynchronized) {
           wl_surface_commit(state.surface);
         }
       } else if (std::strcmp(label, "tag") == 0) {
@@ -474,7 +499,7 @@ int main(int argc, char** argv) {
             state.colorSurface, state.surfaceDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
         );
         wl_surface_commit(state.colorTarget);
-        if (state.colorSubsurface != nullptr) {
+        if (state.colorSubsurface != nullptr && !state.desynchronized) {
           wl_surface_commit(state.surface);
         }
       } else if (state.colorSubsurface != nullptr && std::strcmp(label, "cache") == 0) {
@@ -489,12 +514,14 @@ int main(int argc, char** argv) {
       } else if (state.colorSubsurface != nullptr && std::strcmp(label, "apply") == 0) {
         wl_surface_commit(state.colorTarget);
         wl_surface_commit(state.surface);
-      } else if (std::strcmp(label, "destroy") == 0) {
+      } else if (std::strcmp(label, "destroy") == 0 || std::strcmp(label, "destroy-only") == 0) {
         wp_color_management_surface_v1_destroy(state.colorSurface);
         state.colorSurface = nullptr;
-        wl_surface_commit(state.colorTarget);
-        if (state.colorSubsurface != nullptr) {
-          wl_surface_commit(state.surface);
+        if (std::strcmp(label, "destroy") == 0) {
+          wl_surface_commit(state.colorTarget);
+          if (state.colorSubsurface != nullptr && !state.desynchronized) {
+            wl_surface_commit(state.surface);
+          }
         }
       } else if (std::strcmp(label, "recreate") == 0) {
         state.colorSurface = wp_color_manager_v1_get_surface(state.manager, state.colorTarget);
@@ -502,7 +529,7 @@ int main(int argc, char** argv) {
             state.colorSurface, state.surfaceDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
         );
         wl_surface_commit(state.colorTarget);
-        if (state.colorSubsurface != nullptr) {
+        if (state.colorSubsurface != nullptr && !state.desynchronized) {
           wl_surface_commit(state.surface);
         }
       }

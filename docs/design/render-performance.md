@@ -96,6 +96,26 @@ fractional-scale condition of its own, because it has no background node to
 skip and decides eligibility from window state instead of render-list
 cardinality.
 
+## Background blur invalidation
+
+Each output observes visual changes in its background scene subtree through an
+UmbrielFX addon. Node changes and nonempty buffer damage invalidate the shared
+optimized blur cache, including desynchronized subsurface updates, child
+placement, layer geometry, fades, and color changes. Buffer damage is observed
+before visibility culling because content hidden behind a window can still be
+visible through that window's cached blur. Invalidation also schedules a frame
+when the source itself has no visible damage.
+
+Frame callback requests with no visual changes leave the cache valid. Multiple
+changes before the next cache rebuild share one invalidation. The cache node
+lives outside the observed subtree, so rebuilding it cannot invalidate itself.
+Output and backdrop configuration changes retain their explicit invalidation.
+
+`render/optimized_blur_idle` checks that a background client receives a batch of
+callbacks without producing captured pixel damage, then verifies new parent
+and child pixels, child placement, and layer geometry through a blurred window.
+`render/optimized_blur_layer_exit` covers animated map and unmap transitions.
+
 ## Per-frame work outside the render pass
 
 ### Hardware-cursor capture pacing
@@ -140,16 +160,14 @@ client that holds the cursor session on the other output) through the synthetic
 `tests/unit/cursor_plane_pace.cpp` for the transition decisions. Real-plane
 behaviour needs a native session.
 
-`Output::handleFrame` (`output.cpp:1282`) runs before any damage test:
-`flushDirty`, `Server::tickAnimations`, `flushPendingViewOpacities` over every
-view, and `ColorManager::applySurfaceDescriptions`, which walks every
-`wlr_scene_buffer` in the scene with a map lookup per buffer
-([`color_manager.cpp`](../../src/server/color_manager.cpp)). Native and Wine
-protocol globals share that single pass. The manager also compares cached
-output descriptions and surface preferences each frame so output membership
-and reference-white changes reach clients. Snapshot and overview copy paths
-apply each surface's committed description directly, without another scene
-walk.
+`Output::handleFrame` runs before any damage test: `flushDirty`,
+`Server::tickAnimations`, and `flushPendingViewOpacities` over every view.
+`ColorManager::updatePreferredDescriptions` compares cached output descriptions
+and surface preferences so output membership and reference-white changes reach
+clients. Scene surfaces resolve their committed native or Wine color state
+during surface reconfiguration, before applying guarded scene setters. An
+unchanged description therefore produces no reset and restore damage. Snapshot
+and overview copy paths apply each surface's committed description directly.
 
 `wlr_scene_output_send_frame_done` at the end of that function is unconditional
 and must stay so (`output.cpp:1557`). Mailbox and FIFO clients block on
@@ -185,8 +203,7 @@ require a running-session check.
 A `tracy` build carries CPU zones at those boundaries through
 [`src/core/tracy.h`](../../src/core/tracy.h): `Output::handleFrame`,
 `Output::flushDirty`, `Output::render` (split into `Output::buildState` and
-`Output::commitState`), `Server::tickAnimations`,
-`ColorManager::applySurfaceDescriptions`, and the overview's setup:
+`Output::commitState`), `Server::tickAnimations`, and the overview's setup:
 `Overview::open`, `Overview::beginPresentation`, `Overview::buildState`, and
 `Overview::layoutOutput`. umbrielfx carries paired CPU and
 GPU zones across its render pass. Every `wlr_scene_output_build_state` exit

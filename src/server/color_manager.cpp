@@ -1,7 +1,6 @@
 #include "server/color_manager.h"
 
 #include "color-management-v1-server-protocol.h"
-#include "core/tracy.h"
 #include "output/output.h"
 #include "server/color_description.h"
 #include "server/server.h"
@@ -169,12 +168,16 @@ namespace umbriel {
         return;
       }
 
+      if (!wlr_scene_set_surface_color_resolver(server.scene(), resolveSurfaceColor, this)) {
+        return;
+      }
       global = wl_global_create(server.display(), &wp_color_manager_v1_interface, 2, this, handleBind);
       compatibilityGlobal =
           wl_global_create(server.display(), &wp_color_manager_v1_interface, kProtocolVersion, this, handleBind);
     }
 
     ~Impl() {
+      wlr_scene_set_surface_color_resolver(server.scene(), nullptr, nullptr);
       if (global != nullptr) {
         wl_global_destroy(global);
         global = nullptr;
@@ -515,7 +518,7 @@ namespace umbriel {
       wlr_surface_synced_finish(&surface->synced);
       surface->manager->surfaces.erase(surface->surface);
       if (!destroying) {
-        surface->manager->applySurfaceColor(surface->surface, nullptr);
+        surface->manager->refreshSurfaceColor(&surface->manager->server.scene()->tree.node, surface->surface);
         surface->manager->refreshSurfaceHdr(surface->surface);
       }
       delete surface;
@@ -994,85 +997,37 @@ namespace umbriel {
       }
     }
 
-    void applySurfaceColor(wlr_surface* surface, const ColorDescription* description) {
-      struct ApplyContext {
-        wlr_surface* surface;
-        wlr_color_transfer_function transferFunction;
-        wlr_color_named_primaries primaries;
-        float luminanceMultiplier;
-      } context{
-          .surface = surface,
-          .transferFunction = WLR_COLOR_TRANSFER_FUNCTION_SRGB,
-          .primaries = WLR_COLOR_NAMED_PRIMARIES_SRGB,
-          .luminanceMultiplier = 1.0F,
-      };
-      if (description != nullptr) {
-        context.transferFunction = wlr_color_manager_v1_transfer_function_to_wlr(
-            static_cast<wp_color_manager_v1_transfer_function>(description->data.tf_named)
-        );
-        context.primaries = wlr_color_manager_v1_primaries_to_wlr(
-            static_cast<wp_color_manager_v1_primaries>(description->data.primaries_named)
-        );
-        context.luminanceMultiplier = description->luminanceMultiplier;
+    static void resolveSurfaceColor(wlr_surface* surface, wlr_scene_surface_color_state* state, void* data) {
+      const auto* manager = static_cast<Impl*>(data);
+      const auto found = manager->surfaces.find(surface);
+      if (found == manager->surfaces.end() || !found->second->current.set) {
+        return;
       }
-      wlr_scene_node_for_each_buffer(
-          &server.scene()->tree.node,
-          [](wlr_scene_buffer* buffer, int, int, void* data) {
-            auto* context = static_cast<ApplyContext*>(data);
-            wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-            if (sceneSurface == nullptr || sceneSurface->surface != context->surface) {
-              return;
-            }
-            wlr_scene_buffer_set_transfer_function(buffer, context->transferFunction);
-            wlr_scene_buffer_set_primaries(buffer, context->primaries);
-            wlr_scene_buffer_set_luminance_multiplier(buffer, context->luminanceMultiplier);
-          },
-          &context
+      const ColorDescription& description = found->second->current.description;
+      state->transfer_function = wlr_color_manager_v1_transfer_function_to_wlr(
+          static_cast<wp_color_manager_v1_transfer_function>(description.data.tf_named)
       );
+      state->primaries = wlr_color_manager_v1_primaries_to_wlr(
+          static_cast<wp_color_manager_v1_primaries>(description.data.primaries_named)
+      );
+      state->luminance_multiplier = description.luminanceMultiplier;
     }
 
-    void applySurfaceDescriptions() {
-      updatePreferredDescriptions();
-      struct ApplyContext {
-        const std::unordered_map<wlr_surface*, Surface*>* surfaces;
-      } context{.surfaces = &surfaces};
-
-      wlr_scene_node_for_each_buffer(
-          &server.scene()->tree.node,
-          [](wlr_scene_buffer* buffer, int, int, void* data) {
-            const auto* context = static_cast<ApplyContext*>(data);
-            wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
-            if (sceneSurface == nullptr) {
-              return;
-            }
-            const auto found = context->surfaces->find(sceneSurface->surface);
-            if (found == context->surfaces->end()) {
-              return;
-            }
-            if (!found->second->current.set) {
-              wlr_scene_buffer_set_transfer_function(buffer, WLR_COLOR_TRANSFER_FUNCTION_SRGB);
-              wlr_scene_buffer_set_primaries(buffer, WLR_COLOR_NAMED_PRIMARIES_SRGB);
-              wlr_scene_buffer_set_luminance_multiplier(buffer, 1.0F);
-              return;
-            }
-            const ColorDescription& currentDescription = found->second->current.description;
-            const wlr_image_description_v1_data& description = currentDescription.data;
-            wlr_scene_buffer_set_transfer_function(
-                buffer,
-                wlr_color_manager_v1_transfer_function_to_wlr(
-                    static_cast<wp_color_manager_v1_transfer_function>(description.tf_named)
-                )
-            );
-            wlr_scene_buffer_set_primaries(
-                buffer,
-                wlr_color_manager_v1_primaries_to_wlr(
-                    static_cast<wp_color_manager_v1_primaries>(description.primaries_named)
-                )
-            );
-            wlr_scene_buffer_set_luminance_multiplier(buffer, currentDescription.luminanceMultiplier);
-          },
-          &context
-      );
+    // Color-object destruction is immediate and need not be followed by a
+    // surface commit. Include disabled trees so revealing a hidden surface
+    // cannot revive a description whose protocol object has gone away.
+    void refreshSurfaceColor(wlr_scene_node* node, wlr_surface* surface) {
+      if (node->type == WLR_SCENE_NODE_BUFFER) {
+        wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(wlr_scene_buffer_from_node(node));
+        if (sceneSurface != nullptr && sceneSurface->surface == surface) {
+          wlr_scene_surface_update_color(sceneSurface);
+        }
+      } else if (node->type == WLR_SCENE_NODE_TREE) {
+        wlr_scene_node* child;
+        wl_list_for_each(child, &wlr_scene_tree_from_node(node)->children, link) {
+          refreshSurfaceColor(child, surface);
+        }
+      }
     }
 
     void applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const {
@@ -1137,11 +1092,6 @@ namespace umbriel {
 
   void ColorManager::applySurfaceDescriptionToBuffer(wlr_surface* surface, wlr_scene_buffer* buffer) const {
     m_impl->applySurfaceDescriptionToBuffer(surface, buffer);
-  }
-
-  void ColorManager::applySurfaceDescriptions() {
-    UMBRIEL_ZONE("ColorManager::applySurfaceDescriptions");
-    m_impl->applySurfaceDescriptions();
   }
 
   void ColorManager::updatePreferredDescriptions() { m_impl->updatePreferredDescriptions(); }

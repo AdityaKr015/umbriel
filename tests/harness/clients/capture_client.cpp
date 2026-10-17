@@ -6,14 +6,18 @@
 // metadata payloads themselves are not asserted here: a headless backend has no DRM plane, so its cursor source
 // always reports "no cursor". That is the running-session matrix; what the compositor's gate reads is the cursor
 // session's attachment to a source, which is why both roles run in this one client.
+// CAPTURE_CONTROL enables stdin sync LABEL commands, reporting each output's delivered frame count after a roundtrip.
 #include "ext-image-capture-source-v1-client-protocol.h"
 #include "ext-image-copy-capture-v1-client-protocol.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <poll.h>
 #include <print>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <sys/mman.h>
@@ -239,6 +243,33 @@ namespace {
   }
   void registryGlobalRemove(void*, wl_registry*, uint32_t) {}
   constexpr wl_registry_listener kRegistryListener = {.global = registryGlobal, .global_remove = registryGlobalRemove};
+
+  bool readCommands(std::string& commands) {
+    char buffer[1024];
+    const ssize_t count = read(STDIN_FILENO, buffer, sizeof(buffer));
+    if (count <= 0) {
+      return count < 0 && (errno == EINTR || errno == EAGAIN);
+    }
+    commands.append(buffer, static_cast<size_t>(count));
+    size_t newline = 0;
+    while ((newline = commands.find('\n')) != std::string::npos) {
+      std::istringstream command(commands.substr(0, newline));
+      commands.erase(0, newline + 1);
+      std::string action;
+      std::string label;
+      command >> action >> label;
+      if (action != "sync" || label.empty() || wl_display_roundtrip(state.display) < 0) {
+        printLine("sync-failed");
+        return false;
+      }
+      std::println("synced {} {} {}", label, state.primary.label, state.primary.frames);
+      if (pixelWanted()) {
+        std::println("synced {} {} {}", label, state.pixel.label, state.pixel.frames);
+      }
+      std::fflush(stdout);
+    }
+    return true;
+  }
 } // namespace
 
 int main(int argc, char** argv) {
@@ -273,7 +304,29 @@ int main(int argc, char** argv) {
     printLine("start-failed");
     return 1;
   }
-  while (wl_display_dispatch(state.display) != -1) {
+  const bool control = std::getenv("CAPTURE_CONTROL") != nullptr;
+  std::string commands;
+  while (wl_display_dispatch_pending(state.display) >= 0) {
+    if (wl_display_flush(state.display) < 0 && errno != EAGAIN) {
+      break;
+    }
+    pollfd sources[] = {
+        {.fd = wl_display_get_fd(state.display), .events = POLLIN, .revents = 0},
+        {.fd = control ? STDIN_FILENO : -1, .events = POLLIN, .revents = 0},
+    };
+    if (poll(sources, 2, -1) < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      break;
+    }
+    if ((sources[0].revents & (POLLERR | POLLHUP)) != 0
+        || ((sources[0].revents & POLLIN) != 0 && wl_display_dispatch(state.display) < 0)) {
+      break;
+    }
+    if ((sources[1].revents & (POLLIN | POLLHUP)) != 0 && !readCommands(commands)) {
+      break;
+    }
   }
   return 1;
 }

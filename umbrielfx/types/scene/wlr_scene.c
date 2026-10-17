@@ -122,6 +122,59 @@ static void scene_node_init(struct wlr_scene_node* node, enum wlr_scene_node_typ
   wlr_addon_set_init(&node->addons);
 }
 
+// Observe subtree changes without extending the node/tree structs shared with
+// wlroots. Only roots with listeners allocate this addon.
+struct scene_node_update_observer {
+  struct wlr_addon addon;
+  struct wl_signal update;
+};
+
+static void scene_node_update_observer_destroy(struct wlr_addon* addon) {
+  struct scene_node_update_observer* observer = wl_container_of(addon, observer, addon);
+  assert(wl_list_empty(&observer->update.listener_list));
+  wlr_addon_finish(addon);
+  free(observer);
+}
+
+static const struct wlr_addon_interface scene_node_update_observer_impl = {
+    .name = "scene_node_update_observer",
+    .destroy = scene_node_update_observer_destroy,
+};
+
+static struct scene_node_update_observer* scene_node_update_observer_get(struct wlr_scene_node* node) {
+  struct wlr_addon* addon =
+      wlr_addon_find(&node->addons, &scene_node_update_observer_impl, &scene_node_update_observer_impl);
+  if (addon == NULL) {
+    return NULL;
+  }
+  struct scene_node_update_observer* observer = wl_container_of(addon, observer, addon);
+  return observer;
+}
+
+bool wlr_scene_node_add_update_listener(struct wlr_scene_node* node, struct wl_listener* listener) {
+  struct scene_node_update_observer* observer = scene_node_update_observer_get(node);
+  if (observer == NULL) {
+    observer = calloc(1, sizeof(*observer));
+    if (observer == NULL) {
+      return false;
+    }
+    wl_signal_init(&observer->update);
+    wlr_addon_init(&observer->addon, &node->addons, &scene_node_update_observer_impl, &scene_node_update_observer_impl);
+  }
+  wl_signal_add(&observer->update, listener);
+  return true;
+}
+
+static void scene_node_note_update(struct wlr_scene_node* node) {
+  struct wlr_scene_node* changed = node;
+  for (; node != NULL; node = node->parent != NULL ? &node->parent->node : NULL) {
+    struct scene_node_update_observer* observer = scene_node_update_observer_get(node);
+    if (observer != NULL) {
+      wl_signal_emit_mutable(&observer->update, changed);
+    }
+  }
+}
+
 struct highlight_region {
   pixman_region32_t region;
   struct timespec when;
@@ -1489,6 +1542,7 @@ int wlr_scene_node_animation_expand(struct wlr_scene_node* node) {
  * being reparented to a disabled super tree.
  */
 static void scene_node_update(struct wlr_scene_node* node, pixman_region32_t* damage) {
+  scene_node_note_update(node);
   struct wlr_scene* scene = scene_node_get_root(node);
   struct scene_effects* effects = NULL;
 
@@ -1570,6 +1624,9 @@ static void scene_effect_damage(struct wlr_scene_node* node, int min_expand) {
   if (animation != NULL && animation->light != NULL && wlr_scene_node_coords(&animation->light->rect->node, &rx, &ry)) {
     const struct wlr_scene_rect* rect = animation->light->rect;
     pixman_region32_union_rect(&bounds, &bounds, rx, ry, rect->width, rect->height);
+  }
+  if (!pixman_region32_empty(&bounds)) {
+    scene_node_note_update(node);
   }
   scene_damage_outputs(scene_node_get_root(node), &bounds);
   pixman_region32_fini(&bounds);
@@ -1654,6 +1711,7 @@ bool wlr_scene_node_set_animation_isolation(struct wlr_scene_node* node, unsigne
   if (animation->isolation_group != group || animation->isolation_slot != slot) {
     animation->isolation_group = group;
     animation->isolation_slot = slot;
+    scene_node_note_update(node);
     scene_node_update(&animation->scene->tree.node, NULL);
   }
   return true;
@@ -1712,6 +1770,9 @@ void wlr_scene_node_set_animation(
   if (previous == shader && !restarted && parameters_equal_now) {
     return;
   }
+  // Transient slots update the scene root below. Preserve the changed subtree
+  // identity for callers tracking only a background layer.
+  scene_node_note_update(node);
   if (previous != shader || restarted) {
     fx_animation_history_reset(&animation->histories[slot]);
   }
@@ -1764,6 +1825,7 @@ void wlr_scene_node_set_animation(
 void wlr_scene_node_clear_animations(struct wlr_scene_node* node) {
   struct scene_animation* animation = scene_animation_get(node);
   if (animation != NULL) {
+    scene_node_note_update(node);
     const bool transient = animation->transient;
     if (!transient) {
       scene_effect_damage(node, 0);
@@ -1787,6 +1849,7 @@ bool wlr_scene_node_set_animation_output_clip(struct wlr_scene_node* node, const
       || (!clear && animation->output_clip_enabled && wlr_box_equal(&animation->output_clip, box))) {
     return true;
   }
+  scene_node_note_update(node);
   struct wlr_scene* scene = scene_node_get_root(node);
   if (clear) {
     animation->output_clip_enabled = false;
@@ -2528,6 +2591,12 @@ void wlr_scene_buffer_set_buffer_with_options(
   pixman_region32_intersect_rect(&trans_damage, &trans_damage, box.x, box.y, box.width, box.height);
   pixman_region32_translate(&trans_damage, -box.x, -box.y);
 
+  // Background content can be covered by a window while its cached blur is
+  // still visible through that window. Track damage before visibility culling.
+  if (!pixman_region32_empty(&trans_damage)) {
+    scene_node_note_update(&scene_buffer->node);
+  }
+
   struct wlr_scene* scene = scene_node_get_root(&scene_buffer->node);
   struct wlr_scene_output* scene_output;
   wl_list_for_each(scene_output, &scene->outputs, link) {
@@ -2894,6 +2963,9 @@ void wlr_scene_node_reparent(struct wlr_scene_node* node, struct wlr_scene_tree*
     scene_node_visibility(node, &visible);
   }
 
+  // The usual update runs after reparenting, so notify the old ancestry while
+  // the node still belongs to it. Both cached backgrounds may have changed.
+  scene_node_note_update(node);
   wl_list_remove(&node->link);
   node->parent = new_parent;
   wl_list_insert(new_parent->children.prev, &node->link);

@@ -175,6 +175,7 @@ namespace umbriel {
     static void onFrame(wl_listener* listener, void* data);
     static void onRequestState(wl_listener* listener, void* data);
     static void onPresent(wl_listener* listener, void* data);
+    static void onBackgroundUpdate(wl_listener* listener, void* data);
     static void onDestroy(wl_listener* listener, void* data);
     static int onFrameRetryTimer(void* data);
     static int onEffectFrameTimer(void* data);
@@ -276,6 +277,7 @@ namespace umbriel {
     wl_listener m_frame{};
     wl_listener m_requestState{};
     wl_listener m_present{};
+    wl_listener m_backgroundUpdate{};
     wl_listener m_destroy{};
   };
 

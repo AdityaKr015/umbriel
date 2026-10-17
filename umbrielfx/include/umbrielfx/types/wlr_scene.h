@@ -441,6 +441,15 @@ void wlr_scene_node_reparent(struct wlr_scene_node* node, struct wlr_scene_tree*
  */
 bool wlr_scene_node_coords(struct wlr_scene_node* node, int* lx, int* ly);
 /**
+ * Listen for visual updates to this node or its descendants. The event data
+ * points to the changed node. Frame callback requests without visual changes
+ * emit nothing. Changes to ancestors are not observed. A visual change may
+ * emit more than once. Remove the listener before destroying this node, and
+ * do not destroy or reparent the changed node from the callback.
+ * Returns false if the observer cannot be allocated.
+ */
+bool wlr_scene_node_add_update_listener(struct wlr_scene_node* node, struct wl_listener* listener);
+/**
  * Call `iterator` on each buffer in the scene-graph, with the buffer's
  * position in layout coordinates. The function is called from root to leaves
  * (in rendering order).
@@ -572,6 +581,34 @@ void wlr_scene_tree_set_clip(struct wlr_scene_tree* tree, const struct wlr_box* 
  * intersect.
  */
 struct wlr_scene_surface* wlr_scene_surface_create(struct wlr_scene_tree* parent, struct wlr_surface* surface);
+
+struct wlr_scene_surface_color_state {
+  enum wlr_color_transfer_function transfer_function;
+  enum wlr_color_named_primaries primaries;
+  float luminance_multiplier;
+};
+
+typedef void (*wlr_scene_surface_color_resolver_func_t)(
+    struct wlr_surface* surface, struct wlr_scene_surface_color_state* state, void* data
+);
+
+/**
+ * Resolve compositor-managed surface color before applying it to scene buffers.
+ * The callback receives the surface's committed wlroots color state and may
+ * replace it. It runs when a scene surface is created or reconfigured.
+ *
+ * Passing NULL removes the resolver. Existing surfaces can be refreshed with
+ * wlr_scene_surface_update_color(). Returns false on allocation failure.
+ */
+bool wlr_scene_set_surface_color_resolver(
+    struct wlr_scene* scene, wlr_scene_surface_color_resolver_func_t resolver, void* data
+);
+
+/**
+ * Apply the surface's resolved committed color, damaging only changed state.
+ * This also works for surfaces under disabled scene trees.
+ */
+void wlr_scene_surface_update_color(struct wlr_scene_surface* surface);
 
 /**
  * If this node represents a wlr_scene_buffer, that buffer will be returned. It

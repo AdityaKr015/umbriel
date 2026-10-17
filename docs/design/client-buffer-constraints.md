@@ -206,7 +206,7 @@ Umbriel's `ColorManager` owns the color-management protocol for native and Wine
 clients. Native clients receive a version 2 global with the ordinary supported
 feature set. Wine clients receive a separately filtered compatibility global
 that also exposes Windows-scRGB and, when available, Windows BT.2100. Both
-globals share surface state and the scene repair pass.
+globals share surface state and the scene color resolver.
 
 Surface descriptions use `wlr_surface_synced` so cached commits and synchronized
 subsurfaces apply color metadata with the matching buffer. Destroying a
@@ -245,12 +245,21 @@ bypass the conversion.
 
 ## Scene color mirrors and snapshots
 
-Scene surfaces reset their color state on every commit. Umbriel's color manager
-repairs their committed transfer function, primaries, and luminance multiplier
-at the render boundary for native and Wine clients.
+Scene surfaces resolve their committed transfer function, primaries, and
+luminance multiplier during surface reconfiguration. Umbriel's color resolver
+overrides the natural wlroots state once, before guarded scene setters run, for
+both native and Wine clients. Unchanged descriptions and callback-only commits
+leave the existing color state intact. Synchronized subsurfaces resolve only
+their applied state, keeping cached metadata aligned with its buffer.
+
+Destroying a color-management object refreshes matching scene surfaces
+immediately, including disabled scene trees, without requiring another surface
+commit. `render/color_damage` checks unchanged commits, delivered callbacks,
+real color transitions, object destruction, and synchronized and desynchronized
+subsurfaces through captured pixel damage.
 
 Overview cards, desktop mirrors, close snapshots, and resize snapshots use raw
-scene buffers outside that repair pass. Their copy paths therefore apply the
+scene buffers outside the surface resolver. Their copy paths therefore apply the
 manager's authoritative committed description directly after copying scene
 properties. This preserves PQ BT.2020 and Windows-scRGB metadata even when a
-copy is created between a surface commit and the next render boundary.
+copy is created directly from a surface commit.

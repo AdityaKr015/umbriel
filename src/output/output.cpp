@@ -153,6 +153,13 @@ namespace umbriel {
     for (uint32_t layer = 0; layer < kLayerCount; ++layer) {
       m_layerTrees[layer] = wlr_scene_tree_create(m_server->shellLayerTree(layer));
     }
+    m_backgroundUpdate.notify = onBackgroundUpdate;
+    if (!wlr_scene_node_add_update_listener(
+            &layerTree(ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND)->node, &m_backgroundUpdate
+        )) {
+      kLog.error("output '{}': failed to watch background scene updates", m_output->name);
+      std::abort();
+    }
     m_popupTree = wlr_scene_tree_create(m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY));
     m_viewRoot = wlr_scene_tree_create(m_server->xdgTree());
     m_fullscreenRoot = wlr_scene_tree_create(m_server->fullscreenTree());
@@ -1155,6 +1162,10 @@ namespace umbriel {
   }
 
   Output::~Output() {
+    if (m_backgroundUpdate.link.next != nullptr) {
+      wl_list_remove(&m_backgroundUpdate.link);
+      m_backgroundUpdate.link.next = nullptr;
+    }
     if (m_frameRetryTimer != nullptr) {
       wl_event_source_remove(m_frameRetryTimer);
       m_frameRetryTimer = nullptr;
@@ -1355,7 +1366,7 @@ namespace umbriel {
   }
 
   void Output::markBlurBackgroundDirty() {
-    if (m_optimizedBlur != nullptr) {
+    if (m_optimizedBlur != nullptr && !m_optimizedBlur->dirty) {
       wlr_scene_optimized_blur_mark_dirty(m_optimizedBlur);
     }
   }
@@ -1377,6 +1388,12 @@ namespace umbriel {
     Output* self;
     self = wl_container_of(listener, self, m_frame);
     self->handleFrame();
+  }
+
+  void Output::onBackgroundUpdate(wl_listener* listener, void* /*data*/) {
+    Output* self;
+    self = wl_container_of(listener, self, m_backgroundUpdate);
+    self->markBlurBackgroundDirty();
   }
 
   void Output::onRequestState(wl_listener* listener, void* data) {
@@ -1587,10 +1604,9 @@ namespace umbriel {
       m_animationRenderLocked = animationsActive;
     }
 
-    // Scene surfaces reset their color state on every commit. Apply Umbriel's
-    // committed protocol state at the render boundary before composing a frame.
+    // Keep preferred color descriptions current as output membership and policy change.
     if (ColorManager* colorManager = m_server->colorManager()) {
-      colorManager->applySurfaceDescriptions();
+      colorManager->updatePreferredDescriptions();
     }
 
     const int externalLocks = externalRenderLocks();

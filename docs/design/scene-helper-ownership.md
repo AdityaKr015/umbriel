@@ -8,8 +8,9 @@ A node is therefore only usable if `umbrielfx` allocated it. Every scene helper
 that creates or destroys nodes has to live in `umbrielfx/types/scene/`, even the
 ones that are thin wrappers over wlroots types and carry no effects of their
 own: `surface.c`, `subsurface_tree.c`, `xdg_shell.c`, `layer_shell_v1.c`,
-`drag_icon.c`, `output_layout.c`. They are vendored from wlroots 0.20.2 and
-adapted only in their includes.
+`drag_icon.c`, `output_layout.c`. They are vendored from wlroots 0.20.2. The
+surface helper also resolves Umbriel's committed color state before applying
+scene setters, keeping unchanged commits free of color reset and restore damage.
 
 ## Why borrowing them looked fine
 

@@ -3,6 +3,8 @@
 // exclusive` picks the layer surface's keyboard interactivity, and every keyboard enter and leave the surface receives
 // is logged. `release-on-escape` drops the interactivity to none when Escape is released. `popup-on-click` behaves like
 // a bar opening a menu: the first left press switches the layer to on-demand and opens a grabbing xdg_popup.
+// LAYER_CONTROL enables stdin commands: frames LABEL COUNT, color LABEL AARRGGBB, child-color LABEL AARRGGBB,
+// child-move LABEL X Y, and margins LABEL TOP RIGHT BOTTOM LEFT. Each prints done after its frame callbacks arrive.
 
 #include <wayland-client.h>
 
@@ -13,12 +15,15 @@
 #include "xdg-shell-client-protocol.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <poll.h>
 #include <print>
+#include <sstream>
 #include <string>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -43,6 +48,7 @@ namespace {
     wl_display* display = nullptr;
     wl_compositor* compositor = nullptr;
     wl_shm* shm = nullptr;
+    wl_subcompositor* subcompositor = nullptr;
     zwlr_layer_shell_v1* layerShell = nullptr;
     wl_seat* seat = nullptr;
     wl_keyboard* keyboard = nullptr;
@@ -59,6 +65,14 @@ namespace {
     zwlr_layer_surface_v1* layerSurface = nullptr;
     wl_callback* frame = nullptr;
     Buffer buffer;
+    wl_surface* childSurface = nullptr;
+    wl_subsurface* childSubsurface = nullptr;
+    Buffer childBuffer;
+    wl_surface* frameSurface = nullptr;
+    std::string commands;
+    std::string commandLabel;
+    int remainingFrames = 0;
+    int requestedFrames = 0;
     bool ready = false;
     bool closed = false;
     bool failed = false;
@@ -121,6 +135,8 @@ namespace {
     buffer = {};
   }
 
+  void requestFrame(State& state);
+
   void frameDone(void* data, wl_callback* callback, uint32_t) {
     auto& state = *static_cast<State*>(data);
     wl_callback_destroy(callback);
@@ -130,9 +146,122 @@ namespace {
       std::println("ready");
       std::fflush(stdout);
     }
+    if (state.remainingFrames > 0) {
+      if (--state.remainingFrames > 0) {
+        requestFrame(state);
+      } else {
+        std::println("done {} callbacks {}", state.commandLabel, state.requestedFrames);
+        std::fflush(stdout);
+      }
+    }
   }
 
   constexpr wl_callback_listener kFrameListener = {.done = frameDone};
+
+  void requestFrame(State& state) {
+    state.frame = wl_surface_frame(state.frameSurface);
+    wl_callback_add_listener(state.frame, &kFrameListener, &state);
+    wl_surface_commit(state.frameSurface);
+  }
+
+  void handleCommand(State& state, const std::string& line) {
+    std::istringstream command(line);
+    std::string action;
+    command >> action >> state.commandLabel;
+    if (state.commandLabel.empty() || state.frame != nullptr) {
+      state.failed = state.closed = true;
+      std::println(stderr, "layer-client: invalid or overlapping command '{}'", line);
+      return;
+    }
+    state.frameSurface = state.surface;
+    state.requestedFrames = 1;
+    if (action == "frames") {
+      command >> state.requestedFrames;
+      if (state.requestedFrames <= 0) {
+        command.setstate(std::ios::failbit);
+      }
+    } else if (action == "color" || action == "child-color") {
+      uint32_t color = 0;
+      command >> std::hex >> color;
+      if (command.fail()) {
+        state.failed = state.closed = true;
+        return;
+      }
+      const bool child = action == "child-color";
+      if (child && state.childSurface == nullptr) {
+        if (state.subcompositor == nullptr) {
+          state.failed = state.closed = true;
+          return;
+        }
+        state.childSurface = wl_compositor_create_surface(state.compositor);
+        state.childSubsurface = wl_subcompositor_get_subsurface(state.subcompositor, state.childSurface, state.surface);
+        wl_subsurface_set_desync(state.childSubsurface);
+        wl_surface_commit(state.surface);
+      }
+      const uint32_t parentColor = state.fillColor;
+      state.fillColor = color;
+      Buffer replacement = createBuffer(state, child ? 200 : state.buffer.width, child ? 200 : state.buffer.height);
+      if (child) {
+        state.fillColor = parentColor;
+      }
+      if (replacement.resource == nullptr) {
+        state.failed = state.closed = true;
+        return;
+      }
+      state.frameSurface = child ? state.childSurface : state.surface;
+      wl_surface_attach(state.frameSurface, replacement.resource, 0, 0);
+      wl_surface_damage_buffer(state.frameSurface, 0, 0, replacement.width, replacement.height);
+      Buffer& previous = child ? state.childBuffer : state.buffer;
+      destroyBuffer(previous);
+      previous = replacement;
+    } else if (action == "child-move") {
+      int x = 0;
+      int y = 0;
+      command >> x >> y;
+      if (state.childSubsurface == nullptr) {
+        command.setstate(std::ios::failbit);
+      } else {
+        wl_subsurface_set_position(state.childSubsurface, x, y);
+      }
+    } else if (action == "margins") {
+      int top = 0;
+      int right = 0;
+      int bottom = 0;
+      int left = 0;
+      command >> top >> right >> bottom >> left;
+      zwlr_layer_surface_v1_set_margin(state.layerSurface, top, right, bottom, left);
+    } else {
+      command.setstate(std::ios::failbit);
+    }
+    if (command.fail()) {
+      state.failed = state.closed = true;
+      std::println(stderr, "layer-client: invalid command '{}'", line);
+      return;
+    }
+    state.remainingFrames = state.requestedFrames;
+    requestFrame(state);
+  }
+
+  void readCommands(State& state) {
+    char buffer[1024];
+    const ssize_t count = read(STDIN_FILENO, buffer, sizeof(buffer));
+    if (count <= 0) {
+      if (count == 0 || (errno != EINTR && errno != EAGAIN)) {
+        state.closed = true;
+      }
+      return;
+    }
+    state.commands.append(buffer, static_cast<size_t>(count));
+    size_t newline = 0;
+    while ((newline = state.commands.find('\n')) != std::string::npos) {
+      const std::string command = state.commands.substr(0, newline);
+      state.commands.erase(0, newline + 1);
+      handleCommand(state, command);
+      if (state.closed) {
+        return;
+      }
+    }
+  }
 
   void
   layerConfigure(void* data, zwlr_layer_surface_v1* layerSurface, uint32_t serial, uint32_t width, uint32_t height) {
@@ -318,6 +447,9 @@ namespace {
       state.compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, 4));
     } else if (std::strcmp(interface, wl_shm_interface.name) == 0) {
       state.shm = static_cast<wl_shm*>(wl_registry_bind(registry, name, &wl_shm_interface, 1));
+    } else if (std::strcmp(interface, wl_subcompositor_interface.name) == 0) {
+      state.subcompositor =
+          static_cast<wl_subcompositor*>(wl_registry_bind(registry, name, &wl_subcompositor_interface, 1));
     } else if (std::strcmp(interface, wl_seat_interface.name) == 0) {
       state.seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, std::min(version, 5U)));
       wl_seat_add_listener(state.seat, &kSeatListener, &state);
@@ -463,7 +595,30 @@ int main(int argc, char** argv) {
   zwlr_layer_surface_v1_set_anchor(state.layerSurface, anchors);
   wl_surface_commit(state.surface);
 
-  while (!state.closed && wl_display_dispatch(state.display) >= 0) {
+  const bool control = std::getenv("LAYER_CONTROL") != nullptr;
+  while (!state.closed && wl_display_dispatch_pending(state.display) >= 0) {
+    if (wl_display_flush(state.display) < 0 && errno != EAGAIN) {
+      state.failed = true;
+      break;
+    }
+    pollfd sources[] = {
+        {.fd = wl_display_get_fd(state.display), .events = POLLIN, .revents = 0},
+        {.fd = control ? STDIN_FILENO : -1, .events = POLLIN, .revents = 0},
+    };
+    if (poll(sources, 2, -1) < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      state.failed = true;
+      break;
+    }
+    if ((sources[0].revents & (POLLERR | POLLHUP)) != 0
+        || ((sources[0].revents & POLLIN) != 0 && wl_display_dispatch(state.display) < 0)) {
+      break;
+    }
+    if ((sources[1].revents & (POLLIN | POLLHUP)) != 0) {
+      readCommands(state);
+    }
   }
 
   if (state.frame != nullptr) {
@@ -475,6 +630,11 @@ int main(int argc, char** argv) {
     wl_surface_destroy(state.popupSurface);
   }
   destroyBuffer(state.popupBuffer);
+  if (state.childSubsurface != nullptr) {
+    wl_subsurface_destroy(state.childSubsurface);
+    wl_surface_destroy(state.childSurface);
+  }
+  destroyBuffer(state.childBuffer);
   if (state.pointer != nullptr) {
     wl_pointer_release(state.pointer);
   }
@@ -495,6 +655,9 @@ int main(int argc, char** argv) {
   }
   zwlr_layer_shell_v1_destroy(state.layerShell);
   wl_shm_destroy(state.shm);
+  if (state.subcompositor != nullptr) {
+    wl_subcompositor_destroy(state.subcompositor);
+  }
   wl_compositor_destroy(state.compositor);
   wl_registry_destroy(registry);
   wl_display_disconnect(state.display);

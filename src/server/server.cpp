@@ -748,6 +748,12 @@ namespace umbriel {
 
   Server::~Server() {
     m_stopping = true;
+    if (m_sessionExitResultSource != nullptr) {
+      wl_event_source_remove(m_sessionExitResultSource);
+    }
+    if (m_sessionExitResultFd >= 0) {
+      close(m_sessionExitResultFd);
+    }
     if (m_lidStateReconcileIdle != nullptr) {
       wl_event_source_remove(m_lidStateReconcileIdle);
       m_lidStateReconcileIdle = nullptr;
@@ -968,7 +974,10 @@ namespace umbriel {
     m_applicationScopesRequired = !m_nested && isDirectSystemdService(getpid(), std::getenv("SYSTEMD_EXEC_PID"));
     if (m_applicationScopesRequired) {
       m_systemdRunExecutable = resolveExecutable("systemd-run");
+      m_systemctlExecutable = resolveExecutable("systemctl");
+      m_systemdControlEnvironment = captureSystemdControlEnvironment();
       const std::string ownerUnit = currentSystemdUnit();
+      m_sessionShutdownAvailable = ownerUnit == "umbriel.service" && !m_systemctlExecutable.empty();
       if (m_systemdRunExecutable.empty()) {
         kLog.warn("application scope isolation unavailable: systemd-run was not found on PATH");
       } else if (ownerUnit.empty()) {
@@ -976,7 +985,7 @@ namespace umbriel {
       } else {
         m_applicationScopePartOfProperty = "--property=PartOf=umbriel-session.target";
         m_applicationScopeBindsToProperty = "--property=BindsTo=" + ownerUnit;
-        m_systemdControlEnvironment = captureSystemdControlEnvironment();
+        m_applicationScopeAfterProperty = "--property=After=" + ownerUnit;
         m_applicationScopeEnvironmentArguments = applicationScopeEnvironmentArguments(config().environment.variables);
         kLog.info("application processes will use transient scopes under app.slice");
       }
@@ -1124,6 +1133,76 @@ namespace umbriel {
     wl_display_terminate(m_display);
   }
 
+  void Server::requestSessionExit() {
+    if (m_stopping || m_sessionExitRequested) {
+      return;
+    }
+    if (!m_sessionShutdownAvailable) {
+      stop();
+      return;
+    }
+    m_sessionExitRequested = true;
+    int resultPipe[2]{-1, -1};
+    if (pipe2(resultPipe, O_CLOEXEC | O_NONBLOCK) != 0) {
+      kLog.error("cannot create session shutdown pipe: {}", std::strerror(errno));
+      stop();
+      return;
+    }
+    m_sessionExitResultSource = wl_event_loop_add_fd(
+        wl_display_get_event_loop(m_display), resultPipe[0], WL_EVENT_READABLE,
+        [](int fd, uint32_t mask, void* data) {
+          auto* server = static_cast<Server*>(data);
+          char result = 0;
+          ssize_t size = 0;
+          do {
+            size = read(fd, &result, sizeof(result));
+          } while (size < 0 && errno == EINTR);
+          if (size < 0 && errno == EAGAIN && (mask & (WL_EVENT_HANGUP | WL_EVENT_ERROR)) == 0) {
+            return 0;
+          }
+          wl_event_source_remove(server->m_sessionExitResultSource);
+          server->m_sessionExitResultSource = nullptr;
+          close(fd);
+          server->m_sessionExitResultFd = -1;
+          if (size != 1 || result != 'x') {
+            kLog.error("session shutdown request failed; stopping the compositor directly");
+            server->stop();
+          }
+          return 0;
+        },
+        this
+    );
+    if (m_sessionExitResultSource == nullptr) {
+      close(resultPipe[0]);
+      close(resultPipe[1]);
+      kLog.error("cannot monitor the session shutdown request");
+      stop();
+      return;
+    }
+    m_sessionExitResultFd = resultPipe[0];
+    const std::string command = shellQuote(m_systemctlExecutable)
+        + " --user start --job-mode=replace-irreversibly --no-block umbriel-shutdown.target 1>&2 && printf x";
+    const pid_t pid = fork();
+    if (pid == 0) {
+      resetChildSignalState();
+      restoreFileDescriptorLimit();
+      close(resultPipe[0]);
+      if (dup2(resultPipe[1], STDOUT_FILENO) < 0
+          || fcntl(STDOUT_FILENO, F_SETFD, 0) < 0
+          || !closeChildFileDescriptors()
+          || !restoreSystemdControlEnvironment(m_systemdControlEnvironment)) {
+        _exit(1);
+      }
+      execl("/bin/sh", "/bin/sh", "-c", command.c_str(), nullptr);
+      _exit(1);
+    }
+    if (pid < 0) {
+      kLog.error("cannot fork the session shutdown request: {}", std::strerror(errno));
+      stop();
+    }
+    close(resultPipe[1]);
+  }
+
   uint32_t Server::modKey() const {
     if (!config().general.modKey) {
       return m_nested ? WLR_MODIFIER_ALT : WLR_MODIFIER_LOGO;
@@ -1206,7 +1285,8 @@ namespace umbriel {
     if (scopeRequired
         && (m_systemdRunExecutable.empty()
             || m_applicationScopePartOfProperty.empty()
-            || m_applicationScopeBindsToProperty.empty())) {
+            || m_applicationScopeBindsToProperty.empty()
+            || m_applicationScopeAfterProperty.empty())) {
       kLog.error("cannot launch application because systemd scope isolation is unavailable");
       return;
     }
@@ -1263,7 +1343,8 @@ namespace umbriel {
       if (scopeRequired) {
         execApplicationInScope(
             m_systemdRunExecutable.c_str(), scopeUnitArgument.c_str(), m_applicationScopePartOfProperty.c_str(),
-            m_applicationScopeBindsToProperty.c_str(), m_applicationScopeEnvironmentArguments, command
+            m_applicationScopeBindsToProperty.c_str(), m_applicationScopeAfterProperty.c_str(),
+            m_applicationScopeEnvironmentArguments, command
         );
       }
       execl("/bin/sh", "/bin/sh", "-c", command, nullptr);

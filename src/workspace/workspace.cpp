@@ -1079,8 +1079,8 @@ namespace umbriel {
       }
     }
 
-    // A pair of positioned members whose side relation changes cannot stay disjoint; the one travelling farther passes
-    // over the other.
+    // A pair of positioned members whose side relation changes cannot stay disjoint; the focused one passes over the
+    // other, since it is the window the user acted on, and otherwise the one travelling farther.
     std::vector<bool> raise(views.size(), false);
     for (size_t i = 0; i < views.size(); ++i) {
       for (size_t j = i + 1; j < views.size(); ++j) {
@@ -1089,7 +1089,11 @@ namespace umbriel {
         if (keepsSeparation(a, b)) {
           continue;
         }
-        raise[travelSquared(a.from, a.to) > travelSquared(b.from, b.to) ? i : j] = true;
+        if (views[i].view == m_focusedView || views[j].view == m_focusedView) {
+          raise[views[i].view == m_focusedView ? i : j] = true;
+        } else {
+          raise[travelSquared(a.from, a.to) > travelSquared(b.from, b.to) ? i : j] = true;
+        }
       }
     }
 
@@ -1123,8 +1127,14 @@ namespace umbriel {
       const LayoutMotion::ViewEntry& entry = m_motion.views[i];
       entry.view->beginLayoutMotion(entry.direction);
       entry.view->presentTiledBox(entry.from);
-      if (raise[i]) {
+      if (raise[i] && entry.view != m_focusedView) {
         entry.view->raiseToTop();
+      }
+    }
+    // Raised last, so it also passes over every other window raised above.
+    for (size_t i = 0; i < m_motion.views.size(); ++i) {
+      if (raise[i] && m_motion.views[i].view == m_focusedView) {
+        m_motion.views[i].view->raiseToTop();
       }
     }
     for (View* view : openingViews) {

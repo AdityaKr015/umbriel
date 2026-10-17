@@ -753,9 +753,17 @@ namespace umbriel {
         std::string effect;
         bool enabled = true;
         int durationMs = 250;
-        AnimationCurve curve{.easing = Easing::Spring, .spring = {.damping = 1.0, .stiffness = 900.0}};
+        AnimationCurve curve{.easing = Easing::Spring, .spring = {.damping = 1.0, .stiffness = 800.0}};
         bool operator==(const WindowsMove&) const = default;
       } windowsMove;
+
+      // The size half of a tiled window's layout change; windows_move keeps the position.
+      struct WindowsResize {
+        bool enabled = true;
+        int durationMs = 250;
+        AnimationCurve curve{.easing = Easing::Spring, .spring = {.damping = 1.0, .stiffness = 900.0}};
+        bool operator==(const WindowsResize&) const = default;
+      } windowsResize;
 
       struct Workspaces {
         std::string style = "slide";

@@ -322,8 +322,11 @@ namespace umbriel {
         wlr_box to{};
         float direction = 1.0F;
       };
+      // windows_move drives position and windows_resize size; the motion runs until both have settled.
       AnimatedValue progress;
       MonotonicEasing geometryCurve;
+      AnimatedValue size;
+      MonotonicEasing sizeCurve;
       std::vector<ViewEntry> views;
     };
     LayoutMotion m_motion;

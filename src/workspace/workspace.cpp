@@ -1062,7 +1062,7 @@ namespace umbriel {
     }
 
     // A running motion heading for the same layout keeps going; anything else restarts from the current boxes.
-    if (m_motion.progress.animating() && views.size() == m_motion.views.size()) {
+    if ((m_motion.progress.animating() || m_motion.size.animating()) && views.size() == m_motion.views.size()) {
       bool same = true;
       for (size_t i = 0; i < views.size() && same; ++i) {
         same = views[i].view == m_motion.views[i].view && sameBox(views[i].to, m_motion.views[i].to);
@@ -1109,6 +1109,15 @@ namespace umbriel {
     m_motion.progress.snap(0.0);
     m_motion.progress.retarget(1.0, move.durationMs, move.curve);
     m_motion.geometryCurve.reset(move.curve);
+    // Without windows_resize the size lands at once while the position still moves.
+    const auto& resize = animation.windowsResize;
+    if (resize.enabled) {
+      m_motion.size.snap(0.0);
+      m_motion.size.retarget(1.0, resize.durationMs, resize.curve);
+      m_motion.sizeCurve.reset(resize.curve);
+    } else {
+      m_motion.size.snap(1.0);
+    }
 
     for (size_t i = 0; i < m_motion.views.size(); ++i) {
       const LayoutMotion::ViewEntry& entry = m_motion.views[i];
@@ -1125,19 +1134,22 @@ namespace umbriel {
   }
 
   bool Workspace::tickLayoutMotion(uint64_t nowMsec) {
-    const bool geometryTicked = m_motion.progress.tick(nowMsec);
-    const bool needsFinalPresentation = !m_motion.progress.animating() && !m_motion.views.empty();
-    if (!geometryTicked && !needsFinalPresentation) {
+    const bool positionTicked = m_motion.progress.tick(nowMsec);
+    const bool sizeTicked = m_motion.size.tick(nowMsec);
+    const bool running = m_motion.progress.animating() || m_motion.size.animating();
+    const bool needsFinalPresentation = !running && !m_motion.views.empty();
+    if (!positionTicked && !sizeTicked && !needsFinalPresentation) {
       return false;
     }
 
-    const double progress = m_motion.geometryCurve.value(m_motion.progress.progress());
+    const double position = m_motion.geometryCurve.value(m_motion.progress.progress());
+    const double size = m_motion.size.animating() ? m_motion.sizeCurve.value(m_motion.size.progress()) : 1.0;
     for (const LayoutMotion::ViewEntry& entry : m_motion.views) {
       if (entry.view->mapped() && m_layout->columnOf(entry.view) >= 0) {
-        entry.view->presentTiledBox(interpolateBox(entry.from, entry.to, progress));
+        entry.view->presentTiledBox(interpolateBox(entry.from, entry.to, position, size));
       }
     }
-    if (m_motion.progress.animating()) {
+    if (running) {
       return true;
     }
 
@@ -1155,6 +1167,7 @@ namespace umbriel {
 
   void Workspace::endLayoutMotion() {
     m_motion.progress.snap(1.0);
+    m_motion.size.snap(1.0);
     std::vector<LayoutMotion::ViewEntry> views = std::move(m_motion.views);
     m_motion.views.clear();
     for (const LayoutMotion::ViewEntry& entry : views) {

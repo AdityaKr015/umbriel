@@ -110,6 +110,7 @@ namespace umbriel {
       apply(animation.windowsIn.durationMs, animation.windowsIn.curve);
       apply(animation.windowsOut.durationMs, animation.windowsOut.curve);
       apply(animation.windowsMove.durationMs, animation.windowsMove.curve);
+      apply(animation.windowsResize.durationMs, animation.windowsResize.curve);
       apply(animation.workspaces.durationMs, animation.workspaces.curve);
       apply(animation.overview.durationMs, animation.overview.curve);
       apply(animation.scratchpad.durationMs, animation.scratchpad.curve);
@@ -129,15 +130,9 @@ namespace umbriel {
       );
     }
 
-    // One animation event: its effect, whether it runs, `extra` keys of its own, and its timeline. duration_ms and
-    // curve resolve together, because a spring derives its own length: a duration configured beside one reaches
-    // nothing and has to say so rather than look honoured.
-    template <typename E> registry::Fields<E> eventFields(registry::Fields<E> extra) {
-      registry::Fields<E> fields{
-          effectField("effect", &E::effect, EffectKind::Animation),
-          registry::boolean("enabled", &E::enabled),
-      };
-      std::ranges::move(extra, std::back_inserter(fields));
+    // A timeline's duration_ms and curve, appended to `fields`. They resolve together, because a spring derives its
+    // own length: a duration configured beside one reaches nothing and has to say so rather than look honoured.
+    template <typename E> registry::Fields<E> timelineFields(registry::Fields<E> fields) {
       registry::Field<E> duration = registry::integer("duration_ms", 1, 10000, &E::durationMs);
       duration.describe = [describe = std::move(duration.describe)](
                               const E& defaults, const std::string& path, registry::Descriptions& out
@@ -159,6 +154,16 @@ namespace umbriel {
         }
       }));
       return fields;
+    }
+
+    // One animation event: its effect, whether it runs, `extra` keys of its own, and its timeline.
+    template <typename E> registry::Fields<E> eventFields(registry::Fields<E> extra) {
+      registry::Fields<E> fields{
+          effectField("effect", &E::effect, EffectKind::Animation),
+          registry::boolean("enabled", &E::enabled),
+      };
+      std::ranges::move(extra, std::back_inserter(fields));
+      return timelineFields(std::move(fields));
     }
 
     template <typename E> registry::Field<E> styleField(std::initializer_list<std::string_view> styles) {
@@ -183,6 +188,8 @@ namespace umbriel {
           styleField<A::WindowsOut>({"fade", "slide", "popin", "zoom"}),
       });
       static const registry::Fields<A::WindowsMove> windowsMove = eventFields<A::WindowsMove>({});
+      static const registry::Fields<A::WindowsResize> windowsResize =
+          timelineFields<A::WindowsResize>({registry::boolean("enabled", &A::WindowsResize::enabled)});
       static const registry::Fields<A::Workspaces> workspaces =
           eventFields<A::Workspaces>({styleField<A::Workspaces>({"slide", "reveal"})});
       static const registry::Fields<A::Overview> overview = [] {
@@ -258,6 +265,7 @@ namespace umbriel {
           table("windows_in", &A::windowsIn, windowsIn),
           table("windows_out", &A::windowsOut, windowsOut),
           table("windows_move", &A::windowsMove, windowsMove),
+          table("windows_resize", &A::windowsResize, windowsResize),
           table("workspaces", &A::workspaces, workspaces),
           table("overview", &A::overview, overview),
           table("scratchpad", &A::scratchpad, scratchpad),

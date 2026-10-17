@@ -499,14 +499,14 @@ namespace umbriel {
       return;
     }
     const auto& animation = config().animation;
-    const auto& move = animation.windowsMove;
-    if (!animation.enabled || !move.enabled) {
+    const auto& resize = animation.windowsResize;
+    if (!animation.enabled || !resize.enabled) {
       m_presentation.setSize(width, height);
       m_presentation.snapTo(width, height);
       applyPresentedSize();
       return;
     }
-    m_presentation.animateTo(width, height, move.durationMs, move.curve);
+    m_presentation.animateTo(width, height, resize.durationMs, resize.curve);
     scheduleFrame();
   }
 

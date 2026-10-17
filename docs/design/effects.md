@@ -611,7 +611,8 @@ lifecycle continues independently.
 A layout-sized view is presented at its animated size by stretching its latest
 committed buffer into the presented box (`croppedSourceBox`). There is no
 second layer: the client's redraw at its requested size replaces the stretched
-frame directly while `windows_move` animates the box.
+frame directly, and the size animation runs on `windows_resize` while the
+position follows `windows_move`.
 
 When movement completes, `completeLayoutMotion` keeps the compositor-owned
 endpoint until both the configure serial and committed content dimensions

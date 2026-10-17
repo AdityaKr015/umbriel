@@ -751,7 +751,11 @@ namespace umbriel {
     UMBRIEL_ZONE("View::handleCommit");
     if (m_resizeCrossfade.pending()) {
       const auto& move = config().animation.windowsMove;
-      m_resizeCrossfade.start(move.durationMs, move.curve);
+      const int targetWidth = m_tiledSizeRequest ? m_tiledSizeRequest->width : m_presentedBox.width;
+      const int targetHeight = m_tiledSizeRequest ? m_tiledSizeRequest->height : m_presentedBox.height;
+      m_resizeCrossfade.start(
+          move.durationMs, move.curve, m_presentedBox.width, m_presentedBox.height, targetWidth, targetHeight
+      );
       m_resizeCrossfade.applyOpacity(effectiveOpacity());
       scheduleFrame();
     }

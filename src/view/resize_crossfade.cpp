@@ -5,6 +5,7 @@
 // clang-format off
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include "wlr.h"
 // clang-format on
 
@@ -15,6 +16,11 @@ namespace umbriel {
     bool rejectInput(wlr_scene_buffer* /*buffer*/, double* /*sx*/, double* /*sy*/) { return false; }
 
     int scaled(int value, double factor) { return static_cast<int>(std::lround(value * factor)); }
+
+    // Chebyshev distance between two sizes: the axis that still has the furthest to go.
+    int sizeDistance(int width, int height, int targetWidth, int targetHeight) {
+      return std::max(std::abs(width - targetWidth), std::abs(height - targetHeight));
+    }
 
   } // namespace
 
@@ -96,19 +102,27 @@ namespace umbriel {
     present(width, height);
   }
 
-  void ResizeCrossfade::start(int durationMs, const AnimationCurve& curve) {
+  void ResizeCrossfade::start(
+      int durationMs, const AnimationCurve& curve, int presentedWidth, int presentedHeight, int targetWidth,
+      int targetHeight
+  ) {
     if (!pending()) {
       return;
     }
     m_fading = true;
+    m_targetWidth = targetWidth;
+    m_targetHeight = targetHeight;
+    m_travel = sizeDistance(presentedWidth, presentedHeight, targetWidth, targetHeight);
     m_fade.snap(1.0);
-    m_fade.retarget(0.0, durationMs, curve);
+    if (m_travel == 0) {
+      m_fade.retarget(0.0, durationMs, curve);
+    }
     wlr_scene_node_set_enabled(&m_tree->node, true);
     applyBufferOpacity();
   }
 
   bool ResizeCrossfade::tick(uint64_t nowMsec) {
-    if (!active() || !m_fade.tick(nowMsec)) {
+    if (!active() || followsSize() || !m_fade.tick(nowMsec)) {
       return false;
     }
     if (!m_fade.animating()) {
@@ -122,6 +136,15 @@ namespace umbriel {
   void ResizeCrossfade::present(int width, int height) {
     if (m_tree == nullptr || width <= 0 || height <= 0) {
       return;
+    }
+    if (followsSize()) {
+      const int left = sizeDistance(width, height, m_targetWidth, m_targetHeight);
+      if (left == 0) {
+        discard();
+        return;
+      }
+      m_fade.snap(std::min(1.0, static_cast<double>(left) / m_travel));
+      applyBufferOpacity();
     }
     const double scaleX = static_cast<double>(width) / m_capturedWidth;
     const double scaleY = static_cast<double>(height) / m_capturedHeight;
@@ -158,6 +181,7 @@ namespace umbriel {
   }
 
   void ResizeCrossfade::discard() {
+    m_travel = 0;
     m_buffers.clear();
     m_fading = false;
     m_fade.snap(1.0);

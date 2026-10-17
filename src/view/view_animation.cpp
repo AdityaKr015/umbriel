@@ -908,6 +908,10 @@ namespace umbriel {
       setFadeAlpha(m_fadeAlpha);
       active = active || m_focusDim.animating();
     }
+    // A size-following fade ends with the size animation; one cancelled short of its target ends it here.
+    if (m_resizeCrossfade.followsSize() && !sizeAnimating()) {
+      m_resizeCrossfade.discard();
+    }
     if (m_resizeCrossfade.tick(nowMsec)) {
       active = true;
     }

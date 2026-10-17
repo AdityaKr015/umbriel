@@ -161,6 +161,7 @@ namespace umbriel {
     bool start(const char* startupCmd = nullptr);
     void run();
     void stop();
+    void requestSessionExit();
     [[nodiscard]] bool stopping() const { return m_stopping; }
 
     [[nodiscard]] wl_display* display() const { return m_display; }
@@ -843,10 +844,16 @@ namespace umbriel {
     bool m_nested = false;
     bool m_stopping = false;
     bool m_applicationScopesRequired = false;
+    bool m_sessionShutdownAvailable = false;
+    bool m_sessionExitRequested = false;
+    int m_sessionExitResultFd = -1;
+    wl_event_source* m_sessionExitResultSource = nullptr;
     std::string m_socketName;
     std::string m_systemdRunExecutable;
+    std::string m_systemctlExecutable;
     std::string m_applicationScopePartOfProperty;
     std::string m_applicationScopeBindsToProperty;
+    std::string m_applicationScopeAfterProperty;
     SystemdControlEnvironment m_systemdControlEnvironment;
     ApplicationScopeEnvironmentArguments m_applicationScopeEnvironmentArguments;
     uint64_t m_nextApplicationScopeId = 1;

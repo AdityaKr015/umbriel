@@ -200,6 +200,7 @@ namespace umbriel {
           boolean("default_pinned", &W::defaultPinned),
           boolean("focus_on_activate", &W::focusOnActivate),
           boolean("confine_pointer", &W::confinePointer),
+          boolean("background_render", &W::backgroundRender),
           boolean("tearing", &W::allowTearing),
           boolean("blur", &W::blur),
           boolean("blur_popups", &W::blurPopups),

@@ -689,6 +689,10 @@ namespace umbriel {
       m_ruleOpacity = newOpacity;
       setFadeAlpha(m_fadeAlpha); // refresh effective opacity
     }
+    if (const bool backgroundRender = rule.backgroundRender.value_or(false); backgroundRender != m_backgroundRender) {
+      m_backgroundRender = backgroundRender;
+      m_server->scheduleSuspensionSync();
+    }
     m_presentation.setFullscreenOpaque(fullscreenOpaque());
     updateBlur();
     // updateBlur creates the full node box. Re-apply the owning output's clip immediately, because focus, title, and

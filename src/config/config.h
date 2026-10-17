@@ -423,6 +423,9 @@ namespace umbriel {
     std::optional<bool> defaultPinned;
     std::optional<bool> focusOnActivate;
     std::optional<bool> confinePointer;
+    // Keep a hidden window unsuspended and pace its frame callbacks at its output's refresh rate, for clients whose
+    // non-rendering work stalls without them.
+    std::optional<bool> backgroundRender;
     std::optional<VrrMode> vrr;
     // Overrides the client's tearing-control hint. Omitted follows the hint,
     // true forces async preference, and false vetoes it.
@@ -481,6 +484,7 @@ namespace umbriel {
           && defaultPinned == other.defaultPinned
           && focusOnActivate == other.focusOnActivate
           && confinePointer == other.confinePointer
+          && backgroundRender == other.backgroundRender
           && vrr == other.vrr
           && allowTearing == other.allowTearing
           && hdr == other.hdr
@@ -524,6 +528,7 @@ namespace umbriel {
     std::optional<bool> defaultPinned;
     std::optional<bool> focusOnActivate;
     std::optional<bool> confinePointer;
+    std::optional<bool> backgroundRender;
     std::optional<VrrMode> vrr;
     std::optional<bool> allowTearing;
     std::optional<HdrMode> hdr;

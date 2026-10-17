@@ -286,6 +286,11 @@ default_pinned = true
 # match.app_id = "^steam_app_.*$"
 # confine_pointer = true
 
+# Keep an application drawing while it is hidden on another workspace, for programs whose other work stalls without it.
+# [[window_rule]]
+# match.app_id = "^obs$"
+# background_render = true
+
 # Named scratchpads can launch an application when toggled while empty.
 # [[scratchpad]]
 # name = "music"

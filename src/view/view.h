@@ -141,6 +141,9 @@ namespace umbriel {
     // Effective optional window-rule override used by tearing diagnostics.
     [[nodiscard]] std::optional<bool> tearingRuleOverride();
     [[nodiscard]] bool confinePointer();
+    // A `background_render` rule applies: while hidden, the window stays unsuspended and gets frame callbacks at its
+    // output's refresh rate.
+    [[nodiscard]] bool backgroundRender() const { return m_backgroundRender; }
     [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
@@ -908,6 +911,7 @@ namespace umbriel {
     bool m_initialTitleRulesSettled = false;
     bool m_initialContentTypeRulesSettled = false;
     float m_ruleOpacity = 1.0F;
+    bool m_backgroundRender = false;
     float m_dragOpacity = 1.0F;
     float m_overviewOpacity = 1.0F;
     // wlroots restores a committed scene buffer to the client-provided alpha. Root and subsurface watches set this so

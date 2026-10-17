@@ -327,6 +327,9 @@ namespace umbriel {
       if (rule.confinePointer) {
         resolved.confinePointer = rule.confinePointer;
       }
+      if (rule.backgroundRender) {
+        resolved.backgroundRender = rule.backgroundRender;
+      }
       if (rule.focusOnActivate) {
         resolved.focusOnActivate = rule.focusOnActivate;
       }

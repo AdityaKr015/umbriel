@@ -818,9 +818,13 @@ namespace umbriel {
     clock_gettime(CLOCK_MONOTONIC, &now);
 
     for (const auto& view : self->m_registry.all()) {
-      // A presented view gets its callbacks from the outputs that draw it, including the outgoing workspace mid-slide.
-      // A suspended one gets them only to commit a configure it still owes, such as a resize while hidden.
-      if (!view->mapped() || view->presented() || (view->suspended() && !view->configureOutstanding())) {
+      // A presented view gets its callbacks from the outputs that draw it, including the outgoing workspace mid-slide,
+      // and a background_render view from its own faster tick. A suspended one gets them only to commit a configure it
+      // still owes, such as a resize while hidden.
+      if (!view->mapped()
+          || view->presented()
+          || view->backgroundRender()
+          || (view->suspended() && !view->configureOutstanding())) {
         continue;
       }
       view->forEachSurface(
@@ -835,6 +839,57 @@ namespace umbriel {
       wl_event_source_timer_update(self->m_backgroundFrameTimer, kBackgroundFrameIntervalMs);
     }
     return 0;
+  }
+
+  namespace {
+    // A hidden background_render window's callback interval: its output's refresh period, or 60 Hz when the output
+    // reports none (headless and nested outputs).
+    int backgroundRenderIntervalMs(const View& view) {
+      const Output* output = view.currentOutput();
+      const int refreshMhz = output != nullptr ? output->wlr()->refresh : 0;
+      if (refreshMhz <= 0) {
+        return 16;
+      }
+      return std::max(1, (1'000'000 + refreshMhz / 2) / refreshMhz);
+    }
+
+    bool needsBackgroundRender(const View& view) {
+      return view.mapped() && view.backgroundRender() && !view.presented();
+    }
+  } // namespace
+
+  int Server::onBackgroundRenderTimer(void* data) {
+    auto* self = static_cast<Server*>(data);
+    timespec now{};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    for (const auto& view : self->m_registry.all()) {
+      if (!needsBackgroundRender(*view)) {
+        continue;
+      }
+      view->forEachSurface(
+          [](wlr_surface* surface, int /*sx*/, int /*sy*/, void* userData) {
+            wlr_surface_send_frame_done(surface, static_cast<timespec*>(userData));
+          },
+          &now
+      );
+    }
+    self->armBackgroundRenderTimer();
+    return 0;
+  }
+
+  void Server::armBackgroundRenderTimer() {
+    if (m_backgroundRenderTimer == nullptr) {
+      return;
+    }
+    int interval = 0;
+    for (const auto& view : m_registry.all()) {
+      if (needsBackgroundRender(*view)) {
+        const int candidate = backgroundRenderIntervalMs(*view);
+        interval = interval == 0 ? candidate : std::min(interval, candidate);
+      }
+    }
+    // Zero disarms the timer.
+    wl_event_source_timer_update(m_backgroundRenderTimer, interval);
   }
 
   void Server::scheduleSuspensionSync() {
@@ -853,10 +908,11 @@ namespace umbriel {
     for (const auto& view : server->m_registry.all()) {
       view->syncSuspendedState();
     }
+    server->armBackgroundRenderTimer();
   }
 
   bool Server::viewRenderedOffscreen(const View& view) const {
-    if (m_overview != nullptr && m_overview->presentsLive(&view)) {
+    if (view.backgroundRender() || (m_overview != nullptr && m_overview->presentsLive(&view))) {
       return true;
     }
     return view.m_captureSource != nullptr

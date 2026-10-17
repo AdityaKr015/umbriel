@@ -333,8 +333,8 @@ namespace umbriel {
     // Re-derive every toplevel's suspended state once the current dispatch settles, so a transition that hides and
     // shows a window within one dispatch never reaches the client.
     void scheduleSuspensionSync();
-    // True while something draws `view`'s content off the shared scene (an overview card or a toplevel capture), so
-    // its client must keep drawing although its frame is hidden.
+    // True while `view`'s client must keep drawing although its frame is hidden: an overview card or a toplevel capture
+    // draws its content off the shared scene, or a `background_render` rule asks for it.
     [[nodiscard]] bool viewRenderedOffscreen(const View& view) const;
     // Lock the next group on one physical keyboard, then synchronize matching
     // named layouts across the remaining keyboards.
@@ -528,6 +528,10 @@ namespace umbriel {
     static void onRendererLost(wl_listener* listener, void* data);
     static void onRendererRecoveryIdle(void* data);
     static int onBackgroundFrameTimer(void* data);
+    static int onBackgroundRenderTimer(void* data);
+    // Arms the background-render tick for the fastest refresh among hidden `background_render` windows, or disarms it
+    // when there are none.
+    void armBackgroundRenderTimer();
     static int onStartupRulesTimer(void* data);
     static int onTerminateSignal(int signal, void* data);
     static void onIpcWindowsIdle(void* data);
@@ -849,6 +853,8 @@ namespace umbriel {
 
     std::unique_ptr<Xwayland> m_xwayland;
     wl_event_source* m_backgroundFrameTimer = nullptr;
+    // Paces hidden `background_render` windows at their output's refresh rate; disarmed while none is hidden.
+    wl_event_source* m_backgroundRenderTimer = nullptr;
     // One-shot refresh when dynamic startup rules expire.
     wl_event_source* m_startupRulesTimer = nullptr;
     // Non-null while a windows-event idle callback is pending. The idle source

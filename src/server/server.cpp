@@ -853,6 +853,10 @@ namespace umbriel {
       wl_event_source_remove(m_backgroundFrameTimer);
       m_backgroundFrameTimer = nullptr;
     }
+    if (m_backgroundRenderTimer != nullptr) {
+      wl_event_source_remove(m_backgroundRenderTimer);
+      m_backgroundRenderTimer = nullptr;
+    }
     if (m_startupRulesTimer != nullptr) {
       wl_event_source_remove(m_startupRulesTimer);
       m_startupRulesTimer = nullptr;
@@ -991,6 +995,9 @@ namespace umbriel {
     if (m_backgroundFrameTimer != nullptr) {
       wl_event_source_timer_update(m_backgroundFrameTimer, kBackgroundFrameIntervalMs);
     }
+    // Armed only while a hidden window has a background_render rule (see Server::armBackgroundRenderTimer).
+    m_backgroundRenderTimer =
+        wl_event_loop_add_timer(wl_display_get_event_loop(m_display), onBackgroundRenderTimer, this);
     setenv(
         "UMBRIEL_SOCKET",
         (std::string(std::getenv("XDG_RUNTIME_DIR") ?: "") + "/umbriel-" + m_socketName + ".sock").c_str(), true

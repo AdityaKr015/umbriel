@@ -1316,4 +1316,23 @@ UMBRIEL_TEST(pointerConfinementLastMatchingRuleWins) {
   CHECK(resolve(false).confinePointer.value_or(false));
 }
 
+UMBRIEL_TEST(backgroundRenderLastMatchingRuleWins) {
+  Config config;
+  const auto resolve = [&](std::string_view appId) {
+    return umbriel::resolveWindowRules(config, appId, "video", std::nullopt, ContentType::None, {}, 0);
+  };
+  CHECK(!resolve("firefox").backgroundRender.has_value());
+  WindowRule enabled;
+  enabled.appIdPatterns.add("^firefox$");
+  enabled.backgroundRender = true;
+  config.windowRules.push_back(enabled);
+  CHECK(resolve("firefox").backgroundRender.value_or(false));
+  CHECK(!resolve("kitty").backgroundRender.has_value());
+  WindowRule disabled;
+  disabled.backgroundRender = false;
+  config.windowRules.push_back(disabled);
+  CHECK(resolve("firefox").backgroundRender.has_value());
+  CHECK(!*resolve("firefox").backgroundRender);
+}
+
 int main() { return RUN_TESTS(); }

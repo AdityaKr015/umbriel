@@ -370,7 +370,8 @@ namespace umbriel {
     [[nodiscard]] bool dynamic() const { return m_dynamic; }
     [[nodiscard]] Workspace* workspaceAt(size_t index) const;
     [[nodiscard]] Workspace* workspaceAtClamped(size_t index) const;
-    // Match an explicit name only. Anonymous numeric labels are positions.
+    // Match an explicit name only, preferring native workspaces over temporary refugees. Multiple refugees with the
+    // same name are ambiguous and return null. Anonymous numeric labels are positions.
     [[nodiscard]] Workspace* workspaceNamed(std::string_view name) const;
     [[nodiscard]] Workspace* workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const;
     [[nodiscard]] size_t workspaceCount() const { return m_workspaces.size(); }
@@ -387,8 +388,8 @@ namespace umbriel {
     // Acquire a destination for moving every window from another workspace. Static groups reuse their highest empty
     // configured workspace without changing its identity; dynamic groups use the ordinary create behavior.
     Workspace* transferDestination();
-    // Acquire an anonymous temporary workspace for one absent home, including on a fixed output. Its original
-    // identity is kept separately, so duplicate configured names never alias the refuge output's native workspaces.
+    // Acquire a temporary workspace for one absent home, including on a fixed output. Explicit names survive, while
+    // anonymous workspaces use their new numeric position. Original identities keep matching names separate.
     Workspace* displacedDestination(std::shared_ptr<const DisplacedWorkspace> origin);
     // Insert an empty numbered workspace into a dynamic group and renumber the following workspaces. Static configured
     // groups cannot be extended this way and return null.

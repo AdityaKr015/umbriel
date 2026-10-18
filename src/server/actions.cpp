@@ -83,90 +83,38 @@ namespace umbriel {
       return true;
     }
 
-    std::string workspaceNameToken(std::string_view name) {
-      const bool needsQuotes =
-          !name.empty() && std::ranges::all_of(name, [](char value) { return value >= '0' && value <= '9'; });
-      return needsQuotes ? "\"" + std::string(name) + "\"" : std::string(name);
-    }
-
-    // Resolve a typed workspace reference against the current output layout. Indices stay on the preferred output;
-    // names resolve globally, using that output only to disambiguate duplicates. An output qualifier confines either
-    // kind to exactly one group.
+    // Positions stay on the selected output; names follow a displaced workspace's original output when qualified.
     std::expected<Workspace*, std::string> resolveWorkspaceSelector(Server& server, const Keybind& bind) {
       const auto* selector = payloadIf<WorkspaceArg>(bind);
       if (selector == nullptr) {
         return std::unexpected(std::string("action carries no workspace selector"));
+      }
+      Output* preferred = server.outputFromWlr(server.preferredOutput());
+      WorkspaceGroup* group = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
+      if (const auto* name = std::get_if<WorkspaceName>(&selector->reference)) {
+        return server.resolveNamedWorkspace(name->value, group, selector->output);
       }
       if (!selector->output.empty()) {
         Output* output = server.outputFromName(selector->output);
         if (output == nullptr) {
           return std::unexpected("unknown output: " + selector->output);
         }
-        WorkspaceGroup* group = output->workspaceGroup();
+        group = output->workspaceGroup();
         if (group == nullptr) {
           return std::unexpected("output has no workspace group: " + selector->output);
         }
-        Workspace* target = nullptr;
-        std::string reference;
-        if (const auto* index = std::get_if<WorkspaceIndex>(&selector->reference)) {
-          reference = std::to_string(index->value);
-          if (index->value > 0) {
-            target = group->workspaceAtClamped(index->value - 1);
-          }
-        } else if (const auto* name = std::get_if<WorkspaceName>(&selector->reference)) {
-          reference = name->value;
-          target = group->workspaceNamed(name->value);
-        }
-        if (target == nullptr) {
-          return std::unexpected("unknown workspace on output " + selector->output + ": " + reference);
-        }
-        return target;
       }
-
-      Output* preferred = server.outputFromWlr(server.preferredOutput());
-      WorkspaceGroup* preferredGroup = preferred != nullptr ? preferred->workspaceGroup() : nullptr;
-
-      if (const auto* index = std::get_if<WorkspaceIndex>(&selector->reference)) {
-        Workspace* target = index->value > 0 && preferredGroup != nullptr
-            ? preferredGroup->workspaceAtClamped(index->value - 1)
-            : nullptr;
-        if (target == nullptr) {
-          return std::unexpected("unknown workspace position: " + std::to_string(index->value));
-        }
-        return target;
-      }
-
-      const auto* name = std::get_if<WorkspaceName>(&selector->reference);
-      if (name == nullptr) {
+      const auto* index = std::get_if<WorkspaceIndex>(&selector->reference);
+      if (index == nullptr) {
         return std::unexpected(std::string("action carries an invalid workspace selector"));
       }
-
-      Workspace* target = nullptr;
-      bool ambiguous = false;
-      for (const auto& output : server.outputs()) {
-        WorkspaceGroup* group = output->workspaceGroup();
-        Workspace* match = group != nullptr ? group->workspaceNamed(name->value) : nullptr;
-        if (match == nullptr) {
-          continue;
-        }
-        if (target != nullptr) {
-          ambiguous = true;
-        } else {
-          target = match;
-        }
-      }
-
+      Workspace* target = index->value > 0 && group != nullptr ? group->workspaceAtClamped(index->value - 1) : nullptr;
       if (target == nullptr) {
-        return std::unexpected("unknown workspace: " + name->value);
-      }
-
-      if (ambiguous) {
-        Workspace* preferredMatch = preferredGroup != nullptr ? preferredGroup->workspaceNamed(name->value) : nullptr;
-        if (preferredMatch == nullptr) {
-          const std::string token = workspaceNameToken(name->value);
-          return std::unexpected("ambiguous workspace: " + name->value + " (qualify it as " + token + "/<output>)");
-        }
-        return preferredMatch;
+        return std::unexpected(
+            selector->output.empty()
+                ? "unknown workspace position: " + std::to_string(index->value)
+                : "unknown workspace on output " + selector->output + ": " + std::to_string(index->value)
+        );
       }
       return target;
     }

@@ -10,8 +10,8 @@
 
 namespace umbriel {
 
-  // Own the monitor identity while its Output is absent. Temporary refuge workspaces use their current numeric
-  // position for selection, while layout rules and returning windows retain this original workspace identity.
+  // Own the monitor identity while its Output is absent. Temporary refuge workspaces retain explicit names, while
+  // anonymous ones use their current numeric position. Layout rules and returning windows retain the original home.
   struct DisplacedWorkspace {
     std::string outputName;
     std::string outputMake;

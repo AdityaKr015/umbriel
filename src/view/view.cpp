@@ -79,6 +79,20 @@ namespace umbriel {
     }
 
     WorkspaceGroup* windowRuleWorkspaceGroup(Server& server, const ResolvedWindowRule& rule, WorkspaceGroup* fallback) {
+      if (rule.defaultWorkspace) {
+        if (const auto* name = std::get_if<WorkspaceName>(&*rule.defaultWorkspace)) {
+          if (const auto target =
+                  server.resolveNamedWorkspace(name->value, fallback, rule.defaultOutput.value_or(""))) {
+            return (*target)->group();
+          }
+          if (rule.defaultOutput) {
+            if (Output* output = server.outputFromName(*rule.defaultOutput); output != nullptr) {
+              return output->workspaceGroup();
+            }
+          }
+          return fallback;
+        }
+      }
       Output* targetOutput = nullptr;
       if (rule.defaultOutput) {
         targetOutput = server.outputFromName(*rule.defaultOutput);
@@ -86,26 +100,6 @@ namespace umbriel {
         const OutputRule* owner = nullptr;
         if (const auto* position = std::get_if<WorkspaceIndex>(&*rule.defaultWorkspace)) {
           owner = uniqueFixedWorkspaceOwner(config(), position->value - 1);
-        } else if (const auto* name = std::get_if<WorkspaceName>(&*rule.defaultWorkspace)) {
-          WorkspaceGroup* match = nullptr;
-          bool ambiguous = false;
-          for (const auto& output : server.outputs()) {
-            WorkspaceGroup* group = output->workspaceGroup();
-            if (group == nullptr || group->workspaceNamed(name->value) == nullptr) {
-              continue;
-            }
-            if (match != nullptr) {
-              ambiguous = true;
-            } else {
-              match = group;
-            }
-          }
-          if (!ambiguous && match != nullptr) {
-            return match;
-          }
-          if (ambiguous && fallback != nullptr && fallback->workspaceNamed(name->value) != nullptr) {
-            return fallback;
-          }
         }
         if (owner != nullptr) {
           targetOutput = server.outputFromName(owner->name);
@@ -125,7 +119,14 @@ namespace umbriel {
         if (const auto* position = std::get_if<WorkspaceIndex>(&*rule.defaultWorkspace)) {
           ruleTarget = group->workspaceAtClamped(position->value - 1);
         } else if (const auto* name = std::get_if<WorkspaceName>(&*rule.defaultWorkspace)) {
-          ruleTarget = group->workspaceNamed(name->value);
+          if (rule.defaultOutput) {
+            if (const auto resolved = group->server()->resolveNamedWorkspace(name->value, group, *rule.defaultOutput);
+                resolved && (*resolved)->group() == group) {
+              ruleTarget = *resolved;
+            }
+          } else {
+            ruleTarget = group->workspaceNamed(name->value);
+          }
         }
         if (ruleTarget != nullptr) {
           target = ruleTarget;

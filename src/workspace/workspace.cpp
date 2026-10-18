@@ -2524,7 +2524,7 @@ namespace umbriel {
     std::vector<std::string> claimed;
     claimed.reserve(desired.size());
     for (const auto& workspace : m_workspaces) {
-      if (!workspace->named()) {
+      if (workspace->displacedWorkspace() || !workspace->named()) {
         continue;
       }
       const bool wanted = std::ranges::find(desired, workspace->name()) != desired.end();
@@ -2643,7 +2643,10 @@ namespace umbriel {
     for (auto& workspace : temporary) {
       if ((workspace->hasViews() || workspace->launchReserved()) && next.size() < kMaxWorkspaces) {
         const size_t index = next.size();
-        workspace->rename(std::to_string(index + 1), index, false);
+        const auto& origin = workspace->displacedWorkspace();
+        workspace->rename(
+            origin->workspaceNamed ? origin->workspaceName : std::to_string(index + 1), index, origin->workspaceNamed
+        );
         next.push_back(std::move(workspace));
       } else {
         excessTemporary += workspace->hasViews() ? 1 : 0;
@@ -2913,12 +2916,20 @@ namespace umbriel {
   }
 
   Workspace* WorkspaceGroup::workspaceNamed(std::string_view name) const {
+    Workspace* displaced = nullptr;
+    bool ambiguous = false;
     for (const auto& entry : m_workspaces) {
       if (entry->named() && entry->name() == name) {
-        return entry.get();
+        if (!entry->displacedWorkspace()) {
+          return entry.get();
+        }
+        if (displaced != nullptr) {
+          ambiguous = true;
+        }
+        displaced = entry.get();
       }
     }
-    return nullptr;
+    return ambiguous ? nullptr : displaced;
   }
 
   Workspace* WorkspaceGroup::workspaceFromHandle(wlr_ext_workspace_handle_v1* handle) const {
@@ -3312,8 +3323,11 @@ namespace umbriel {
       return nullptr;
     }
     const size_t index = m_workspaces.size();
-    auto workspace =
-        createConfiguredWorkspace({std::to_string(index + 1), false, displacedWorkspaceLayout(*origin)}, index);
+    auto workspace = createConfiguredWorkspace(
+        {origin->workspaceNamed ? origin->workspaceName : std::to_string(index + 1), origin->workspaceNamed,
+         displacedWorkspaceLayout(*origin)},
+        index
+    );
     workspace->m_displacedWorkspace = std::move(origin);
     if (workspace->m_displacedWorkspace->configGeneration == configStore().generation()) {
       workspace->m_layoutModeOverride = workspace->m_displacedWorkspace->layoutModeOverride;

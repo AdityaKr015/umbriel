@@ -57,8 +57,8 @@ snapshot() {
 }
 
 refuge_inventory() {
-  "$UMBRIEL" workspaces --json | jq -c \
-    '[.[] | select(.output == "HEADLESS-2" and .named) |
+  "$UMBRIEL" workspaces --json | jq -c --argjson native "$REFUGE_IDS" \
+    '[.[] | select(.id as $id | $native | index($id)) |
       {id, name, named, index, layout, layout_override}] | sort_by(.index)'
 }
 
@@ -102,8 +102,8 @@ assert_evacuated() {
   workspaces=$("$UMBRIEL" workspaces --json)
   if ! jq -e --arg code "$code" --arg web "$web" '
     ([.[] | select(.output == "HEADLESS-2")] | length) == 4 and
-    any(.[]; .id == $code and .named == false and .index > 2 and .layout == "scrolling") and
-    any(.[]; .id == $web and .named == false and .index > 2 and .layout == "dwindle")
+    any(.[]; .id == $code and .named and .name == "code" and .index > 2 and .layout == "scrolling") and
+    any(.[]; .id == $web and .named and .name == "web" and .index > 2 and .layout == "dwindle")
   ' <<< "$workspaces" > /dev/null; then
     echo "$phase did not keep the source layouts in separate temporary members: $workspaces"
     return 1
@@ -169,6 +169,7 @@ spawn evac-web-second web/HEADLESS-1 6
 readonly CODE_BOXES="$(snapshot evac-code- 0)"
 readonly WEB_BOXES="$(snapshot evac-web- 0)"
 readonly REFUGE_BOX="$(snapshot refuge-code 0)"
+REFUGE_IDS="$("$UMBRIEL" workspaces --json | jq -c '[.[] | select(.output == "HEADLESS-2") | .id]')"
 readonly REFUGE_INVENTORY="$(refuge_inventory)"
 readonly REFUGE_CONFIGURATION="$(refuge_configuration)"
 
@@ -195,6 +196,7 @@ assert_restored reenable true
 "$UMBRIEL" output-destroy HEADLESS-1 > /dev/null
 "$UMBRIEL" output-destroy HEADLESS-2 > /dev/null
 "$UMBRIEL" output-create HEADLESS-2 > /dev/null
+REFUGE_IDS="$("$UMBRIEL" workspaces --json | jq -c '[.[] | select(.output == "HEADLESS-2" and .index <= 2) | .id]')"
 assert_evacuated refuge-first false
 "$UMBRIEL" output-create HEADLESS-1 > /dev/null
 assert_restored all-output-recreation false

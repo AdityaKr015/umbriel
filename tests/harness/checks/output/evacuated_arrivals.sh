@@ -108,7 +108,7 @@ if ! jq -e --arg moved "$MOVED_HOME" --arg local "$LOCAL_HOME" '
   exit 1
 fi
 if ! jq -e --arg refuge "$REFUGE" '
-  any(.[]; .id == $refuge and .named == false and .occupied == false and .window_count == 0)
+  any(.[]; .id == $refuge and .named and .name == "origin" and .occupied == false and .window_count == 0)
 ' <<< "$workspaces" > /dev/null; then
   echo "pending launch did not preserve the emptied temporary workspace: $workspaces"
   exit 1

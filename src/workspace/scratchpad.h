@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -26,6 +27,8 @@ namespace umbriel {
   class Server;
   class View;
   class Workspace;
+  struct DisplacedWorkspace;
+  struct WorkspaceLaunchAnchor;
   class ScratchpadManager : public Animatable {
   public:
     ScratchpadManager(Server& server, wlr_scene_tree* root);
@@ -121,6 +124,9 @@ namespace umbriel {
       std::string returnWorkspace;
       size_t returnWorkspaceIndex = 0;
       bool returnWorkspaceNamed = false;
+      // A refuge can share its name with a native workspace and can be pruned while its last view is in a scratchpad.
+      std::weak_ptr<WorkspaceLaunchAnchor> returnWorkspaceAnchor;
+      std::shared_ptr<const DisplacedWorkspace> returnDisplacedWorkspace;
       bool returnTiled = false;
     };
 

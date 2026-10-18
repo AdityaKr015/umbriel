@@ -19,6 +19,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <expected>
 #include <memory>
 #include <optional>
 #include <span>
@@ -415,6 +416,15 @@ namespace umbriel {
     [[nodiscard]] wlr_output* preferredOutput() const;
     [[nodiscard]] Output* outputFromWlr(wlr_output* output) const;
     [[nodiscard]] Output* outputFromName(const std::string& name) const;
+    // Named workspaces on enabled outputs, with native local names taking precedence over displaced ones. A qualifier
+    // for an unavailable output identifies a displaced workspace's original output; positions remain output-local.
+    [[nodiscard]] std::expected<Workspace*, std::string> resolveNamedWorkspace(
+        std::string_view name, WorkspaceGroup* preferred = nullptr, std::string_view output = {}
+    ) const;
+    // Acquire a temporary destination for an absent workspace, including when a scratchpad return outlives its refuge.
+    Workspace* displacedWorkspaceDestination(
+        const std::shared_ptr<const DisplacedWorkspace>& home, Output* preferred, Output* excluded = nullptr
+    );
     [[nodiscard]] wlr_box usableAreaAt(double lx, double ly) const;
     void updateOutputManagerConfig();
     // Change logical desktop membership through the same atomic transaction as
@@ -621,9 +631,6 @@ namespace umbriel {
     void rememberOutputEnableOverride(const Output& output, bool enabled);
     void restoreDisplacedViews();
     void refreshDisplacedWorkspace(Workspace& workspace);
-    Workspace* displacedWorkspaceDestination(
-        const std::shared_ptr<const DisplacedWorkspace>& home, Output* preferred, Output* excluded = nullptr
-    );
     [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 
     struct IdleInhibitorWatch {

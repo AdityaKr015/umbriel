@@ -271,10 +271,16 @@ namespace umbriel {
       entry.returnWorkspace.clear();
       entry.returnWorkspaceIndex = 0;
       entry.returnWorkspaceNamed = false;
+      entry.returnWorkspaceAnchor.reset();
+      entry.returnDisplacedWorkspace.reset();
       if (workspace != nullptr) {
         entry.returnWorkspace = workspace->name();
         entry.returnWorkspaceIndex = workspace->index();
         entry.returnWorkspaceNamed = workspace->named();
+        if (workspace->displacedWorkspace()) {
+          entry.returnWorkspaceAnchor = workspace->reserveForLaunch();
+          entry.returnDisplacedWorkspace = workspace->displacedWorkspace();
+        }
         if (workspace->group() != nullptr && workspace->group()->output() != nullptr) {
           output = workspace->group()->output();
         }
@@ -330,6 +336,8 @@ namespace umbriel {
           .returnWorkspace = {},
           .returnWorkspaceIndex = 0,
           .returnWorkspaceNamed = false,
+          .returnWorkspaceAnchor = {},
+          .returnDisplacedWorkspace = nullptr,
           .returnTiled = options.restoreTiled.value_or(view->tiled()),
       };
       Workspace* previous = options.restoreWorkspace != nullptr ? options.restoreWorkspace : view->workspace();
@@ -1140,9 +1148,60 @@ namespace umbriel {
       restoreOutput = scratchpadOutput;
     }
     Workspace* workspace = nullptr;
+    const auto& origin = entry.returnDisplacedWorkspace;
+    bool homeAvailable = false;
+    if (origin) {
+      Output* homeOutput = m_server->outputFromName(origin->outputName);
+      WorkspaceGroup* homeGroup = homeOutput != nullptr ? homeOutput->workspaceGroup() : nullptr;
+      homeAvailable = homeGroup != nullptr;
+      if (homeAvailable) {
+        restoreOutput = homeOutput;
+        if (origin->workspaceNamed) {
+          workspace = homeGroup->workspaceNamed(origin->workspaceName);
+        } else {
+          if (homeGroup->dynamic()) {
+            while (homeGroup->workspaceCount() <= origin->workspaceIndex) {
+              if (homeGroup->insertDynamicWorkspace(homeGroup->workspaceCount()) == nullptr) {
+                break;
+              }
+            }
+          }
+          workspace = homeGroup->workspaceAt(origin->workspaceIndex);
+          if (homeGroup->dynamic() && workspace != nullptr && (workspace->named() || workspace->displacedWorkspace())) {
+            workspace = homeGroup->insertDynamicWorkspace(origin->workspaceIndex);
+          }
+        }
+        if (workspace != nullptr && workspace->displacedWorkspace()) {
+          workspace = nullptr;
+        }
+        if (workspace == nullptr && homeGroup->active() != nullptr && !homeGroup->active()->displacedWorkspace()) {
+          workspace = homeGroup->active();
+        }
+        for (size_t index = 0; workspace == nullptr && index < homeGroup->workspaceCount(); ++index) {
+          Workspace* candidate = homeGroup->workspaceAt(index);
+          if (!candidate->displacedWorkspace()) {
+            workspace = candidate;
+          }
+        }
+      } else {
+        if (const auto anchor = entry.returnWorkspaceAnchor.lock(); anchor != nullptr && anchor->workspace != nullptr) {
+          Workspace* saved = anchor->workspace;
+          Output* output = saved->group()->output();
+          if (saved->displacedWorkspace() && output->desktopEnabled() && output->wlr()->enabled) {
+            workspace = saved;
+          }
+        }
+        if (workspace == nullptr) {
+          workspace = m_server->displacedWorkspaceDestination(origin, restoreOutput);
+        }
+      }
+      if (workspace != nullptr) {
+        restoreOutput = workspace->group()->output();
+      }
+    }
     if (restoreOutput != nullptr && restoreOutput->workspaceGroup() != nullptr) {
       WorkspaceGroup* group = restoreOutput->workspaceGroup();
-      if (!entry.returnWorkspace.empty()) {
+      if (!origin && !entry.returnWorkspace.empty()) {
         workspace = entry.returnWorkspaceNamed ? group->workspaceNamed(entry.returnWorkspace)
                                                : group->workspaceAtClamped(entry.returnWorkspaceIndex);
         if (!entry.returnWorkspaceNamed && group->dynamic() && workspace != nullptr && workspace->named()) {
@@ -1154,6 +1213,18 @@ namespace umbriel {
       }
     }
     view->moveToWorkspace(workspace, false);
+    if (origin && !homeAvailable && !view->displacedHome()) {
+      View::DisplacedHome home;
+      home.outputName = origin->outputName;
+      home.workspaceName = origin->workspaceName;
+      home.workspaceIndex = origin->workspaceIndex;
+      home.workspaceNamed = origin->workspaceNamed;
+      home.layoutModeOverride = origin->layoutModeOverride;
+      home.configGeneration = origin->configGeneration;
+      home.workspaceOrigin = origin;
+      view->markDisplaced(std::move(home));
+      m_server->scheduleDisplacedViewRestore();
+    }
     if (entry.returnTiled) {
       view->setFloating(false);
     } else {

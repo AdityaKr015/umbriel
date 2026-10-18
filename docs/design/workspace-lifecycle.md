@@ -261,11 +261,12 @@ output identity, selector, layout snapshot, floating positions, and active
 selection before moving any views. Source reservation anchors keep dynamic
 reconciliation from deleting workspace batches during that transfer.
 
-Each populated source workspace receives an anonymous temporary member on a
-live output. `DisplacedWorkspace` owns the source identity strings, so its
-layout rules can still resolve against the original monitor and workspace
-after the physical `Output` is destroyed. Temporary labels and indices describe
-the receiving output; the saved home remains independent of those positions.
+Each populated source workspace receives a temporary member on a live output.
+Explicit source names and their `named` flag are preserved; anonymous sources
+use their receiving positions as labels. `DisplacedWorkspace` owns the source
+identity strings, so its layout rules can still resolve against the original
+monitor and workspace after the physical `Output` is destroyed. Indices
+describe the receiving output; the saved home remains independent of those positions.
 Duplicate named workspaces on different outputs therefore remain separate.
 The destination layout receives the captured topology and viewport before its
 members are moved. Pinned windows and scratchpads retain their separate
@@ -280,6 +281,21 @@ an empty temporary member alive. A new window entering that member inherits
 its original home and schedules restoration, including when the home returned
 before the delayed window mapped. Explicit movement into a native workspace
 clears that window's return record.
+
+`Server::resolveNamedWorkspace()` serves actions and window rules. It excludes
+disabled outputs, prefers a native name over displaced names within one group,
+and treats multiple displaced matches as ambiguity. A qualifier naming an
+unavailable output searches the original identities of displaced members on
+enabled outputs. Numeric selectors remain positions on a live output.
+Dynamic declaration reconciliation skips displaced members, including when a
+native declaration with the same name is added or removed during reload.
+
+Scratchpad returns from temporary workspaces retain a weak workspace anchor
+and the displaced origin. A surviving anchor selects the exact temporary
+member despite a name collision. An expired anchor allows the empty member to
+be pruned and recreated on return; if the original output has returned, the
+window rejoins its native home instead. This does not reserve an empty temporary
+workspace for the duration of a scratchpad stay.
 
 Allocation remains bounded at 64 workspaces per output. Evacuation tries the
 chosen live output, then the other enabled outputs. If none has room, it uses a
@@ -309,6 +325,11 @@ workspace selection is exercised by
 [`tests/harness/checks/workspace/selectors.sh`](../../tests/harness/checks/workspace/selectors.sh),
 including a bare position on the pointer-preferred output versus an exact
 numeric name selected with quotes.
+Preserved names, original-output qualification, dynamic name collisions,
+disabled-output rule routing, and scratchpad returns are covered by
+[`tests/harness/checks/output/evacuated_names.sh`](../../tests/harness/checks/output/evacuated_names.sh)
+and
+[`tests/harness/checks/output/evacuated_name_collisions.sh`](../../tests/harness/checks/output/evacuated_name_collisions.sh).
 Output removal, disable, reload, complete output loss, separate temporary
 membership, layout preservation, and cleanup are covered by
 [`tests/harness/checks/output/workspace_evacuation.sh`](../../tests/harness/checks/output/workspace_evacuation.sh).

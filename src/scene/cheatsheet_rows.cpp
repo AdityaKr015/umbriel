@@ -1,5 +1,7 @@
 #include "scene/cheatsheet_rows.h"
 
+#include "config/window_position.h"
+
 // clang-format off
 // See keybind_parse.cpp: <cmath> must precede the wayland chain.
 #include <cmath>
@@ -299,6 +301,28 @@ namespace {
           return name + ": " + value;
         }
         return name;
+      case umbriel::ActionArgKind::WindowMoveTo:
+        if (const auto* moveTo = umbriel::payloadIf<umbriel::WindowMoveToArg>(bind); moveTo != nullptr) {
+          std::string val(umbriel::windowPositionAnchorName(moveTo->position.anchor));
+          val += "/" + std::to_string(moveTo->position.x);
+          val += "/" + std::to_string(moveTo->position.y);
+          if (!moveTo->id.empty()) {
+            val += "/" + moveTo->id;
+          }
+          return name + ": " + val;
+        }
+        return name;
+      case umbriel::ActionArgKind::WindowMoveBy:
+        if (const auto* moveBy = umbriel::payloadIf<umbriel::WindowMoveByArg>(bind); moveBy != nullptr) {
+          std::string val;
+          val += std::to_string(moveBy->deltaX);
+          val += "/" + std::to_string(moveBy->deltaY);
+          if (!moveBy->id.empty()) {
+            val += "/" + moveBy->id;
+          }
+          return name + ": " + val;
+        }
+        return name;
       }
       return name;
     }
@@ -400,6 +424,8 @@ namespace {
     case A::WindowCycleSecondaryExtent:
     case A::WindowCycleSecondaryExtentBack:
     case A::WindowCenter:
+    case A::WindowMoveTo:
+    case A::WindowMoveBy:
     case A::LayoutScrollLeft:
     case A::LayoutScrollRight:
     case A::LayoutScrollUp:

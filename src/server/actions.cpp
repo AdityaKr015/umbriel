@@ -1302,6 +1302,33 @@ namespace umbriel {
       return true;
     }
 
+    // The window a move action names, or the focused one when it names none.
+    View* moveTarget(Server& server, const std::string& id, std::string* error) {
+      View* view = id.empty() ? focusedWindow(server) : viewByForeignIdentifier(server, id);
+      if (view == nullptr) {
+        reject(error, id.empty() ? "no focused window" : "unknown window: " + id);
+      }
+      return view;
+    }
+
+    bool actionWindowMoveTo(Server& server, const Keybind& bind, std::string* error) {
+      if (const auto* arg = payloadIf<WindowMoveToArg>(bind); arg != nullptr) {
+        if (View* view = moveTarget(server, arg->id, error)) {
+          view->moveFloatingTo(arg->position);
+        }
+      }
+      return true;
+    }
+
+    bool actionWindowMoveBy(Server& server, const Keybind& bind, std::string* error) {
+      if (const auto* arg = payloadIf<WindowMoveByArg>(bind); arg != nullptr) {
+        if (View* view = moveTarget(server, arg->id, error)) {
+          view->moveFloatingBy(arg->deltaX, arg->deltaY);
+        }
+      }
+      return true;
+    }
+
     bool actionColumnCenter(Server& server, const Keybind& /*bind*/, std::string* error) {
       if (scratchpadHoldsFocus(server)) {
         return true;
@@ -2200,6 +2227,8 @@ namespace umbriel {
         &actionWorkspaceSwapActiveOutputCycle<-1>,
         &actionModifyWidth,
         &actionWindowCenter,
+        &actionWindowMoveTo,
+        &actionWindowMoveBy,
         &actionWorkspaceSetLayout,
         &actionDpms<false>,
         &actionDpms<true>,

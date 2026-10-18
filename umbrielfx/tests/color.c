@@ -579,6 +579,14 @@ static bool test_hdr_white_point(struct fixture* fixture) {
     ok = false;
     goto out;
   }
+  const uint8_t sdr_white[4] = {255, 255, 255, 255};
+  for (size_t sample = 0; sample < 2; sample++) {
+    ok = check(
+             codes_close(baseline[sample], sdr_white, 1),
+             "returning from HDR repaints reference white and highlights as SDR white"
+         )
+        && ok;
+  }
   wlr_scene_output_set_hdr_white_point(scene_output, warm);
   if (!render_white_point_scene(fixture, scene_output, false, shown, captured)) {
     ok = false;
@@ -587,6 +595,118 @@ static bool test_hdr_white_point(struct fixture* fixture) {
   for (size_t sample = 0; sample < 2; sample++) {
     ok = check(codes_close(shown[sample], baseline[sample], 1), "HDR white point leaves SDR rendering unchanged") && ok;
   }
+
+out:
+  if (scene != NULL) {
+    wlr_scene_node_destroy(&scene->tree.node);
+  }
+  if (source != NULL) {
+    wlr_buffer_drop(source);
+  }
+  return ok;
+}
+
+static bool render_sdr_alpha_scene(
+    struct fixture* fixture, struct wlr_scene_output* scene_output, int expected, const char* label
+) {
+  struct wlr_output_state state;
+  wlr_output_state_init(&state);
+  bool ok = check(wlr_scene_output_build_state(scene_output, &state, NULL), "render SDR alpha scene");
+  ok = check(state.buffer != NULL, "SDR alpha render produces a buffer") && ok;
+  uint8_t shown[4] = {0};
+  if (ok) {
+    ok = fixture_read_display_pixel(fixture, state.buffer, TEST_WIDTH / 2, TEST_HEIGHT / 2, shown);
+  }
+  if (ok) {
+    ok = check(wlr_output_commit_state(fixture->output, &state), "present SDR alpha scene");
+    for (size_t channel = 0; channel < 3; channel++) {
+      if (abs((int)shown[channel] - expected) > 1) {
+        fprintf(stderr, "FAIL: %s channel %zu expected %d, got %u\n", label, channel, expected, shown[channel]);
+        ok = false;
+      }
+    }
+  }
+  wlr_output_state_finish(&state);
+  return ok;
+}
+
+// HDR white-point state must not switch an SDR desktop to linear blending.
+// Exercise actual translucent scene pixels before and after setting warmth,
+// then ensure a real shader gamma ramp can be applied and removed independently.
+static bool test_sdr_white_point_alpha(struct fixture* fixture) {
+  bool ok = true;
+  struct wlr_scene* scene = NULL;
+  struct wlr_buffer* source = NULL;
+  struct wlr_output_state enable;
+  wlr_output_state_init(&enable);
+  wlr_output_state_set_enabled(&enable, true);
+  wlr_output_state_set_custom_mode(&enable, TEST_WIDTH, TEST_HEIGHT, 0);
+  const bool enabled = wlr_output_commit_state(fixture->output, &enable);
+  wlr_output_state_finish(&enable);
+  if (!check(enabled, "enable SDR alpha output")) {
+    return false;
+  }
+  if (!check(wlr_output_get_gamma_size(fixture->output) == 0, "headless output uses shader gamma ramps")) {
+    return false;
+  }
+
+  source = create_output_buffer(fixture, DRM_FORMAT_ABGR8888, TEST_WIDTH, TEST_HEIGHT);
+  if (!check(source != NULL, "allocate translucent SDR source")) {
+    return false;
+  }
+  struct wlr_render_pass* paint = wlr_renderer_begin_buffer_pass(fixture->renderer, source, NULL);
+  if (!check(paint != NULL, "begin translucent SDR source paint")) {
+    ok = false;
+    goto out;
+  }
+  const float alpha = 247.0f / 255.0f;
+  wlr_render_pass_add_rect(
+      paint,
+      &(struct wlr_render_rect_options){
+          .box = {.width = TEST_WIDTH, .height = TEST_HEIGHT},
+          .color = {.a = alpha},
+          .blend_mode = WLR_RENDER_BLEND_MODE_NONE,
+      }
+  );
+  if (!check(wlr_render_pass_submit(paint), "paint translucent SDR source")) {
+    ok = false;
+    goto out;
+  }
+
+  scene = wlr_scene_create();
+  struct wlr_scene_output* scene_output = scene != NULL ? wlr_scene_output_create(scene, fixture->output) : NULL;
+  const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  struct wlr_scene_rect* backdrop =
+      scene != NULL ? wlr_scene_rect_create(&scene->tree, TEST_WIDTH, TEST_HEIGHT, white) : NULL;
+  struct wlr_scene_buffer* content = scene != NULL ? wlr_scene_buffer_create(&scene->tree, source) : NULL;
+  if (!check(scene_output != NULL && backdrop != NULL && content != NULL, "create translucent SDR scene")) {
+    ok = false;
+    goto out;
+  }
+  wlr_scene_output_set_direct_scanout_enabled(scene_output, false);
+  const int encoded = to_u8(1.0f - alpha);
+  ok = render_sdr_alpha_scene(fixture, scene_output, encoded, "initial encoded SDR blending") && ok;
+  ok = check(!wlr_scene_output_needs_frame(scene_output), "static SDR alpha scene is idle") && ok;
+
+  const float warm[3] = {1.0f, 0.8f, 0.5f};
+  wlr_scene_output_set_hdr_white_point(scene_output, warm);
+  ok = check(wlr_scene_output_needs_frame(scene_output), "white-point change schedules the SDR test frame") && ok;
+  ok = render_sdr_alpha_scene(fixture, scene_output, encoded, "HDR warmth leaves SDR alpha unchanged") && ok;
+  wlr_scene_output_set_hdr_white_point(scene_output, white);
+  ok = render_sdr_alpha_scene(fixture, scene_output, encoded, "resetting HDR warmth preserves SDR alpha") && ok;
+
+  const uint16_t ramp[2] = {0, 32768};
+  scene_output->gamma_lut_color_transform = wlr_color_transform_init_lut_3x1d(2, ramp, ramp, ramp);
+  if (!check(scene_output->gamma_lut_color_transform != NULL, "create shader gamma dimming ramp")) {
+    ok = false;
+    goto out;
+  }
+  const int dimmed_linear = to_u8(linear_to_srgb(1.0f - alpha) * 0.5f);
+  ok = render_sdr_alpha_scene(fixture, scene_output, dimmed_linear, "shader gamma ramp remains effective") && ok;
+  wlr_color_transform_unref(scene_output->gamma_lut_color_transform);
+  scene_output->gamma_lut_color_transform = NULL;
+  ok = render_sdr_alpha_scene(fixture, scene_output, encoded, "removing shader gamma restores encoded SDR alpha") && ok;
+  ok = check(!wlr_scene_output_needs_frame(scene_output), "restored SDR alpha scene is idle") && ok;
 
 out:
   if (scene != NULL) {
@@ -2428,6 +2548,8 @@ int main(int argc, char* argv[]) {
     ok = test_scene_unset_primaries(&fixture);
   } else if (strcmp(argv[1], "hdr-white-point") == 0) {
     ok = test_hdr_white_point(&fixture);
+  } else if (strcmp(argv[1], "sdr-white-point-alpha") == 0) {
+    ok = test_sdr_white_point_alpha(&fixture);
   } else if (strcmp(argv[1], "sdr-curve-consistency") == 0) {
     ok = test_sdr_curve_consistency(&fixture);
   } else if (strcmp(argv[1], "sdr-transfer-policy") == 0) {

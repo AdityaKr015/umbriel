@@ -5521,7 +5521,7 @@ static void scene_output_state_attempt_gamma(struct wlr_scene_output* scene_outp
 
 static bool scene_output_combine_color_transforms(
     struct wlr_scene_output* scene_output, struct wlr_color_transform* supplied,
-    const struct wlr_output_image_description* img_desc, bool render_gamma_lut
+    const struct wlr_output_image_description* img_desc, struct wlr_color_transform* gamma_lut
 ) {
   bool result = false;
   struct wlr_color_transform* color_matrix = NULL;
@@ -5560,15 +5560,16 @@ static bool scene_output_combine_color_transforms(
     }
   } else if (supplied != NULL) {
     inv_eotf = wlr_color_transform_ref(supplied);
-  } else {
+  } else if (gamma_lut != NULL) {
+    // A software gamma LUT consumes encoded sRGB. Ordinary SDR composition
+    // keeps its encoded blending path when no output transform is needed.
     inv_eotf = wlr_color_transform_init_linear_to_inverse_eotf(WLR_COLOR_TRANSFER_FUNCTION_SRGB);
     if (inv_eotf == NULL) {
       goto cleanup_transforms;
     }
   }
 
-  struct wlr_color_transform* gamma_lut = scene_output->gamma_lut_color_transform;
-  if (gamma_lut != NULL && render_gamma_lut) {
+  if (gamma_lut != NULL) {
     user_gamma = wlr_color_transform_ref(gamma_lut);
   }
 
@@ -5771,14 +5772,19 @@ static bool scene_output_build_state(
   const bool persistent_effects = effects != NULL && effects->persistent > 0;
   const bool bounded_effects = effects != NULL && effects->bounded > 0;
 
-  bool render_gamma_lut = false;
+  // A pending output description can switch between linear and encoded
+  // composition. Repaint before reusing a swapchain buffer from the old path.
+  if (state->committed & WLR_OUTPUT_STATE_IMAGE_DESCRIPTION) {
+    scene_output_damage_whole(scene_output);
+  }
+
+  struct wlr_color_transform* gamma_lut = NULL;
   if (wlr_output_get_gamma_size(output) == 0 && output->renderer->features.output_color_transform) {
-    if (scene_output->gamma_lut_color_transform != scene_output->prev_gamma_lut_color_transform) {
-      scene_output_damage_whole(scene_output);
-    }
-    if (scene_output->gamma_lut_color_transform != NULL) {
-      render_gamma_lut = true;
-    }
+    gamma_lut = scene_output->gamma_lut_color_transform;
+  }
+  const bool render_gamma_lut = gamma_lut != NULL;
+  if (gamma_lut != scene_output->prev_gamma_lut_color_transform) {
+    scene_output_damage_whole(scene_output);
   }
 
   struct render_data render_data = {
@@ -6037,14 +6043,12 @@ static bool scene_output_build_state(
     timer->pre_render_duration = timespec_to_nsec(&duration);
   }
 
-  if ((render_gamma_lut && scene_output->gamma_lut_color_transform != scene_output->prev_gamma_lut_color_transform)
+  if (gamma_lut != scene_output->prev_gamma_lut_color_transform
       || scene_output->prev_supplied_color_transform != options->color_transform
       || scene_output->color_transform_dirty
       || (state->committed & WLR_OUTPUT_STATE_IMAGE_DESCRIPTION)) {
     const struct wlr_output_image_description* output_description = output_pending_image_description(output, state);
-    if (!scene_output_combine_color_transforms(
-            scene_output, options->color_transform, output_description, render_gamma_lut
-        )) {
+    if (!scene_output_combine_color_transforms(scene_output, options->color_transform, output_description, gamma_lut)) {
       wlr_buffer_unlock(buffer);
       return false;
     }

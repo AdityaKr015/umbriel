@@ -149,6 +149,23 @@ output description before collecting cursors, then restores the live policy
 until commit. Commits, neutral restoration, SDR transitions, disabled outputs,
 and destruction balance that lock.
 
+On an SDR output without an output description, supplied transform, or software
+gamma ramp, the combined output transform stays null. This preserves encoded
+SDR alpha blending when HDR white-point state changes or returns to neutral.
+A software gamma ramp adds the required sRGB encoding before its LUT; removing
+the ramp rebuilds the null transform. Only the ramp actually applied by the
+renderer participates in that cache key, so hardware gamma does not activate
+linear composition.
+
+Pending output-description changes damage the whole output before rendering.
+This refreshes swapchain pixels when a transition returns from linear HDR
+composition to encoded SDR composition, including when client buffers have not
+changed.
+
+`color-sdr-white-point-alpha` checks translucent SDR pixels through warmth,
+neutral restoration, software gamma, and gamma removal. `color-hdr-white-point`
+also checks that returning to SDR immediately redraws the tagged HDR source.
+
 The SDR capture sidecar is generated before this display transform and excludes
 the adjustment. Export-DMA-BUF retains the adjusted native HDR representation.
 Math and render checks cover extraction, adaptation, HDR transitions, and the

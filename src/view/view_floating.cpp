@@ -35,25 +35,24 @@ namespace umbriel {
     return m_server->usableAreaAt(m_sceneTree->node.x, m_sceneTree->node.y);
   }
 
+  wlr_box View::floatingMarginArea(const wlr_box& usable) const {
+    const LayoutStruts& struts = m_workspace != nullptr ? m_workspace->layoutConfig().struts : config().layout.struts;
+    const int pad = m_workspace != nullptr ? m_workspace->layoutConfig().edgePad : config().layoutEdgePad();
+    const wlr_box inside = applyLayoutStruts(usable, struts);
+    const wlr_box inset{
+        .x = inside.x + pad,
+        .y = inside.y + pad,
+        .width = inside.width - (2 * pad),
+        .height = inside.height - (2 * pad),
+    };
+    return inset.width > 0 && inset.height > 0 ? inset : usable;
+  }
+
   wlr_box View::floatingMaximizedBox(const wlr_box& usable) const {
     if (usable.width <= 0 || usable.height <= 0) {
       return usable;
     }
-    wlr_box area = usable;
-    if (!m_maximizedToEdges) {
-      const LayoutStruts& struts = m_workspace != nullptr ? m_workspace->layoutConfig().struts : config().layout.struts;
-      const int pad = m_workspace != nullptr ? m_workspace->layoutConfig().edgePad : config().layoutEdgePad();
-      const wlr_box inside = applyLayoutStruts(usable, struts);
-      const wlr_box inset{
-          .x = inside.x + pad,
-          .y = inside.y + pad,
-          .width = inside.width - (2 * pad),
-          .height = inside.height - (2 * pad),
-      };
-      if (inset.width > 0 && inset.height > 0) {
-        area = inset;
-      }
-    }
+    const wlr_box area = m_maximizedToEdges ? usable : floatingMarginArea(usable);
     // A client whose maximum size is below the area (a fixed-size splash) keeps that size, centered in the area
     // rather than pinned to its corner.
     const SizeHints hints = sizeHints();
@@ -186,6 +185,42 @@ namespace umbriel {
     }
     FloatingPoint origin = {.x = layoutTargetX() + deltaX, .y = layoutTargetY() + deltaY};
     origin = clampFloatingOrigin(origin, geo, usable);
+    animateTo(origin.x, origin.y);
+    m_floating.rememberPositionFraction(origin, usable);
+    return true;
+  }
+
+  bool View::moveFloatingToEdge(wlr_edges edge) {
+    if (!m_mapped || m_tiled || scheduledFullscreen() || currentFullscreen()) {
+      return false;
+    }
+    const wlr_box& geo = geometryBox();
+    const wlr_box usable = floatingUsableArea();
+    if (usable.width <= 0 || usable.height <= 0 || geo.width <= 0 || geo.height <= 0) {
+      return false;
+    }
+    const wlr_box area = floatingMarginArea(usable);
+    const FloatingPoint current{.x = layoutTargetX(), .y = layoutTargetY()};
+    FloatingPoint origin = current;
+    switch (edge) {
+    case WLR_EDGE_LEFT:
+      origin.x = area.x;
+      break;
+    case WLR_EDGE_RIGHT:
+      origin.x = area.x + area.width - geo.width;
+      break;
+    case WLR_EDGE_TOP:
+      origin.y = area.y;
+      break;
+    case WLR_EDGE_BOTTOM:
+      origin.y = area.y + area.height - geo.height;
+      break;
+    case WLR_EDGE_NONE:
+      return false;
+    }
+    if (origin.x == current.x && origin.y == current.y) {
+      return false;
+    }
     animateTo(origin.x, origin.y);
     m_floating.rememberPositionFraction(origin, usable);
     return true;

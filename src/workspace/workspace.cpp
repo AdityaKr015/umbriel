@@ -1712,12 +1712,15 @@ namespace umbriel {
   bool Workspace::moveFocusedColumn(int direction) {
     // Dwindle has no columns to carry, so a column move is the window move.
     if (dwindleLayout() != nullptr) {
-      return moveFocusedHorizontal(direction);
+      return (m_focusedView == nullptr || !m_focusedView->floating()) && moveFocusedHorizontal(direction);
     }
     return scrollingVertical() ? moveWithinLane(direction) : moveLaneAlongStrip(direction);
   }
 
   bool Workspace::moveFocusedHorizontal(int direction) {
+    if (m_focusedView != nullptr && m_focusedView->floating()) {
+      return m_focusedView->moveFloatingToEdge(direction < 0 ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT);
+    }
     if (DwindleLayout* dwindle = dwindleLayout()) {
       if (!dwindle->moveView(m_focusedView, true, direction)) {
         return false;
@@ -1732,6 +1735,9 @@ namespace umbriel {
   }
 
   bool Workspace::moveFocusedVertical(int direction) {
+    if (m_focusedView != nullptr && m_focusedView->floating()) {
+      return m_focusedView->moveFloatingToEdge(direction < 0 ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM);
+    }
     return scrollingVertical() ? moveLaneAlongStrip(direction) : moveWithinLane(direction);
   }
 

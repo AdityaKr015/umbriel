@@ -337,6 +337,8 @@ namespace umbriel {
     // `usable` less the margin a maximized tile keeps (struts, then gap and border), so the border stays on screen.
     // A client capped below that box by its maximum size keeps the capped size, centered in it.
     [[nodiscard]] wlr_box floatingMaximizedBox(const wlr_box& usable) const;
+    // The usable area inside the layout struts and the gap plus border margin; `usable` when that leaves nothing.
+    [[nodiscard]] wlr_box floatingMarginArea(const wlr_box& usable) const;
     // Put a maximized float back in the box its settings give it now, after a layout, border, strut, or usable area
     // change. Does nothing unless that box moved, so every arrange can ask.
     void refitFloatingMaximized();
@@ -356,6 +358,9 @@ namespace umbriel {
     bool moveFloatingTo(const WindowPosition& position);
     // Shift the floating window by logical pixels, clamped to its output's usable area. False when not floating.
     bool moveFloatingBy(int deltaX, int deltaY);
+    // Move the floating window to one edge of its output's usable area, inside the layout struts, gap and borders, and
+    // keep its position on the other axis. False when not floating or already there.
+    bool moveFloatingToEdge(wlr_edges edge);
     // Animate the presented size toward a layout-assigned size. Called by Workspace::arrange when it configures the
     // client, so the animation owns the presented size before the clip can report the final size.
     void beginResizeAnimation(int width, int height, bool allowFullscreen = false);

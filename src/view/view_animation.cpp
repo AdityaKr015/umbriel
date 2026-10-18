@@ -343,6 +343,8 @@ namespace umbriel {
   void View::enterDragPresentation() {
     cancelPositionAnimation();
     m_dragOpacity = config().appearance.dragOpacity;
+    // The insert hint sits below the dragged window, out of reach of the cached background blur.
+    m_decoration.setBlurLive(true);
     setFadeAlpha(m_fadeAlpha);
     m_effectiveOpacityCommitPending = false;
     if (m_pinned) {
@@ -449,6 +451,7 @@ namespace umbriel {
     // resting presentation below is re-applied through a real reconfigure.
     resetPresentedSurface();
     m_dragOpacity = 1.0F;
+    m_decoration.setBlurLive(false);
     m_effectiveOpacityCommitPending = false;
     setFadeAlpha(m_fadeAlpha);
     wlr_scene_node_place_below(&m_server->dragTree()->node, &m_server->dragIconTree()->node);

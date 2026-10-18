@@ -63,6 +63,7 @@ namespace umbriel {
         const wlr_box* clip, float surfaceOpacity, float blurAlpha
     );
     void hideBlur();
+    void setBlurLive(bool live) { m_blur.setLive(live); }
 
     // Shadow
     void createShadow(wlr_scene_tree* frame);

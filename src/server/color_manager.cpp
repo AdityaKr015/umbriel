@@ -234,7 +234,8 @@ namespace umbriel {
     }
 
     static void handleSceneDestroy(wl_listener* listener, void*) {
-      ManagedScene* scene = wl_container_of(listener, scene, destroy);
+      ManagedScene* scene;
+      scene = wl_container_of(listener, scene, destroy);
       scene->manager->unregisterScene(scene->scene);
     }
 

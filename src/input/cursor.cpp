@@ -1500,14 +1500,9 @@ namespace umbriel {
       wlr_seat_pointer_notify_button(m_server->seat()->wlr(), timeMsec, button, state);
 
       // After the final release, realign pointer focus (pinned by the implicit grab) with the surface under the cursor,
-      // so a press without intervening motion targets it. The overview keeps the desktop inert, so focus goes nowhere.
+      // retaining panel focus in overview so release-driven menus keep their pointer anchor.
       if (m_server->seat()->wlr()->pointer_state.button_count == 0) {
-        const Overview* overview = m_server->overview();
-        if (overview != nullptr && overview->active() && !m_server->sessionLocked()) {
-          clearPointerFocus();
-        } else {
-          refreshPointerFocus();
-        }
+        refreshPointerFocus();
       }
 
       resetMode();
@@ -2837,7 +2832,14 @@ namespace umbriel {
     double sx = 0;
     double sy = 0;
     wlr_surface* surface = nullptr;
-    m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+    LayerSurface* layer = nullptr;
+    m_server->viewAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy, &layer);
+    if (const Overview* overview = m_server->overview(); overview != nullptr
+        && overview->active()
+        && !m_server->sessionLocked()
+        && (overview->dragging() || !overviewPassthroughLayer(layer))) {
+      surface = nullptr;
+    }
     const bool stale = !pointerFocusPinned() && pointerContentsStale(surface, sx, sy);
     setPointerFocus(surface, sx, sy, monotonicMsec());
     if (stale) {

@@ -3,6 +3,7 @@
 // exclusive` picks the layer surface's keyboard interactivity, and every keyboard enter and leave the surface receives
 // is logged. `release-on-escape` drops the interactivity to none when Escape is released. `popup-on-click` behaves like
 // a bar opening a menu: the first left press switches the layer to on-demand and opens a grabbing xdg_popup.
+// `popup-on-release` batches the release until the pointer frame and anchors its menu at the last valid position.
 // LAYER_CONTROL enables stdin commands: frames LABEL COUNT, color LABEL AARRGGBB, child-color LABEL AARRGGBB,
 // child-move LABEL X Y, and margins LABEL TOP RIGHT BOTTOM LEFT. Each prints done after its frame callbacks arrive.
 
@@ -60,6 +61,11 @@ namespace {
     Buffer popupBuffer;
     bool popupMapped = false;
     bool popupOnClick = false;
+    bool popupOnRelease = false;
+    bool hasPointerPosition = false;
+    int pointerX = 0;
+    int pointerY = 0;
+    uint32_t pendingReleaseSerial = 0;
     std::vector<std::unique_ptr<Output>> outputs;
     wl_surface* surface = nullptr;
     zwlr_layer_surface_v1* layerSurface = nullptr;
@@ -332,7 +338,9 @@ namespace {
 
   constexpr xdg_surface_listener kPopupXdgSurfaceListener = {.configure = popupSurfaceConfigure};
 
-  void popupConfigure(void*, xdg_popup*, int32_t, int32_t, int32_t, int32_t) {}
+  void popupConfigure(void*, xdg_popup*, int32_t x, int32_t y, int32_t width, int32_t height) {
+    std::println("popup-configure x={} y={} width={} height={}", x, y, width, height);
+  }
   void popupDone(void*, xdg_popup*) { std::println("popup-done"); }
   void popupRepositioned(void*, xdg_popup*, uint32_t) {}
 
@@ -343,7 +351,7 @@ namespace {
   };
 
   // Mirrors a bar opening a menu: the layer surface only asks for the keyboard right before its popup grabs it.
-  void openPopup(State& state, uint32_t serial) {
+  void openPopup(State& state, uint32_t serial, int anchorX = 0, int anchorY = 0) {
     zwlr_layer_surface_v1_set_keyboard_interactivity(
         state.layerSurface, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND
     );
@@ -354,7 +362,7 @@ namespace {
     xdg_surface_add_listener(state.popupXdgSurface, &kPopupXdgSurfaceListener, &state);
     xdg_positioner* positioner = xdg_wm_base_create_positioner(state.wmBase);
     xdg_positioner_set_size(positioner, kPopupSize, kPopupSize);
-    xdg_positioner_set_anchor_rect(positioner, 0, 0, 1, 1);
+    xdg_positioner_set_anchor_rect(positioner, anchorX, anchorY, 1, 1);
     xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_BOTTOM_LEFT);
     xdg_positioner_set_gravity(positioner, XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
     state.popup = xdg_surface_get_popup(state.popupXdgSurface, nullptr, positioner);
@@ -366,18 +374,49 @@ namespace {
     std::println("popup-requested");
   }
 
-  void pointerEnter(void*, wl_pointer*, uint32_t, wl_surface*, wl_fixed_t, wl_fixed_t) {}
-  void pointerLeave(void*, wl_pointer*, uint32_t, wl_surface*) {}
-  void pointerMotion(void*, wl_pointer*, uint32_t, wl_fixed_t, wl_fixed_t) {}
+  void pointerEnter(void* data, wl_pointer*, uint32_t, wl_surface*, wl_fixed_t x, wl_fixed_t y) {
+    auto& state = *static_cast<State*>(data);
+    state.hasPointerPosition = true;
+    state.pointerX = wl_fixed_to_int(x);
+    state.pointerY = wl_fixed_to_int(y);
+  }
+  void pointerLeave(void* data, wl_pointer*, uint32_t, wl_surface*) {
+    static_cast<State*>(data)->hasPointerPosition = false;
+  }
+  void pointerMotion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
+    auto& state = *static_cast<State*>(data);
+    state.hasPointerPosition = true;
+    state.pointerX = wl_fixed_to_int(x);
+    state.pointerY = wl_fixed_to_int(y);
+  }
   void pointerButton(void* data, wl_pointer*, uint32_t serial, uint32_t, uint32_t button, uint32_t buttonState) {
     constexpr uint32_t kLeftButton = 0x110;
     auto& state = *static_cast<State*>(data);
-    if (button == kLeftButton && buttonState == WL_POINTER_BUTTON_STATE_PRESSED && state.popup == nullptr) {
+    if (state.popupOnClick
+        && button == kLeftButton
+        && buttonState == WL_POINTER_BUTTON_STATE_PRESSED
+        && state.popup == nullptr) {
       openPopup(state, serial);
+    }
+    if (state.popupOnRelease
+        && button == kLeftButton
+        && buttonState == WL_POINTER_BUTTON_STATE_RELEASED
+        && state.popup == nullptr) {
+      state.pendingReleaseSerial = serial;
     }
   }
   void pointerAxis(void*, wl_pointer*, uint32_t, uint32_t, wl_fixed_t) {}
-  void pointerFrame(void*, wl_pointer*) {}
+  void pointerFrame(void* data, wl_pointer*) {
+    auto& state = *static_cast<State*>(data);
+    if (state.pendingReleaseSerial == 0) {
+      return;
+    }
+    const int x = state.hasPointerPosition ? state.pointerX : 0;
+    const int y = state.hasPointerPosition ? state.pointerY : 0;
+    std::println("pointer-release-frame valid={} x={} y={}", state.hasPointerPosition, x, y);
+    openPopup(state, state.pendingReleaseSerial, x, y);
+    state.pendingReleaseSerial = 0;
+  }
   void pointerAxisSource(void*, wl_pointer*, uint32_t) {}
   void pointerAxisStop(void*, wl_pointer*, uint32_t, uint32_t) {}
   void pointerAxisDiscrete(void*, wl_pointer*, uint32_t, int32_t) {}
@@ -428,7 +467,9 @@ namespace {
       wl_keyboard_release(state.keyboard);
       state.keyboard = nullptr;
     }
-    if (state.popupOnClick && (capabilities & WL_SEAT_CAPABILITY_POINTER) != 0 && state.pointer == nullptr) {
+    if ((state.popupOnClick || state.popupOnRelease)
+        && (capabilities & WL_SEAT_CAPABILITY_POINTER) != 0
+        && state.pointer == nullptr) {
       state.pointer = wl_seat_get_pointer(seat);
       wl_pointer_add_listener(state.pointer, &kPointerListener, &state);
     }
@@ -485,7 +526,7 @@ int main(int argc, char** argv) {
     std::println(
         "usage: layer-client <output> <exclusive-height-or-zero-background> [bottom-layer|overlay-layer] "
         "[log-configures] "
-        "[keyboard=none|on-demand|exclusive] [release-on-escape] [popup-on-click]"
+        "[keyboard=none|on-demand|exclusive] [release-on-escape] [popup-on-click|popup-on-release]"
     );
     return EXIT_FAILURE;
   }
@@ -518,6 +559,8 @@ int main(int argc, char** argv) {
       state.logConfigures = true;
     } else if (option == "popup-on-click") {
       state.popupOnClick = true;
+    } else if (option == "popup-on-release") {
+      state.popupOnRelease = true;
     } else {
       std::println(stderr, "layer-client: unknown option '{}'", option);
       return EXIT_FAILURE;
@@ -547,13 +590,18 @@ int main(int argc, char** argv) {
   if (state.compositor == nullptr
       || state.shm == nullptr
       || state.layerShell == nullptr
-      || (state.popupOnClick && (state.wmBase == nullptr || state.seat == nullptr))
+      || ((state.popupOnClick || state.popupOnRelease) && (state.wmBase == nullptr || state.seat == nullptr))
       || selected == state.outputs.end()) {
     std::println(stderr, "layer-client: missing protocol or output '{}'", outputName);
     return EXIT_FAILURE;
   }
-  if (state.popupOnClick) {
+  if (state.popupOnClick || state.popupOnRelease) {
+    const uint32_t fillColor = state.fillColor;
+    if (state.popupOnRelease) {
+      state.fillColor = 0xFFFFAA00;
+    }
     state.popupBuffer = createBuffer(state, kPopupSize, kPopupSize);
+    state.fillColor = fillColor;
     if (state.popupBuffer.resource == nullptr) {
       std::println(stderr, "layer-client: failed to allocate the popup buffer");
       return EXIT_FAILURE;

@@ -760,6 +760,9 @@ namespace umbriel {
       m_presentation.setSize(presentedWidth, presentedHeight);
     }
     setFullscreenState(fullscreen);
+    if (m_workspace != nullptr) {
+      m_workspace->syncFloatingStack(this);
+    }
     setFadeAlpha(m_fadeAlpha);
     updateFullscreenPresentation(0, 0);
     if (fullscreen) {

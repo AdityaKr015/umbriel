@@ -628,6 +628,9 @@ namespace umbriel {
       root = parent;
     }
     root->raiseTransientTree();
+    if (m_workspace != nullptr) {
+      m_workspace->raiseFloatingLayer();
+    }
   }
 
   View* View::shellParent() const {
@@ -707,8 +710,9 @@ namespace umbriel {
     if (View* parent = transientParent()) {
       wlr_scene_tree* parentTree = parent->m_sceneTree->node.parent;
       Output* output = currentOutput();
+      const bool inRaisedFloatingLayer = !m_tiled && !scheduledFullscreen() && m_workspace->floatingLayerRaised();
       const bool parentElevated = parentTree == m_server->dragTree()
-          || parentTree == m_workspace->fullscreenTree()
+          || (parentTree == m_workspace->fullscreenTree() && !inRaisedFloatingLayer)
           || (output != nullptr && parentTree == output->pinnedRoot());
       if (parentElevated) {
         target = parentTree;

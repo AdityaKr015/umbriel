@@ -116,14 +116,17 @@ namespace umbriel {
     [[nodiscard]] wlr_scene_tree* viewLayer(bool tiled) const { return tiled ? m_tiledLayer : m_floatingLayer; }
     [[nodiscard]] wlr_scene_tree* tileShadowLayer() const { return m_tileShadowLayer; }
     [[nodiscard]] wlr_scene_tree* fullscreenTree() const { return m_fullscreenTree; }
+    [[nodiscard]] bool floatingLayerRaised() const;
     [[nodiscard]] bool switchTransitionActive() const { return m_inSwitchTransition; }
     [[nodiscard]] bool isSwitchTransitionView(const View* view) const;
 
     void setActive(bool active);
     void updateUrgent();
-    void setFocusedView(View* view);
+    // Hover and maintenance focus preserve the floating layer when focus enters the tiled layout.
+    void setFocusedView(View* view, bool raise = true);
     void syncFloatingStack(View* view);
     void restackFloatingViews();
+    void raiseFloatingLayer();
     void addView(View* view, bool attachToLayout = true, LayoutAttachOrigin origin = LayoutAttachOrigin::ExistingView);
     View* removeView(View* view, bool reconcile = true);
     void layoutAttach(
@@ -256,6 +259,7 @@ namespace umbriel {
     [[nodiscard]] bool layoutMotionActive() const { return m_motion.progress.animating() || !m_motion.views.empty(); }
 
   private:
+    void syncFloatingLayer();
     friend class WorkspaceGroup;
 
     // `resized` lists the members whose assigned size this arrange changed.
@@ -303,6 +307,7 @@ namespace umbriel {
     LayoutMode m_layoutMode = LayoutMode::Scrolling;
     std::optional<LayoutMode> m_layoutModeOverride;
     View* m_focusedView = nullptr;
+    bool m_floatingLayerActive = false;
     bool m_inSwitchTransition = false;
     bool m_arrangePending = false;
     bool m_arrangeAnimate = true;

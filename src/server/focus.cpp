@@ -104,7 +104,7 @@ namespace umbriel {
     }
     Workspace* workspace = view->workspace();
     if (workspace != nullptr && (!view->pinned() || workspace->active())) {
-      workspace->setFocusedView(view);
+      workspace->setFocusedView(view, reason != FocusReason::PointerHover);
     }
     m_server.refreshOutputPolicies();
     if (overviewActive) {
@@ -217,7 +217,7 @@ namespace umbriel {
       // and stacking so a popup or input grab keeps the exact focused surface.
       view->applySeatFocus(false);
       if (Workspace* workspace = view->workspace(); workspace != nullptr && (!view->pinned() || workspace->active())) {
-        workspace->setFocusedView(view);
+        workspace->setFocusedView(view, false);
       }
       m_server.refreshOutputPolicies();
       return true;

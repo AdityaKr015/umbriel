@@ -245,17 +245,26 @@ namespace umbriel {
     m_group->server()->scheduleIpcWorkspacesEvent();
   }
 
-  void Workspace::setFocusedView(View* view) {
+  void Workspace::setFocusedView(View* view, bool raise) {
     if (view == nullptr || view->workspace() == this) {
       if (m_focusedView != view) {
         m_focusedView = view;
         m_group->server()->scheduleIpcWorkspacesEvent();
       }
+      if (view == nullptr) {
+        m_floatingLayerActive = false;
+      } else if (!view->pinned()) {
+        if (view->floating() && !view->scheduledFullscreen()) {
+          m_floatingLayerActive = true;
+        } else if (raise) {
+          m_floatingLayerActive = false;
+        }
+      }
       if (view != nullptr && view->floating()) {
         std::erase(m_floatingStack, view);
         m_floatingStack.push_back(view);
-        restackFloatingViews();
       }
+      restackFloatingViews();
       // Whatever focused a tab, a click on its bar, a keybind, activation, or IPC, puts that tab on show.
       m_tabs.focusChanged(view);
     }
@@ -264,6 +273,9 @@ namespace umbriel {
   void Workspace::syncFloatingStack(View* view) {
     if (view == nullptr || view->workspace() != this) {
       return;
+    }
+    if (view == m_focusedView && !view->pinned()) {
+      m_floatingLayerActive = view->floating() && !view->scheduledFullscreen();
     }
     if (view->floating()) {
       if (std::ranges::find(m_floatingStack, view) == m_floatingStack.end()) {
@@ -275,12 +287,42 @@ namespace umbriel {
     restackFloatingViews();
   }
 
+  bool Workspace::floatingLayerRaised() const {
+    return m_floatingLayer != nullptr && m_floatingLayer->node.parent == m_fullscreenTree;
+  }
+
+  void Workspace::syncFloatingLayer() {
+    if (m_floatingLayerActive && std::ranges::none_of(m_views, [](const View* view) {
+          return view->mapped() && view->floating() && !view->pinned() && !view->scheduledFullscreen();
+        })) {
+      // A hover may leave the floating layer raised after tiled focus returns. Once it empties, a later arrival
+      // must establish floating focus itself rather than inherit the previous floating episode.
+      m_floatingLayerActive = false;
+    }
+    const bool fullscreen = std::ranges::any_of(m_views, [](const View* view) {
+      return view->mapped() && !view->pinned() && view->scheduledFullscreen();
+    });
+    wlr_scene_tree* target = m_floatingLayerActive && fullscreen ? m_fullscreenTree : m_tree;
+    if (m_floatingLayer->node.parent != target) {
+      // Both workspace roots carry the same slide offset and output clip.
+      wlr_scene_node_reparent(&m_floatingLayer->node, target);
+    }
+  }
+
+  void Workspace::raiseFloatingLayer() {
+    if (floatingLayerRaised()) {
+      wlr_scene_node_raise_to_top(&m_floatingLayer->node);
+    }
+  }
+
   void Workspace::restackFloatingViews() {
+    syncFloatingLayer();
     for (View* view : m_floatingStack) {
       if (view != nullptr && view->workspace() == this && view->floating()) {
         view->raiseToTop();
       }
     }
+    raiseFloatingLayer();
   }
 
   void Workspace::addView(View* view, bool attachToLayout, LayoutAttachOrigin origin) {
@@ -340,6 +382,11 @@ namespace umbriel {
     updateUrgent();
     std::erase(m_floatingStack, view);
     std::erase(m_switchViews, view);
+    if (focusedHere) {
+      setFocusedView(replacement);
+    } else {
+      restackFloatingViews();
+    }
 
     // Re-anchor the strip on whatever is focused now, the way every other focus-moving operation does. Fitting the
     // survivor prevents the old scroll offset from leaving it cut off at the left edge while empty space opens on the
@@ -1939,7 +1986,11 @@ namespace umbriel {
     }
 
     View* target = m_focusedView;
-    if (!target->pinned() && !target->scheduledFullscreen() && m_group != nullptr && m_group->output() != nullptr) {
+    if (!target->pinned()
+        && !target->scheduledFullscreen()
+        && !(target->floating() && floatingLayerRaised())
+        && m_group != nullptr
+        && m_group->output() != nullptr) {
       const wlr_box outputBox = m_group->output()->layoutBox();
       const wlr_box focusedBox = target->presentedBox();
       wlr_box focusedVisible{};

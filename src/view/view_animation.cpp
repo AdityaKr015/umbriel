@@ -347,6 +347,8 @@ namespace umbriel {
     m_effectiveOpacityCommitPending = false;
     if (m_pinned) {
       wlr_scene_node_place_above(&m_server->dragTree()->node, &m_server->pinnedTree()->node);
+    } else if (m_workspace != nullptr && m_workspace->floatingLayerRaised()) {
+      wlr_scene_node_place_above(&m_server->dragTree()->node, &m_server->fullscreenTree()->node);
     }
     setSceneParent(m_server->dragTree());
     setNodeEnabled(true);

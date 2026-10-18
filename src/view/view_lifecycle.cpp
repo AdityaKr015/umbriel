@@ -356,8 +356,20 @@ namespace umbriel {
     const std::optional<bool> deferredActivation = std::exchange(m_deferredActivationTrusted, std::nullopt);
     const bool activateOnMap = deferredActivation.has_value()
         && rule.focusOnActivate.value_or(*deferredActivation || config().general.focusOnActivate);
+    // An independent float must not cover fullscreen merely by opening. Explicit focus rules and activation can
+    // reveal it, while dialogs retain their normal parent-aware opening behavior.
+    const View* previousFocus = m_workspace != nullptr ? m_workspace->focusedView() : nullptr;
+    const bool protectsFullscreen = !assignedScratchpad
+        && !m_pinned
+        && !m_tiled
+        && !openingParented()
+        && !requestedFullscreen()
+        && !scheduledFullscreen()
+        && !rule.defaultFullscreen.value_or(false)
+        && m_workspace != nullptr
+        && ((previousFocus != nullptr && previousFocus->scheduledFullscreen()) || m_workspace->floatingLayerRaised());
     const bool focusOnMap =
-        activateOnMap || (!deferredActivation.value_or(false) && rule.defaultFocused.value_or(true));
+        activateOnMap || (!deferredActivation.value_or(false) && rule.defaultFocused.value_or(!protectsFullscreen));
     const bool hiddenScratchpad = assignedScratchpad && !m_onActiveWorkspace;
     if (!m_server->sessionLocked() && focusOnMap && !hiddenScratchpad && !launchPlacementSilent) {
       m_server->focusView(this, activateOnMap ? FocusReason::XdgActivation : FocusReason::Startup);
@@ -593,6 +605,9 @@ namespace umbriel {
     const bool hadRuntimeEffects = m_effects.slot(EffectKind::Border).runtimeSelector.has_value()
         || m_effects.slot(EffectKind::Window).runtimeSelector.has_value();
     m_mapped = false;
+    if (m_workspace != nullptr) {
+      m_workspace->syncFloatingStack(this);
+    }
     m_effects.detach();
     m_effects.resetSlots();
     if (hadRuntimeEffects) {

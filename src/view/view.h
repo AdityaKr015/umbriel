@@ -48,6 +48,7 @@ namespace umbriel {
   enum class LayoutAttachOrigin;
   struct ResolvedWindowRule;
   struct WorkspaceLaunchAnchor;
+  struct DisplacedWorkspace;
   struct SizeHints;
   struct XwaylandRegion;
 
@@ -250,6 +251,7 @@ namespace umbriel {
       // True while this view is still at home and only carries a clean
       // snapshot taken before foreign refugees entered its layout.
       bool layoutProtectionOnly = false;
+      std::shared_ptr<const DisplacedWorkspace> workspaceOrigin;
     };
     [[nodiscard]] const std::optional<DisplacedHome>& displacedHome() const { return m_displacedHome; }
     void markDisplaced(DisplacedHome home) { m_displacedHome = std::move(home); }

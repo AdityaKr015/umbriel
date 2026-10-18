@@ -2515,7 +2515,10 @@ namespace umbriel {
       }
     }
     const char* sourceName = source->wlr()->name;
-    if (sourceGroup != nullptr && sourceGroup->active() != nullptr && sourceName != nullptr) {
+    if (sourceGroup != nullptr
+        && sourceGroup->active() != nullptr
+        && !sourceGroup->active()->displacedWorkspace()
+        && sourceName != nullptr) {
       const auto existing = std::ranges::find_if(m_displacedWorkspaceSelections, [sourceName](const auto& selection) {
         return selection.outputName == sourceName;
       });
@@ -2529,8 +2532,20 @@ namespace umbriel {
       }
     }
     const auto rememberWorkspace = [this](Workspace* workspace, Output* output, bool tiledOnly) {
-      if (workspace == nullptr || output == nullptr || output->wlr()->name == nullptr) {
-        return;
+      std::shared_ptr<const DisplacedWorkspace> origin = workspace->displacedWorkspace();
+      if (!origin) {
+        const OutputIdentity identity = output->identity();
+        origin = std::make_shared<const DisplacedWorkspace>(DisplacedWorkspace{
+            .outputName = std::string(identity.connector),
+            .outputMake = std::string(identity.make),
+            .outputModel = std::string(identity.model),
+            .outputSerial = std::string(identity.serial),
+            .workspaceName = workspace->name(),
+            .workspaceIndex = workspace->index(),
+            .workspaceNamed = workspace->named(),
+            .configGeneration = configStore().generation(),
+            .layoutModeOverride = workspace->layoutModeOverride(),
+        });
       }
       const wlr_box outputBox = output->layoutBox();
       const LayoutCapture capture = workspace->scrollingLayout() != nullptr
@@ -2550,10 +2565,10 @@ namespace umbriel {
           view->rememberFloatingPosition();
         }
         View::DisplacedHome home{
-            .outputName = output->wlr()->name,
-            .workspaceName = workspace->name(),
-            .workspaceIndex = workspace->index(),
-            .workspaceNamed = workspace->named(),
+            .outputName = origin->outputName,
+            .workspaceName = origin->workspaceName,
+            .workspaceIndex = origin->workspaceIndex,
+            .workspaceNamed = origin->workspaceNamed,
             .layoutSnapshot = nullptr,
             .layoutMember = 0,
             .ownsNamedScrollingColumnExtent = view->m_ownsNamedScrollingColumnExtent,
@@ -2563,6 +2578,7 @@ namespace umbriel {
             .floatingOutputPosition = std::nullopt,
             .configGeneration = configStore().generation(),
             .layoutProtectionOnly = tiledOnly,
+            .workspaceOrigin = origin,
         };
         if (view->floating() && outputBox.width > 0 && outputBox.height > 0) {
           home.floatingOutputPosition = {{
@@ -2576,6 +2592,7 @@ namespace umbriel {
         }
         view->markDisplaced(std::move(home));
       }
+      return origin;
     };
 
     if (sourceGroup != nullptr) {
@@ -2588,37 +2605,180 @@ namespace umbriel {
         leaving.push_back(view.get());
       }
 
-      // Capture every source workspace before the first move. Moving a view can
-      // collapse and renumber a dynamic workspace group.
+      struct EvacuatedWorkspace {
+        std::shared_ptr<WorkspaceLaunchAnchor> source;
+        std::shared_ptr<const DisplacedWorkspace> origin;
+        ResolvedLayoutConfig layout;
+        std::optional<LayoutMode> layoutOverride;
+        LayoutCapture capture;
+        std::vector<View*> views;
+        View* focused = nullptr;
+      };
+      std::vector<EvacuatedWorkspace> workspaces;
+      // Capture every source before moving a view. Reservation anchors keep
+      // dynamic reconciliation from deleting the batches still being moved.
       for (size_t index = 0; index < sourceGroup->workspaceCount(); ++index) {
-        rememberWorkspace(sourceGroup->workspaceAt(index), source, false);
-      }
-      // Refugees alter the destination's tiled structure. Preserve its native
-      // members before the first refugee joins, so a later loss of that output
-      // does not snapshot an already mixed layout.
-      const bool contaminatesDestination = !leaving.empty();
-      if (contaminatesDestination && targetWorkspace != nullptr) {
-        rememberWorkspace(targetWorkspace, destination, true);
+        Workspace* workspace = sourceGroup->workspaceAt(index);
+        refreshDisplacedWorkspace(*workspace);
+        EvacuatedWorkspace batch{
+            .source = workspace->reserveForLaunch(),
+            .origin = rememberWorkspace(workspace, source, false),
+            .layout = workspace->layoutConfig(),
+            .layoutOverride = workspace->layoutModeOverride(),
+            .capture = workspace->scrollingLayout() != nullptr
+                ? workspace->scrollingLayout()->captureStateForViewport(workspace->scrollViewportExtent())
+                : workspace->layout().captureState(),
+            .views = {},
+            .focused = workspace->focusedView(),
+        };
+        for (View* view : leaving) {
+          if (view->workspace() == workspace) {
+            batch.views.push_back(view);
+          }
+        }
+        if (!batch.views.empty()) {
+          workspaces.push_back(std::move(batch));
+        }
       }
 
-      for (View* view : leaving) {
-        if (view->displacedHome() && view->displacedHome()->layoutProtectionOnly) {
-          View::DisplacedHome home = *view->displacedHome();
-          home.layoutProtectionOnly = false;
-          view->markDisplaced(std::move(home));
+      bool protectedFallback = false;
+      for (const EvacuatedWorkspace& batch : workspaces) {
+        const bool hasOrdinaryViews =
+            std::ranges::any_of(batch.views, [](const View* view) { return !view->pinned(); });
+        Workspace* refuge =
+            hasOrdinaryViews ? displacedWorkspaceDestination(batch.origin, destination, source) : targetWorkspace;
+        const bool separate = refuge != nullptr && refuge->displacedWorkspace() != nullptr;
+        const auto hold = refuge != nullptr ? refuge->reserveForLaunch() : nullptr;
+        bool capturedLayout = false;
+        if (separate) {
+          refuge->applyLayoutConfig(batch.layout);
+          if (batch.layoutOverride) {
+            refuge->overrideLayoutMode(*batch.layoutOverride);
+          }
+          capturedLayout = batch.capture.snapshot != nullptr
+              && refuge->layout().restoreState(*batch.capture.snapshot, batch.capture.members);
+        } else if (refuge != nullptr && !protectedFallback) {
+          // Only exhausted inventories need to mix with a native workspace.
+          // Keep its clean layout available for the existing restore path.
+          rememberWorkspace(refuge, refuge->group()->output(), true);
+          protectedFallback = true;
         }
-        const bool floating = view->floating();
-        view->setWorkspace(targetWorkspace);
-        if (floating && targetWorkspace != nullptr) {
-          // This output is only a refuge while the recorded home is absent. Present the saved geometry here without
-          // replacing it, since another output can disappear before this animation finishes during VT deactivation.
-          view->restoreFloatingPosition(false);
+        for (View* view : batch.views) {
+          if (view->displacedHome() && view->displacedHome()->layoutProtectionOnly) {
+            View::DisplacedHome home = *view->displacedHome();
+            home.layoutProtectionOnly = false;
+            view->markDisplaced(std::move(home));
+          }
+          const bool floating = view->floating();
+          Workspace* target = view->pinned() ? targetWorkspace : refuge;
+          view->setWorkspace(target, !capturedLayout || target != refuge);
+          if (floating && target != nullptr) {
+            view->restoreFloatingPosition(false);
+          }
+        }
+        if (separate) {
+          refuge->setFocusedView(batch.focused);
+          if (capturedLayout && refuge->scrollingLayout() != nullptr) {
+            refuge->scrollingLayout()->restoreSnapshotViewport(
+                *batch.capture.snapshot, refuge->scrollViewportExtent(), false
+            );
+          }
+          refuge->markArrange(false);
         }
       }
     }
     if (m_scratchpadManager != nullptr) {
       m_scratchpadManager->moveOutput(source, destination);
     }
+    if (sourceGroup != nullptr) {
+      // A disabled output draws no frame to finish its now-empty layouts.
+      sourceGroup->reconcileDynamic();
+      sourceGroup->flushArrange();
+    }
+  }
+
+  void Server::refreshDisplacedWorkspace(Workspace& workspace) {
+    const auto& origin = workspace.displacedWorkspace();
+    if (!origin) {
+      return;
+    }
+    const auto belongsToOrigin = [&origin](const View::DisplacedHome& home) {
+      return home.outputName == origin->outputName
+          && home.workspaceName == origin->workspaceName
+          && home.workspaceIndex == origin->workspaceIndex
+          && home.workspaceNamed == origin->workspaceNamed;
+    };
+    // An unmapped peer still needs its slot in the original complete snapshot.
+    // Otherwise the live temporary layout is authoritative, including edits
+    // and new members made while the original output was absent.
+    if (std::ranges::any_of(m_registry.all(), [&belongsToOrigin](const auto& view) {
+          return !view->mapped()
+              && view->displacedHome()
+              && view->displacedHome()->layoutSnapshot
+              && belongsToOrigin(*view->displacedHome());
+        })) {
+      return;
+    }
+    const LayoutCapture capture = workspace.scrollingLayout() != nullptr
+        ? workspace.scrollingLayout()->captureStateForViewport(workspace.scrollViewportExtent())
+        : workspace.layout().captureState();
+    for (const LayoutMember& member : capture.members) {
+      View* view = member.view;
+      if (view == nullptr || !view->mapped() || !view->displacedHome() || !belongsToOrigin(*view->displacedHome())) {
+        continue;
+      }
+      View::DisplacedHome home = *view->displacedHome();
+      home.layoutSnapshot = capture.snapshot;
+      home.layoutMember = member.id;
+      home.layoutModeOverride = workspace.layoutModeOverride();
+      home.configGeneration = configStore().generation();
+      home.ownsNamedScrollingColumnExtent = view->m_ownsNamedScrollingColumnExtent;
+      view->markDisplaced(std::move(home));
+    }
+  }
+
+  Workspace* Server::displacedWorkspaceDestination(
+      const std::shared_ptr<const DisplacedWorkspace>& home, Output* preferred, Output* excluded
+  ) {
+    const auto onOutput = [&](Output* output) -> Workspace* {
+      if (output == nullptr
+          || output == excluded
+          || !output->desktopEnabled()
+          || !output->wlr()->enabled
+          || output->workspaceGroup() == nullptr) {
+        return nullptr;
+      }
+      return output->workspaceGroup()->displacedDestination(home);
+    };
+    if (Workspace* workspace = onOutput(preferred)) {
+      return workspace;
+    }
+    for (const auto& output : m_outputs) {
+      if (output.get() != preferred) {
+        if (Workspace* workspace = onOutput(output.get())) {
+          return workspace;
+        }
+      }
+    }
+    if (preferred != nullptr
+        && preferred != excluded
+        && preferred->wlr()->enabled
+        && preferred->workspaceGroup() != nullptr) {
+      kLog.warn(
+          "all enabled outputs reached the workspace limit; merging displaced workspace {} from {}",
+          home->workspaceName, home->outputName
+      );
+      WorkspaceGroup* group = preferred->workspaceGroup();
+      if (!group->active()->displacedWorkspace()) {
+        return group->active();
+      }
+      for (size_t index = 0; index < group->workspaceCount(); ++index) {
+        if (!group->workspaceAt(index)->displacedWorkspace()) {
+          return group->workspaceAt(index);
+        }
+      }
+    }
+    return nullptr;
   }
 
   // Deferred to idle: outputs come back one at a time, and a returning one has no workspace group until addOutput is
@@ -2643,6 +2803,25 @@ namespace umbriel {
     Output* fallback = outputFromWlr(preferredOutput());
     if (fallback == nullptr) {
       return;
+    }
+    const auto nativeFallback = [](WorkspaceGroup* group) -> Workspace* {
+      if (group->active() != nullptr && !group->active()->displacedWorkspace()) {
+        return group->active();
+      }
+      for (size_t index = 0; index < group->workspaceCount(); ++index) {
+        Workspace* workspace = group->workspaceAt(index);
+        if (!workspace->displacedWorkspace()) {
+          return workspace;
+        }
+      }
+      return nullptr;
+    };
+    for (const auto& output : m_outputs) {
+      if (WorkspaceGroup* group = output->workspaceGroup()) {
+        for (size_t index = 0; index < group->workspaceCount(); ++index) {
+          refreshDisplacedWorkspace(*group->workspaceAt(index));
+        }
+      }
     }
     std::vector<View*> displaced;
     for (const auto& entry : m_registry.all()) {
@@ -2701,29 +2880,50 @@ namespace umbriel {
 
       Output* target = outputFromName(groupHome.outputName);
       WorkspaceGroup* targetGroup = target != nullptr ? target->workspaceGroup() : nullptr;
-      if (targetGroup == nullptr) {
-        WorkspaceGroup* fallbackGroup = fallback->workspaceGroup();
-        Workspace* refuge = fallbackGroup != nullptr ? fallbackGroup->active() : nullptr;
-        if (refuge != nullptr) {
-          for (size_t index = first; index < last; ++index) {
-            View* view = displaced[index];
-            if (view->workspace() != nullptr) {
-              continue;
-            }
-            const bool floating = view->floating();
-            view->setWorkspace(refuge);
-            if (floating) {
-              view->restoreFloatingPosition(false);
-            }
+      const bool homeAvailable = targetGroup != nullptr;
+      Workspace* workspace = nullptr;
+      std::shared_ptr<WorkspaceLaunchAnchor> refugeHold;
+      if (!homeAvailable) {
+        for (size_t index = first; index < last; ++index) {
+          View* view = displaced[index];
+          if (view->pinned() && view->workspace() == nullptr) {
+            view->setWorkspace(fallback->workspaceGroup()->active());
+            view->restoreFloatingPosition(false);
             ++restored;
           }
         }
-        first = last;
-        continue;
-      }
-
-      Workspace* workspace = nullptr;
-      if (groupHome.workspaceNamed) {
+        const bool needsRefuge = std::ranges::any_of(
+            displaced.begin() + static_cast<std::ptrdiff_t>(first),
+            displaced.begin() + static_cast<std::ptrdiff_t>(last),
+            [](const View* view) { return !view->pinned() && view->workspace() == nullptr; }
+        );
+        if (!needsRefuge) {
+          first = last;
+          continue;
+        }
+        workspace = groupHome.workspaceOrigin ? displacedWorkspaceDestination(groupHome.workspaceOrigin, fallback)
+                                              : fallback->workspaceGroup()->active();
+        if (workspace == nullptr || !workspace->displacedWorkspace()) {
+          if (workspace != nullptr) {
+            for (size_t index = first; index < last; ++index) {
+              View* view = displaced[index];
+              if (view->workspace() == nullptr) {
+                const bool floating = view->floating();
+                view->setWorkspace(workspace);
+                if (floating) {
+                  view->restoreFloatingPosition(false);
+                }
+                ++restored;
+              }
+            }
+          }
+          first = last;
+          continue;
+        }
+        refugeHold = workspace->reserveForLaunch();
+        targetGroup = workspace->group();
+        target = targetGroup->output();
+      } else if (groupHome.workspaceNamed) {
         workspace = targetGroup->workspaceNamed(groupHome.workspaceName);
       } else {
         if (targetGroup->dynamic()) {
@@ -2737,13 +2937,16 @@ namespace umbriel {
           }
         }
         workspace = targetGroup->workspaceAt(groupHome.workspaceIndex);
-        if (targetGroup->dynamic() && workspace != nullptr && workspace->named()) {
+        if (targetGroup->dynamic() && workspace != nullptr && (workspace->named() || workspace->displacedWorkspace())) {
           workspace = targetGroup->insertDynamicWorkspace(groupHome.workspaceIndex);
         }
       }
+      if (workspace != nullptr && workspace->displacedWorkspace() && homeAvailable) {
+        workspace = nullptr;
+      }
       const bool selectorMatched = workspace != nullptr;
       if (workspace == nullptr) {
-        workspace = targetGroup->active();
+        workspace = nativeFallback(targetGroup);
       }
       if (workspace == nullptr) {
         first = last;
@@ -2892,13 +3095,14 @@ namespace umbriel {
           });
       const bool retainLayoutProtection =
           exact != nullptr && exact->representative.layoutProtectionOnly && foreignRefugeesRemain;
-      const auto retainHome = [exact, retainLayoutProtection, snapshotMemberIsUnmapped, selectorMatched,
-                               workspace](const View* view) {
+      const auto retainHome = [exact, retainLayoutProtection, snapshotMemberIsUnmapped, selectorMatched, workspace,
+                               homeAvailable](const View* view) {
         const auto& home = view->displacedHome();
         if (!home) {
           return false;
         }
-        return (retainLayoutProtection && home->layoutProtectionOnly)
+        return !homeAvailable
+            || (retainLayoutProtection && home->layoutProtectionOnly)
             || (snapshotMemberIsUnmapped && home->layoutSnapshot.get() == exact->snapshot.get())
             || (!view->mapped()
                 && selectorMatched
@@ -2908,6 +3112,9 @@ namespace umbriel {
 
       for (size_t index = first; index < last; ++index) {
         View* view = displaced[index];
+        if (!homeAvailable && view->pinned()) {
+          continue;
+        }
         if (std::ranges::find(exactViews, view) != exactViews.end()) {
           if (!retainHome(view)) {
             view->clearDisplaced();
@@ -2996,13 +3203,16 @@ namespace umbriel {
           }
         }
         workspace = group->workspaceAt(selection->workspaceIndex);
-        if (workspace != nullptr && workspace->named()) {
+        if (workspace != nullptr && (workspace->named() || workspace->displacedWorkspace())) {
           Workspace* inserted = group->insertDynamicWorkspace(selection->workspaceIndex);
           workspace = inserted != nullptr ? inserted : group->active();
         }
       }
       if (workspace == nullptr && group->workspaceCount() > 0) {
         workspace = group->workspaceAt(std::min(selection->workspaceIndex, group->workspaceCount() - 1));
+      }
+      if (workspace != nullptr && workspace->displacedWorkspace()) {
+        workspace = nativeFallback(group);
       }
       if (workspace == nullptr) {
         ++selection;

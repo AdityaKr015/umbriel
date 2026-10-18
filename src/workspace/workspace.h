@@ -3,6 +3,7 @@
 #include "core/animation.h"
 #include "layout/layout.h"
 #include "layout/layout_motion.h"
+#include "workspace/displaced_workspace.h"
 #include "workspace/tab_presenter.h"
 
 #include <array>
@@ -73,6 +74,9 @@ namespace umbriel {
     [[nodiscard]] bool named() const { return m_named; }
     [[nodiscard]] size_t index() const { return m_index; }
     [[nodiscard]] bool active() const { return m_active; }
+    [[nodiscard]] const std::shared_ptr<const DisplacedWorkspace>& displacedWorkspace() const {
+      return m_displacedWorkspace;
+    }
     [[nodiscard]] std::shared_ptr<WorkspaceLaunchAnchor> reserveForLaunch() const { return m_launchAnchor; }
     [[nodiscard]] bool launchReserved() const { return m_launchAnchor.use_count() > 1; }
     void invalidateLaunchReservations();
@@ -252,6 +256,8 @@ namespace umbriel {
     [[nodiscard]] bool layoutMotionActive() const { return m_motion.progress.animating() || !m_motion.views.empty(); }
 
   private:
+    friend class WorkspaceGroup;
+
     // `resized` lists the members whose assigned size this arrange changed.
     void applyPositions(bool animate, std::span<View* const> resized);
     [[nodiscard]] wlr_box tiledTargetBox(const View* view, const wlr_box& usable) const;
@@ -288,6 +294,7 @@ namespace umbriel {
     size_t m_index = 0;
     bool m_named = false;
     bool m_active = false;
+    std::shared_ptr<const DisplacedWorkspace> m_displacedWorkspace;
     std::shared_ptr<WorkspaceLaunchAnchor> m_launchAnchor = std::make_shared<WorkspaceLaunchAnchor>();
     std::vector<View*> m_views;
     std::vector<View*> m_floatingStack;
@@ -375,6 +382,9 @@ namespace umbriel {
     // Acquire a destination for moving every window from another workspace. Static groups reuse their highest empty
     // configured workspace without changing its identity; dynamic groups use the ordinary create behavior.
     Workspace* transferDestination();
+    // Acquire an anonymous temporary workspace for one absent home, including on a fixed output. Its original
+    // identity is kept separately, so duplicate configured names never alias the refuge output's native workspaces.
+    Workspace* displacedDestination(std::shared_ptr<const DisplacedWorkspace> origin);
     // Insert an empty numbered workspace into a dynamic group and renumber the following workspaces. Static configured
     // groups cannot be extended this way and return null.
     Workspace* insertDynamicWorkspace(size_t index);
@@ -417,7 +427,8 @@ namespace umbriel {
     Workspace* appendDynamicWorkspace();
     Workspace* prependDynamicWorkspace();
     void reconcileDynamicNames(const std::vector<ResolvedWorkspace>& resolved);
-    void refreshDynamicWorkspaceMetadata();
+    void refreshWorkspaceMetadata();
+    bool pruneDisplacedWorkspaces();
 
     void beginReveal();
     // The workspace a reveal at `progress` shows coming in; the previous one when progress is held at the base.

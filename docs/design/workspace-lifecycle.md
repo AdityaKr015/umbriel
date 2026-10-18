@@ -253,6 +253,53 @@ Bare digits produce a position, ordinary text produces a name, and double
 quotes force a name for numeric-looking values. Resolution never retries one
 type as the other.
 
+## Output evacuation
+
+Output removal, configuration disable, and output-management disable share
+`Server::reassignOutputViews()`. It records each native workspace's original
+output identity, selector, layout snapshot, floating positions, and active
+selection before moving any views. Source reservation anchors keep dynamic
+reconciliation from deleting workspace batches during that transfer.
+
+Each populated source workspace receives an anonymous temporary member on a
+live output. `DisplacedWorkspace` owns the source identity strings, so its
+layout rules can still resolve against the original monitor and workspace
+after the physical `Output` is destroyed. Temporary labels and indices describe
+the receiving output; the saved home remains independent of those positions.
+Duplicate named workspaces on different outputs therefore remain separate.
+The destination layout receives the captured topology and viewport before its
+members are moved. Pinned windows and scratchpads retain their separate
+output-level evacuation paths.
+
+Temporary members also appear on fixed inventories. Fixed reconciliation
+matches configured native members first, then appends surviving temporary
+members. Dynamic name reconciliation cannot claim a temporary member as a
+configured name. Both inventory types prune empty unreserved temporary members
+and repair active and previous workspace pointers. A pending launch can keep
+an empty temporary member alive. A new window entering that member inherits
+its original home and schedules restoration, including when the home returned
+before the delayed window mapped. Explicit movement into a native workspace
+clears that window's return record.
+
+Allocation remains bounded at 64 workspaces per output. Evacuation tries the
+chosen live output, then the other enabled outputs. If none has room, it uses a
+native workspace without overwriting a foreign temporary layout. Fixed
+inventory growth can likewise displace excess temporary members into native
+workspaces while preserving the windows' original return records.
+
+`restoreDisplacedViews()` restores available homes first. If every output was
+lost, saved homes whose outputs are still missing acquire separate temporary
+members on the first available output through the same allocation policy.
+Before further evacuation or restoration, live temporary workspaces refresh
+their mapped tiled members' snapshots, including column edits, widths, tabs,
+and runtime layout overrides. The original selector stays unchanged. If a
+surviving peer is unmapped and still needs a saved snapshot slot, the origin
+retains that complete snapshot until the delayed member can be restored.
+Returning native anonymous positions cannot resolve to foreign temporary
+members. A temporary active selection is never recorded as a native selection
+for its refuge output. Empty source layouts are flushed after evacuation,
+because a disabled output has no frame on which to finish their pending work.
+
 ## Verification
 
 Configuration resolution and change classification are covered by
@@ -262,6 +309,22 @@ workspace selection is exercised by
 [`tests/harness/checks/workspace/selectors.sh`](../../tests/harness/checks/workspace/selectors.sh),
 including a bare position on the pointer-preferred output versus an exact
 numeric name selected with quotes.
+Output removal, disable, reload, complete output loss, separate temporary
+membership, layout preservation, and cleanup are covered by
+[`tests/harness/checks/output/workspace_evacuation.sh`](../../tests/harness/checks/output/workspace_evacuation.sh).
+New windows following a temporary workspace home, explicit moves adopting
+their destination, and pending launches retaining an emptied temporary member
+until a late client maps are covered by
+[`tests/harness/checks/output/evacuated_arrivals.sh`](../../tests/harness/checks/output/evacuated_arrivals.sh).
+Tiling edits and runtime layout switches made while the home output is absent
+are covered by
+[`tests/harness/checks/output/evacuated_layout_edits.sh`](../../tests/harness/checks/output/evacuated_layout_edits.sh).
+Native fallback at the limit of 64 workspaces, including an already occupied
+temporary workspace being active when another output disappears, is covered by
+[`tests/harness/checks/output/evacuation_capacity.sh`](../../tests/harness/checks/output/evacuation_capacity.sh).
+Exact scrolling, dwindle, and master restoration with an unmapped member is
+covered by
+[`tests/harness/checks/output/layout_restore.sh`](../../tests/harness/checks/output/layout_restore.sh).
 Leading and trailing dynamic sentinels, including renumbering after workspace
 movement, are covered by
 [`tests/harness/checks/workspace/empty_above.sh`](../../tests/harness/checks/workspace/empty_above.sh).

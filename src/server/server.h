@@ -141,6 +141,7 @@ namespace umbriel {
   class View;
   class Workspace;
   class WorkspaceGroup;
+  struct DisplacedWorkspace;
   struct WorkspaceLaunchAnchor;
   class ScratchpadManager;
   class ConfigBanner;
@@ -618,6 +619,10 @@ namespace umbriel {
     [[nodiscard]] bool initialOutputEnabled(const Output& output);
     void rememberOutputEnableOverride(const Output& output, bool enabled);
     void restoreDisplacedViews();
+    void refreshDisplacedWorkspace(Workspace& workspace);
+    Workspace* displacedWorkspaceDestination(
+        const std::shared_ptr<const DisplacedWorkspace>& home, Output* preferred, Output* excluded = nullptr
+    );
     [[nodiscard]] WorkspaceGroup* workspaceGroupFromHandle(wlr_ext_workspace_group_handle_v1* handle) const;
 
     struct IdleInhibitorWatch {

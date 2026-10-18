@@ -363,6 +363,18 @@ namespace umbriel {
         && m_server->scratchpadManager()->contains(this)) {
       return;
     }
+    if (!m_displacedHome && !m_pinned && workspace != nullptr && workspace->displacedWorkspace()) {
+      const auto& home = workspace->displacedWorkspace();
+      m_displacedHome.emplace();
+      m_displacedHome->outputName = home->outputName;
+      m_displacedHome->workspaceName = home->workspaceName;
+      m_displacedHome->workspaceIndex = home->workspaceIndex;
+      m_displacedHome->workspaceNamed = home->workspaceNamed;
+      m_displacedHome->layoutModeOverride = home->layoutModeOverride;
+      m_displacedHome->configGeneration = home->configGeneration;
+      m_displacedHome->workspaceOrigin = home;
+      m_server->scheduleDisplacedViewRestore();
+    }
     if (m_workspace == workspace) {
       return;
     }

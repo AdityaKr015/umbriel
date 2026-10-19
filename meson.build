@@ -124,7 +124,7 @@ libdrm_dep = dependency('libdrm', version: '>=2.4.129')
 libdisplay_info_dep = dependency('libdisplay-info', version: '>=0.3.0')
 libudev_dep = dependency('libudev', required: false)
 # sd-bus reads the systemd-localed keymap a keyboard without XKB config uses.
-libsystemd_dep = dependency('libsystemd', version: '>=243', required: false)
+libsystemd_dep = dependency('libsystemd', version: '>=243', required: get_option('localed'))
 xcb_dep = dependency('xcb')
 xcb_icccm_dep = dependency('xcb-icccm')
 xcb_ewmh_dep = dependency('xcb-ewmh')

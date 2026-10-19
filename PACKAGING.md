@@ -59,6 +59,11 @@ meson test -C build
 `jemalloc` is optional and recommended on glibc. The `jemalloc` Meson feature
 defaults to `auto`. It is skipped on non-glibc systems.
 
+The `localed` Meson feature defaults to `auto` and links libsystemd when it is
+found. `-Dlocaled=disabled` builds without it; keyboards with no XKB
+configuration then use libxkbcommon's defaults instead of the
+systemd-localed keymap.
+
 ## umbrielfx
 
 Umbriel's scene graph and GLES2 renderer live in `umbrielfx/`, a hard fork of

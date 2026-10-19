@@ -82,6 +82,7 @@ distribution-provided LTO and archive member pruning.
 - xkbcommon
 - libinput 1.23 or newer
 - libudev, required for native `[drm]` GPU exclusion support
+- libsystemd 243 or newer, required to read the systemd-localed keymap for keyboards with no XKB configuration
 - pixman 0.43 or newer
 - libdrm 2.4.129 or newer
 - libdisplay-info 0.3 or newer

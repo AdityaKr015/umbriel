@@ -30,7 +30,7 @@ Direct project dependencies. Transitive dependencies are owned by their providin
 | Compositor framework | `wlroots-0.20` |
 | Scene graph and effects | `umbrielfx` (blur, shadows, rounded corners; maintained in-tree) |
 | Wayland core | `wayland-server`, `wayland-client`, `wayland-protocols`, `wayland-scanner` |
-| Input | `libinput`, `xkbcommon` |
+| Input | `libinput`, `xkbcommon`, `libsystemd` (sd-bus, optional: the systemd-localed keymap) |
 | Graphics | `pixman`, `libdrm`, OpenGL via wlroots |
 | Text | `cairo`, `pangocairo` |
 | Memory allocation | `jemalloc` (optional, glibc) |

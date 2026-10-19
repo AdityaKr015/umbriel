@@ -7,6 +7,7 @@
 #include "input/gestures.h"
 #include "input/keyboard.h"
 #include "input/seat.h"
+#include "input/system_keymap.h"
 #include "input/text_input.h"
 #include "layer/layer_surface.h"
 #include "layout/scrolling.h"
@@ -657,14 +658,7 @@ namespace umbriel {
       }
     }
     if (effects.input) {
-      m_surfaceLayouts.clear();
-      for (const auto& keyboard : m_keyboards) {
-        keyboard->applyConfig();
-      }
-      if (m_keyboardLayoutSource != nullptr) {
-        syncKeyboardLayout(m_keyboardLayoutSource);
-        notifyKeyboardLayoutIpc();
-      }
+      applyKeyboardConfig();
       for (const auto& pointer : m_pointers) {
         applyPointerConfig(pointer->device);
       }
@@ -775,9 +769,36 @@ namespace umbriel {
     }
   }
 
+  void Server::applyKeyboardConfig() {
+    m_surfaceLayouts.clear();
+    for (const auto& keyboard : m_keyboards) {
+      keyboard->applyConfig();
+    }
+    if (m_keyboardLayoutSource != nullptr) {
+      syncKeyboardLayout(m_keyboardLayoutSource);
+      notifyKeyboardLayoutIpc();
+    }
+  }
+
+  bool Server::refreshSystemKeymap() {
+    XkbNames names = usesSystemXkbNames(config().input) ? querySystemKeymap() : XkbNames{};
+    if (names == m_systemKeymap) {
+      return false;
+    }
+    if (!names.empty()) {
+      kLog.info(
+          "using the systemd-localed keymap: layout='{}' variant='{}' options='{}' model='{}'", names.layout,
+          names.variant, names.options, names.model
+      );
+    }
+    m_systemKeymap = std::move(names);
+    return true;
+  }
+
   void Server::handleConfigReload(const ConfigReloadResult& result) {
     cancelModifierTap();
     if (result.success) {
+      const bool systemKeymapChanged = refreshSystemKeymap();
       if (result.change.drm) {
         kLog.warn("DRM configuration changed; restart Umbriel to apply it");
       }
@@ -793,6 +814,9 @@ namespace umbriel {
         m_overview->forceClose();
       }
       applyConfig(result.effects);
+      if (systemKeymapChanged && !result.effects.input) {
+        applyKeyboardConfig();
+      }
       if ((result.change.colors || result.change.appearance) && m_ipc != nullptr) {
         m_ipc->notifyThemeChanged();
       }

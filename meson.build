@@ -123,6 +123,8 @@ pangocairo_dep = dependency('pangocairo')
 libdrm_dep = dependency('libdrm', version: '>=2.4.129')
 libdisplay_info_dep = dependency('libdisplay-info', version: '>=0.3.0')
 libudev_dep = dependency('libudev', required: false)
+# sd-bus reads the systemd-localed keymap a keyboard without XKB config uses.
+libsystemd_dep = dependency('libsystemd', version: '>=243', required: false)
 xcb_dep = dependency('xcb')
 xcb_icccm_dep = dependency('xcb-icccm')
 xcb_ewmh_dep = dependency('xcb-ewmh')
@@ -133,6 +135,7 @@ if native_drm_policy_supported
 endif
 add_project_arguments(
   '-DUMBRIEL_HAS_NATIVE_DRM_POLICY=' + native_drm_policy_supported.to_int().to_string(),
+  '-DUMBRIEL_HAS_SD_BUS=' + libsystemd_dep.found().to_int().to_string(),
   language: 'cpp',
 )
 
@@ -714,6 +717,7 @@ core_sources = files(
   'src/output/hdr_metadata.cpp',
   'src/input/seat.cpp',
   'src/input/keyboard.cpp',
+  'src/input/system_keymap.cpp',
   'src/input/text_input.cpp',
   'src/input/cursor.cpp',
   'src/input/gestures.cpp',
@@ -776,6 +780,7 @@ umbriel_core_deps = [
   libdrm_dep,
   libdisplay_info_dep,
   native_drm_policy_deps,
+  libsystemd_dep,
   nlohmann_json_dep,
   layer_shell_protocol_dep,
   xcb_dep,

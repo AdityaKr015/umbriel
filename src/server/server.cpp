@@ -947,6 +947,7 @@ namespace umbriel {
     }
     m_socketName = socket;
 
+    refreshSystemKeymap();
     if (!wlr_backend_start(m_backend)) {
       wlr_log(WLR_ERROR, "failed to start backend");
       return false;

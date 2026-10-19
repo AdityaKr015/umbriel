@@ -4,6 +4,7 @@
 #include "core/animation.h"
 #include "core/application_scope.h"
 #include "core/dirty.h"
+#include "input/keyboard_layout.h"
 #include "input/lid_state.h"
 #include "input/modifier_tap.h"
 #include "input/shortcuts_inhibit.h"
@@ -367,6 +368,8 @@ namespace umbriel {
     // The canonical physical keyboard's layout vocabulary and effective group.
     // Nullopt when no configured physical keyboard exists.
     [[nodiscard]] std::optional<KeyboardLayoutState> keyboardLayoutState() const;
+    // systemd-localed's keymap, for keyboards whose config sets no XKB names. Empty when unused or unavailable.
+    [[nodiscard]] const XkbNames& systemKeymap() const { return m_systemKeymap; }
     void notifyKeyboardLayoutIpc();
     void notifyOverviewChanged();
     void notifySubmapChanged();
@@ -619,6 +622,10 @@ namespace umbriel {
     void beginSessionLock(wlr_session_lock_v1* lock);
     void recreateRenderer();
     void applyConfig(const ConfigEffects& effects);
+    // Recompile every keyboard's keymap from the current config and system keymap.
+    void applyKeyboardConfig();
+    // Re-read the system keymap when the config uses it; true when it changed.
+    bool refreshSystemKeymap();
     void showConfigDiagnostics();
     void clearNormalFocus() { m_focus.clearNormalFocus(); }
     void setLockBlankEnabled(bool enabled);
@@ -943,6 +950,7 @@ namespace umbriel {
     std::vector<std::unique_ptr<ShortcutsInhibitorWatch>> m_shortcutsInhibitors;
     ManualShortcutsInhibit m_manualShortcutsInhibit;
     SurfaceLayoutMemory m_surfaceLayouts;
+    XkbNames m_systemKeymap;
     Keyboard* m_keyboardLayoutSource = nullptr;
     Keyboard* m_keyboardInputSource = nullptr;
     ModifierTapState m_modifierTap;

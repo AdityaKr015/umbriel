@@ -51,23 +51,20 @@ namespace umbriel {
     }
     const Config::Input& input = config().input;
     const Config::Input::Device* device = input.findDevice(m_deviceName);
-    const std::string& layout = device != nullptr && device->layout ? *device->layout : input.keyboard.layout;
-    const std::string& variant = device != nullptr && device->variant ? *device->variant : input.keyboard.variant;
-    const std::string& options = device != nullptr && device->options ? *device->options : input.keyboard.options;
-    const std::string& model = device != nullptr && device->model ? *device->model : input.keyboard.model;
+    const XkbNames names = resolveXkbNames(input.keyboard, device, m_server->systemKeymap());
     const int repeatRate = device != nullptr && device->repeatRate ? *device->repeatRate : input.keyboard.repeatRate;
     const int repeatDelay =
         device != nullptr && device->repeatDelay ? *device->repeatDelay : input.keyboard.repeatDelay;
     xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    const xkb_rule_names names{
+    const xkb_rule_names rules{
         .rules = nullptr,
-        .model = model.empty() ? nullptr : model.c_str(),
-        .layout = layout.empty() ? nullptr : layout.c_str(),
-        .variant = variant.empty() ? nullptr : variant.c_str(),
-        .options = options.empty() ? nullptr : options.c_str(),
+        .model = names.model.empty() ? nullptr : names.model.c_str(),
+        .layout = names.layout.empty() ? nullptr : names.layout.c_str(),
+        .variant = names.variant.empty() ? nullptr : names.variant.c_str(),
+        .options = names.options.empty() ? nullptr : names.options.c_str(),
     };
     xkb_keymap* keymap =
-        context == nullptr ? nullptr : xkb_keymap_new_from_names(context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        context == nullptr ? nullptr : xkb_keymap_new_from_names(context, &rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
     if (keymap != nullptr) {
       wlr_keyboard_set_keymap(m_keyboard, keymap);
       xkb_keymap_unref(keymap);

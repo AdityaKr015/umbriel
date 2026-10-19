@@ -7,6 +7,7 @@
 # Containment matters. A stock Umbriel start runs its built-in autostarts, and
 # `dbus-update-activation-environment --systemd` would repoint the *caller's* session-wide WAYLAND_DISPLAY and
 # UMBRIEL_SOCKET at this throwaway instance. Unsetting DBUS_SESSION_BUS_ADDRESS makes both autostarts fail harmlessly.
+# DBUS_SYSTEM_BUS_ADDRESS points at no bus, so the host's systemd-localed keymap never reaches an instance.
 # Usage: check.sh <path-to-umbriel-binary> [name-fragment ...] [-j N|--jobs N] [-v|--verbose] [-l|--list]
 # A check's name is its path under checks/ without `.sh`, such as `overview/wheel`. Each name fragment selects every
 # check whose name contains it, so `overview/` selects a topic and several fragments run several checks. Without a
@@ -510,6 +511,7 @@ start_instance() {
   # compositor in place, so SERVER_PID stays the compositor.
   local pgid_file=$RUNTIME_DIR/instance.pgid
   setsid env -u WAYLAND_DISPLAY -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+    DBUS_SYSTEM_BUS_ADDRESS="unix:path=$RUNTIME_DIR/no-system-bus" \
     XDG_RUNTIME_DIR="$RUNTIME_DIR" \
     WLR_BACKENDS=headless \
     WLR_LIBINPUT_NO_DEVICES=1 \
@@ -648,6 +650,7 @@ run_check_body() {
     display_environment+=("DISPLAY=$UMBRIEL_HARNESS_DISPLAY")
   fi
   setsid env -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS "${display_environment[@]}" \
+    DBUS_SYSTEM_BUS_ADDRESS="unix:path=$RUNTIME_DIR/no-system-bus" \
     XDG_RUNTIME_DIR="$RUNTIME_DIR" \
     WAYLAND_DISPLAY=wayland-0 \
     bash -c 'echo $$ > "$1"; shift; exec "$@"' _ "$pgid_file" \

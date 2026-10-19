@@ -13,8 +13,8 @@ namespace umbriel {
 
   namespace {
 
-    // A cached state is waited on at most this many times: once while its fence materializes, and once more in case
-    // the wait fired before wlroots dropped the matching lock.
+    // A cached state is waited on at most this many times: once while its fence signals, and once more in case the
+    // wait fired before the matching lock was dropped.
     constexpr int kMaxAcquireWaits = 2;
 
     struct SurfaceWatch;
@@ -35,8 +35,9 @@ namespace umbriel {
       // Release points this surface committed that may still be pending. Signalling a point also completes every lower
       // point on its timeline, so a buffer is only released early while none of these sit below its point.
       std::unordered_map<wlr_drm_syncobj_timeline*, std::vector<uint64_t>> committedPoints;
-      // wlroots locks a cached state until its acquire fence materializes and reports nothing when it unlocks, so a
-      // state that blocks a release is waited on here, by seq, to inspect the queue again.
+      // wlroots locks a cached state until its acquire fence materializes, and SyncobjAcquireBarrier until it
+      // signals; neither reports when it unlocks, so a state that blocks a release is waited on here, by seq, to
+      // inspect the queue again.
       std::vector<AcquireWait*> waits;
       std::vector<std::pair<uint32_t, int>> waitCounts;
       wl_listener clientCommit{};
@@ -123,7 +124,7 @@ namespace umbriel {
       wlr_drm_syncobj_timeline_waiter_finish(&wait->waiter);
       std::erase(watch->waits, wait);
       delete wait;
-      // wlroots' own wait on this fence unlocks the state when it runs; inspect the queue once it has.
+      // The acquire locks on this fence drop when their own waits run; inspect the queue once they have.
       scheduleInspection(*watch);
     }
 
@@ -148,7 +149,7 @@ namespace umbriel {
       wait->watch = &watch;
       wait->seq = state->seq;
       if (!wlr_drm_syncobj_timeline_waiter_init(
-              &wait->waiter, timeline, point, DRM_SYNCOBJ_WAIT_FLAGS_WAIT_AVAILABLE, watch.loop, onAcquireReady
+              &wait->waiter, timeline, point, 0, watch.loop, onAcquireReady
           )) {
         delete wait;
         return;

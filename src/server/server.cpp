@@ -28,6 +28,7 @@
 #include "server/backend_manager.h"
 #include "server/color_manager.h"
 #include "server/ipc.h"
+#include "server/syncobj_acquire_barrier.h"
 #include "server/syncobj_superseded_release.h"
 #include "server/syncobj_unmap_release.h"
 #include "view/view.h"
@@ -479,6 +480,7 @@ namespace umbriel {
     effectRegistry().prepare(m_renderer);
     m_compositor = wlr_compositor_create(m_display, 5, m_renderer);
     if (explicitSync) {
+      m_syncobjAcquireBarrier = std::make_unique<SyncobjAcquireBarrier>(m_compositor);
       m_syncobjUnmapRelease = std::make_unique<SyncobjUnmapRelease>(m_compositor);
       m_syncobjSupersededRelease = std::make_unique<SyncobjSupersededRelease>(m_compositor);
     }
@@ -877,6 +879,7 @@ namespace umbriel {
     }
     wl_display_destroy_clients(m_display);
     m_colorManager.reset();
+    m_syncobjAcquireBarrier.reset();
     m_syncobjUnmapRelease.reset();
     m_syncobjSupersededRelease.reset();
     // Chrome components destroy scene nodes in their destructors, so they must go before the scene tree does; otherwise

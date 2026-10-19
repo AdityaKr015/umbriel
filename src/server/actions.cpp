@@ -967,7 +967,10 @@ namespace umbriel {
         return true;
       }
       if (Workspace* workspace = windowActionWorkspace(server)) {
-        if (workspace->moveFocusedColumn(Direction)) {
+        const View* focused = workspace->focusedView();
+        const bool moved = focused != nullptr && focused->floating() ? workspace->moveFocusedHorizontal(Direction)
+                                                                     : workspace->moveFocusedColumn(Direction);
+        if (moved) {
           maybeWarpCursorToWindow(server, workspace->focusedView());
           return true;
         }

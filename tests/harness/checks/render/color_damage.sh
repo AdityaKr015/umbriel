@@ -1,18 +1,34 @@
 #!/usr/bin/env bash
-# Unchanged committed color must deliver requested callbacks without pixel damage.
-# Real color transitions must repaint, including cached and independent child commits.
+# Unchanged color and opacity must deliver requested callbacks without pixel damage.
+# Real transitions must repaint, including cached and independent child commits.
 set -euo pipefail
 source "$UMBRIEL_HARNESS_LIB"
 
 cat >> "$UMBRIEL_CONFIG" <<'CONFIG'
 [animation]
 enabled = false
+[appearance]
+border_width = 0
+outer_border_width = 0
+corner_radius = 0
 [appearance.blur]
+enabled = false
+[appearance.shadow]
 enabled = false
 [output.HEADLESS-1]
 hdr = "off"
+[[window_rule]]
+match.app_id = "^color-feedback-client$"
+match.title = "^color-feedback-opaque$"
+opacity = 1.0
+[[window_rule]]
+match.app_id = "^color-feedback-client$"
+match.title = "^color-feedback-translucent$"
+opacity = 0.95
 CONFIG
 "$UMBRIEL" msg config-reload > /dev/null
+# The inotify reload must finish before capture measurements can observe title-only transitions.
+sleep 0.3 # real time: inotify reload timer
 
 readonly CAPTURE_LOG="$UMBRIEL_RUNTIME_DIR/color-damage-capture.log"
 mkfifo "$UMBRIEL_RUNTIME_DIR/color-damage-capture.fifo"
@@ -50,7 +66,7 @@ expect_frames() {
   capture_count
   after=$frame_count
   if ((after - before != expected)); then
-    echo "$mode: $description changed capture count $before to $after, expected $expected drawn frame(s)"
+    echo "$mode opacity=$opacity: $description changed capture count $before to $after, expected $expected drawn frame(s)"
     exit 1
   fi
 }
@@ -66,28 +82,47 @@ for mode in toplevel subsurface subsurface-desync; do
   exec {CLIENT_FD}> "$fifo"
   await_lines "$CLIENT_LOG" '{"event":"mapped"}' 1
   "$UMBRIEL" settle > /dev/null
-
-  expect_frames frame 0 'a PQ callback-only commit'
-  expect_frames commit 0 'an unchanged PQ surface commit'
-  expect_frames tag 0 'the same PQ description'
-  expect_frames unset 1 'the PQ to sRGB transition'
-  expect_frames frame 0 'an sRGB callback-only commit'
-  expect_frames unset 0 'the same unset description'
-  expect_frames tag 1 'the sRGB to PQ transition'
-  expect_frames frame 0 'a callback after restoring PQ'
-
-  if [[ $mode == subsurface ]]; then
-    expect_frames cache 0 'a synchronized cached color change'
-    expect_frames parent 1 'the cached sRGB state applied by its parent'
-    expect_frames apply 1 'the newer pending PQ state applied by its child'
-    expect_frames frame 0 'a callback after synchronized state application'
+  # The helper initially requests fullscreen, where opaque_fullscreen bypasses rule opacity.
+  "$UMBRIEL" msg window-toggle-fullscreen > /dev/null
+  "$UMBRIEL" settle > /dev/null
+  if ! "$UMBRIEL" tearing --json | jq -e '
+    [.surfaces[] | select(.app_id == "color-feedback-client")] as $clients
+    | ($clients | length) == 1 and $clients[0].fullscreen == false
+  ' > /dev/null; then
+    echo "$mode: color client did not leave fullscreen before opacity checks"
+    exit 1
   fi
+  opacity=1.0
+  expect_frames 'title color-feedback-opaque' 0 'a title change retaining opaque content'
 
-  expect_frames destroy-only 1 'color-object destruction without a surface commit'
-  expect_frames frame 0 'a callback after color-object destruction'
-  expect_frames recreate 1 'recreating the color object with PQ'
-  expect_frames frame 0 'a callback after color-object recreation'
-  echo "$mode: unchanged colors stayed quiet, callbacks completed, actual color changes repainted"
+  for opacity in 1.0 0.95; do
+    if [[ $opacity == 0.95 ]]; then
+      expect_frames 'title color-feedback-translucent' 1 'the compositor opacity transition to 0.95'
+    fi
+    expect_frames frame 0 'a PQ callback-only commit'
+    expect_frames commit 0 'an unchanged PQ surface commit'
+    expect_frames tag 0 'the same PQ description'
+    expect_frames unset 1 'the PQ to sRGB transition'
+    expect_frames frame 0 'an sRGB callback-only commit'
+    expect_frames commit 0 'an unchanged sRGB surface commit'
+    expect_frames unset 0 'the same unset description'
+    expect_frames tag 1 'the sRGB to PQ transition'
+    expect_frames frame 0 'a callback after restoring PQ'
+
+    if [[ $mode == subsurface ]]; then
+      expect_frames cache 0 'a synchronized cached color change'
+      expect_frames parent 1 'the cached sRGB state applied by its parent'
+      expect_frames apply 1 'the newer pending PQ state applied by its child'
+      expect_frames frame 0 'a callback after synchronized state application'
+    fi
+
+    expect_frames destroy-only 1 'color-object destruction without a surface commit'
+    expect_frames frame 0 'a callback after color-object destruction'
+    expect_frames recreate 1 'recreating the color object with PQ'
+    expect_frames frame 0 'a callback after color-object recreation'
+    echo "$mode opacity=$opacity: unchanged colors stayed quiet, callbacks completed, actual color changes repainted"
+  done
+  expect_frames 'title color-feedback-opaque' 1 'the compositor opacity transition back to 1.0'
 
   kill -TERM "$client_pid"
   wait "$client_pid" || true

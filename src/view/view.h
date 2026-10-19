@@ -559,7 +559,6 @@ namespace umbriel {
     // The lifecycle fade runs through a whole-window shader, so buffers and borders stay opaque under it.
     [[nodiscard]] bool fadeComposited() const;
     void applyEffectiveOpacity();
-    void flushPendingEffectiveOpacity();
     void watchViewSurfaceTree(wlr_surface* root, wlr_subsurface* attachment = nullptr);
     void watchViewSurface(wlr_surface* surface, wlr_subsurface* attachment);
     void clearViewSurfaceWatches();
@@ -918,7 +917,6 @@ namespace umbriel {
     float m_overviewOpacity = 1.0F;
     // wlroots restores a committed scene buffer to the client-provided alpha. Root and subsurface watches set this so
     // compositor-managed opacity is restored on the frame after every scene helper commit listener has run.
-    bool m_effectiveOpacityCommitPending = false;
     std::vector<std::unique_ptr<ViewSurfaceWatch>> m_viewSurfaceWatches;
     bool m_hasMaximizeRestoreBox = false;
     wlr_box m_maximizeRestoreBox{};

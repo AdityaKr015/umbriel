@@ -157,10 +157,6 @@ namespace umbriel {
     ViewSurfaceWatch* watch;
     watch = wl_container_of(listener, watch, commit);
     watch->view->syncContentType(watch->surface);
-    if (watch->view->effectiveOpacity() < 1.0F) {
-      watch->view->m_effectiveOpacityCommitPending = true;
-      watch->view->scheduleFrame();
-    }
   }
 
   void View::onViewSurfaceNewSubsurface(wl_listener* listener, void* data) {

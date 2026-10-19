@@ -241,7 +241,6 @@ namespace umbriel {
     // Central animation tick: advances every registered owner once per msec and
     // reports whether anything is still animating.
     bool tickAnimations(double nowMsec);
-    void flushPendingViewOpacities();
     [[nodiscard]] bool animationsActive() const;
     [[nodiscard]] bool animationsActiveFor(const Output* output) const;
     // No animation is running, no workspace has an arrange waiting for the next frame, and every mapped window has

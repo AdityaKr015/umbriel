@@ -1655,12 +1655,6 @@ namespace umbriel {
     return active;
   }
 
-  void Server::flushPendingViewOpacities() {
-    for (const auto& view : m_registry.all()) {
-      view->flushPendingEffectiveOpacity();
-    }
-  }
-
   bool Server::animationsActive() const {
     return std::ranges::any_of(m_animatables, [](const Animatable* owner) { return owner->hasActiveAnimations(); });
   }

@@ -1,4 +1,5 @@
 #include "config/config.h"
+#include "core/log.h"
 #include "input/cursor.h"
 #include "input/seat.h"
 #include "layer/layer_surface.h"
@@ -26,16 +27,7 @@ extern "C" {
 
 namespace umbriel {
   namespace {
-    void setCompositorOpacity(wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
-      float opacity = *static_cast<float*>(data);
-      if (wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer)) {
-        if (const wlr_alpha_modifier_surface_v1_state* clientAlpha =
-                wlr_alpha_modifier_v1_get_surface_state(sceneSurface->surface)) {
-          opacity *= static_cast<float>(clientAlpha->multiplier);
-        }
-      }
-      wlr_scene_buffer_set_opacity(buffer, opacity);
-    }
+    constexpr Logger kLog("view");
   } // namespace
 
   using view_detail::toplevelSurfaceTreeNode;
@@ -82,8 +74,8 @@ namespace umbriel {
   void View::setFadeAlpha(float alpha) {
     // Overshooting curves can push this out of range; wlr_scene_buffer_set_opacity asserts opacity is in [0, 1].
     m_fadeAlpha = std::clamp(alpha, 0.0F, 1.0F);
-    float effective = effectiveOpacity();
-    wlr_scene_node_for_each_buffer(&m_contentTree->node, setCompositorOpacity, &effective);
+    applyEffectiveOpacity();
+    const float effective = effectiveOpacity();
     m_decoration.setBorderRawColor(m_borderColorAnim.current(), effective);
     // The analytic fallback still follows the lifecycle fade. Shader-shaped
     // shadows get their opacity from captured pixels instead of this multiplier.
@@ -107,19 +99,10 @@ namespace umbriel {
     if (m_sceneTree == nullptr) {
       return;
     }
-    float effective = effectiveOpacity();
-    if (effective >= 1.0F) {
-      return;
+    if (!wlr_scene_node_set_surface_opacity(&m_contentTree->node, effectiveOpacity())) {
+      kLog.error("failed to store compositor surface opacity");
+      wl_resource_post_no_memory(rootSurface()->resource);
     }
-    wlr_scene_node_for_each_buffer(&m_contentTree->node, setCompositorOpacity, &effective);
-  }
-
-  void View::flushPendingEffectiveOpacity() {
-    if (!m_effectiveOpacityCommitPending) {
-      return;
-    }
-    applyEffectiveOpacity();
-    m_effectiveOpacityCommitPending = false;
   }
 
   void View::cancelFadeAnimation() {
@@ -344,7 +327,6 @@ namespace umbriel {
     cancelPositionAnimation();
     m_dragOpacity = config().appearance.dragOpacity;
     setFadeAlpha(m_fadeAlpha);
-    m_effectiveOpacityCommitPending = false;
     if (m_pinned) {
       wlr_scene_node_place_above(&m_server->dragTree()->node, &m_server->pinnedTree()->node);
     } else if (m_workspace != nullptr && m_workspace->floatingLayerRaised()) {
@@ -449,7 +431,6 @@ namespace umbriel {
     // resting presentation below is re-applied through a real reconfigure.
     resetPresentedSurface();
     m_dragOpacity = 1.0F;
-    m_effectiveOpacityCommitPending = false;
     setFadeAlpha(m_fadeAlpha);
     wlr_scene_node_place_below(&m_server->dragTree()->node, &m_server->dragIconTree()->node);
     if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
@@ -1090,8 +1071,7 @@ namespace umbriel {
     } else if (clip == nullptr) {
       wlr_scene_subsurface_tree_set_clip(&m_contentTree->node, nullptr);
     }
-    // A clip change runs wlroots' scene surface reconfigure, which resets the scene-buffer opacity to the client alpha.
-    // This runs in the render path after the animation tick, so re-apply our fade/rule opacity.
+    // Fullscreen policy can change the compositor multiplier even when the clip stays the same.
     applyEffectiveOpacity();
   }
 

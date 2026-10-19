@@ -598,6 +598,8 @@ int main(int argc, char** argv) {
         if (state.colorSubsurface != nullptr && !state.desynchronized) {
           wl_surface_commit(state.surface);
         }
+      } else if (std::strncmp(label, "title ", 6) == 0) {
+        xdg_toplevel_set_title(state.toplevel, label + 6);
       } else if (std::strncmp(label, "color ", 6) == 0) {
         unsigned color = 0;
         char trailing = '\0';

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Window captures and output captures must both resolve committed client color.
+# Only output scene surfaces inherit compositor opacity, including late children.
 # Check numeric pixels as well as matching views so a shared fallback cannot pass.
 set -euo pipefail
 source "$UMBRIEL_HARNESS_LIB"
@@ -161,4 +162,78 @@ for mode in toplevel subsurface subsurface-desync; do
   fi
 done
 
-echo 'window and output captures resolved SDR, gamma22 and colored PQ through parent, child and color-object lifecycles'
+# The child is created after the parent's 0.5 opacity has settled. Its first
+# independent commit must inherit that opacity without a rule or config change.
+# The isolated capture presents the same wl_surfaces at their client opacity.
+cat >> "$UMBRIEL_CONFIG" <<'CONFIG'
+[colors]
+backdrop = "#00FF00FF"
+[[window_rule]]
+match.app_id = "^capture-opacity-initial$"
+default_floating = true
+opacity = 0.5
+[[window_rule]]
+match.app_id = "^capture-opacity-remapped$"
+default_floating = true
+opacity = 0.25
+CONFIG
+"$UMBRIEL" msg config-reload > /dev/null
+"$UMBRIEL" settle > /dev/null
+
+mode=late-subsurface
+readonly OPACITY_LOG="$UMBRIEL_RUNTIME_DIR/window-capture-opacity.log"
+mkfifo "$UMBRIEL_RUNTIME_DIR/window-capture-opacity.fifo"
+env APP_ID=capture-opacity-initial APP_ID_AFTER_ACTIVATION=capture-opacity-remapped \
+  FILL_COLOR=0xFFFFFFFF CONTENT_TYPE_ON_SUBSURFACE=1 CONTENT_TYPE_AFTER_MAP=game REMAP_ON_STDIN=1 \
+  "$UMBRIEL_UNMAP_CLIENT" capture-opacity 320 240 \
+  < "$UMBRIEL_RUNTIME_DIR/window-capture-opacity.fifo" > "$OPACITY_LOG" 2>&1 &
+opacity_client_pid=$!
+exec {OPACITY_FD}> "$UMBRIEL_RUNTIME_DIR/window-capture-opacity.fifo"
+await_lines "$OPACITY_LOG" 'mapped$' 1
+
+opacity_window() {
+  local app_id=$1 window
+  for _ in $(seq 60); do
+    window=$("$UMBRIEL" windows --json | jq -ce --arg app_id "$app_id" '.[] | select(.app_id == $app_id)') || true
+    if [[ -n $window ]]; then
+      read -r x y width height window_id < <(jq -r '"\(.x) \(.y) \(.w) \(.h) \(.id)"' <<< "$window")
+      return 0
+    fi
+    sleep 0.05
+  done
+  echo "$mode: no mapped window with app id $app_id"
+  return 1
+}
+
+expect_opacity_pixels() {
+  local expected=$1 description=$2
+  "$UMBRIEL" settle > /dev/null
+  grim -o HEADLESS-1 "$OUTPUT_IMAGE"
+  grim -T "$window_id" "$WINDOW_IMAGE"
+  expect_image_pixel "$OUTPUT_IMAGE" "$((x + width / 2))" "$((y + height / 2))" \
+    "$expected" 255 "$expected" "$description on the output"
+  expect_image_pixel "$WINDOW_IMAGE" "$((width / 2))" "$((height / 2))" \
+    255 255 255 "$description in the isolated window capture"
+}
+
+opacity_window capture-opacity-initial
+expect_opacity_pixels 128 'the parent at 0.5 compositor opacity'
+printf 'u' >&"$OPACITY_FD"
+await_lines "$OPACITY_LOG" 'content-type-updated$' 1
+expect_opacity_pixels 191 'the late child stacked over its parent at 0.5 opacity'
+
+# Remapping retains the wl_surfaces while the new app id selects 0.25 opacity.
+# The first remapped frame must use the new multiplier for both surfaces.
+"$UMBRIEL" msg "window-close:$window_id" > /dev/null
+await_lines "$OPACITY_LOG" 'unmapped$' 1
+"$UMBRIEL" settle > /dev/null
+printf 'r' >&"$OPACITY_FD"
+await_lines "$OPACITY_LOG" 'mapped$' 2
+opacity_window capture-opacity-remapped
+expect_opacity_pixels 112 'the remapped parent and child at 0.25 opacity'
+
+kill -TERM "$opacity_client_pid"
+wait "$opacity_client_pid" || true
+exec {OPACITY_FD}>&-
+
+echo 'window and output captures resolved client color and kept compositor opacity on late and remapped output surfaces'

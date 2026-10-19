@@ -119,6 +119,34 @@ callbacks without producing captured pixel damage, then verifies new parent
 and child pixels, child placement, and layer geometry through a blurred window.
 `render/optimized_blur_layer_exit` covers animated map and unmap transitions.
 
+## Surface opacity
+
+Each window's content tree owns its compositor opacity multiplier in a node
+addon. A scene surface resolves the closest multiplier on itself or its
+ancestors and combines it with committed client alpha before the guarded buffer
+setter runs. Unchanged commits, clip changes, and scale changes therefore
+preserve rule, fade, drag, and focus opacity without resetting to client alpha
+and damaging the same pixels again.
+
+New subsurfaces and popups inherit opacity when their scene surfaces are
+created or reconfigured. An unchanged commit only resolves the committing
+surface's ancestry; it never refreshes the whole window. Changing the tree's
+multiplier refreshes existing descendant surfaces, including disabled nodes,
+and reparenting refreshes inherited opacity against the new ancestry. An
+explicit `1.0` multiplier overrides any outer multiplier. Plain snapshot
+buffers keep their directly assigned opacity.
+
+The separate window-capture scene has no desktop opacity marker, so its
+surfaces use client alpha without baking in the desktop multiplier.
+
+`render/color_damage` verifies callback delivery without captured damage at
+opacity `1.0` and `0.95` for PQ and sRGB content, including synchronized and
+desynchronized subsurfaces. Title-based window rules change opacity in both
+directions and must each produce one changed frame without a config reload.
+`render/window_capture_color` also checks the first frame from a late
+subsurface, a rule change during same-surface remapping, and independent window
+capture pixels throughout those transitions.
+
 ## Per-frame work outside the render pass
 
 ### Hardware-cursor capture pacing
@@ -163,8 +191,9 @@ client that holds the cursor session on the other output) through the synthetic
 `tests/unit/cursor_plane_pace.cpp` for the transition decisions. Real-plane
 behaviour needs a native session.
 
-`Output::handleFrame` runs before any damage test: `flushDirty`,
-`Server::tickAnimations`, and `flushPendingViewOpacities` over every view.
+`Output::handleFrame` runs `flushDirty` and `Server::tickAnimations` before any
+damage test. Surface commits preserve compositor opacity directly, so no
+per-frame opacity repair walk is needed.
 `ColorManager::updatePreferredDescriptions` compares cached output descriptions
 and surface preferences so output membership and reference-white changes reach
 clients. Scene surfaces resolve their committed native or Wine color state

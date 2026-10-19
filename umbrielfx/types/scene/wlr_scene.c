@@ -2996,6 +2996,7 @@ void wlr_scene_node_reparent(struct wlr_scene_node* node, struct wlr_scene_tree*
   node->parent = new_parent;
   wl_list_insert(new_parent->children.prev, &node->link);
   scene_node_update(node, &visible);
+  scene_node_update_surface_opacity(node);
 }
 
 bool wlr_scene_node_coords(struct wlr_scene_node* node, int* lx_ptr, int* ly_ptr) {

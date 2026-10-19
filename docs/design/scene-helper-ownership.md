@@ -11,6 +11,11 @@ own: `surface.c`, `subsurface_tree.c`, `xdg_shell.c`, `layer_shell_v1.c`,
 `drag_icon.c`, `output_layout.c`. They are vendored from wlroots 0.20.2. The
 surface helper also resolves Umbriel's committed color state before applying
 scene setters, keeping unchanged commits free of color reset and restore damage.
+Compositor opacity is retained in an addon on the window's content tree. Each
+scene surface combines its inherited multiplier with committed client alpha
+before its setter runs. Late subsurfaces and popups inherit it automatically,
+without a per-commit window walk, a public struct layout change, or sharing
+desktop opacity with a separate window-capture scene.
 
 ## Why borrowing them looked fine
 

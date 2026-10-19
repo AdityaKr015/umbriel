@@ -226,6 +226,81 @@ static int min(int a, int b) { return a < b ? a : b; }
 
 static int max(int a, int b) { return a > b ? a : b; }
 
+struct surface_opacity {
+  struct wlr_addon addon;
+  float multiplier;
+};
+
+static void surface_opacity_destroy(struct wlr_addon* addon) {
+  struct surface_opacity* opacity = wl_container_of(addon, opacity, addon);
+  wlr_addon_finish(addon);
+  free(opacity);
+}
+
+static const struct wlr_addon_interface surface_opacity_impl = {
+    .name = "scene_surface_opacity",
+    .destroy = surface_opacity_destroy,
+};
+
+static struct surface_opacity* surface_opacity_get(struct wlr_scene_node* node) {
+  struct wlr_addon* addon = wlr_addon_find(&node->addons, &surface_opacity_impl, &surface_opacity_impl);
+  if (addon == NULL) {
+    return NULL;
+  }
+  struct surface_opacity* opacity = wl_container_of(addon, opacity, addon);
+  return opacity;
+}
+
+static void surface_update_opacity(struct wlr_scene_surface* surface) {
+  float resolved = 1.0f;
+  for (struct wlr_scene_node* node = &surface->buffer->node; node != NULL;
+       node = node->parent != NULL ? &node->parent->node : NULL) {
+    const struct surface_opacity* opacity = surface_opacity_get(node);
+    if (opacity != NULL) {
+      resolved = opacity->multiplier;
+      break;
+    }
+  }
+  const struct wlr_alpha_modifier_surface_v1_state* client_alpha =
+      wlr_alpha_modifier_v1_get_surface_state(surface->surface);
+  if (client_alpha != NULL) {
+    resolved *= (float)client_alpha->multiplier;
+  }
+  wlr_scene_buffer_set_opacity(surface->buffer, resolved);
+}
+
+void scene_node_update_surface_opacity(struct wlr_scene_node* node) {
+  if (node->type == WLR_SCENE_NODE_BUFFER) {
+    struct wlr_scene_surface* surface = wlr_scene_surface_try_from_buffer(wlr_scene_buffer_from_node(node));
+    if (surface != NULL) {
+      surface_update_opacity(surface);
+    }
+  } else if (node->type == WLR_SCENE_NODE_TREE) {
+    struct wlr_scene_node* child;
+    wl_list_for_each(child, &wlr_scene_tree_from_node(node)->children, link) {
+      scene_node_update_surface_opacity(child);
+    }
+  }
+}
+
+bool wlr_scene_node_set_surface_opacity(struct wlr_scene_node* node, float multiplier) {
+  assert(multiplier >= 0.0f && multiplier <= 1.0f);
+  struct surface_opacity* opacity = surface_opacity_get(node);
+  if (opacity != NULL && opacity->multiplier == multiplier) {
+    return true;
+  }
+  if (opacity == NULL) {
+    opacity = calloc(1, sizeof(*opacity));
+    if (opacity == NULL) {
+      return false;
+    }
+    wlr_addon_init(&opacity->addon, &node->addons, &surface_opacity_impl, &surface_opacity_impl);
+  }
+  opacity->multiplier = multiplier;
+  scene_node_update_surface_opacity(node);
+  return true;
+}
+
 struct surface_color_resolver {
   struct wlr_addon addon;
   wlr_scene_surface_color_resolver_func_t resolve;
@@ -354,13 +429,6 @@ static void surface_reconfigure(struct wlr_scene_surface* scene_surface) {
     return;
   }
 
-  float opacity = 1.0;
-  const struct wlr_alpha_modifier_surface_v1_state* alpha_modifier_state =
-      wlr_alpha_modifier_v1_get_surface_state(surface);
-  if (alpha_modifier_state != NULL) {
-    opacity = (float)alpha_modifier_state->multiplier;
-  }
-
   enum wlr_color_encoding color_encoding = WLR_COLOR_ENCODING_NONE;
   enum wlr_color_range color_range = WLR_COLOR_RANGE_NONE;
   const struct wlr_color_representation_v1_surface_state* color_repr =
@@ -390,7 +458,7 @@ static void surface_reconfigure(struct wlr_scene_surface* scene_surface) {
   wlr_scene_buffer_set_source_box(scene_buffer, &src_box);
   wlr_scene_buffer_set_dest_size(scene_buffer, dest_width, dest_height);
   wlr_scene_buffer_set_transform(scene_buffer, state->transform);
-  wlr_scene_buffer_set_opacity(scene_buffer, opacity);
+  surface_update_opacity(scene_surface);
   wlr_scene_surface_update_color(scene_surface);
   wlr_scene_buffer_set_color_encoding(scene_buffer, color_encoding);
   wlr_scene_buffer_set_color_range(scene_buffer, color_range);

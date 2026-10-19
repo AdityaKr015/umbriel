@@ -1601,9 +1601,6 @@ namespace umbriel {
       applyOutputEffects();
     }
 
-    // Surface commits reset scene-buffer opacity to the protocol alpha. Repair
-    // pending rule opacity after every commit listener and before composition.
-    m_server->flushPendingViewOpacities();
     if (m_workspaceGroup != nullptr) {
       m_workspaceGroup->refreshReveal();
     }

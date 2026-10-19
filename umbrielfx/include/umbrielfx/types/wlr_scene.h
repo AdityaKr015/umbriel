@@ -582,6 +582,19 @@ void wlr_scene_tree_set_clip(struct wlr_scene_tree* tree, const struct wlr_box* 
  */
 struct wlr_scene_surface* wlr_scene_surface_create(struct wlr_scene_tree* parent, struct wlr_surface* surface);
 
+/**
+ * Set a compositor opacity multiplier in [0, 1] for scene surfaces under node.
+ * The closest multiplier on the node or its ancestors takes precedence. An
+ * explicit 1 overrides outer multipliers. It is combined with committed client
+ * alpha before updating each scene surface's buffer.
+ *
+ * Changed multipliers refresh existing surfaces, including disabled nodes.
+ * New surfaces inherit the multiplier when created. Plain scene buffers are
+ * unaffected. The multiplier is stored in a node addon, independently of other
+ * scenes displaying the same wlr_surface. Returns false on allocation failure.
+ */
+bool wlr_scene_node_set_surface_opacity(struct wlr_scene_node* node, float opacity);
+
 struct wlr_scene_surface_color_state {
   // Zero leaves the transfer function unspecified and follows output SDR policy.
   enum wlr_color_transfer_function transfer_function;

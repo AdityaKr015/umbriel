@@ -95,6 +95,33 @@ enum wlr_scene_debug_damage_option {
   WLR_SCENE_DEBUG_DAMAGE_HIGHLIGHT
 };
 
+/** Whether a frame scanned a client buffer out directly, and if not, the first reason it could not. */
+enum wlr_scene_direct_scanout_status {
+  WLR_SCENE_DIRECT_SCANOUT_ACTIVE,
+  // Turned off for the output, or for the scene through WLR_SCENE_DISABLE_DIRECT_SCANOUT.
+  WLR_SCENE_DIRECT_SCANOUT_DISABLED,
+  // Nothing on the output, or the one visible node is not a client buffer.
+  WLR_SCENE_DIRECT_SCANOUT_NO_CANDIDATE,
+  // More than one node is visible on the output.
+  WLR_SCENE_DIRECT_SCANOUT_COMPOSITED,
+  WLR_SCENE_DIRECT_SCANOUT_EFFECTS,
+  // A color transform, gamma LUT, HDR white point, or buffer color description needs conversion.
+  WLR_SCENE_DIRECT_SCANOUT_COLOR,
+  // An HDR output is being captured as SDR.
+  WLR_SCENE_DIRECT_SCANOUT_CAPTURE,
+  // An ancestor clip crops the buffer.
+  WLR_SCENE_DIRECT_SCANOUT_CROPPED,
+  WLR_SCENE_DIRECT_SCANOUT_TRANSFORM,
+  // The frame also changes the mode, enabled state, or render format.
+  WLR_SCENE_DIRECT_SCANOUT_MODESET,
+  // Something holds the output's render lock, such as a capture or an animation.
+  WLR_SCENE_DIRECT_SCANOUT_RENDER_LOCKED,
+  WLR_SCENE_DIRECT_SCANOUT_SOFTWARE_CURSOR,
+  // The backend test rejected the buffer, for instance its format or modifier.
+  WLR_SCENE_DIRECT_SCANOUT_REJECTED,
+  WLR_SCENE_DIRECT_SCANOUT_DEBUG_DAMAGE,
+};
+
 /**
  * A sub-tree in the scene-graph.
  *
@@ -372,6 +399,10 @@ struct wlr_scene_output {
     float sdr_white_level;
     bool color_transform_dirty;
     bool direct_scanout_enabled;
+    // The outcome of the latest frame's scanout attempt, and the buffer it scanned out. The buffer is valid only until
+    // the scene changes, so read it right after wlr_scene_output_build_state().
+    enum wlr_scene_direct_scanout_status direct_scanout_status;
+    struct wlr_scene_buffer* direct_scanout_buffer;
     // A screen or cursor effect is set on this output.
     bool output_effects_configured;
     float hdr_white_point[3];
@@ -1012,6 +1043,18 @@ void wlr_scene_output_set_position(struct wlr_scene_output* scene_output, int lx
  * Changing this fully damages and schedules the output.
  */
 void wlr_scene_output_set_direct_scanout_enabled(struct wlr_scene_output* scene_output, bool enabled);
+
+/**
+ * The outcome of the latest frame's direct scanout attempt. Frames that change nothing keep the previous outcome.
+ */
+enum wlr_scene_direct_scanout_status
+wlr_scene_output_direct_scanout_status(const struct wlr_scene_output* scene_output);
+
+/**
+ * The buffer the latest frame scanned out, or NULL. Valid only until the scene changes, so read it right after
+ * wlr_scene_output_build_state().
+ */
+struct wlr_scene_buffer* wlr_scene_output_direct_scanout_buffer(const struct wlr_scene_output* scene_output);
 
 /**
  * Set the SDR white level used for PQ input and output normalization.

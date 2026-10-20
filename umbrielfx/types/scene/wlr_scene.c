@@ -4828,6 +4828,7 @@ struct wlr_scene_output* wlr_scene_output_create(struct wlr_scene* scene, struct
   scene_output->output = output;
   scene_output->scene = scene;
   scene_output->direct_scanout_enabled = true;
+  scene_output->direct_scanout_status = WLR_SCENE_DIRECT_SCANOUT_NO_CANDIDATE;
   scene_output->hdr_white_point[0] = scene_output->hdr_white_point[1] = scene_output->hdr_white_point[2] = 1.0f;
   wlr_addon_init(&scene_output->addon, &output->addons, scene, &output_addon_impl);
 
@@ -4963,6 +4964,15 @@ void wlr_scene_output_set_direct_scanout_enabled(struct wlr_scene_output* scene_
 
   scene_output->direct_scanout_enabled = enabled;
   scene_output_damage_whole(scene_output);
+}
+
+enum wlr_scene_direct_scanout_status
+wlr_scene_output_direct_scanout_status(const struct wlr_scene_output* scene_output) {
+  return scene_output->direct_scanout_status;
+}
+
+struct wlr_scene_buffer* wlr_scene_output_direct_scanout_buffer(const struct wlr_scene_output* scene_output) {
+  return scene_output->direct_scanout_buffer;
 }
 
 void wlr_scene_output_set_sdr_white_level(struct wlr_scene_output* scene_output, float nits) {
@@ -5249,19 +5259,19 @@ enum scene_direct_scanout_result {
 };
 
 static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
-    struct render_list_entry* entry, struct wlr_output_state* state, const struct render_data* data
+    struct render_list_entry* entry, struct wlr_output_state* state, const struct render_data* data,
+    enum wlr_scene_direct_scanout_status* status
 ) {
   struct wlr_scene_output* scene_output = data->output;
   struct wlr_scene_node* node = entry->node;
 
-  if (!scene_output->scene->direct_scanout
-      || !scene_output->direct_scanout_enabled
-      || data->transient_effects
-      || data->persistent_visible) {
+  if (data->transient_effects || data->persistent_visible) {
+    *status = WLR_SCENE_DIRECT_SCANOUT_EFFECTS;
     return SCANOUT_INELIGIBLE;
   }
 
   if (node->type != WLR_SCENE_NODE_BUFFER) {
+    *status = WLR_SCENE_DIRECT_SCANOUT_NO_CANDIDATE;
     return SCANOUT_INELIGIBLE;
   }
   // Direct scanout bypasses node->visible, so a node cropped by an ancestor
@@ -5275,20 +5285,26 @@ static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
   bool fully_visible = pixman_region32_equal(&node_region, &node->visible);
   pixman_region32_fini(&node_region);
   if (!fully_visible) {
+    *status = WLR_SCENE_DIRECT_SCANOUT_CROPPED;
     return SCANOUT_INELIGIBLE;
   }
 
   if (state->committed & (WLR_OUTPUT_STATE_MODE | WLR_OUTPUT_STATE_ENABLED | WLR_OUTPUT_STATE_RENDER_FORMAT)) {
     // Legacy DRM will explode if we try to modeset with a direct scanout buffer
+    *status = WLR_SCENE_DIRECT_SCANOUT_MODESET;
     return SCANOUT_INELIGIBLE;
   }
 
   if (!wlr_output_is_direct_scanout_allowed(scene_output->output)) {
+    // wlroots refuses for a render lock or a software cursor; the lock count tells them apart.
+    *status = scene_output->output->attach_render_locks > 0 ? WLR_SCENE_DIRECT_SCANOUT_RENDER_LOCKED
+                                                            : WLR_SCENE_DIRECT_SCANOUT_SOFTWARE_CURSOR;
     return SCANOUT_INELIGIBLE;
   }
 
   struct wlr_scene_buffer* buffer = wlr_scene_buffer_from_node(node);
   if (buffer->buffer == NULL) {
+    *status = WLR_SCENE_DIRECT_SCANOUT_NO_CANDIDATE;
     return SCANOUT_INELIGIBLE;
   }
 
@@ -5302,11 +5318,13 @@ static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
   };
 
   if (buffer->transform != data->transform) {
+    *status = WLR_SCENE_DIRECT_SCANOUT_TRANSFORM;
     return SCANOUT_INELIGIBLE;
   }
 
   const struct wlr_output_image_description* img_desc = output_pending_image_description(scene_output->output, state);
   if (!color_management_is_scanout_allowed(img_desc, buffer)) {
+    *status = WLR_SCENE_DIRECT_SCANOUT_COLOR;
     return SCANOUT_INELIGIBLE;
   }
 
@@ -5316,6 +5334,7 @@ static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
       buffer->color_encoding == WLR_COLOR_ENCODING_IDENTITY && buffer->color_range == WLR_COLOR_RANGE_FULL;
 
   if (!(is_color_repr_none || is_color_repr_identity_full)) {
+    *status = WLR_SCENE_DIRECT_SCANOUT_COLOR;
     return SCANOUT_INELIGIBLE;
   }
 
@@ -5335,6 +5354,7 @@ static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
   struct wlr_output_state pending;
   wlr_output_state_init(&pending);
   if (!wlr_output_state_copy(&pending, state)) {
+    *status = WLR_SCENE_DIRECT_SCANOUT_REJECTED;
     return SCANOUT_CANDIDATE;
   }
 
@@ -5367,6 +5387,7 @@ static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
 
   if (!wlr_output_test_state(scene_output->output, &pending)) {
     wlr_output_state_finish(&pending);
+    *status = WLR_SCENE_DIRECT_SCANOUT_REJECTED;
     return SCANOUT_CANDIDATE;
   }
 
@@ -5380,6 +5401,7 @@ static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
       .release_point = data->output->out_point,
   };
   wl_signal_emit_mutable(&buffer->events.output_sample, &sample_event);
+  *status = WLR_SCENE_DIRECT_SCANOUT_ACTIVE;
   return SCANOUT_SUCCESS;
 }
 
@@ -5970,14 +5992,30 @@ static bool scene_output_build_state(
   // - There are no color transforms that need to be applied
   // - Damage highlight debugging is not enabled
   enum scene_direct_scanout_result scanout_result = SCANOUT_INELIGIBLE;
-  if (!options->capture_sdr
-      && options->color_transform == NULL
-      && !render_gamma_lut
-      && !scene_output_hdr_white_point_active(scene_output, output_pending_image_description(output, state))
-      && list_len == 1
-      && debug_damage != WLR_SCENE_DEBUG_DAMAGE_HIGHLIGHT) {
-    scanout_result = scene_entry_try_direct_scanout(&list_data[0], state, &render_data);
+  enum wlr_scene_direct_scanout_status scanout_status;
+  // The policy comes first: an output with scanout turned off reports that, whatever else is on screen.
+  if (!scene_output->scene->direct_scanout || !scene_output->direct_scanout_enabled) {
+    scanout_status = WLR_SCENE_DIRECT_SCANOUT_DISABLED;
+  } else if (options->capture_sdr) {
+    scanout_status = WLR_SCENE_DIRECT_SCANOUT_CAPTURE;
+  } else if (
+      options->color_transform != NULL
+      || render_gamma_lut
+      || scene_output_hdr_white_point_active(scene_output, output_pending_image_description(output, state))
+  ) {
+    scanout_status = WLR_SCENE_DIRECT_SCANOUT_COLOR;
+  } else if (list_len == 0) {
+    scanout_status = WLR_SCENE_DIRECT_SCANOUT_NO_CANDIDATE;
+  } else if (list_len > 1) {
+    scanout_status = WLR_SCENE_DIRECT_SCANOUT_COMPOSITED;
+  } else if (debug_damage == WLR_SCENE_DEBUG_DAMAGE_HIGHLIGHT) {
+    scanout_status = WLR_SCENE_DIRECT_SCANOUT_DEBUG_DAMAGE;
+  } else {
+    scanout_result = scene_entry_try_direct_scanout(&list_data[0], state, &render_data, &scanout_status);
   }
+  scene_output->direct_scanout_status = scanout_status;
+  scene_output->direct_scanout_buffer =
+      scanout_result == SCANOUT_SUCCESS ? wlr_scene_buffer_from_node(list_data[0].node) : NULL;
 
   if (scanout_result == SCANOUT_INELIGIBLE) {
     if (scene_output->dmabuf_feedback_debounce > 0) {

@@ -2,6 +2,7 @@
 
 #include "core/dirty.h"
 #include "output/cursor_plane_pace.h"
+#include "output/direct_scanout.h"
 #include "output/frame_schedule.h"
 #include "output/hdr_metadata.h"
 #include "output/hdr_transition.h"
@@ -129,6 +130,8 @@ namespace umbriel {
     [[nodiscard]] const std::optional<bool>& lastPresentationPresented() const { return m_lastPresentationPresented; }
     [[nodiscard]] std::optional<bool> lastPresentationVsync() const;
     [[nodiscard]] const std::string& tearingFallbackReason() const { return m_tearingFallbackReason; }
+    // Settled, so it can lag the latest frame by DirectScanoutTracker::kSettleMs.
+    [[nodiscard]] const DirectScanoutState& directScanout() const { return m_directScanout.settled(); }
     [[nodiscard]] bool clientTearingHintAsync(const View* view) const;
     [[nodiscard]] bool tearingEligible(View* view) const;
     [[nodiscard]] View* tearingCandidate() const;
@@ -181,6 +184,7 @@ namespace umbriel {
     static void onDestroy(wl_listener* listener, void* data);
     static int onFrameRetryTimer(void* data);
     static int onEffectFrameTimer(void* data);
+    static int onDirectScanoutTimer(void* data);
 
     void handleFrame();
     void handleRequestState(void* data);
@@ -197,6 +201,8 @@ namespace umbriel {
     void updateSceneSdrWhite();
     void updateSceneHdrWhitePoint(wlr_gamma_control_v1* control);
     void armFrameRetry();
+    // Reads the scanout outcome of the frame just built.
+    void observeDirectScanout();
     void armEffectFrame(uint64_t nowMsec);
     // Render locks other than this output's animation lock.
     [[nodiscard]] int externalRenderLocks() const;
@@ -252,6 +258,8 @@ namespace umbriel {
     bool m_appliedConfiguredScale = false;
     wl_event_source* m_frameRetryTimer = nullptr;
     wl_event_source* m_effectFrameTimer = nullptr;
+    wl_event_source* m_directScanoutTimer = nullptr;
+    DirectScanoutTracker m_directScanout;
     uint64_t m_lastEffectFrameMsec = 0;
     bool m_effectFrameDue = false;
     bool m_effectFrameArmed = false;

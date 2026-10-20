@@ -52,6 +52,40 @@ namespace umbriel {
     constexpr Logger kLog("output");
     constexpr int kFrameRetryDelayMs = 16;
 
+    std::string_view directScanoutReason(wlr_scene_direct_scanout_status status) {
+      switch (status) {
+      case WLR_SCENE_DIRECT_SCANOUT_ACTIVE:
+        return "";
+      case WLR_SCENE_DIRECT_SCANOUT_DISABLED:
+        return "disabled";
+      case WLR_SCENE_DIRECT_SCANOUT_NO_CANDIDATE:
+        return "no_candidate";
+      case WLR_SCENE_DIRECT_SCANOUT_COMPOSITED:
+        return "composited";
+      case WLR_SCENE_DIRECT_SCANOUT_EFFECTS:
+        return "effects";
+      case WLR_SCENE_DIRECT_SCANOUT_COLOR:
+        return "color_conversion";
+      case WLR_SCENE_DIRECT_SCANOUT_CAPTURE:
+        return "capture";
+      case WLR_SCENE_DIRECT_SCANOUT_CROPPED:
+        return "cropped";
+      case WLR_SCENE_DIRECT_SCANOUT_TRANSFORM:
+        return "transform";
+      case WLR_SCENE_DIRECT_SCANOUT_MODESET:
+        return "modeset";
+      case WLR_SCENE_DIRECT_SCANOUT_RENDER_LOCKED:
+        return "render_locked";
+      case WLR_SCENE_DIRECT_SCANOUT_SOFTWARE_CURSOR:
+        return "software_cursor";
+      case WLR_SCENE_DIRECT_SCANOUT_REJECTED:
+        return "rejected";
+      case WLR_SCENE_DIRECT_SCANOUT_DEBUG_DAMAGE:
+        return "debug_damage";
+      }
+      return "unknown";
+    }
+
     struct OutputFrameScope {
       explicit OutputFrameScope(Server& owner) : server(owner) { server.beginOutputFrame(); }
       ~OutputFrameScope() { server.endOutputFrame(); }
@@ -134,6 +168,8 @@ namespace umbriel {
 
     m_frameRetryTimer =
         wl_event_loop_add_timer(wl_display_get_event_loop(m_server->display()), onFrameRetryTimer, this);
+    m_directScanoutTimer =
+        wl_event_loop_add_timer(wl_display_get_event_loop(m_server->display()), onDirectScanoutTimer, this);
 
     applyCursorConfig();
     m_desktopEnabled = m_server->initialOutputEnabled(*this);
@@ -1185,6 +1221,10 @@ namespace umbriel {
       wl_event_source_remove(m_effectFrameTimer);
       m_effectFrameTimer = nullptr;
     }
+    if (m_directScanoutTimer != nullptr) {
+      wl_event_source_remove(m_directScanoutTimer);
+      m_directScanoutTimer = nullptr;
+    }
     if (m_animationRenderLocked) {
       wlr_output_lock_attach_render(m_output, false);
       m_animationRenderLocked = false;
@@ -1430,6 +1470,49 @@ namespace umbriel {
     if (outputFrameAllowed(self->m_server->stopping(), self->m_server->session())) {
       wlr_output_schedule_frame(self->m_output);
     }
+    return 0;
+  }
+
+  void Output::observeDirectScanout() {
+    const wlr_scene_direct_scanout_status status = wlr_scene_output_direct_scanout_status(m_sceneOutput);
+    DirectScanoutState state;
+    state.active = status == WLR_SCENE_DIRECT_SCANOUT_ACTIVE;
+    state.reason = directScanoutReason(status);
+    if (wlr_scene_buffer* buffer = wlr_scene_output_direct_scanout_buffer(m_sceneOutput)) {
+      wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(buffer);
+      const View* view =
+          sceneSurface != nullptr ? View::fromSurface(wlr_surface_get_root_surface(sceneSurface->surface)) : nullptr;
+      if (view != nullptr) {
+        state.windowId = view->extForeignIdentifier() != nullptr ? view->extForeignIdentifier() : "";
+        state.appId = view->appId() != nullptr ? view->appId() : "";
+        state.title = view->title() != nullptr ? view->title() : "";
+      }
+    }
+    // Restarting the wait on every change settles only a state that held for the whole interval.
+    const DirectScanoutTracker::Observation observation = m_directScanout.observe(state);
+    if (observation != DirectScanoutTracker::Observation::Unchanged && m_directScanoutTimer != nullptr) {
+      const bool pending = observation == DirectScanoutTracker::Observation::Pending;
+      wl_event_source_timer_update(m_directScanoutTimer, pending ? DirectScanoutTracker::kSettleMs : 0);
+    }
+  }
+
+  int Output::onDirectScanoutTimer(void* data) {
+    auto* self = static_cast<Output*>(data);
+    if (!self->m_directScanout.settle()) {
+      return 0;
+    }
+    const DirectScanoutState& state = self->m_directScanout.settled();
+    if (self->m_directScanout.settledChangeIsNotable()) {
+      if (state.active) {
+        kLog.info(
+            "output '{}': direct scanout on ({} \"{}\")", self->m_output->name,
+            state.appId.empty() ? "unknown" : state.appId, state.title
+        );
+      } else {
+        kLog.info("output '{}': direct scanout off ({})", self->m_output->name, state.reason);
+      }
+    }
+    self->m_server->scheduleIpcOutputsEvent();
     return 0;
   }
 
@@ -1734,6 +1817,9 @@ namespace umbriel {
       if (!built && sceneOptions.require_animation_success) {
         // Reject the incomplete frame and resume native slide at the same progress.
         m_workspaceGroup->abandonReveal();
+      }
+      if (built) {
+        observeDirectScanout();
       }
       if (built) {
         // Hardware gamma only (DRM). Nested Wayland has no gamma LUT; leave that alone.

@@ -298,6 +298,22 @@ namespace umbriel {
           std::println("  Adaptive sync: {}", output.at("adaptive_sync").get<bool>() ? "enabled" : "disabled");
         }
         std::println("  HDR: {}", output.value("hdr_active", false) ? "on" : "off");
+        if (const auto scanout = output.find("direct_scanout"); scanout != output.end() && scanout->is_object()) {
+          if (scanout->value("active", false)) {
+            const auto& window = scanout->at("window");
+            if (window.is_object()) {
+              std::println(
+                  "  Direct scanout: active ({} \"{}\")", window.value("app_id", ""), window.value("title", "")
+              );
+            } else {
+              std::println("  Direct scanout: active");
+            }
+          } else {
+            std::string reason = scanout->value("reason", "");
+            std::ranges::replace(reason, '_', ' ');
+            std::println("  Direct scanout: inactive ({})", reason);
+          }
+        }
         const auto& modes = output.at("modes");
         if (modes.empty()) {
           continue;
@@ -868,6 +884,20 @@ namespace umbriel {
       const wlr_box usable = desktopEnabled ? output->usableArea() : wlr_box{};
       const WorkspaceGroup* group = output->workspaceGroup();
       const Workspace* activeWorkspace = group != nullptr ? group->active() : nullptr;
+      // Unknown while the output is off: nothing is drawn to scan out.
+      nlohmann::json directScanout = nullptr;
+      if (desktopEnabled && !output->dpmsOff()) {
+        const DirectScanoutState& scanout = output->directScanout();
+        nlohmann::json window = nullptr;
+        if (scanout.active && !scanout.windowId.empty()) {
+          window = {{"id", scanout.windowId}, {"app_id", scanout.appId}, {"title", scanout.title}};
+        }
+        directScanout = {
+            {"active", scanout.active},
+            {"reason", scanout.active ? nlohmann::json(nullptr) : nlohmann::json(scanout.reason)},
+            {"window", std::move(window)},
+        };
+      }
       outputs.push_back({
           {"name", wlrOutput->name},
           {"description", wlrOutput->description != nullptr ? wlrOutput->description : ""},
@@ -888,6 +918,7 @@ namespace umbriel {
           {"scale", wlrOutput->scale},
           {"adaptive_sync", std::move(adaptiveSync)},
           {"hdr_active", output->hdrActive()},
+          {"direct_scanout", std::move(directScanout)},
           {"modes", std::move(modes)},
       });
     }

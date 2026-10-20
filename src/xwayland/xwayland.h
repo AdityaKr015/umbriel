@@ -56,7 +56,7 @@ namespace umbriel {
     // Republishes the X screen and moves every X11 window to match it.
     void handleOutputLayoutChange();
     // An Xwayland surface just yielded the keyboard to a native Wayland client. Clear both X focus channels after the
-    // Wayland enter has reached the client, matching the cross-process handoff used by xwayland-satellite.
+    // Wayland enter has reached the client, so the native client holds keyboard focus before X11 loses it.
     void scheduleFocusClear();
 
   private:

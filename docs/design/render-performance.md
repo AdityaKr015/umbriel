@@ -93,11 +93,9 @@ size and sets a logical destination, so no plane scaling is involved. A client
 that ignores the protocol presents at the logical size, and then
 `scene_entry_try_direct_scanout` stages a `buffer_dst_box` larger than the
 buffer and asks the backend to accept primary-plane scaling
-(`wlr_scene.c:4789-4814`). Hyprland rejects that case outright
-(`bufferSize != m_pixelSize`, its `Monitor.cpp:1995`) but has no
-fractional-scale condition of its own, because it has no background node to
-skip and decides eligibility from window state instead of render-list
-cardinality.
+(`wlr_scene.c:4789-4814`). Rejecting every buffer whose size differs from the
+output pixel size would also exclude this case, but Umbriel keys eligibility
+on render-list cardinality, so the background node is what must be skipped.
 
 ## Background blur invalidation
 

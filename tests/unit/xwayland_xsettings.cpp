@@ -104,7 +104,7 @@ namespace {
 
 } // namespace
 
-// Integer scales reach GTK whole, with fonts at 96 DPI before scaling, as niri's xwayland-satellite announces them.
+// Integer scales reach GTK whole, with fonts at 96 DPI before scaling.
 UMBRIEL_TEST(integerScaleIsWholeWindowScale) {
   const auto values = xsettingsFor(3.0, "", 24);
   CHECK_EQ(values.windowScalingFactor, 3);

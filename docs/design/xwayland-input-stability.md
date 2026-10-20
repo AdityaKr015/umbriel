@@ -64,8 +64,8 @@ Umbriel handles an Xwayland-to-native keyboard transition in this order:
 4. Set X core input focus to `None`, set `_NET_ACTIVE_WINDOW` to `None`, and
    flush the XWM connection.
 
-The delayed ordering matches xwayland-satellite's cross-process handoff. It is
-also the focus state Hyprland uses for native clients. Performing the X clear
+The delayed ordering is the standard cross-process handoff: the native enter
+is delivered before X focus is cleared. Performing the X clear
 before the native enter can leave the native game unable to receive control. A
 stale timer cannot clear a newly restored X11 focus because the callback
 rechecks the seat, and Xwayland-to-Xwayland refreshes never schedule it.
@@ -73,8 +73,7 @@ rechecks the seat, and Xwayland-to-Xwayland refreshes never schedule it.
 Using `None` means X11 keyboard grabs are unavailable while a native client is
 focused, which is why wlroots normally prefers `PointerRoot`. Umbriel limits
 that tradeoff to a real Xwayland-to-native transfer and lets wlroots restore
-normal X focus when the seat returns to Xwayland. This is the same externally
-observable state as the previously working xwayland-satellite path.
+normal X focus when the seat returns to Xwayland.
 
 ## Native selections are reannounced on X11 focus return
 
@@ -127,11 +126,11 @@ an Umbriel cursor override, Umbriel also completes its frame callback so
 Xwayland can submit the next cursor image. Visible raw surfaces retain
 wlroots' normal output pacing.
 
-This deliberately stays inside the compositor. Sway and wlroots preserve raw
-client cursor surfaces and already provide the named, output-scale-aware path
-used after a match. Hyprland's global Xwayland scaling work requires a patched
-X server. Raising `XCURSOR_SIZE` for the whole session, as can be done around
-xwayland-satellite, also changes applications that already account for scale.
+This deliberately stays inside the compositor. wlroots preserves raw
+client cursor surfaces and already provides the named, output-scale-aware path
+used after a match. Global Xwayland scaling requires a patched
+X server. Raising `XCURSOR_SIZE` for the whole session
+also changes applications that already account for scale.
 Neither approach can safely distinguish a theme cursor from a custom one, and
 application-specific rules would only move that ambiguity into configuration.
 

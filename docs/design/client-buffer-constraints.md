@@ -326,6 +326,24 @@ and manager teardown clears the resolvers on any remaining roots before
 freeing their shared state. Window capture therefore resolves the same client
 metadata as the desktop while rendering only the captured client's surfaces.
 
+The scene-node capture helper lives in `umbrielfx/types/scene/capture.c`, adapted
+from wlroots 0.20.2. Its standard constructor retains a default scale of 1;
+Umbriel sets the window's current output scale through
+`umbrielfx_scene_capture_source_set_scale` before accepting a capture request.
+`View::notifyOutputScale` updates cached sources when output assignment or scale
+changes. Active sources immediately render and publish any changed buffer
+constraints, including when the client makes no new surface commit. Idle sources
+store the scale without rendering or allocating a swapchain.
+
+Scene extents and positions remain logical. The virtual capture output uses the
+requested render scale and a physical mode of `ceil(width * scale)` by
+`ceil(height * scale)`, preserving native buffer detail without changing layout
+or Xwayland's existing surface-to-logical conversion. Capture consumers must
+handle buffer constraints changing when the window moves between differently
+scaled outputs. `render/window_capture_scale` checks native pixel detail,
+fractional rounding, changes with a frozen client, output moves, and fullscreen
+capture at the physical display resolution.
+
 Destroying a color-management object refreshes matching scene surfaces
 immediately across all registered scene roots, including disabled scene trees,
 without requiring another surface commit. `render/color_damage` checks unchanged

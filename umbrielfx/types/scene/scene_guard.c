@@ -3,6 +3,7 @@
 
 #include <dlfcn.h>
 #include <stdio.h>
+#include <wlr/types/wlr_ext_image_capture_source_v1.h>
 #include <wlr/types/wlr_output_layout.h>
 
 // umbrielfx's scene structs carry trailing fields wlroots knows nothing about,
@@ -35,6 +36,8 @@ const char* umbrielfx_scene_check_helpers(void) {
     const void* fn;
   } helpers[] = {
       {"wlr_scene_buffer_create", (const void*)&wlr_scene_buffer_create},
+      {"wlr_ext_image_capture_source_v1_create_with_scene_node",
+       (const void*)&wlr_ext_image_capture_source_v1_create_with_scene_node},
       {"wlr_scene_surface_create", (const void*)&wlr_scene_surface_create},
       {"wlr_scene_subsurface_tree_create", (const void*)&wlr_scene_subsurface_tree_create},
       {"wlr_scene_xdg_surface_create", (const void*)&wlr_scene_xdg_surface_create},

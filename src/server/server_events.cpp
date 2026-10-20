@@ -3988,6 +3988,10 @@ namespace umbriel {
       wl_signal_add(&view->m_captureSource->events.destroy, &view->m_captureSourceDestroy);
     }
 
+    if (Output* output = view->currentOutput()) {
+      umbrielfx_scene_capture_source_set_scale(view->m_captureSource, output->wlr()->scale);
+    }
+
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request_accept(request, view->m_captureSource);
   }
 } // namespace umbriel

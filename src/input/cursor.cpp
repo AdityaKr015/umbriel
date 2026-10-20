@@ -973,8 +973,8 @@ namespace umbriel {
     const bool tiledUnderneath = tiled || (pinned && view->restoresTiledOnUnpin());
     MoveGrab grab{
         .view = view,
-        .offsetX = m_cursor->x - view->sceneTree()->node.x,
-        .offsetY = m_cursor->y - view->sceneTree()->node.y,
+        .offsetX = m_cursor->x - view->layoutX(),
+        .offsetY = m_cursor->y - view->layoutY(),
         .target = tiled ? DragTarget::Tiled : (pinned ? DragTarget::Pinned : DragTarget::Floating),
         .unpinned = tiledUnderneath ? DragTarget::Tiled : DragTarget::Floating,
         .sourceWorkspace = tiled ? view->workspace() : nullptr,
@@ -1080,16 +1080,14 @@ namespace umbriel {
     }
 
     const wlr_box& geometry = view->geometryBox();
-    const double borderX =
-        (view->sceneTree()->node.x + geometry.x) + ((edges & WLR_EDGE_RIGHT) != 0 ? geometry.width : 0);
-    const double borderY =
-        (view->sceneTree()->node.y + geometry.y) + ((edges & WLR_EDGE_BOTTOM) != 0 ? geometry.height : 0);
+    const double borderX = (view->layoutX() + geometry.x) + ((edges & WLR_EDGE_RIGHT) != 0 ? geometry.width : 0);
+    const double borderY = (view->layoutY() + geometry.y) + ((edges & WLR_EDGE_BOTTOM) != 0 ? geometry.height : 0);
     m_grab = FloatingResizeGrab{
         .view = view,
         .offsetX = m_cursor->x - borderX,
         .offsetY = m_cursor->y - borderY,
-        .geometryX = geometry.x + view->sceneTree()->node.x,
-        .geometryY = geometry.y + view->sceneTree()->node.y,
+        .geometryX = geometry.x + view->layoutX(),
+        .geometryY = geometry.y + view->layoutY(),
         .geometryWidth = geometry.width,
         .geometryHeight = geometry.height,
         .edges = edges,
@@ -2483,8 +2481,8 @@ namespace umbriel {
     // Where the drag left the window. Read before the state change: becoming
     // floating re-places the window at its remembered origin, immediately when
     // position animations are off.
-    const int dropX = view->sceneTree()->node.x;
-    const int dropY = view->sceneTree()->node.y;
+    const int dropX = view->layoutX();
+    const int dropY = view->layoutY();
     // State first, placement second: a window that refused the drag's target
     // (a fullscreen window cannot be pinned) is still tiled here and drops back
     // into the layout rather than staying detached.
@@ -2689,8 +2687,8 @@ namespace umbriel {
       return WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM;
     }
     const wlr_box& geo = view->geometryBox();
-    const int x = view->sceneTree()->node.x + geo.x;
-    const int y = view->sceneTree()->node.y + geo.y;
+    const int x = view->layoutX() + geo.x;
+    const int y = view->layoutY() + geo.y;
     const wlr_box box{.x = x, .y = y, .width = geo.width, .height = geo.height};
     return resizeEdgesForPoint(box, m_cursor->x, m_cursor->y);
   }
@@ -2707,8 +2705,8 @@ namespace umbriel {
         return 0;
       }
       const wlr_box& geo = view->geometryBox();
-      const double left = view->sceneTree()->node.x + geo.x;
-      const double top = view->sceneTree()->node.y + geo.y;
+      const double left = view->layoutX() + geo.x;
+      const double top = view->layoutY() + geo.y;
       const double right = left + geo.width;
       const double bottom = top + geo.height;
       const double distLeft = std::abs(m_cursor->x - left);

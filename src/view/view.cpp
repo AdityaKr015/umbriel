@@ -761,7 +761,7 @@ namespace umbriel {
     wlr_scene_tree* pool = m_workspace != nullptr && m_sceneTree->node.parent == m_workspace->viewLayer(true)
         ? m_workspace->tileShadowLayer()
         : nullptr;
-    m_decoration.poolShadow(m_sceneTree, pool, m_sceneTree->node.x, m_sceneTree->node.y, m_sceneTree->node.enabled);
+    m_decoration.poolShadow(m_sceneTree, pool, layoutX(), layoutY(), m_sceneTree->node.enabled);
   }
 
   void View::setScenePosition(int x, int y) {
@@ -771,6 +771,10 @@ namespace umbriel {
       syncXwaylandConfigure();
     }
   }
+
+  int View::layoutX() const { return m_sceneTree->node.x; }
+
+  int View::layoutY() const { return m_sceneTree->node.y; }
 
   void View::applySeatFocus(bool withKeyboard) {
     // Mechanism only. Policy lives in Server::focusView; do not call directly
@@ -880,8 +884,7 @@ namespace umbriel {
     // Other floating views with no workspace use their scene coordinates.
     if (m_sceneTree != nullptr && m_server != nullptr && m_server->outputLayout() != nullptr) {
       wlr_output* wlrOut = wlr_output_layout_output_at(
-          m_server->outputLayout(), m_sceneTree->node.x + (currentSize().width / 2),
-          m_sceneTree->node.y + (currentSize().height / 2)
+          m_server->outputLayout(), layoutX() + (currentSize().width / 2), layoutY() + (currentSize().height / 2)
       );
       if (wlrOut != nullptr) {
         return m_server->outputFromWlr(wlrOut);

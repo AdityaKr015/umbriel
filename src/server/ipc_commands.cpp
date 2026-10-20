@@ -679,8 +679,8 @@ namespace umbriel {
         entry["y"] = box.y;
       } else if (v->floating() && server.cursor()->isDraggingView(v.get())) {
         // A floating drag moves its scene node before committing the saved target.
-        entry["x"] = v->sceneTree()->node.x;
-        entry["y"] = v->sceneTree()->node.y;
+        entry["x"] = v->layoutX();
+        entry["y"] = v->layoutY();
       } else {
         entry["x"] = v->layoutTargetX();
         entry["y"] = v->layoutTargetY();

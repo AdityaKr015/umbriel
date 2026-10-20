@@ -294,6 +294,11 @@ namespace umbriel {
     // supplies the target buffer is still outstanding, compositor presentation remains authoritative until it lands.
     void completeLayoutMotion(const wlr_box& target);
     void endLayoutMotion();
+    // Where the frame is now in layout coordinates, mid-animation included, without the workspace slide offset. Frames
+    // sit directly under trees anchored at the layout origin (a workspace tree moves only by its slide offset), so this
+    // is the frame node's own position.
+    [[nodiscard]] int layoutX() const;
+    [[nodiscard]] int layoutY() const;
     // The authoritative layout position: where the window's slot is, not where its scene node happens to be
     // mid-animation. Workspace slides and arrange reflows move nodes without touching the animation targets, so window
     // listings that order by position must read these instead.

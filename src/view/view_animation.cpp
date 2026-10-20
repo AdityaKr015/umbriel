@@ -35,8 +35,8 @@ namespace umbriel {
   void View::cancelPositionAnimation() {
     // Freeze wherever the node currently sits; callers use this to take over
     // positioning (drags, layout snaps) without a jump.
-    m_posX.snap(m_sceneTree->node.x);
-    m_posY.snap(m_sceneTree->node.y);
+    m_posX.snap(layoutX());
+    m_posY.snap(layoutY());
   }
 
   bool View::fadeComposited() const {
@@ -277,8 +277,8 @@ namespace umbriel {
 
   void View::applyDragPresentation() {
     applyPresentation({
-        .x = m_sceneTree->node.x,
-        .y = m_sceneTree->node.y,
+        .x = layoutX(),
+        .y = layoutY(),
         .width = m_presentation.width(),
         .height = m_presentation.height(),
     });
@@ -665,7 +665,7 @@ namespace umbriel {
   }
 
   void View::setDragPosition(int x, int y) {
-    const bool changed = m_sceneTree->node.x != x || m_sceneTree->node.y != y;
+    const bool changed = layoutX() != x || layoutY() != y;
     setScenePosition(x, y);
     if (m_mapped && !m_tiled && changed) {
       m_server->scheduleIpcWindowsEvent();
@@ -684,8 +684,8 @@ namespace umbriel {
       setPosition(x, y);
       return;
     }
-    const int fromX = m_sceneTree->node.x;
-    const int fromY = m_sceneTree->node.y;
+    const int fromX = layoutX();
+    const int fromY = layoutY();
     if (fromX == x && fromY == y) {
       m_posX.snap(x);
       m_posY.snap(y);

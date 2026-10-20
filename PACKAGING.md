@@ -216,10 +216,17 @@ manager-provided environment.
 The managed path imports the resulting login environment, including `PATH`,
 then starts `umbriel.service`. Login-profile values take precedence over
 variables with the same names generated from `environment.d`, while values
-present only in the user manager remain available. Once ready, Umbriel
-publishes its graphical session variables and validated `[environment]`
-assignments to the systemd user manager, then starts
-`umbriel-session.target`. The imported login-environment values are also copied
+present only in the user manager remain available. The service uses
+`Type=notify` and queues `umbriel-session.target` and
+`graphical-session.target` in the initial startup transaction, ordered after
+the compositor. Umbriel waits for publication of its graphical session
+variables and validated `[environment]` assignments to the systemd user
+manager before sending `READY=1` and launching configured startup commands.
+The graphical and IPC sockets are available before readiness is reported.
+Services ordered after `graphical-session.target` therefore wait for the
+published environment without requiring portal service overrides. A failed
+environment import prevents the managed compositor from reporting ready.
+The imported login-environment values are also copied
 to traditional D-Bus activation. Arbitrary configured values are not copied
 there. Imported login-environment and configured values remain in the user
 manager for its lifetime. User quits in the packaged `umbriel.service` activate

@@ -21,6 +21,7 @@
 #include <array>
 #include <cerrno>
 #include <csignal>
+#include <cstdint>
 #include <cstring>
 #include <expected>
 #include <optional>
@@ -147,6 +148,76 @@ namespace umbriel {
       }
       Workspace* workspace = activeWorkspace(server);
       return workspace != nullptr ? workspace->focusedView() : nullptr;
+    }
+
+    // Window IDs are ext-foreign-toplevel identifiers, the same strings
+    // clients receive from the protocol and the IPC surface reuses.
+    std::expected<View*, std::string> viewByForeignIdentifier(Server& server, std::string_view id) {
+      for (const auto& view : server.views()) {
+        if (!view->mapped()) {
+          continue;
+        }
+        const char* identifier = view->extForeignIdentifier();
+        if (identifier != nullptr && id == identifier) {
+          return view.get();
+        }
+      }
+      return std::unexpected("unknown window: " + std::string(id));
+    }
+
+    // The window id an action carries, or empty when it names none.
+    std::string_view windowIdArg(const Keybind& bind) {
+      const auto* arg = payloadIf<WindowIdArg>(bind);
+      return arg != nullptr ? std::string_view(arg->id) : std::string_view{};
+    }
+
+    // Which focused window a window action addresses when it names none.
+    enum class FocusSource : uint8_t {
+      Seat,       // the keyboard focus, else the active workspace's focused window
+      Scratchpad, // the keyboard focus while it is a scratchpad window, else none
+      Workspace,  // the active workspace's focused window, whatever holds the keyboard
+      Layout,     // the same, but none while a scratchpad window holds the keyboard
+      Recent,     // the most recently focused mapped window on any active workspace
+    };
+
+    // The window whose place an action changes: the one `id` names, else the focused window `source` picks, which
+    // may be null. An `id` naming no mapped window is an error.
+    std::expected<View*, std::string>
+    placementTarget(Server& server, std::string_view id, FocusSource source = FocusSource::Seat) {
+      if (!id.empty()) {
+        return viewByForeignIdentifier(server, id);
+      }
+      switch (source) {
+      case FocusSource::Seat:
+        return focusedWindow(server);
+      case FocusSource::Scratchpad:
+        return focusedScratchpadWindow(server);
+      case FocusSource::Workspace: {
+        Workspace* workspace = activeWorkspace(server);
+        return workspace != nullptr ? workspace->focusedView() : nullptr;
+      }
+      case FocusSource::Layout: {
+        Workspace* workspace = windowActionWorkspace(server);
+        return workspace != nullptr ? workspace->focusedView() : nullptr;
+      }
+      case FocusSource::Recent:
+        for (const auto& view : server.views()) {
+          if (view->mapped() && view->onActiveWorkspace()) {
+            return view.get();
+          }
+        }
+        return nullptr;
+      }
+      return nullptr;
+    }
+
+    // The window whose client an action addresses: the one `id` names, else the focused window that
+    // FocusSource::Seat picks, which may be null. An `id` naming no mapped window is an error.
+    std::expected<View*, std::string> clientTarget(Server& server, std::string_view id) {
+      if (!id.empty()) {
+        return viewByForeignIdentifier(server, id);
+      }
+      return focusedWindow(server);
     }
 
     const std::vector<double>& floatingPresetsFor(View& view) {
@@ -291,28 +362,25 @@ namespace umbriel {
       }
     }
 
-    // Move the focused tiled column as one structural unit. Rebuild it only
-    // after snapshotting because every view transfer mutates the source layout.
-    // A floating focus has no column, so it follows the single-window behavior
-    // used by the directional output actions.
-    bool moveFocusedColumnToWorkspace(Server& server, Workspace& source, Workspace& target) {
-      if (&source == &target) {
-        return false;
+    // Move the column of the window FocusSource::Layout picks to `target` as one structural unit. Rebuild it only
+    // after snapshotting because every view transfer mutates the source layout. A floating window has no column, so
+    // it follows the single-window behavior used by the directional output actions.
+    void moveFocusedColumnToWorkspace(Server& server, Workspace& target) {
+      Workspace* source = windowActionWorkspace(server);
+      View* focused = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr);
+      if (source == nullptr || source == &target || focused == nullptr) {
+        return;
       }
-      View* focused = source.focusedView();
-      if (focused == nullptr) {
-        return false;
-      }
-      const int columnIndex = source.layout().columnOf(focused);
-      const auto& sourceColumns = source.layout().columns();
+      const int columnIndex = source->layout().columnOf(focused);
+      const auto& sourceColumns = source->layout().columns();
       if (columnIndex < 0 || columnIndex >= static_cast<int>(sourceColumns.size())) {
         moveViewToWorkspace(server, *focused, target);
-        return true;
+        return;
       }
 
       const Column column = sourceColumns[static_cast<size_t>(columnIndex)];
       if (column.views.empty()) {
-        return false;
+        return;
       }
 
       target.exitFullscreenForIncomingView(focused);
@@ -326,7 +394,6 @@ namespace umbriel {
       target.group()->activate(&target);
       server.focusView(focused, FocusReason::Directional);
       finishWorkspaceTransfer(server, *focused);
-      return true;
     }
 
     // Adjacent output in `direction` from the focused (cursor) output; null with
@@ -616,33 +683,14 @@ namespace umbriel {
       return true;
     }
 
-    // Window IDs are ext-foreign-toplevel identifiers, the same strings
-    // clients receive from the protocol and the IPC surface reuses.
-    View* viewByForeignIdentifier(Server& server, std::string_view id) {
-      for (const auto& view : server.views()) {
-        if (!view->mapped()) {
-          continue;
-        }
-        const char* identifier = view->extForeignIdentifier();
-        if (identifier != nullptr && id == identifier) {
-          return view.get();
-        }
-      }
-      return nullptr;
-    }
-
     bool actionScreenCastSetWindow(Server& server, const Keybind& bind, std::string* error) {
-      View* view = nullptr;
-      if (const auto* arg = payloadIf<WindowIdArg>(bind); arg != nullptr && !arg->id.empty()) {
-        view = viewByForeignIdentifier(server, arg->id);
-        if (view == nullptr) {
-          return reject(error, "unknown window: " + arg->id);
-        }
-      } else {
-        view = focusedWindow(server);
-        if (view == nullptr) {
-          return reject(error, "no focused window");
-        }
+      const auto target = clientTarget(server, windowIdArg(bind));
+      if (!target.has_value()) {
+        return reject(error, target.error());
+      }
+      View* view = *target;
+      if (view == nullptr) {
+        return reject(error, "no focused window");
       }
       if (view->extForeignIdentifier() == nullptr) {
         return reject(error, "window has no capture identifier");
@@ -704,33 +752,25 @@ namespace umbriel {
     }
 
     bool actionWindowClose(Server& server, const Keybind& bind, std::string* error) {
-      if (const auto* arg = payloadIf<WindowIdArg>(bind); arg != nullptr && !arg->id.empty()) {
-        View* view = viewByForeignIdentifier(server, arg->id);
-        if (view == nullptr) {
-          if (error != nullptr) {
-            *error = "unknown window: " + arg->id;
-          }
-          return false;
+      const auto target = clientTarget(server, windowIdArg(bind));
+      if (!target.has_value()) {
+        if (error != nullptr) {
+          *error = target.error();
         }
-        view->requestClose();
-        return true;
+        return false;
       }
-      if (View* view = focusedWindow(server)) {
+      if (View* view = *target) {
         view->requestClose();
       }
       return true;
     }
 
     bool actionWindowKill(Server& server, const Keybind& bind, std::string* error) {
-      View* view = nullptr;
-      if (const auto* arg = payloadIf<WindowIdArg>(bind); arg != nullptr && !arg->id.empty()) {
-        view = viewByForeignIdentifier(server, arg->id);
-        if (view == nullptr) {
-          return reject(error, "unknown window: " + arg->id);
-        }
-      } else {
-        view = focusedWindow(server);
+      const auto target = clientTarget(server, windowIdArg(bind));
+      if (!target.has_value()) {
+        return reject(error, target.error());
       }
+      View* view = *target;
       if (view == nullptr) {
         return true;
       }
@@ -1030,7 +1070,7 @@ namespace umbriel {
           if (target == nullptr || target == source) {
             return true;
           }
-          if (View* view = source->focusedView()) {
+          if (View* view = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr)) {
             moveViewToWorkspace(server, *view, *target);
           }
         }
@@ -1064,7 +1104,7 @@ namespace umbriel {
     }
 
     template <int Direction> bool actionCycleWidth(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         cycleScratchpadSize<Direction>(*view, true);
         return true;
       }
@@ -1075,7 +1115,7 @@ namespace umbriel {
     }
 
     template <int Direction> bool actionCycleHeight(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         cycleScratchpadSize<Direction>(*view, false);
         return true;
       }
@@ -1086,7 +1126,7 @@ namespace umbriel {
     }
 
     bool actionSetWidth(Server& server, const Keybind& bind, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         if (const auto* arg = payloadIf<FractionArg>(bind)) {
           view->resizeFloatingFractions(std::clamp(arg->fraction, 0.1, 1.0), std::nullopt);
         }
@@ -1101,7 +1141,7 @@ namespace umbriel {
     }
 
     bool actionModifyWidth(Server& server, const Keybind& bind, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         if (const auto* arg = payloadIf<FractionArg>(bind); arg != nullptr) {
           if (const auto current = view->floatingFraction(true)) {
             view->resizeFloatingFractions(std::clamp(*current + arg->fraction, 0.1, 1.0), std::nullopt);
@@ -1118,7 +1158,7 @@ namespace umbriel {
     }
 
     bool actionSetHeight(Server& server, const Keybind& bind, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         if (const auto* arg = payloadIf<FractionArg>(bind)) {
           view->resizeFloatingFractions(std::nullopt, std::clamp(arg->fraction, 0.1, 1.0));
         }
@@ -1133,7 +1173,7 @@ namespace umbriel {
     }
 
     bool actionModifyHeight(Server& server, const Keybind& bind, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         if (const auto* arg = payloadIf<FractionArg>(bind); arg != nullptr) {
           if (const auto current = view->floatingFraction(false)) {
             view->resizeFloatingFractions(std::nullopt, std::clamp(*current + arg->fraction, 0.1, 1.0));
@@ -1157,7 +1197,7 @@ namespace umbriel {
       if (arg == nullptr) {
         return true;
       }
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         view->resizeFloatingEdge(Edges, arg->fraction);
         return true;
       }
@@ -1168,7 +1208,7 @@ namespace umbriel {
     }
 
     bool actionToggleMaximize(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         if (view->maximizedToEdges()) {
           view->setMaximizedToEdges(false);
         }
@@ -1184,7 +1224,7 @@ namespace umbriel {
     }
 
     bool actionToggleMaximizeToEdges(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         view->toggleMaximizedToEdges();
         server.scratchpadManager()->restorePresentation(view);
         return true;
@@ -1196,7 +1236,7 @@ namespace umbriel {
     }
 
     bool actionToggleFullscreen(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
-      if (View* view = focusedScratchpadWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Scratchpad).value_or(nullptr)) {
         view->toggleFullscreen();
         server.scratchpadManager()->restorePresentation(view);
         return true;
@@ -1208,15 +1248,15 @@ namespace umbriel {
     }
 
     bool actionToggleFloating(Server& server, const Keybind& bind, std::string* error) {
-      if (const auto* arg = payloadIf<WindowIdArg>(bind); arg != nullptr && !arg->id.empty()) {
-        View* view = viewByForeignIdentifier(server, arg->id);
-        if (view == nullptr) {
+      if (const std::string_view id = windowIdArg(bind); !id.empty()) {
+        const auto target = placementTarget(server, id);
+        if (!target.has_value()) {
           if (error != nullptr) {
-            *error = "unknown window: " + arg->id;
+            *error = target.error();
           }
           return false;
         }
-
+        View* view = *target;
         view->setFloating(view->tiled(), false);
         return true;
       } else {
@@ -1235,47 +1275,43 @@ namespace umbriel {
       if (scratchpadHoldsFocus(server)) {
         return true;
       }
-      if (View* view = focusedWindow(server)) {
+      if (View* view = placementTarget(server, {}, FocusSource::Seat).value_or(nullptr)) {
         view->togglePinned();
       }
       return true;
     }
 
     bool actionWindowCenter(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
-      if (scratchpadHoldsFocus(server)) {
-        return true;
-      }
-      if (Workspace* workspace = activeWorkspace(server)) {
-        if (View* view = workspace->focusedView()) {
-          view->centerFloating();
-        }
+      if (View* view = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr)) {
+        view->centerFloating();
       }
       return true;
     }
 
-    // The window a move action names, or the focused one when it names none.
-    View* moveTarget(Server& server, const std::string& id, std::string* error) {
-      View* view = id.empty() ? focusedWindow(server) : viewByForeignIdentifier(server, id);
-      if (view == nullptr) {
-        reject(error, id.empty() ? "no focused window" : "unknown window: " + id);
-      }
-      return view;
-    }
-
     bool actionWindowMoveTo(Server& server, const Keybind& bind, std::string* error) {
       if (const auto* arg = payloadIf<WindowMoveToArg>(bind); arg != nullptr) {
-        if (View* view = moveTarget(server, arg->id, error)) {
-          view->moveFloatingTo(arg->position);
+        const auto target = placementTarget(server, arg->id);
+        if (!target.has_value()) {
+          return reject(error, target.error());
         }
+        if (*target == nullptr) {
+          return reject(error, "no focused window");
+        }
+        (*target)->moveFloatingTo(arg->position);
       }
       return true;
     }
 
     bool actionWindowMoveBy(Server& server, const Keybind& bind, std::string* error) {
       if (const auto* arg = payloadIf<WindowMoveByArg>(bind); arg != nullptr) {
-        if (View* view = moveTarget(server, arg->id, error)) {
-          view->moveFloatingBy(arg->deltaX, arg->deltaY);
+        const auto target = placementTarget(server, arg->id);
+        if (!target.has_value()) {
+          return reject(error, target.error());
         }
+        if (*target == nullptr) {
+          return reject(error, "no focused window");
+        }
+        (*target)->moveFloatingBy(arg->deltaX, arg->deltaY);
       }
       return true;
     }
@@ -1349,13 +1385,14 @@ namespace umbriel {
         }
         return false;
       }
-      View* view = viewByForeignIdentifier(server, arg->id);
-      if (view == nullptr) {
+      const auto target = placementTarget(server, arg->id);
+      if (!target.has_value()) {
         if (error != nullptr) {
-          *error = "unknown window: " + arg->id;
+          *error = target.error();
         }
         return false;
       }
+      View* view = *target;
       if (ScratchpadManager* scratchpad = server.scratchpadManager();
           scratchpad != nullptr && scratchpad->contains(view) && !view->onActiveWorkspace()) {
         // Hidden scratchpad entries fail FocusManager's visibility gate. Summon
@@ -1376,7 +1413,7 @@ namespace umbriel {
     }
 
     bool actionWindowFocusLast(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
-      View* current = focusedWindow(server);
+      View* current = placementTarget(server, {}, FocusSource::Seat).value_or(nullptr);
       for (const auto& entry : server.registry().all()) {
         View* target = entry.get();
         if (target == current || !target->mapped() || target->workspace() == nullptr) {
@@ -1413,7 +1450,7 @@ namespace umbriel {
       if (workspace == nullptr) {
         return true;
       }
-      View* focused = workspace->focusedView();
+      View* focused = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr);
       const bool seekFloating = focused == nullptr || !focused->floating();
       View* target = nullptr;
       for (const auto& entry : server.registry().all()) {
@@ -1453,11 +1490,9 @@ namespace umbriel {
           return true;
         }
         const bool follow = bind.action == KeybindAction::WindowMoveToWorkspace;
-        for (const auto& entry : server.views()) {
-          if (entry->mapped() && entry->onActiveWorkspace()) {
-            moveViewToWorkspace(server, *entry, **target, follow);
-            return true;
-          }
+        if (View* view = placementTarget(server, {}, FocusSource::Recent).value_or(nullptr)) {
+          moveViewToWorkspace(server, *view, **target, follow);
+          return true;
         }
         if (!follow) {
           // Nothing to move: no-op, rather than falling through to the workspace switch below.
@@ -1465,9 +1500,7 @@ namespace umbriel {
         }
       }
       if (bind.action == KeybindAction::ColumnMoveToWorkspace) {
-        if (Workspace* source = windowActionWorkspace(server)) {
-          moveFocusedColumnToWorkspace(server, *source, **target);
-        }
+        moveFocusedColumnToWorkspace(server, **target);
         return true;
       }
       group->select(*target);
@@ -1503,7 +1536,7 @@ namespace umbriel {
       if (target == nullptr || target == workspace) {
         return true;
       }
-      if (View* view = workspace->focusedView()) {
+      if (View* view = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr)) {
         moveViewToWorkspace(server, *view, *target, Follow);
       }
       return true;
@@ -1519,7 +1552,7 @@ namespace umbriel {
       if (target == nullptr || target == source) {
         return true;
       }
-      moveFocusedColumnToWorkspace(server, *source, *target);
+      moveFocusedColumnToWorkspace(server, *target);
       return true;
     }
 
@@ -1599,8 +1632,7 @@ namespace umbriel {
       if (destination == nullptr) {
         return reject(error, "output has no workspace");
       }
-      Workspace* source = windowActionWorkspace(server);
-      View* view = source != nullptr ? source->focusedView() : nullptr;
+      View* view = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr);
       if (view == nullptr) {
         return true; // nothing focused: silent no-op
       }
@@ -1649,10 +1681,7 @@ namespace umbriel {
       if (destination == nullptr) {
         return reject(error, "output has no workspace");
       }
-      Workspace* source = windowActionWorkspace(server);
-      if (source == nullptr || !moveFocusedColumnToWorkspace(server, *source, *destination)) {
-        return true; // nothing focused: silent no-op
-      }
+      moveFocusedColumnToWorkspace(server, *destination); // nothing focused: silent no-op
       return true;
     }
 
@@ -1918,11 +1947,9 @@ namespace umbriel {
       if (!name || output == nullptr) {
         return false;
       }
-      Workspace* workspace = activeWorkspace(server);
+      View* view = placementTarget(server, {}, FocusSource::Workspace).value_or(nullptr);
       ScratchpadManager* scratchpad = server.scratchpadManager();
-      return scratchpad != nullptr
-          && workspace != nullptr
-          && scratchpad->moveToScratchpad(workspace->focusedView(), *name, output);
+      return scratchpad != nullptr && scratchpad->moveToScratchpad(view, *name, output);
     }
 
     bool actionScratchpadToggle(Server& server, const Keybind& bind, std::string* error) {
@@ -1969,8 +1996,8 @@ namespace umbriel {
       if (focusedScratchpadWindow(server) != nullptr && scratchpad->hasFocus(*name)) {
         return scratchpad->restoreFocused(*name);
       }
-      Workspace* workspace = activeWorkspace(server);
-      return workspace != nullptr && scratchpad->moveToScratchpad(workspace->focusedView(), *name, output);
+      View* view = placementTarget(server, {}, FocusSource::Workspace).value_or(nullptr);
+      return scratchpad->moveToScratchpad(view, *name, output);
     }
 
     bool actionScratchpadFocusNext(Server& server, const Keybind& bind, std::string* error) {
@@ -2027,9 +2054,13 @@ namespace umbriel {
       View* view = nullptr;
       Output* output = nullptr;
       if constexpr (Kind == EffectKind::Window || Kind == EffectKind::Border) {
-        view = target.empty() ? focusedWindow(server) : viewByForeignIdentifier(server, target);
+        const auto resolved = placementTarget(server, target);
+        if (!resolved.has_value()) {
+          return reject(error, resolved.error());
+        }
+        view = *resolved;
         if (view == nullptr || !view->mapped()) {
-          return reject(error, target.empty() ? "no focused window" : "unknown window: " + std::string(target));
+          return reject(error, "no focused window");
         }
         slot = &view->effectSlot(Kind);
       } else if constexpr (Kind == EffectKind::Screen) {

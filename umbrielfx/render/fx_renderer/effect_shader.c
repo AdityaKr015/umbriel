@@ -400,7 +400,7 @@ struct fx_effect_shader* fx_effect_shader_create(
     return NULL;
   }
   snprintf(fragment, length, "%s%s%s%s%s%s", kPreamble, section, extra, line, source, suffix);
-  wlr_log(WLR_DEBUG, "Compiling %s shader: %s", kind_name(kind), label);
+  wlr_log(WLR_INFO, "Compiling %s shader: %s", kind_name(kind), label);
   shader->program = link_program(fragment);
   free(fragment);
   if (shader->program == 0) {

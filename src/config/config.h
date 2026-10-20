@@ -230,6 +230,12 @@ namespace umbriel {
     LeftMiddleRight,
   };
 
+  enum class DragLock : uint8_t {
+    Off,
+    Timeout,
+    Sticky,
+  };
+
   enum class WindowDragToggle : uint8_t {
     None,
     Floating,
@@ -1030,6 +1036,8 @@ namespace umbriel {
 
       struct Touchpad {
         std::optional<bool> tap = true;
+        std::optional<bool> tapAndDrag;
+        std::optional<DragLock> dragLock;
         std::optional<bool> naturalScroll;
         std::optional<bool> leftHanded;
         std::optional<AccelProfile> accelProfile;
@@ -1120,6 +1128,8 @@ namespace umbriel {
         std::optional<int> repeatRate;
         std::optional<int> repeatDelay;
         std::optional<bool> tap;
+        std::optional<bool> tapAndDrag;
+        std::optional<DragLock> dragLock;
         std::optional<bool> naturalScroll;
         std::optional<bool> leftHanded;
         std::optional<AccelProfile> accelProfile;

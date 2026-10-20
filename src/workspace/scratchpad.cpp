@@ -374,7 +374,7 @@ namespace umbriel {
           targetArea.y + std::max(0, (targetArea.height - targetHeight) / 2)
       );
     } else {
-      view->setPosition(view->sceneTree()->node.x, view->sceneTree()->node.y);
+      view->setPosition(view->layoutX(), view->layoutY());
     }
 
     if (newEntry) {
@@ -456,8 +456,8 @@ namespace umbriel {
         const int width = view->presentation().width();
         const int height = view->presentation().height();
         if (width > 0 && height > 0 && targetArea.width > 0 && targetArea.height > 0) {
-          const int centerX = view->sceneTree()->node.x + width / 2;
-          const int centerY = view->sceneTree()->node.y + height / 2;
+          const int centerX = view->layoutX() + width / 2;
+          const int centerY = view->layoutY() + height / 2;
           const bool centerOnTarget = centerX >= targetArea.x
               && centerX < targetArea.x + targetArea.width
               && centerY >= targetArea.y
@@ -565,9 +565,8 @@ namespace umbriel {
           && targetArea.height > 0) {
         remapViewRestoreGeometry(view, previousArea, targetArea);
         if (view != alreadyPositioned) {
-          const double xFraction = static_cast<double>(view->sceneTree()->node.x - previousArea.x) / previousArea.width;
-          const double yFraction =
-              static_cast<double>(view->sceneTree()->node.y - previousArea.y) / previousArea.height;
+          const double xFraction = static_cast<double>(view->layoutX() - previousArea.x) / previousArea.width;
+          const double yFraction = static_cast<double>(view->layoutY() - previousArea.y) / previousArea.height;
           const int newX = targetArea.x + static_cast<int>(std::lround(xFraction * targetArea.width));
           const int newY = targetArea.y + static_cast<int>(std::lround(yFraction * targetArea.height));
           view->cancelPositionAnimation();
@@ -682,8 +681,8 @@ namespace umbriel {
         }
         View* view = entry.view;
         remapViewRestoreGeometry(view, previousArea, targetArea);
-        const double xFraction = static_cast<double>(view->sceneTree()->node.x - previousArea.x) / previousArea.width;
-        const double yFraction = static_cast<double>(view->sceneTree()->node.y - previousArea.y) / previousArea.height;
+        const double xFraction = static_cast<double>(view->layoutX() - previousArea.x) / previousArea.width;
+        const double yFraction = static_cast<double>(view->layoutY() - previousArea.y) / previousArea.height;
         const int newX = targetArea.x + static_cast<int>(std::lround(xFraction * targetArea.width));
         const int newY = targetArea.y + static_cast<int>(std::lround(yFraction * targetArea.height));
         const int width = view->currentSize().width;
@@ -1044,8 +1043,8 @@ namespace umbriel {
       return;
     }
     view->applyPresentation({
-        .x = view->sceneTree()->node.x,
-        .y = view->sceneTree()->node.y,
+        .x = view->layoutX(),
+        .y = view->layoutY(),
         .width = geometry.width,
         .height = geometry.height,
     });
@@ -1235,8 +1234,8 @@ namespace umbriel {
           const int width = view->currentSize().width;
           const int height = view->currentSize().height;
           view->setPosition(
-              std::clamp(view->sceneTree()->node.x, area.x, area.x + std::max(0, area.width - width)),
-              std::clamp(view->sceneTree()->node.y, area.y, area.y + std::max(0, area.height - height))
+              std::clamp(view->layoutX(), area.x, area.x + std::max(0, area.width - width)),
+              std::clamp(view->layoutY(), area.y, area.y + std::max(0, area.height - height))
           );
         }
       }
@@ -1316,8 +1315,8 @@ namespace umbriel {
             continue;
           }
           entry.displacedPosition = {{
-              static_cast<double>(entry.view->sceneTree()->node.x - homeArea.x) / homeArea.width,
-              static_cast<double>(entry.view->sceneTree()->node.y - homeArea.y) / homeArea.height,
+              static_cast<double>(entry.view->layoutX() - homeArea.x) / homeArea.width,
+              static_cast<double>(entry.view->layoutY() - homeArea.y) / homeArea.height,
           }};
         }
       }

@@ -320,8 +320,8 @@ namespace umbriel {
     // The frame's position is its place in layout coordinates: a workspace slide moves the workspace tree around it
     // and does not change it. Its own animated motion is not published frame by frame either, because X clients, games
     // in particular, react to every move; the last tick of the animation publishes where the window came to rest.
-    int lx = region.toX(m_sceneTree->node.x);
-    int ly = region.toY(m_sceneTree->node.y);
+    int lx = region.toX(layoutX());
+    int ly = region.toY(layoutY());
     // X11 geometry is 16-bit: coordinates are signed, sizes unsigned and nonzero.
     constexpr int kMinCoordinate = std::numeric_limits<int16_t>::min();
     constexpr int kMaxCoordinate = std::numeric_limits<int16_t>::max();
@@ -363,9 +363,7 @@ namespace umbriel {
 
   XwaylandRegion View::xwaylandRegion() const {
     const Output* output = currentOutput();
-    return m_server->xwayland()->outputs().region(
-        output != nullptr ? output->wlr() : nullptr, m_sceneTree->node.x, m_sceneTree->node.y
-    );
+    return m_server->xwayland()->outputs().region(output != nullptr ? output->wlr() : nullptr, layoutX(), layoutY());
   }
 
   void View::applyXwaylandScale(double scale) {

@@ -725,8 +725,8 @@ namespace umbriel {
     if (fullscreen && !m_tiled && !currentFullscreen()) {
       const wlr_box& geometry = geometryBox();
       m_fullscreenRestoreBox = {
-          .x = m_sceneTree->node.x,
-          .y = m_sceneTree->node.y,
+          .x = layoutX(),
+          .y = layoutY(),
           .width = geometry.width,
           .height = geometry.height,
       };

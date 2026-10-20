@@ -32,7 +32,7 @@ namespace umbriel {
         return output->usableArea();
       }
     }
-    return m_server->usableAreaAt(m_sceneTree->node.x, m_sceneTree->node.y);
+    return m_server->usableAreaAt(layoutX(), layoutY());
   }
 
   wlr_box View::floatingMarginArea(const wlr_box& usable) const {
@@ -107,7 +107,7 @@ namespace umbriel {
       return;
     }
     const wlr_box& geo = geometryBox();
-    const FloatingPoint origin{.x = m_sceneTree->node.x, .y = m_sceneTree->node.y};
+    const FloatingPoint origin{.x = layoutX(), .y = layoutY()};
     if (const auto clamped = floatingClampTarget(origin, geo.width, geo.height, false)) {
       setPosition(clamped->x, clamped->y);
     }
@@ -402,8 +402,7 @@ namespace umbriel {
   void View::beginFloatingResize(uint32_t edges) {
     const wlr_box& geo = geometryBox();
     m_floating.beginResize(
-        {.x = m_sceneTree->node.x + geo.x, .y = m_sceneTree->node.y + geo.y, .width = geo.width, .height = geo.height},
-        edges
+        {.x = layoutX() + geo.x, .y = layoutY() + geo.y, .width = geo.width, .height = geo.height}, edges
     );
     syncFloatingResizePosition();
   }

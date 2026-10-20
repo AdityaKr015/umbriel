@@ -442,8 +442,8 @@ namespace umbriel {
             const int targetH = m_presentation.height();
             const int startW = std::max(1, static_cast<int>(targetW * scale));
             const int startH = std::max(1, static_cast<int>(targetH * scale));
-            const int targetX = m_sceneTree->node.x;
-            const int targetY = m_sceneTree->node.y;
+            const int targetX = layoutX();
+            const int targetY = layoutY();
             const int startX = targetX + (targetW - startW) / 2;
             const int startY = targetY + (targetH - startH) / 2;
 
@@ -462,8 +462,8 @@ namespace umbriel {
             setLayoutTarget(area.x, area.y);
             presentBox(area);
           } else {
-            const int targetX = m_sceneTree->node.x;
-            const int targetY = m_sceneTree->node.y;
+            const int targetX = layoutX();
+            const int targetY = layoutY();
             setScenePosition(targetX, targetY + kOpenSlidePx);
             m_posX.snap(targetX);
             m_posY.snap(targetY + kOpenSlidePx);

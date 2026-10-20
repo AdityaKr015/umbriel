@@ -905,7 +905,8 @@ namespace umbriel {
     // Position from the node's CURRENT position, not the layout target: during position animations (column swaps, drag
     // drops) the node lags the target, and presentation derived from the target lands displaced on screen (cut-off
     // borders that reappear as the window settles).
-    const wlr_scene_node& node = view->sceneTree()->node;
+    const int nodeX = view->layoutX();
+    const int nodeY = view->layoutY();
 
     // Each case only decides the region the view occupies; everything after is common. Keeping that region off the
     // neighbouring output is the job of the output's clipped scene roots, not of this function.
@@ -918,7 +919,7 @@ namespace umbriel {
       // Pinned views sit outside the workspace, so no slide offset applies, and
       // they are sized from committed geometry rather than the presented size.
       const wlr_box& geometry = view->geometryBox();
-      target = {node.x, node.y, geometry.width, geometry.height};
+      target = {nodeX, nodeY, geometry.width, geometry.height};
     } else {
       if (!normallyVisible && !overviewActive) {
         return;
@@ -931,7 +932,7 @@ namespace umbriel {
           return;
         }
         // Fullscreen covers the output and draws no decorations.
-        target = {node.x + m_slideOffsetX, node.y + m_slideOffsetY, outputBox.width, outputBox.height};
+        target = {nodeX + m_slideOffsetX, nodeY + m_slideOffsetY, outputBox.width, outputBox.height};
       } else {
         // Floating views follow committed geometry; tiled ones follow the box
         // the layout assigned them.
@@ -943,7 +944,7 @@ namespace umbriel {
           view->setNodeEnabled(normallyVisible);
           return;
         }
-        target = {node.x + m_slideOffsetX, node.y + m_slideOffsetY, sized.width, sized.height};
+        target = {nodeX + m_slideOffsetX, nodeY + m_slideOffsetY, sized.width, sized.height};
       }
     }
 
@@ -1101,9 +1102,8 @@ namespace umbriel {
         view->presentTiledBox(slot);
         continue;
       }
-      const wlr_scene_node& node = view->sceneTree()->node;
       const wlr_box from = openingLayoutBox.value_or(
-          wlr_box{.x = node.x, .y = node.y, .width = presented.width, .height = presented.height}
+          wlr_box{.x = view->layoutX(), .y = view->layoutY(), .width = presented.width, .height = presented.height}
       );
       // A positioned member animates its size only when this pass reconfigured it or a motion already carries it;
       // otherwise it keeps the size it presents, which stays inside the slot.
@@ -2018,10 +2018,9 @@ namespace umbriel {
               || !candidate->scheduledFullscreen()) {
             continue;
           }
-          const wlr_scene_node& node = candidate->sceneTree()->node;
           const wlr_box fullscreenBox{
-              .x = node.x + m_slideOffsetX,
-              .y = node.y + m_slideOffsetY,
+              .x = candidate->layoutX() + m_slideOffsetX,
+              .y = candidate->layoutY() + m_slideOffsetY,
               .width = outputBox.width,
               .height = outputBox.height,
           };

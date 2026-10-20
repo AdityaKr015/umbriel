@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "input/cursor.h"
 #include "output/output.h"
+#include "overview/overview.h"
 #include "scene/effect_registry.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -38,6 +39,12 @@ namespace umbriel {
 
     bool sameBox(const wlr_box& first, const wlr_box& second) {
       return first.x == second.x && first.y == second.y && first.width == second.width && first.height == second.height;
+    }
+
+    // Opening the overview hides every scratchpad, and nothing shows one again until it closes.
+    bool overviewOpen(Server& server) {
+      const Overview* overview = server.overview();
+      return overview != nullptr && overview->active();
     }
   } // namespace
 
@@ -816,7 +823,7 @@ namespace umbriel {
 
   bool ScratchpadManager::summon(std::string_view name, Output* invokingOutput, View* member) {
     Scratchpad* scratchpad = findScratchpad(name);
-    if (scratchpad == nullptr || invokingOutput == nullptr || !hasEntries(name)) {
+    if (scratchpad == nullptr || invokingOutput == nullptr || !hasEntries(name) || overviewOpen(*m_server)) {
       return false;
     }
     // A pad showing one window shows the member asked for instead; a dialog shows with the member it belongs to.
@@ -858,7 +865,7 @@ namespace umbriel {
 
   bool ScratchpadManager::toggle(std::string_view name, Output* invokingOutput) {
     Scratchpad* scratchpad = findScratchpad(name);
-    if (scratchpad == nullptr || invokingOutput == nullptr) {
+    if (scratchpad == nullptr || invokingOutput == nullptr || overviewOpen(*m_server)) {
       return false;
     }
     if (!hasEntries(name)) {
@@ -1057,7 +1064,10 @@ namespace umbriel {
 
   bool ScratchpadManager::showStep(std::string_view name, int direction, Output* invokingOutput) {
     Scratchpad* scratchpad = findScratchpad(name);
-    if (scratchpad == nullptr || invokingOutput == nullptr || (direction != -1 && direction != 1)) {
+    if (scratchpad == nullptr
+        || invokingOutput == nullptr
+        || (direction != -1 && direction != 1)
+        || overviewOpen(*m_server)) {
       return false;
     }
     if (!hasEntries(name)) {

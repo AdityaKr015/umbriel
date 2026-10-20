@@ -148,9 +148,7 @@ namespace umbriel {
       auto* wait = new AcquireWait();
       wait->watch = &watch;
       wait->seq = state->seq;
-      if (!wlr_drm_syncobj_timeline_waiter_init(
-              &wait->waiter, timeline, point, 0, watch.loop, onAcquireReady
-          )) {
+      if (!wlr_drm_syncobj_timeline_waiter_init(&wait->waiter, timeline, point, 0, watch.loop, onAcquireReady)) {
         delete wait;
         return;
       }

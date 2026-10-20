@@ -150,6 +150,18 @@ namespace umbriel {
 
     result.committed = runSequenceForCurrentMode(params, ops, result, hdrFail, sdr10Fail);
 
+    const auto rerunOnMode = [&](wlr_output_mode* mode) {
+      ops.stageMode(mode);
+      hdrFail = params.earlyHdrFail;
+      sdr10Fail = {};
+      result.committed = runSequenceForCurrentMode(params, ops, result, hdrFail, sdr10Fail);
+    };
+
+    if (!result.committed && !result.retry && params.keptLiveMode != nullptr) {
+      result.usedLiveModeRetry = true;
+      rerunOnMode(params.keptLiveMode);
+    }
+
     if (!result.committed && !result.retry && params.configuredModeSpec != nullptr && params.preferredMode != nullptr) {
       result.usedModeFallback = true;
       if (!params.modeFallbackAlreadyWarned) {
@@ -163,11 +175,7 @@ namespace umbriel {
         ops.warnModeFallback(requested, *params.preferredMode);
       }
 
-      ops.stageMode(params.preferredMode);
-
-      hdrFail = params.earlyHdrFail;
-      sdr10Fail = {};
-      result.committed = runSequenceForCurrentMode(params, ops, result, hdrFail, sdr10Fail);
+      rerunOnMode(params.preferredMode);
     }
 
     result.hdrFail = hdrFail;

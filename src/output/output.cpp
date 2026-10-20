@@ -117,6 +117,16 @@ namespace umbriel {
       return {.x = sceneOutput.x, .y = sceneOutput.y, .width = width, .height = height};
     }
 
+    // Staging any mode, even the live one, makes wlroots request ALLOW_MODESET, which makes the display resync.
+    wlr_output_mode* keepLiveModeOrStage(wlr_output_state& state, const wlr_output& output, wlr_output_mode* mode) {
+      if (!liveModeMatches(output, mode)) {
+        wlr_output_state_set_mode(&state, mode);
+        return nullptr;
+      }
+      kLog.info("output '{}': keeping live mode {}x{}@{}mHz", output.name, mode->width, mode->height, mode->refresh);
+      return mode;
+    }
+
 #ifdef TRACY_ENABLE
     // Tracy keeps a plot's name pointer and reads it while a capture runs, so
     // the per-output names live for the rest of the process.
@@ -537,7 +547,7 @@ namespace umbriel {
     const bool enabled = desktopEnabled() && !m_dpmsOff;
     wlr_output_state state{};
     wlr_output_state_init(&state);
-    if (stageGeometry) {
+    if (stageGeometry && outputEnableNeedsStaging(*m_output, enabled)) {
       wlr_output_state_set_enabled(&state, enabled);
     }
 
@@ -548,6 +558,7 @@ namespace umbriel {
     bool scaleStaged = false;
     const OutputMode* configuredModeSpec = nullptr;
     wlr_output_mode* stagedMode = nullptr;
+    wlr_output_mode* keptLiveMode = nullptr;
     if (enabled && stageGeometry) {
       if (rule != nullptr && rule->mode) {
         if (wlr_output_is_wl(m_output)) {
@@ -556,14 +567,14 @@ namespace umbriel {
           configuredModeSpec = &*rule->mode;
           stagedMode = selectOutputMode(m_output, *rule->mode);
           if (stagedMode != nullptr) {
-            wlr_output_state_set_mode(&state, stagedMode);
+            keptLiveMode = keepLiveModeOrStage(state, *m_output, stagedMode);
           } else {
             wlr_output_state_set_custom_mode(&state, rule->mode->width, rule->mode->height, rule->mode->refreshMHz);
           }
         }
       } else if (!wlr_output_is_wl(m_output)) {
         if (wlr_output_mode* mode = wlr_output_preferred_mode(m_output)) {
-          wlr_output_state_set_mode(&state, mode);
+          keptLiveMode = keepLiveModeOrStage(state, *m_output, mode);
         }
       }
 
@@ -646,6 +657,14 @@ namespace umbriel {
             },
     };
 
+    // wlroots writes max bpc only in commits that allow a modeset, and the kernel may require one to change
+    // colorspace or to switch HDR on or off.
+    const auto allowModesetForColorChange = [&](uint32_t fmt, bool hdr) {
+      if (colorChangeNeedsModeset(*m_output, fmt, hdr)) {
+        state.allow_reconfiguration = true;
+      }
+    };
+
     const auto stageHdr = [&](uint32_t fmt, bool vrr) -> bool {
       if (!isPrimaryFormat(fmt)) {
         return false;
@@ -654,6 +673,7 @@ namespace umbriel {
       (void)stageGammaForOutputMode(GammaOutputMode::Hdr, gammaOps);
       wlr_output_state_set_image_description(&state, &hdrDescription);
       wlr_output_state_set_render_format(&state, fmt);
+      allowModesetForColorChange(fmt, true);
       return true;
     };
 
@@ -664,6 +684,7 @@ namespace umbriel {
       stageVrr(vrr);
       (void)stageGammaForOutputMode(GammaOutputMode::Sdr, gammaOps);
       wlr_output_state_set_render_format(&state, fmt);
+      allowModesetForColorChange(fmt, false);
       return true;
     };
 
@@ -683,6 +704,7 @@ namespace umbriel {
           .tryVrrOn = tryVrrOn,
           .configuredModeSpec = stageGeometry ? configuredModeSpec : nullptr,
           .preferredMode = stageGeometry ? preferredFallbackMode(m_output, stagedMode) : nullptr,
+          .keptLiveMode = keptLiveMode,
           .modeFallbackAlreadyWarned = m_modeFallbackWarned,
           .vrrDroppedTier = m_vrrDroppedTier,
           .earlyHdrFail = earlyHdrFail,
@@ -771,7 +793,15 @@ namespace umbriel {
       const FormatSequenceOps seqOps{
           .stageSdr = stageSdr,
           .stageHdr = stageHdr,
-          .test = [&] { return wlr_output_test_state(m_output, &state); },
+          .test =
+              [&] {
+                // A kept live mode leaves wlroots nothing to change, so it skips the KMS test unless a buffer is sent.
+                if (keptLiveMode != nullptr
+                    && !wlr_output_configure_primary_swapchain(m_output, &state, &m_output->swapchain)) {
+                  return false;
+                }
+                return wlr_output_test_state(m_output, &state);
+              },
           .commit = commitStagedState,
           .clearImageDescription = [&] { wlr_output_state_set_image_description(&state, nullptr); },
           .stageMode = [&](wlr_output_mode* mode) { wlr_output_state_set_mode(&state, mode); },
@@ -805,6 +835,12 @@ namespace umbriel {
       const FormatSequenceResult seq = runFormatSequence(seqParams, seqOps);
       anyCommitted = seq.committed;
       usedModeFallback = seq.usedModeFallback;
+      if (seq.usedLiveModeRetry) {
+        kLog.info(
+            "output '{}': backend rejected keeping live mode {}x{}@{}mHz, retried with a modeset", m_output->name,
+            keptLiveMode->width, keptLiveMode->height, keptLiveMode->refresh
+        );
+      }
       if (seq.modeFallbackWarnedNow) {
         m_modeFallbackWarned = true;
       }

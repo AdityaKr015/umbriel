@@ -775,9 +775,6 @@ namespace umbriel {
         AnimationCurve curve{.easing = Easing::Spring, .spring = {.damping = 1.0, .stiffness = 800.0}};
         double dim = 0.8;
         bool blur = false;
-        double scale = 0.0;
-        bool maximize = false;
-        bool fullscreen = false;
         bool operator==(const Scratchpad&) const = default;
       } scratchpad;
 

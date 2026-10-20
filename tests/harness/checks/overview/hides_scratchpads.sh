@@ -129,7 +129,6 @@ enabled = false
 enabled = false
 dim = 0.0
 blur = false
-scale = 0.0
 
 [colors]
 backdrop = "#000000FF"

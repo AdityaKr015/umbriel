@@ -64,7 +64,6 @@ namespace umbriel {
   } // namespace
 
   using view_detail::removeListener;
-  using view_detail::scratchpadOwnsOpeningGeometry;
   using view_detail::toplevelSurfaceTreeNode;
   using view_detail::windowRuleWorkspace;
   using view_detail::windowRuleWorkspaceGroup;
@@ -306,7 +305,7 @@ namespace umbriel {
     if (!assignedScratchpad && rule.defaultPinned && *rule.defaultPinned) {
       setPinned(true, false);
     }
-    if (assignedScratchpad && !scratchpadOwnsOpeningGeometry()) {
+    if (assignedScratchpad) {
       // Scratchpad admission has detached the view from its workspace, so its
       // assigned scratchpad output now supplies the correct usable area.
       placeInUsableArea(rule.defaultPosition);
@@ -392,12 +391,13 @@ namespace umbriel {
 
     // After default_maximize so maximize-to-edges wins the column, but before
     // fullscreen: setFullscreen leaves and restores the maximize-to-edges state.
-    if (!assignedScratchpad && rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges) {
+    // These two also present a window that opens into a scratchpad.
+    if (rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges) {
       setMaximizedToEdges(true);
     }
 
     // Fullscreen after workspace + focus so the view lands in the right place.
-    if (!assignedScratchpad && rule.defaultFullscreen && *rule.defaultFullscreen) {
+    if (rule.defaultFullscreen && *rule.defaultFullscreen) {
       setFullscreen(true);
     }
 
@@ -754,7 +754,6 @@ namespace umbriel {
       const bool openingInScratchpad = rule.defaultScratchpad
           && scratchpadManager != nullptr
           && scratchpadManager->hasScratchpad(*rule.defaultScratchpad);
-      const auto& scratchpadConfig = config().animation.scratchpad;
       const bool wantTiled = !openingInScratchpad
           && !rule.defaultPinned.value_or(false)
           && (rule.defaultFloating ? !*rule.defaultFloating : looksTiled());
@@ -801,14 +800,13 @@ namespace umbriel {
         rule.defaultScrollingExtent = alone.defaultScrollingExtent;
       }
 
-      const bool wantFullscreen = openingInScratchpad
-          ? scratchpadConfig.fullscreen
-          : requestedFullscreen() || (rule.defaultFullscreen && *rule.defaultFullscreen);
+      const bool wantFullscreen =
+          (!openingInScratchpad && requestedFullscreen()) || (rule.defaultFullscreen && *rule.defaultFullscreen);
       const bool layoutMaximizeToEdges =
           (target != nullptr ? target->layoutConfig().clientMaximize : config().layout.clientMaximize)
           == ClientMaximize::Edges;
       const bool wantMaximizeToEdges = openingInScratchpad
-          ? !wantFullscreen && scratchpadConfig.maximize
+          ? !wantFullscreen && rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges
           : (rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges)
               || (config().general.honorRestoredMaximize && requestedMaximized() && layoutMaximizeToEdges);
       const bool wantMaximized = openingInScratchpad
@@ -896,12 +894,6 @@ namespace umbriel {
           const wlr_box usable = openingUsableArea(targetOutput);
           requestFloatingSize(usable.width, usable.height);
           setMaximizedState(true);
-        } else if (openingInScratchpad && scratchpadConfig.scale > 0.0 && scratchpadConfig.scale <= 1.0) {
-          const wlr_box usable = openingUsableArea(targetOutput);
-          requestFloatingSize(
-              std::max(100, static_cast<int>(std::lround(usable.width * scratchpadConfig.scale))),
-              std::max(100, static_cast<int>(std::lround(usable.height * scratchpadConfig.scale)))
-          );
         } else {
           const wlr_box usable = openingUsableArea(targetOutput);
           int requestedWidth = 0;

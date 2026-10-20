@@ -29,8 +29,6 @@ namespace umbriel {
     constexpr Logger kLog("view");
   } // namespace
 
-  using view_detail::scratchpadOwnsOpeningGeometry;
-
   void View::onRequestMove(wl_listener* listener, void* data) {
     View* self = wl_container_of(listener, self, m_requestMove);
     self->handleRequestMove(data);
@@ -371,7 +369,7 @@ namespace umbriel {
 
   void View::handleSetParent() {
     if (m_mapped) {
-      if (inheritScratchpadFromParent(m_tiled) && !scratchpadOwnsOpeningGeometry()) {
+      if (inheritScratchpadFromParent(m_tiled)) {
         placeInUsableArea(m_initialRules.defaultPosition);
         if (ScratchpadManager* scratchpad = m_server->scratchpadManager()) {
           scratchpad->syncViewPresentation(this);

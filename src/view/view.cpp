@@ -63,11 +63,6 @@ namespace umbriel {
       }
     }
 
-    bool scratchpadOwnsOpeningGeometry() {
-      const auto& scratchpad = config().animation.scratchpad;
-      return scratchpad.fullscreen || scratchpad.maximize || (scratchpad.scale > 0.0 && scratchpad.scale <= 1.0);
-    }
-
     wlr_scene_node* toplevelSurfaceTreeNode(wlr_scene_tree* xdgTree, wlr_surface* mainSurface) {
       wlr_scene_node* child = nullptr;
       wl_list_for_each(child, &xdgTree->children, link) {

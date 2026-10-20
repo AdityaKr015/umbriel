@@ -200,9 +200,6 @@ namespace umbriel {
       static const registry::Fields<A::Scratchpad> scratchpad = eventFields<A::Scratchpad>({
           real("dim", 0.0, 1.0, &A::Scratchpad::dim),
           boolean("blur", &A::Scratchpad::blur),
-          real("scale", 0.0, 1.0, &A::Scratchpad::scale),
-          boolean("maximize", &A::Scratchpad::maximize),
-          boolean("fullscreen", &A::Scratchpad::fullscreen),
       });
       static const registry::Fields<A::Border> border = eventFields<A::Border>({});
       static const registry::Fields<A::DimUnfocused> dimUnfocused = eventFields<A::DimUnfocused>({

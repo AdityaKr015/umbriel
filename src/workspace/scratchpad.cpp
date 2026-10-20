@@ -355,27 +355,7 @@ namespace umbriel {
     view->setFloating(true);
     view->cancelPositionAnimation();
 
-    const wlr_box targetArea = usableArea(*m_server, output);
-    const auto& scratchpadConfig = config().animation.scratchpad;
-    if (scratchpadConfig.fullscreen) {
-      if (!view->scheduledFullscreen() && !view->currentFullscreen()) {
-        view->toggleFullscreen();
-      }
-    } else if (scratchpadConfig.maximize) {
-      view->toggleMaximizedToEdges();
-    } else if (
-        scratchpadConfig.scale > 0.0 && scratchpadConfig.scale <= 1.0 && targetArea.width > 0 && targetArea.height > 0
-    ) {
-      const int targetWidth = std::max(100, static_cast<int>(std::lround(targetArea.width * scratchpadConfig.scale)));
-      const int targetHeight = std::max(100, static_cast<int>(std::lround(targetArea.height * scratchpadConfig.scale)));
-      view->configureSize(targetWidth, targetHeight);
-      view->setPosition(
-          targetArea.x + std::max(0, (targetArea.width - targetWidth) / 2),
-          targetArea.y + std::max(0, (targetArea.height - targetHeight) / 2)
-      );
-    } else {
-      view->setPosition(view->layoutX(), view->layoutY());
-    }
+    view->setPosition(view->layoutX(), view->layoutY());
 
     if (newEntry) {
       view->moveToWorkspace(nullptr);

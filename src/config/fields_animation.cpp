@@ -114,6 +114,7 @@ namespace umbriel {
       apply(animation.workspaces.durationMs, animation.workspaces.curve);
       apply(animation.overview.durationMs, animation.overview.curve);
       apply(animation.scratchpad.durationMs, animation.scratchpad.curve);
+      apply(animation.dialogs.durationMs, animation.dialogs.curve);
       apply(animation.border.durationMs, animation.border.curve);
       apply(animation.dimUnfocused.durationMs, animation.dimUnfocused.curve);
       apply(animation.layers.durationMs, animation.layers.curve);
@@ -201,6 +202,10 @@ namespace umbriel {
           real("dim", 0.0, 1.0, &A::Scratchpad::dim),
           boolean("blur", &A::Scratchpad::blur),
       });
+      static const registry::Fields<A::Dialogs> dialogs = timelineFields<A::Dialogs>({
+          boolean("enabled", &A::Dialogs::enabled),
+          real("dim", 0.0, 1.0, &A::Dialogs::dim),
+      });
       static const registry::Fields<A::Border> border = eventFields<A::Border>({});
       static const registry::Fields<A::DimUnfocused> dimUnfocused = eventFields<A::DimUnfocused>({
           real("dim", 0.0, 1.0, &A::DimUnfocused::dim),
@@ -266,6 +271,7 @@ namespace umbriel {
           table("workspaces", &A::workspaces, workspaces),
           table("overview", &A::overview, overview),
           table("scratchpad", &A::scratchpad, scratchpad),
+          table("dialogs", &A::dialogs, dialogs),
           table("border", &A::border, border),
           table("dim_unfocused", &A::dimUnfocused, dimUnfocused),
           table("layers", &A::layers, layers),

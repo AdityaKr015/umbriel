@@ -354,6 +354,8 @@ namespace umbriel {
     bool alone = false;
     // Stricter than alone: floating windows are included.
     bool onlyWindow = false;
+    // The client named a parent window for it.
+    bool dialog = false;
 
     [[nodiscard]] bool operator==(const WindowRuleState& other) const = default;
   };
@@ -388,6 +390,7 @@ namespace umbriel {
     std::optional<bool> matchScratchpad;
     std::optional<bool> matchAlone;
     std::optional<bool> matchOnlyWindow;
+    std::optional<bool> matchDialog;
     std::optional<bool> matchAtStartup;
     std::optional<std::string> defaultOutput;
     std::optional<bool> defaultFloating;
@@ -409,6 +412,8 @@ namespace umbriel {
     std::optional<bool> defaultFocused;
     std::optional<bool> defaultPinned;
     std::optional<bool> focusOnActivate;
+    // Lets a modal dialog hang on its parent's frame (true, the default) or opens it as an ordinary window (false).
+    std::optional<bool> attachToParent;
     std::optional<bool> confinePointer;
     // Keep a hidden window unsuspended and pace its frame callbacks at its output's refresh rate, for clients whose
     // non-rendering work stalls without them.
@@ -449,6 +454,7 @@ namespace umbriel {
           && matchScratchpad == other.matchScratchpad
           && matchAlone == other.matchAlone
           && matchOnlyWindow == other.matchOnlyWindow
+          && matchDialog == other.matchDialog
           && matchAtStartup == other.matchAtStartup
           && defaultOutput == other.defaultOutput
           && defaultFloating == other.defaultFloating
@@ -470,6 +476,7 @@ namespace umbriel {
           && defaultFocused == other.defaultFocused
           && defaultPinned == other.defaultPinned
           && focusOnActivate == other.focusOnActivate
+          && attachToParent == other.attachToParent
           && confinePointer == other.confinePointer
           && backgroundRender == other.backgroundRender
           && vrr == other.vrr
@@ -514,6 +521,7 @@ namespace umbriel {
     std::optional<bool> defaultFocused;
     std::optional<bool> defaultPinned;
     std::optional<bool> focusOnActivate;
+    std::optional<bool> attachToParent;
     std::optional<bool> confinePointer;
     std::optional<bool> backgroundRender;
     std::optional<VrrMode> vrr;
@@ -778,6 +786,15 @@ namespace umbriel {
         bool operator==(const Scratchpad&) const = default;
       } scratchpad;
 
+      // The shade over a window while a modal dialog is attached to it. `dim` stays without the fade when disabled.
+      struct Dialogs {
+        bool enabled = true;
+        int durationMs = 250;
+        AnimationCurve curve{.easing = Easing::EaseOutCubic};
+        double dim = 0.3;
+        bool operator==(const Dialogs&) const = default;
+      } dialogs;
+
       struct Border {
         std::string effect;
         bool enabled = true;
@@ -954,6 +971,8 @@ namespace umbriel {
       bool showCheatsheet = true;
       // Honor activation requests by focusing and revealing the target window.
       bool focusOnActivate = false;
+      // Hang a modal dialog on its parent's frame, so it follows the parent and holds its input.
+      bool attachModalDialogs = true;
       // Honor maximized state restored by a client while its window opens.
       bool honorRestoredMaximize = false;
       bool operator==(const General&) const = default;

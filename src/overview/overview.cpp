@@ -1000,9 +1000,47 @@ namespace umbriel {
     }
   }
 
+  void Overview::forEachCardSurface(Card* card, void (*visit)(wlr_surface*, int, int, void*)) {
+    View* view = card->view;
+    wlr_surface* root = view->rootSurface();
+    if (root == nullptr) {
+      return;
+    }
+    CardWalk own{.card = card, .view = view};
+    wlr_surface_for_each_surface(root, visit, &own);
+    if (view->attachments().empty()) {
+      return;
+    }
+    // A dialog hangs in the window's frame, so the scene holds both at their real offset.
+    wlr_scene_buffer* rootBuffer = sourceBufferForSurface(&view->sceneTree()->node, root);
+    if (rootBuffer == nullptr) {
+      return;
+    }
+    int rootX = 0;
+    int rootY = 0;
+    wlr_scene_node_coords(&rootBuffer->node, &rootX, &rootY);
+    const auto walk = [&](const auto& self, const View* parent) -> void {
+      for (View* dialog : parent->attachments()) {
+        wlr_surface* surface = dialog->rootSurface();
+        wlr_scene_buffer* buffer =
+            surface != nullptr ? sourceBufferForSurface(&dialog->sceneTree()->node, surface) : nullptr;
+        if (buffer != nullptr) {
+          int x = 0;
+          int y = 0;
+          wlr_scene_node_coords(&buffer->node, &x, &y);
+          CardWalk offset{.card = card, .view = dialog, .dx = x - rootX, .dy = y - rootY};
+          wlr_surface_for_each_surface(surface, visit, &offset);
+        }
+        self(self, dialog);
+      }
+    };
+    walk(walk, view);
+  }
+
   void Overview::addCardSurface(wlr_surface* surface, int sx, int sy, void* data) {
-    auto* card = static_cast<Card*>(data);
-    wlr_scene_buffer* source = sourceBufferForSurface(&card->view->sceneTree()->node, surface);
+    const auto* walk = static_cast<const CardWalk*>(data);
+    Card* card = walk->card;
+    wlr_scene_buffer* source = sourceBufferForSurface(&walk->view->sceneTree()->node, surface);
     if (source == nullptr) {
       return;
     }
@@ -1012,11 +1050,12 @@ namespace umbriel {
     }
     auto entry = std::make_unique<CardSurface>();
     entry->card = card;
+    entry->view = walk->view;
     entry->surface = surface;
     entry->sourceBuffer = source;
     entry->buffer = buffer;
-    entry->sx = sx;
-    entry->sy = sy;
+    entry->sx = sx + walk->dx;
+    entry->sy = sy + walk->dy;
     entry->isRoot = surface == card->view->rootSurface();
     wlr_scene_buffer_set_filter_mode(buffer, WLR_SCALE_FILTER_BILINEAR);
     buffer->point_accepts_input = rejectInput;
@@ -1033,11 +1072,11 @@ namespace umbriel {
   }
 
   void Overview::syncCardSurface(wlr_surface* surface, int sx, int sy, void* data) {
-    auto* card = static_cast<Card*>(data);
-    for (const auto& entry : card->surfaces) {
+    const auto* walk = static_cast<const CardWalk*>(data);
+    for (const auto& entry : walk->card->surfaces) {
       if (entry->surface == surface) {
-        entry->sx = sx;
-        entry->sy = sy;
+        entry->sx = sx + walk->dx;
+        entry->sy = sy + walk->dy;
         syncCardBuffer(*entry);
         return;
       }
@@ -1055,7 +1094,7 @@ namespace umbriel {
     }
     // The source scene surface reconfigures on every commit. Refresh the
     // passive buffer mirrors, then re-derive their overview crop and scale.
-    wlr_surface_for_each_surface(card->view->rootSurface(), syncCardSurface, card);
+    forEachCardSurface(card, syncCardSurface);
     PreviewMetrics metrics{};
     if (previewMetrics(*card->owner, *self->m_server, self->zoom(), metrics)) {
       self->layoutCard(*card, metrics, card->owner->rowScroll.current(), self->liveTargetView());
@@ -1106,7 +1145,8 @@ namespace umbriel {
   }
 
   Overview::Card* Overview::createCard(OutputState& state, View* view, size_t workspaceIndex) {
-    if (view == nullptr || !view->mapped() || view->pinned()) {
+    // An attached dialog shows over its parent's card instead of on one of its own.
+    if (view == nullptr || !view->mapped() || view->pinned() || view->attached()) {
       return nullptr;
     }
     wlr_surface* surface = view->rootSurface();
@@ -1138,7 +1178,7 @@ namespace umbriel {
     state.cards.push_back(std::move(card));
     m_shortcutsDirty = true;
 
-    wlr_surface_for_each_surface(surface, addCardSurface, raw);
+    forEachCardSurface(raw, addCardSurface);
 
     // Animation schedules the first output frame. The passive card buffers then
     // pace clients from frames where their content was actually sampled.
@@ -2031,6 +2071,10 @@ namespace umbriel {
     if (!m_active || view == nullptr || !view->mapped() || view->pinned()) {
       return;
     }
+    if (view->attached()) {
+      onViewAttachmentsChanged(view->placementRoot());
+      return;
+    }
     Workspace* workspace = view->workspace();
     OutputState* state = stateForWorkspace(workspace);
     if (state == nullptr || findCard(view) != nullptr) {
@@ -2040,6 +2084,33 @@ namespace umbriel {
       return;
     }
     assignShortcuts();
+  }
+
+  void Overview::onViewAttachmentsChanged(View* parent) {
+    if (!m_active || parent == nullptr) {
+      return;
+    }
+    Card* card = findCard(parent->placementRoot());
+    if (card == nullptr || card->owner == nullptr) {
+      return;
+    }
+    // The card's own surfaces stay; the dialogs' are mirrored again from the current attachments.
+    std::erase_if(card->surfaces, [card](const std::unique_ptr<CardSurface>& entry) {
+      if (entry->view == card->view) {
+        return false;
+      }
+      wl_list_remove(&entry->commit.link);
+      wl_list_remove(&entry->destroy.link);
+      wl_list_remove(&entry->outputSample.link);
+      wl_list_remove(&entry->frameDone.link);
+      if (entry->buffer != nullptr) {
+        wlr_scene_node_destroy(&entry->buffer->node);
+      }
+      return true;
+    });
+    forEachCardSurface(card, syncCardSurface);
+    layoutOutput(*card->owner);
+    wlr_output_schedule_frame(card->owner->output->wlr());
   }
 
   void Overview::onViewPinnedChanged(View* view) {

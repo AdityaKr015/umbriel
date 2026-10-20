@@ -265,6 +265,10 @@ namespace umbriel {
   }
 
   void View::syncOwnedPresentation() {
+    if (m_attachedTo != nullptr) {
+      m_attachedTo->layoutAttachments();
+      return;
+    }
     if (m_workspace != nullptr) {
       m_workspace->syncViewPresentation(this);
       return;
@@ -899,6 +903,10 @@ namespace umbriel {
       setFadeAlpha(m_fadeAlpha);
       active = active || m_focusDim.animating();
     }
+    if (m_modalShadeAlpha.tick(nowMsec)) {
+      syncModalShade();
+      active = active || m_modalShadeAlpha.animating();
+    }
 
     if (m_borderColorAnim.tick(nowMsec)) {
       m_decoration.setBorderRawColor(m_borderColorAnim.current(), effectiveOpacity());
@@ -943,6 +951,7 @@ namespace umbriel {
         || m_fade.animating()
         || m_borderColorAnim.animating()
         || m_focusDim.animating()
+        || m_modalShadeAlpha.animating()
         || m_dragPhysics.active();
   }
 
@@ -1170,5 +1179,7 @@ namespace umbriel {
     updateBorderGeometry(content.width, content.height);
     updateShadow();
     updateBlur(content.width, content.height);
+    syncModalShade();
+    layoutAttachments();
   }
 } // namespace umbriel

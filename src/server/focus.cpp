@@ -48,6 +48,10 @@ namespace umbriel {
     if (view == nullptr || m_server.sessionLocked()) {
       return;
     }
+    // Focus policy (workspace, MRU, reveal) belongs to the window that holds the placement; the keyboard goes to the
+    // dialog attached on top of it, if any.
+    view = view->placementRoot();
+    View* seatTarget = view->inputDelegate();
 
     // PointerHover gate: reject focus entirely when revealing would exceed the configured max scroll fraction. Must run
     // before any side effects (MRU, seat focus) so an over-limit hover focuses nothing.
@@ -84,7 +88,7 @@ namespace umbriel {
 
     View* previous = View::fromSurface(m_server.seat()->wlr()->keyboard_state.focused_surface);
     // Read the rule before changing activation: a match.is_focused rule stops matching as soon as focus moves.
-    const bool leavingConfinement = previous != nullptr && previous != view && previous->confinePointer();
+    const bool leavingConfinement = previous != nullptr && previous != seatTarget && previous->confinePointer();
     m_server.registry().promote(view);
     view->setUrgent(false);
 
@@ -100,7 +104,7 @@ namespace umbriel {
     if (LayerSurface* layer = exclusiveKeyboardLayer()) {
       layer->focus();
     } else {
-      view->applySeatFocus(!overviewActive);
+      seatTarget->applySeatFocus(!overviewActive);
     }
     Workspace* workspace = view->workspace();
     if (workspace != nullptr && (!view->pinned() || workspace->active())) {
@@ -196,7 +200,8 @@ namespace umbriel {
     };
 
     if (View* view = View::fromSurface(focusedSurface)) {
-      if (!view->mapped() || (!view->onActiveWorkspace() && !view->pinned())) {
+      // A window with a dialog attached hands the keyboard to the dialog instead of keeping it.
+      if (!view->mapped() || view->blocked() || (!view->onActiveWorkspace() && !view->pinned())) {
         return false;
       }
 
@@ -217,7 +222,7 @@ namespace umbriel {
       // and stacking so a popup or input grab keeps the exact focused surface.
       view->applySeatFocus(false);
       if (Workspace* workspace = view->workspace(); workspace != nullptr && (!view->pinned() || workspace->active())) {
-        workspace->setFocusedView(view, false);
+        workspace->setFocusedView(view->placementRoot(), false);
       }
       m_server.refreshOutputPolicies();
       return true;
@@ -309,7 +314,7 @@ namespace umbriel {
           return true;
         }
       }
-      for (const auto& entry : m_server.registry().all()) {
+      for (const auto& entry : m_server.registry().placementRoots()) {
         if (entry->mapped() && entry->workspace() == workspace) {
           focusView(entry.get());
           return true;
@@ -416,6 +421,11 @@ namespace umbriel {
     if (!view->pinned() && !view->onActiveWorkspace()) {
       *surface = nullptr;
       return nullptr;
+    }
+    // A window with a dialog attached gets no pointer, the way it gets no keyboard. The view is still reported so a
+    // press on it focuses the dialog and a Mod-drag moves it.
+    if (view->blocked()) {
+      *surface = nullptr;
     }
     return view;
   }

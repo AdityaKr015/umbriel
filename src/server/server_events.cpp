@@ -767,6 +767,19 @@ namespace umbriel {
         }
       }
     }
+    if (effects.dialogAttachment) {
+      // Focus moves promote views in the registry, so walk a snapshot.
+      std::vector<View*> views;
+      views.reserve(m_registry.all().size());
+      for (const auto& view : m_registry.all()) {
+        views.push_back(view.get());
+      }
+      for (View* view : views) {
+        if (view->mapped()) {
+          view->reconcileAttachment();
+        }
+      }
+    }
   }
 
   void Server::applyKeyboardConfig() {
@@ -1129,6 +1142,13 @@ namespace umbriel {
     const auto* event = static_cast<wlr_xdg_toplevel_tag_manager_v1_set_tag_event*>(data);
     if (View* view = viewForToplevel(*self, event->toplevel)) {
       view->setXdgTag(event->tag != nullptr ? event->tag : "");
+    }
+  }
+
+  void Server::onNewXdgDialog(wl_listener* /*listener*/, void* data) {
+    auto* dialog = static_cast<wlr_xdg_dialog_v1*>(data);
+    if (View* view = View::fromSurface(dialog->xdg_toplevel->base->surface)) {
+      view->setDialog(dialog);
     }
   }
 
@@ -2575,7 +2595,7 @@ namespace umbriel {
       const LayoutCapture capture = workspace->scrollingLayout() != nullptr
           ? workspace->scrollingLayout()->captureStateForViewport(workspace->scrollViewportExtent())
           : workspace->layout().captureState();
-      for (const auto& view : m_registry.all()) {
+      for (const auto& view : m_registry.placementRoots()) {
         if (view->workspace() != workspace || view->displacedHome()) {
           continue;
         }
@@ -2621,7 +2641,7 @@ namespace umbriel {
 
     if (sourceGroup != nullptr) {
       std::vector<View*> leaving;
-      for (const auto& view : m_registry.all()) {
+      for (const auto& view : m_registry.placementRoots()) {
         Workspace* workspace = view->workspace();
         if (workspace == nullptr || workspace->group() != sourceGroup) {
           continue;
@@ -3183,7 +3203,7 @@ namespace umbriel {
     WorkspaceGroup* fallbackGroup = fallback->workspaceGroup();
     Workspace* refuge = fallbackGroup != nullptr ? fallbackGroup->active() : nullptr;
     if (refuge != nullptr) {
-      for (const auto& entry : m_registry.all()) {
+      for (const auto& entry : m_registry.placementRoots()) {
         View* view = entry.get();
         if (!view->mapped()
             || view->workspace() != nullptr

@@ -100,6 +100,22 @@ namespace umbriel {
     return origin;
   }
 
+  // One axis of an attached dialog's place, as an offset from the start of the window it is attached to: centred on
+  // that window's `length`, then moved inside the area [`areaStart`, `areaStart + areaLength`) with `inset` left for
+  // the dialog's border. A dialog longer than the area keeps its start inside it. A window resting wholly outside the
+  // area, as a scrolled-away column does, takes its dialog along centred.
+  [[nodiscard]] constexpr int
+  attachmentOffset(int start, int length, int size, int areaStart, int areaLength, int inset) {
+    const int centred = (length - size) / 2;
+    if (areaLength <= 0 || start + length <= areaStart || start >= areaStart + areaLength) {
+      return centred;
+    }
+    const int low = areaStart + inset;
+    const int high = areaStart + areaLength - inset - size;
+    const int placed = start + centred;
+    return (placed > high ? (high > low ? high : low) : (placed < low ? low : placed)) - start;
+  }
+
   // Pixel length of `fraction` of the usable area on one axis. Rounds like
   // Layout::fractionalWidth so a float and a tiled lane at the same fraction do
   // not disagree by a pixel on an odd axis. A degenerate axis yields 0, which

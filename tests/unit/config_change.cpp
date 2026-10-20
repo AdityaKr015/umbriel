@@ -358,6 +358,34 @@ UMBRIEL_TEST(firstLoadInvalidatesEveryRuntimeConsumer) {
   CHECK(effects.input);
   CHECK(effects.overviewPresentation);
   CHECK(effects.internalUi);
+  CHECK(effects.dialogAttachment);
+}
+
+UMBRIEL_TEST(dialogAttachmentFollowsTheSwitchAndWindowRules) {
+  const Config before;
+  Config disabled;
+  disabled.general.attachModalDialogs = false;
+  const ConfigEffects switched = ConfigEffects::between(before, disabled);
+  CHECK(switched.dialogAttachment);
+  CHECK(!switched.viewChrome);
+
+  Config ruled;
+  WindowRule optOut;
+  optOut.matchDialog = true;
+  optOut.attachToParent = false;
+  ruled.windowRules.push_back(std::move(optOut));
+  CHECK(ConfigEffects::between(before, ruled).dialogAttachment);
+
+  // A rule that cannot decide attachment leaves dialogs alone.
+  Config translucent;
+  WindowRule faded;
+  faded.opacity = 0.5;
+  translucent.windowRules.push_back(std::move(faded));
+  CHECK(!ConfigEffects::between(before, translucent).dialogAttachment);
+
+  Config slower;
+  slower.animation.overview.durationMs = 400;
+  CHECK(!ConfigEffects::between(before, slower).dialogAttachment);
 }
 
 UMBRIEL_TEST(anyColorChangeRefreshesEveryColorConsumer) {

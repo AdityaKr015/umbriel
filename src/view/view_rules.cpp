@@ -279,6 +279,13 @@ namespace umbriel {
         config(), m_initialRulesAppId, m_initialRulesTitle, m_initialRulesXdgTag, m_initialRulesContentType,
         m_initialRuleState, m_server->uptimeMs()
     );
+    // An attached dialog's placement is its parent's, so the placement rules have nothing to act on.
+    if (attached()) {
+      m_initialRules = rule;
+      m_initialRuleHistory.push_back(rule);
+      applyDynamicRules();
+      return;
+    }
     ScratchpadManager* scratchpadManager = m_server->scratchpadManager();
     const bool wasInScratchpad = scratchpadManager != nullptr && scratchpadManager->contains(this);
     const bool scratchpadChanged =
@@ -571,6 +578,7 @@ namespace umbriel {
         .scratchpad = m_inScratchpad,
         .alone = isAloneInLayout(),
         .onlyWindow = isOnlyWindowOnWorkspace(),
+        .dialog = shellParent() != nullptr,
     };
   }
 

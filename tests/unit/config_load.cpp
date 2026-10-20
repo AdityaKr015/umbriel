@@ -2572,6 +2572,30 @@ UMBRIEL_TEST(restoredMaximizePolicyLoadsAndDefaultsOff) {
   CHECK(!store.config().general.honorRestoredMaximize);
 }
 
+UMBRIEL_TEST(modalDialogAttachmentLoadsGloballyAndPerWindow) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[general]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().general.attachModalDialogs);
+
+  file.write(
+      "[general]\nattach_modal_dialogs = false\n\n[[window_rule]]\nmatch.is_dialog = true\nattach_to_parent = false\n"
+  );
+  CHECK(store.reload().success);
+  CHECK(!store.config().general.attachModalDialogs);
+  CHECK_EQ(store.config().windowRules.size(), 1U);
+  CHECK(store.config().windowRules[0].matchDialog == true);
+  CHECK(store.config().windowRules[0].attachToParent == false);
+
+  // A mistyped match rejects the rule.
+  file.write("[[window_rule]]\nmatch.is_dialog = \"yes\"\nattach_to_parent = false\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().windowRules.empty());
+}
+
 UMBRIEL_TEST(layoutClientMaximizeLoadsGloballyAndPerWorkspace) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();

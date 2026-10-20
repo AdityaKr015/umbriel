@@ -88,6 +88,8 @@ namespace umbriel {
     void onViewPinnedChanged(View* view);
     void onViewFloatingChanged(View* view);
     void onViewWorkspaceChanged(View* view);
+    // A dialog attached to or left `parent`: its card mirrors the dialogs over the window.
+    void onViewAttachmentsChanged(View* parent);
     void onWorkspaceActivated(WorkspaceGroup* group);
     void onWorkspaceArranged(Workspace* workspace);
     void onWorkspaceInventoryChanged(WorkspaceGroup* group);
@@ -158,6 +160,8 @@ namespace umbriel {
 
     struct CardSurface {
       Card* card = nullptr;
+      // The window whose surface tree holds `surface`: the card's own, or a dialog attached to it.
+      View* view = nullptr;
       wlr_surface* surface = nullptr;
       wlr_scene_buffer* sourceBuffer = nullptr;
       wlr_scene_buffer* buffer = nullptr;
@@ -277,6 +281,15 @@ namespace umbriel {
     static void onCardSurfaceDestroy(wl_listener* listener, void* data);
     static void onCardBufferOutputSample(wl_listener* listener, void* data);
     static void onCardBufferFrameDone(wl_listener* listener, void* data);
+    // One walk over a card's surfaces, for one window of it, offset from the card window's root surface.
+    struct CardWalk {
+      Card* card = nullptr;
+      View* view = nullptr;
+      int dx = 0;
+      int dy = 0;
+    };
+    // The card window's surfaces, then those of every dialog attached to it at their offset over the window.
+    static void forEachCardSurface(Card* card, void (*visit)(wlr_surface*, int, int, void*));
     static void addCardSurface(wlr_surface* surface, int sx, int sy, void* data);
     static void syncCardSurface(wlr_surface* surface, int sx, int sy, void* data);
     static void onDesktopSurfaceCommit(wl_listener* listener, void* data);

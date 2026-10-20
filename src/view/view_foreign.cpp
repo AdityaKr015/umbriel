@@ -106,9 +106,14 @@ namespace umbriel {
       m_initialRulesAppId = ruleText(appId());
       m_initialRulesTitle = ruleText(title());
       applyWindowRules();
-      return;
+    } else {
+      applyDynamicRules();
     }
-    applyDynamicRules();
+    // A rule may opt this dialog, or the dialogs of this window, out of attaching by title.
+    if (m_mapped) {
+      reconcileAttachment();
+      reconcileDialogAttachments();
+    }
   }
 
   void View::handleSetAppId() {
@@ -133,6 +138,8 @@ namespace umbriel {
       applyDynamicRules();
     }
     if (m_mapped) {
+      reconcileAttachment();
+      reconcileDialogAttachments();
       if (Output* output = currentOutput()) {
         output->updateHdr();
       }

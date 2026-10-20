@@ -18,6 +18,7 @@ extern "C" {
 #include "view/view_internal.h"
 // clang-format off
 #include <algorithm>
+#include <cassert>
 #include "wlr.h"
 // clang-format on
 #include "workspace/scratchpad.h"
@@ -196,6 +197,11 @@ namespace umbriel {
     if (!roleInitialized()) {
       return;
     }
+    // An attached dialog's size is its own, but its placement is its parent's.
+    if (attached()) {
+      reassertRoleState();
+      return;
+    }
     if (!m_mapped) {
       if (config().general.honorRestoredMaximize && requestedMaximized()) {
         // Some clients restore maximization only after acknowledging the first
@@ -339,6 +345,10 @@ namespace umbriel {
     );
 
     const bool requested = requestedFullscreen();
+    if (attached()) {
+      reassertRoleState();
+      return;
+    }
     if (!requested && scheduledFullscreen() && m_xCompositorFullscreen) {
       kLog.debug("request_fullscreen denied for compositor-owned X11 '{}'", appId() != nullptr ? appId() : "?");
       reassertRoleState();
@@ -369,6 +379,11 @@ namespace umbriel {
 
   void View::handleSetParent() {
     if (m_mapped) {
+      reconcileAttachment();
+      // `match.is_dialog` follows the parent.
+      refreshStateRuleEffects();
+    }
+    if (m_mapped && !attached()) {
       if (inheritScratchpadFromParent(m_tiled)) {
         placeInUsableArea(m_initialRules.defaultPosition);
         if (ScratchpadManager* scratchpad = m_server->scratchpadManager()) {
@@ -440,6 +455,7 @@ namespace umbriel {
   void View::togglePinned() { setPinned(!m_pinned, true); }
 
   void View::setPinned(bool pinned, bool focus) {
+    assert(!attached());
     if (!m_mapped
         || !roleInitialized()
         || (pinned && (scheduledFullscreen() || currentFullscreen()))
@@ -491,6 +507,7 @@ namespace umbriel {
   }
 
   void View::setFloating(bool floating, bool focus, TilePlacement placement) {
+    assert(!attached());
     if (!m_mapped || !roleInitialized()) {
       return;
     }
@@ -706,6 +723,7 @@ namespace umbriel {
   }
 
   void View::setFullscreen(bool fullscreen, FullscreenExitLayout exitLayout) {
+    assert(!attached());
     m_deferredUnfullscreen.clear();
     const bool refreshHoverFocus = !fullscreen
         && m_mapped

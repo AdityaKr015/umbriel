@@ -82,7 +82,7 @@ namespace umbriel {
   }
 
   std::optional<FloatingPoint> View::floatingClampTarget(FloatingPoint origin, int width, int height, bool resize) {
-    if (m_tiled || !m_mapped || scheduledFullscreen() || scheduledMaximized() || sizeGrabActive()) {
+    if (m_tiled || !m_mapped || attached() || scheduledFullscreen() || scheduledMaximized() || sizeGrabActive()) {
       return std::nullopt;
     }
     if (Cursor* cursor = m_server->cursor(); cursor != nullptr && cursor->isDraggingView(this)) {
@@ -288,6 +288,9 @@ namespace umbriel {
   }
 
   void View::placeInUsableArea(const std::optional<WindowPosition>& position) {
+    if (attached()) {
+      return;
+    }
     const wlr_box usable = floatingUsableArea();
 
     std::optional<FloatingPoint> origin = getFloatingPosition(usable, position);
@@ -469,7 +472,8 @@ namespace umbriel {
   void View::finishFloatingResize() { m_floating.endResize(); }
 
   void View::syncFloatingResizePosition() {
-    if (!m_floating.anchor()) {
+    // An attached dialog resizes around its centre, which its parent's layoutAttachments() keeps.
+    if (!m_floating.anchor() || attached()) {
       return;
     }
     const wlr_box& geo = geometryBox();

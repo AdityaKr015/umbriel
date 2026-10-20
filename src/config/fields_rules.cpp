@@ -176,6 +176,7 @@ namespace umbriel {
           strict(boolean("is_scratchpad", &W::matchScratchpad)),
           strict(boolean("is_alone", &W::matchAlone)),
           strict(boolean("is_only_window", &W::matchOnlyWindow)),
+          strict(boolean("is_dialog", &W::matchDialog)),
           strict(boolean("at_startup", &W::matchAtStartup)),
       };
       static const registry::Fields<W> floatingSize{
@@ -195,6 +196,7 @@ namespace umbriel {
           boolean("default_focused", &W::defaultFocused),
           boolean("default_pinned", &W::defaultPinned),
           boolean("focus_on_activate", &W::focusOnActivate),
+          boolean("attach_to_parent", &W::attachToParent),
           boolean("confine_pointer", &W::confinePointer),
           boolean("background_render", &W::backgroundRender),
           boolean("tearing", &W::allowTearing),

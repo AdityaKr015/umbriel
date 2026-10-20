@@ -19,6 +19,7 @@ extern "C" {
 #include "view/size_hints.h"
 #include "view/view_internal.h"
 // clang-format off
+#include <cassert>
 #include <ranges>
 #include <utility>
 #include <variant>
@@ -175,6 +176,7 @@ namespace umbriel {
     m_contentTree->node.data = sceneNodeData(this);
     wlr_scene_node_set_enabled(&m_sceneTree->node, false);
     m_presentation.createBackdrop(m_contentTree);
+    m_attachmentTree = wlr_scene_tree_create(m_sceneTree);
 
     // A scene-node capture uses the node's scene as its render source. Keep a
     // second scene containing only the client surfaces so transparency cannot
@@ -287,6 +289,16 @@ namespace umbriel {
     m_server->unregisterAnimatable(this);
     m_effects.detach();
     clearViewSurfaceWatches();
+    releaseDialog();
+    // Teardown follows the registry's order, so either end of an attachment can go first.
+    if (attached()) {
+      unlinkAttachment();
+    }
+    for (View* attachment : m_attachments) {
+      attachment->m_attachedTo = nullptr;
+      wlr_scene_node_reparent(&attachment->m_sceneTree->node, m_server->xdgTree());
+    }
+    m_attachments.clear();
     setWorkspace(nullptr);
     // A view deleted while its role lives on (server teardown) must not leave the role pointing at freed scene nodes.
     if (m_map.link.next != nullptr) {
@@ -354,6 +366,7 @@ namespace umbriel {
   }
 
   void View::setWorkspace(Workspace* workspace, bool attachToLayout, LayoutAttachOrigin origin) {
+    assert(!attached());
     if (workspace != nullptr
         && m_server->scratchpadManager() != nullptr
         && m_server->scratchpadManager()->contains(this)) {
@@ -624,8 +637,8 @@ namespace umbriel {
       root = parent;
     }
     root->raiseTransientTree();
-    if (m_workspace != nullptr) {
-      m_workspace->raiseFloatingLayer();
+    if (Workspace* home = workspace()) {
+      home->raiseFloatingLayer();
     }
   }
 
@@ -651,6 +664,9 @@ namespace umbriel {
   View* View::transientParent() const {
     if (!m_mapped) {
       return nullptr;
+    }
+    if (m_attachedTo != nullptr) {
+      return m_attachedTo;
     }
     View* parent = shellParent();
     if (parent == nullptr) {
@@ -722,6 +738,10 @@ namespace umbriel {
   }
 
   void View::raiseTransientTree() {
+    // An attached dialog stacks inside its parent's frame, which its parent's own raise already carried.
+    if (attached()) {
+      return;
+    }
     syncTransientSceneParent();
     wlr_scene_node_raise_to_top(&m_sceneTree->node);
 
@@ -760,6 +780,10 @@ namespace umbriel {
   }
 
   void View::setScenePosition(int x, int y) {
+    // An attached dialog's frame offset belongs to its parent's layoutAttachments().
+    if (attached()) {
+      return;
+    }
     wlr_scene_node_set_position(&m_sceneTree->node, x, y);
     m_decoration.setShadowPosition(x, y);
     if (m_xsurface != nullptr) {
@@ -767,9 +791,23 @@ namespace umbriel {
     }
   }
 
-  int View::layoutX() const { return m_sceneTree->node.x; }
+  int View::layoutX() const {
+    return m_attachedTo != nullptr ? m_attachedTo->layoutX() + m_sceneTree->node.x : m_sceneTree->node.x;
+  }
 
-  int View::layoutY() const { return m_sceneTree->node.y; }
+  int View::layoutY() const {
+    return m_attachedTo != nullptr ? m_attachedTo->layoutY() + m_sceneTree->node.y : m_sceneTree->node.y;
+  }
+
+  int View::layoutTargetX() const {
+    return m_attachedTo != nullptr ? m_attachedTo->layoutTargetX() + m_sceneTree->node.x
+                                   : static_cast<int>(std::lround(m_posX.target()));
+  }
+
+  int View::layoutTargetY() const {
+    return m_attachedTo != nullptr ? m_attachedTo->layoutTargetY() + m_sceneTree->node.y
+                                   : static_cast<int>(std::lround(m_posY.target()));
+  }
 
   void View::applySeatFocus(bool withKeyboard) {
     // Mechanism only. Policy lives in Server::focusView; do not call directly
@@ -868,6 +906,9 @@ namespace umbriel {
   }
 
   Output* View::currentOutput() const {
+    if (m_attachedTo != nullptr) {
+      return m_attachedTo->currentOutput();
+    }
     if (m_workspace != nullptr && m_workspace->group() != nullptr && m_workspace->group()->output() != nullptr) {
       return m_workspace->group()->output();
     }
@@ -969,6 +1010,9 @@ namespace umbriel {
   }
 
   wlr_scene_tree* View::homeTree() const {
+    if (m_attachedTo != nullptr) {
+      return m_attachedTo->m_attachmentTree;
+    }
     const bool fs = scheduledFullscreen();
     if (m_workspace != nullptr) {
       return fs ? m_workspace->fullscreenTree() : m_workspace->viewLayer(m_tiled);

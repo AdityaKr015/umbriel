@@ -224,6 +224,8 @@ namespace umbriel {
     } else {
       layoutChromeAttachment(m_chromeContentWidth, m_chromeContentHeight);
     }
+    // Chrome joins the frame after the attachment tree, which must stay on top.
+    wlr_scene_node_raise_to_top(&m_attachmentTree->node);
   }
 
   void View::layoutChromeAttachment(int contentWidth, int contentHeight) {
@@ -259,5 +261,6 @@ namespace umbriel {
     }
     updateShadow();
     reloadBackdropColor();
+    syncModalShade();
   }
 } // namespace umbriel

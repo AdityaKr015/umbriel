@@ -402,7 +402,7 @@ namespace umbriel {
   int Workspace::layoutAttachIndex(const View* view) const {
     int focusedColumn = m_layout->columnOf(m_focusedView);
     if (focusedColumn < 0 && m_group != nullptr) {
-      for (const auto& entry : m_group->server()->registry().all()) {
+      for (const auto& entry : m_group->server()->registry().placementRoots()) {
         View* candidate = entry.get();
         if (candidate != view && candidate->mapped() && candidate->tiled() && candidate->workspace() == this) {
           focusedColumn = m_layout->columnOf(candidate);
@@ -1455,7 +1455,7 @@ namespace umbriel {
     if (peers.empty()) {
       return target;
     }
-    for (const auto& entry : m_group->server()->registry().all()) {
+    for (const auto& entry : m_group->server()->registry().placementRoots()) {
       View* candidate = entry.get();
       if (candidate->mapped() && candidate->workspace() == this && std::ranges::find(peers, candidate) != peers.end()) {
         return candidate;
@@ -1507,7 +1507,7 @@ namespace umbriel {
     // Floating views have no layout successor: hand focus back to the most recently focused mapped view on this
     // workspace, since nothing else refocuses until a destroy-time fallback that unmap-only clients never reach.
     if (columnIndex < 0 || columnIndex >= static_cast<int>(columns.size())) {
-      for (const auto& entry : m_group->server()->registry().all()) {
+      for (const auto& entry : m_group->server()->registry().placementRoots()) {
         if (entry.get() != view && entry->mapped() && entry->workspace() == this) {
           return entry.get();
         }
@@ -1528,7 +1528,7 @@ namespace umbriel {
     }
     const auto recentInColumn = [&](int targetColumn) -> View* {
       const auto& members = columns[static_cast<size_t>(targetColumn)].views;
-      for (const auto& entry : m_group->server()->registry().all()) {
+      for (const auto& entry : m_group->server()->registry().placementRoots()) {
         View* candidate = entry.get();
         if (mappedCandidate(candidate) && std::ranges::find(members, candidate) != members.end()) {
           return candidate;

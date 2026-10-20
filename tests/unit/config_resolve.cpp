@@ -1114,6 +1114,24 @@ UMBRIEL_TEST(windowRulesMatchIsOnlyWindow) {
   CHECK(aloneBesideFloat.defaultMaximize && *aloneBesideFloat.defaultMaximize);
 }
 
+UMBRIEL_TEST(windowRulesMatchIsDialog) {
+  Config config;
+
+  WindowRule dialogRule;
+  dialogRule.appIdPatterns.add("^editor$");
+  dialogRule.matchDialog = true;
+  dialogRule.attachToParent = false;
+  config.windowRules.push_back(std::move(dialogRule));
+
+  const auto dialog =
+      umbriel::resolveWindowRules(config, "editor", std::nullopt, std::nullopt, ContentType::None, {.dialog = true}, 0);
+  CHECK(dialog.attachToParent && !*dialog.attachToParent);
+
+  const auto toplevel =
+      umbriel::resolveWindowRules(config, "editor", std::nullopt, std::nullopt, ContentType::None, {}, 0);
+  CHECK(!toplevel.attachToParent);
+}
+
 UMBRIEL_TEST(windowVrrRuleOverridesTheOutputPolicy) {
   CHECK(umbriel::effectiveVrrEnabled(VrrMode::Disabled, false, VrrMode::Always, false));
   CHECK(!umbriel::effectiveVrrEnabled(VrrMode::Always, false, VrrMode::Disabled, false));

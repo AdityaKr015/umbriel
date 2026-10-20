@@ -3,6 +3,7 @@
 #include "check.h"
 
 using umbriel::anchoredContentOrigin;
+using umbriel::attachmentOffset;
 using umbriel::centeredOrigin;
 using umbriel::centeredOverShown;
 using umbriel::clampFloatingOrigin;
@@ -237,6 +238,33 @@ UMBRIEL_TEST(aDialogLargerThanTheAreaKeepsItsTopLeftOnIt) {
   CHECK_EQ(origin.x, 0);
   CHECK_EQ(origin.y, 40);
 }
+
+// Attached dialog placement, one axis at a time
+UMBRIEL_TEST(anAttachedDialogCentersOnItsParent) {
+  // A 900 long parent at 100 centers a 400 long dialog 250 into it.
+  CHECK_EQ(attachmentOffset(100, 900, 400, 0, 1920, 2), 250);
+}
+
+UMBRIEL_TEST(anAttachedDialogWiderThanItsParentStaysInsideTheArea) {
+  // Centered on a 200 long parent at the area's start, the 600 long dialog would start at -200; it stops at the
+  // area's start plus its border.
+  CHECK_EQ(attachmentOffset(0, 200, 600, 0, 1920, 2), 2);
+  // At the far end it stops one border short of the area's end, at 1920 - 2 - 600 = 1318: -402 from the parent.
+  CHECK_EQ(attachmentOffset(1720, 200, 600, 0, 1920, 2), -402);
+}
+
+UMBRIEL_TEST(anAttachedDialogLongerThanTheAreaKeepsItsStartInside) {
+  CHECK_EQ(attachmentOffset(40, 680, 900, 40, 680, 0), 0);
+  CHECK_EQ(attachmentOffset(100, 500, 900, 40, 680, 0), -60);
+}
+
+UMBRIEL_TEST(anAttachedDialogGoesAlongWithAParentOutsideTheArea) {
+  // A column scrolled wholly out of view keeps its dialog centered on it rather than left behind on screen.
+  CHECK_EQ(attachmentOffset(2000, 200, 600, 0, 1920, 2), -200);
+  CHECK_EQ(attachmentOffset(-400, 400, 600, 0, 1920, 2), -100);
+}
+
+UMBRIEL_TEST(anAttachedDialogWithNoAreaIsCentered) { CHECK_EQ(attachmentOffset(0, 200, 600, 0, 0, 2), -200); }
 
 // Resize anchoring
 UMBRIEL_TEST(draggingTheRightEdgeLeavesTheOriginAlone) {

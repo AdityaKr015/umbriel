@@ -31,6 +31,8 @@ files = []
 # Umbriel announces the X11 interface scale and cursor theme through XSETTINGS.
 # Turn this off to run your own manager, such as xsettingsd.
 # xwayland_xsettings = false
+# Modal dialogs hang on their parent window and follow it. Turn this off to keep them ordinary windows.
+# attach_modal_dialogs = false
 
 # ==============================================================================
 # Lid events
@@ -297,6 +299,12 @@ default_pinned = true
 # match.app_id = "^obs$"
 # background_render = true
 
+# Keep one application's modal dialogs as ordinary windows.
+# [[window_rule]]
+# match.app_id = "^gimp"
+# match.is_dialog = true
+# attach_to_parent = false
+
 # Named scratchpads can launch an application when toggled while empty.
 # [[scratchpad]]
 # name = "music"
@@ -353,3 +361,7 @@ action = "overview-open"
 # effect = "workspace_wipe"
 # duration_ms = 300
 # curve = "easeout"
+
+# Shade over a window while a modal dialog is attached to it.
+# [animation.dialogs]
+# dim = 0.3

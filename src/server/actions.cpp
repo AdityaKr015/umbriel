@@ -181,17 +181,19 @@ namespace umbriel {
     };
 
     // The window whose place an action changes: the one `id` names, else the focused window `source` picks, which
-    // may be null. An `id` naming no mapped window is an error.
+    // may be null. An attached dialog's place is its parent's, so an action aimed at it acts on the window it lives
+    // in. An `id` naming no mapped window is an error.
     std::expected<View*, std::string>
     placementTarget(Server& server, std::string_view id, FocusSource source = FocusSource::Seat) {
+      const auto root = [](View* view) { return view != nullptr ? view->placementRoot() : nullptr; };
       if (!id.empty()) {
-        return viewByForeignIdentifier(server, id);
+        return viewByForeignIdentifier(server, id).transform(root);
       }
       switch (source) {
       case FocusSource::Seat:
-        return focusedWindow(server);
+        return root(focusedWindow(server));
       case FocusSource::Scratchpad:
-        return focusedScratchpadWindow(server);
+        return root(focusedScratchpadWindow(server));
       case FocusSource::Workspace: {
         Workspace* workspace = activeWorkspace(server);
         return workspace != nullptr ? workspace->focusedView() : nullptr;
@@ -201,7 +203,7 @@ namespace umbriel {
         return workspace != nullptr ? workspace->focusedView() : nullptr;
       }
       case FocusSource::Recent:
-        for (const auto& view : server.views()) {
+        for (const auto& view : server.registry().placementRoots()) {
           if (view->mapped() && view->onActiveWorkspace()) {
             return view.get();
           }
@@ -211,8 +213,9 @@ namespace umbriel {
       return nullptr;
     }
 
-    // The window whose client an action addresses: the one `id` names, else the focused window that
-    // FocusSource::Seat picks, which may be null. An `id` naming no mapped window is an error.
+    // The window an action addresses itself, not its place: its client (close, kill, screencast) or its own effects.
+    // The one `id` names, else the focused window that FocusSource::Seat picks, which may be null. An `id` naming no
+    // mapped window is an error.
     std::expected<View*, std::string> clientTarget(Server& server, std::string_view id) {
       if (!id.empty()) {
         return viewByForeignIdentifier(server, id);
@@ -1414,7 +1417,7 @@ namespace umbriel {
 
     bool actionWindowFocusLast(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       View* current = placementTarget(server, {}, FocusSource::Seat).value_or(nullptr);
-      for (const auto& entry : server.registry().all()) {
+      for (const auto& entry : server.registry().placementRoots()) {
         View* target = entry.get();
         if (target == current || !target->mapped() || target->workspace() == nullptr) {
           continue;
@@ -1453,7 +1456,7 @@ namespace umbriel {
       View* focused = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr);
       const bool seekFloating = focused == nullptr || !focused->floating();
       View* target = nullptr;
-      for (const auto& entry : server.registry().all()) {
+      for (const auto& entry : server.registry().placementRoots()) {
         View* view = entry.get();
         if (view == focused || !view->mapped() || view->workspace() != workspace) {
           continue;
@@ -2054,7 +2057,7 @@ namespace umbriel {
       View* view = nullptr;
       Output* output = nullptr;
       if constexpr (Kind == EffectKind::Window || Kind == EffectKind::Border) {
-        const auto resolved = placementTarget(server, target);
+        const auto resolved = clientTarget(server, target);
         if (!resolved.has_value()) {
           return reject(error, resolved.error());
         }

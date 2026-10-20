@@ -303,6 +303,19 @@ xdg_toplevel_tag_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+xdg_dialog_client_h = custom_target(
+  'xdg-dialog-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/xdg-dialog/xdg-dialog-v1.xml',
+  output: 'xdg-dialog-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+xdg_dialog_client_c = custom_target(
+  'xdg-dialog-v1-client-protocol.c',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/xdg-dialog/xdg-dialog-v1.xml',
+  output: 'xdg-dialog-v1-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 xdg_foreign_client_h = custom_target(
   'xdg-foreign-unstable-v2-client-protocol.h',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/xdg-foreign/xdg-foreign-unstable-v2.xml',
@@ -738,6 +751,7 @@ core_sources = files(
   'src/view/view_foreign.cpp',
   'src/view/view_role.cpp',
   'src/view/view_animation.cpp',
+  'src/view/view_attachment.cpp',
   'src/view/view_chrome.cpp',
   'src/view/view_floating.cpp',
   'src/view/view_lifecycle.cpp',

@@ -269,6 +269,9 @@ namespace umbriel {
       if (rule.matchOnlyWindow && *rule.matchOnlyWindow != state.onlyWindow) {
         continue;
       }
+      if (rule.matchDialog && *rule.matchDialog != state.dialog) {
+        continue;
+      }
       if (rule.matchAtStartup && *rule.matchAtStartup != (uptimeMs < kStartupRuleDurationMs)) {
         continue;
       }
@@ -332,6 +335,9 @@ namespace umbriel {
       }
       if (rule.focusOnActivate) {
         resolved.focusOnActivate = rule.focusOnActivate;
+      }
+      if (rule.attachToParent) {
+        resolved.attachToParent = rule.attachToParent;
       }
       if (rule.vrr) {
         resolved.vrr = rule.vrr;

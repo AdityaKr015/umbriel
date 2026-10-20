@@ -35,6 +35,7 @@ struct wlr_scene_rect;
 struct wlr_subsurface;
 struct wlr_surface;
 struct wlr_xdg_popup;
+struct wlr_xdg_dialog_v1;
 struct wlr_xdg_toplevel;
 struct wlr_xwayland_surface;
 struct wlr_xwayland_surface_configure_event;
@@ -134,7 +135,10 @@ namespace umbriel {
     [[nodiscard]] bool mapped() const { return m_mapped; }
     // The pid of the application process, or -1 when it is unknown (an X11 client that sets no _NET_WM_PID).
     [[nodiscard]] pid_t pid() const;
-    [[nodiscard]] Workspace* workspace() const { return m_workspace; }
+    // An attached dialog reports its placement root's workspace, output, visibility, and pinned state.
+    [[nodiscard]] Workspace* workspace() const {
+      return m_attachedTo != nullptr ? m_attachedTo->workspace() : m_workspace;
+    }
     // The output currently presenting this view. Unassigned views follow the
     // preferred output until they are attached to a workspace.
     [[nodiscard]] Output* currentOutput() const;
@@ -144,7 +148,9 @@ namespace umbriel {
     // A `background_render` rule applies: while hidden, the window stays unsuspended and gets frame callbacks at its
     // output's refresh rate.
     [[nodiscard]] bool backgroundRender() const { return m_backgroundRender; }
-    [[nodiscard]] bool onActiveWorkspace() const { return m_onActiveWorkspace; }
+    [[nodiscard]] bool onActiveWorkspace() const {
+      return m_attachedTo != nullptr ? m_attachedTo->onActiveWorkspace() : m_onActiveWorkspace;
+    }
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
     [[nodiscard]] bool isAloneInLayout() const;
@@ -153,7 +159,7 @@ namespace umbriel {
       return m_namedScrollingColumnName;
     }
     [[nodiscard]] std::optional<int> namedScrollingColumnOrder() const { return m_namedScrollingColumnOrder; }
-    [[nodiscard]] bool pinned() const { return m_pinned; }
+    [[nodiscard]] bool pinned() const { return m_attachedTo != nullptr ? m_attachedTo->pinned() : m_pinned; }
     // True when unpinning puts the window back in the tiled layout, because
     // that is where it was pinned from.
     [[nodiscard]] bool restoresTiledOnUnpin() const { return m_restoreTiledAfterUnpin; }
@@ -163,6 +169,21 @@ namespace umbriel {
     [[nodiscard]] bool urgent() const { return m_urgent; }
     // The mapped window the client named as this one's parent (xdg parent or X11 WM_TRANSIENT_FOR), or null.
     [[nodiscard]] View* shellParent() const;
+    // Modal dialog attachment. An attached dialog has no placement of its own: it lives inside the window it is
+    // attached to, which holds its workspace, output, and visibility.
+    [[nodiscard]] bool attached() const { return m_attachedTo != nullptr; }
+    // The dialogs attached to this window, oldest first.
+    [[nodiscard]] std::span<View* const> attachments() const { return m_attachments; }
+    // The window at the bottom of this one's attachment chain, which is where its placement lives; itself when it is
+    // not attached.
+    [[nodiscard]] View* placementRoot();
+    [[nodiscard]] const View* placementRoot() const;
+    // The window that takes this one's input: its topmost attached dialog, recursively; itself when none is attached.
+    [[nodiscard]] View* inputDelegate();
+    // A window with a dialog attached is shaded and gets no input of its own.
+    [[nodiscard]] bool blocked() const { return !m_attachments.empty(); }
+    // The toplevel's xdg-dialog-v1 object. Its modality can change or go away while the window is mapped.
+    void setDialog(wlr_xdg_dialog_v1* dialog);
     // The window id the ext-foreign-toplevel protocol hands to clients, which the IPC surface reuses verbatim for its
     // own window identity. Null only while no ext handle exists (the handle lives for the whole map lifetime).
     [[nodiscard]] const char* extForeignIdentifier() const {
@@ -296,14 +317,14 @@ namespace umbriel {
     void endLayoutMotion();
     // Where the frame is now in layout coordinates, mid-animation included, without the workspace slide offset. Frames
     // sit directly under trees anchored at the layout origin (a workspace tree moves only by its slide offset), so this
-    // is the frame node's own position.
+    // is the frame node's own position; an attached dialog's frame sits at an offset inside its parent's.
     [[nodiscard]] int layoutX() const;
     [[nodiscard]] int layoutY() const;
     // The authoritative layout position: where the window's slot is, not where its scene node happens to be
     // mid-animation. Workspace slides and arrange reflows move nodes without touching the animation targets, so window
     // listings that order by position must read these instead.
-    [[nodiscard]] int layoutTargetX() const { return static_cast<int>(std::lround(m_posX.target())); }
-    [[nodiscard]] int layoutTargetY() const { return static_cast<int>(std::lround(m_posY.target())); }
+    [[nodiscard]] int layoutTargetX() const;
+    [[nodiscard]] int layoutTargetY() const;
     // The box this window is headed for: the output when fullscreen, its presented slot when tiled, which is the usable
     // area when maximized to edges, else its own position at the size it is resizing to. Valid ahead of the animation
     // that carries the node there and of the client's resize, and settles a pending arrange to get there.
@@ -506,6 +527,8 @@ namespace umbriel {
     static void onEffectSelectionIdle(void* data);
     static void onRequestFullscreen(wl_listener* listener, void* data);
     static void onSetParent(wl_listener* listener, void* data);
+    static void onDialogSetModal(wl_listener* listener, void* data);
+    static void onDialogDestroy(wl_listener* listener, void* data);
     static void onSetTitle(wl_listener* listener, void* data);
     static void onSetAppId(wl_listener* listener, void* data);
     static void onForeignActivate(wl_listener* listener, void* data);
@@ -692,6 +715,28 @@ namespace umbriel {
     [[nodiscard]] wlr_box fullscreenArea() const;
     void setPinned(bool pinned, bool focus);
     [[nodiscard]] View* transientParent() const;
+    // A modal dialog attaches to its shell parent: one marked modal through xdg-dialog-v1, or one another client
+    // parented through xdg-foreign, which is how a portal parents its dialogs. `general.attach_modal_dialogs` and the
+    // `attach_to_parent` rule action opt out.
+    [[nodiscard]] bool wantsAttach();
+    // Attach or detach to match wantsAttach(). The only caller of attach() and detach().
+    void reconcileAttachment();
+    // Re-check the dialogs this window parents, whose `attach_to_parent` can come from this window's rules.
+    void reconcileDialogAttachments();
+    // Leave whatever placement this view has, then hang its frame in `parent`'s attachment tree.
+    void attach(View* parent);
+    // Leave the parent and become an ordinary float where the dialog showed.
+    void detach();
+    // Remove this view from its parent's attachments, keeping the frame where it shows, and return the old parent.
+    View* unlinkAttachment();
+    // This view is going away: hand its attachments to its own parent, or let them go as floats.
+    void releaseAttachments();
+    // Centre every attachment on this view's presented box, kept on its output, and present it there.
+    void layoutAttachments();
+    // Fade the shade in while a dialog is attached and out once none is; animation.dialogs times it.
+    void retargetModalShade();
+    void syncModalShade();
+    void releaseDialog();
     [[nodiscard]] bool inheritScratchpadFromParent(bool restoreTiled);
     void syncTransientSceneParent();
     void raiseTransientTree();
@@ -811,6 +856,12 @@ namespace umbriel {
     ContentType m_contentType = ContentType::None;
     wlr_scene_tree* m_sceneTree = nullptr;
     wlr_scene_tree* m_contentTree = nullptr;
+    // The last child of the frame, so attached dialogs draw above everything else of this window.
+    wlr_scene_tree* m_attachmentTree = nullptr;
+    // Shades this window while a dialog is attached: above its content and borders, below the attachment tree.
+    wlr_scene_rect* m_modalShade = nullptr;
+    // 0 to 1 of animation.dialogs.dim.
+    AnimatedValue m_modalShadeAlpha{0.0};
     // A separate scene containing only client-owned surfaces. Window capture
     // must never sample the composited desktop behind translucent content.
     wlr_scene* m_captureScene = nullptr;
@@ -838,7 +889,12 @@ namespace umbriel {
     wlr_ext_foreign_toplevel_handle_v1* m_extForeign = nullptr;
     wlr_output* m_foreignOutput = nullptr;
     wlr_ext_image_capture_source_v1* m_captureSource = nullptr;
+    wlr_xdg_dialog_v1* m_dialog = nullptr;
     Workspace* m_workspace = nullptr;
+    // The window whose attachment tree holds this one, and the dialogs attached to this one, oldest first: the last is
+    // topmost and takes the input.
+    View* m_attachedTo = nullptr;
+    std::vector<View*> m_attachments;
     std::optional<DisplacedHome> m_displacedHome;
 
     bool m_mapped = false;
@@ -961,6 +1017,8 @@ namespace umbriel {
     wl_listener m_xRequestConfigure{};
     wl_listener m_xRequestActivate{};
     wl_listener m_xSetHints{};
+    wl_listener m_dialogSetModal{};
+    wl_listener m_dialogDestroy{};
   };
 
 } // namespace umbriel

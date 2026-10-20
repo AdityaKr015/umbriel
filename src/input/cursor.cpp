@@ -955,6 +955,8 @@ namespace umbriel {
     if (view == nullptr || !view->mapped() || button == 0) {
       return false;
     }
+    // An attached dialog's place is its parent's, so dragging it drags the window it lives in.
+    view = view->placementRoot();
     if (!isPassthrough()) {
       resetMode();
     }
@@ -1014,7 +1016,7 @@ namespace umbriel {
     }
     bool tiled = view->tiled();
     if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
-        scratchpad != nullptr && scratchpad->contains(view)) {
+        scratchpad != nullptr && !view->attached() && scratchpad->contains(view)) {
       view->setFloating(true);
       tiled = false;
     }
@@ -2072,9 +2074,9 @@ namespace umbriel {
     // invalidated hover must not immediately focus it again. A real re-entry (or a click) can still focus it.
     const bool entered = view != oldView || (refocus && !ruleConstraintApplies(*view));
     // Workspace focus is remembered independently from the seat. A pinned window from another workspace can own the
-    // seat while this view remains its active workspace's remembered focus, so only seat-global activation makes this
-    // handoff redundant.
-    const bool alreadyFocused = view->activated();
+    // seat while this view remains its active workspace's remembered focus, so only seat-global activation of the
+    // window that would take the keyboard (a dialog attached to this one) makes this handoff redundant.
+    const bool alreadyFocused = view->placementRoot()->inputDelegate()->activated();
     if (entered && !alreadyFocused) {
       m_server->focusView(view, FocusReason::PointerHover);
       // Scroll may have moved another surface under the cursor; refresh hit-test for

@@ -92,6 +92,10 @@ namespace umbriel {
       });
     }
 
+    bool decidesAttachment(const std::vector<WindowRule>& rules) {
+      return std::ranges::any_of(rules, [](const WindowRule& rule) { return rule.attachToParent.has_value(); });
+    }
+
     bool sameOutputDirectScanoutPolicy(const OutputRule* before, const OutputRule* after) {
       static const OutputRule defaults;
       const OutputRule& lhs = before != nullptr ? *before : defaults;
@@ -134,6 +138,7 @@ namespace umbriel {
             || lhs.matchScratchpad != rhs.matchScratchpad
             || lhs.matchAlone != rhs.matchAlone
             || lhs.matchOnlyWindow != rhs.matchOnlyWindow
+            || lhs.matchDialog != rhs.matchDialog
             || lhs.matchAtStartup != rhs.matchAtStartup
             || lhs.allowTearing != rhs.allowTearing) {
           return false;
@@ -245,6 +250,9 @@ namespace umbriel {
         .overviewPresentation = before.overview != after.overview || before.colors != after.colors,
         .internalUi = before.colors != after.colors || before.general.modKey != after.general.modKey,
         .effects = effectsChanged,
+        .dialogAttachment = before.general.attachModalDialogs != after.general.attachModalDialogs
+            || (before.windowRules != after.windowRules
+                && (decidesAttachment(before.windowRules) || decidesAttachment(after.windowRules))),
     };
   }
 
@@ -263,6 +271,7 @@ namespace umbriel {
         .overviewPresentation = true,
         .internalUi = true,
         .effects = true,
+        .dialogAttachment = true,
     };
   }
 
@@ -374,6 +383,7 @@ namespace umbriel {
     add(input, "input");
     add(overviewPresentation, "overview presentation");
     add(effects, "effects");
+    add(dialogAttachment, "dialog attachment");
     return out;
   }
 } // namespace umbriel

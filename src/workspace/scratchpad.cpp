@@ -11,6 +11,7 @@
 #include "workspace/workspace.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <ranges>
 #include <set>
@@ -159,7 +160,8 @@ namespace umbriel {
   }
 
   bool ScratchpadManager::ridesWithParent(const View* view, std::string_view name) const {
-    const View* parent = view != nullptr ? view->shellParent() : nullptr;
+    // An attached dialog belongs to no scratchpad of its own: it shows inside its parent.
+    const View* parent = view != nullptr && !view->attached() ? view->shellParent() : nullptr;
     const Entry* entry = parent != nullptr ? findEntry(parent) : nullptr;
     return entry != nullptr && entry->scratchpad == name;
   }
@@ -186,16 +188,19 @@ namespace umbriel {
     }
   }
 
-  bool ScratchpadManager::contains(const View* view) const { return findEntry(view) != nullptr; }
+  // An attached dialog has no entry of its own; the queries answer for the window it lives in.
+  bool ScratchpadManager::contains(const View* view) const {
+    return view != nullptr && findEntry(view->placementRoot()) != nullptr;
+  }
 
   Output* ScratchpadManager::outputFor(const View* view) const {
-    const Entry* entry = findEntry(view);
+    const Entry* entry = view != nullptr ? findEntry(view->placementRoot()) : nullptr;
     const Scratchpad* scratchpad = entry != nullptr ? findScratchpad(entry->scratchpad) : nullptr;
     return scratchpad != nullptr ? scratchpad->output : nullptr;
   }
 
   std::string_view ScratchpadManager::nameFor(const View* view) const {
-    const Entry* entry = findEntry(view);
+    const Entry* entry = view != nullptr ? findEntry(view->placementRoot()) : nullptr;
     return entry != nullptr ? std::string_view(entry->scratchpad) : std::string_view{};
   }
 
@@ -208,7 +213,7 @@ namespace umbriel {
   }
 
   Output* ScratchpadManager::restoreOutputFor(const View* view) const {
-    const Entry* entry = findEntry(view);
+    const Entry* entry = view != nullptr ? findEntry(view->placementRoot()) : nullptr;
     return entry != nullptr ? m_server->outputFromName(entry->returnOutput) : nullptr;
   }
 
@@ -238,6 +243,7 @@ namespace umbriel {
     if (view == nullptr
         || parent == nullptr
         || view == parent
+        || view->attached()
         || !parent->mapped()
         || !parent->onActiveWorkspace()
         || scratchpad == nullptr
@@ -252,6 +258,7 @@ namespace umbriel {
   bool ScratchpadManager::admit(
       View* view, std::string_view name, Output* invokingOutput, Admission admission, const AutomaticAdmission& options
   ) {
+    assert(!view->attached());
     Scratchpad* scratchpad = findScratchpad(name);
     if (scratchpad == nullptr || invokingOutput == nullptr || m_server == nullptr || m_root == nullptr) {
       return false;

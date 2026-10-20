@@ -263,21 +263,27 @@ namespace umbriel {
 
     showDecorations(!scheduledFullscreen());
 
-    Workspace* launchWorkspace = m_launchWorkspace != nullptr ? m_launchWorkspace->workspace : nullptr;
-    if (!launchRuleOverride && m_workspace == nullptr && launchWorkspace != nullptr) {
-      setWorkspace(launchWorkspace, false);
-    } else if (launchRuleOverride && m_workspace != nullptr) {
-      setWorkspace(nullptr, false);
-    }
-    if (m_workspace != nullptr) {
-      m_workspace->layoutAttach(
-          this, rule.defaultScrollingExtent, rule.defaultScrollingExtentPx, LayoutAttachOrigin::OpeningView
-      );
-    } else if (!attachToAvailableWorkspace(rule, LayoutAttachOrigin::OpeningView)) {
-      setOnActiveWorkspace(true);
+    // A modal dialog attaches before it is placed anywhere: its parent's placement is its own, so none of the
+    // placement rules below apply to it.
+    reconcileAttachment();
+    const bool placed = !attached();
+    if (placed) {
+      Workspace* launchWorkspace = m_launchWorkspace != nullptr ? m_launchWorkspace->workspace : nullptr;
+      if (!launchRuleOverride && m_workspace == nullptr && launchWorkspace != nullptr) {
+        setWorkspace(launchWorkspace, false);
+      } else if (launchRuleOverride && m_workspace != nullptr) {
+        setWorkspace(nullptr, false);
+      }
+      if (m_workspace != nullptr) {
+        m_workspace->layoutAttach(
+            this, rule.defaultScrollingExtent, rule.defaultScrollingExtentPx, LayoutAttachOrigin::OpeningView
+        );
+      } else if (!attachToAvailableWorkspace(rule, LayoutAttachOrigin::OpeningView)) {
+        setOnActiveWorkspace(true);
+      }
     }
     bool assignedScratchpad = false;
-    if (rule.defaultScratchpad) {
+    if (placed && rule.defaultScratchpad) {
       if (ScratchpadManager* scratchpad = m_server->scratchpadManager();
           scratchpad != nullptr && scratchpad->hasScratchpad(*rule.defaultScratchpad)) {
         Workspace* restoreWorkspace = m_workspace;
@@ -299,10 +305,10 @@ namespace umbriel {
         }
       }
     }
-    if (!assignedScratchpad) {
+    if (placed && !assignedScratchpad) {
       assignedScratchpad = inheritScratchpadFromParent(restoreTiled);
     }
-    if (!assignedScratchpad && rule.defaultPinned && *rule.defaultPinned) {
+    if (placed && !assignedScratchpad && rule.defaultPinned && *rule.defaultPinned) {
       setPinned(true, false);
     }
     if (assignedScratchpad) {
@@ -382,26 +388,28 @@ namespace umbriel {
         && m_tiled
         && m_workspace != nullptr
         && m_workspace->layoutConfig().clientMaximize == ClientMaximize::Edges;
-    if (!assignedScratchpad && (ruleMaximized || (restoredMaximized && !restoreToEdges))) {
+    if (placed && !assignedScratchpad && (ruleMaximized || (restoredMaximized && !restoreToEdges))) {
       setMaximized(true);
     }
-    if (!assignedScratchpad && restoreToEdges) {
+    if (placed && !assignedScratchpad && restoreToEdges) {
       setMaximizedToEdges(true);
     }
 
     // After default_maximize so maximize-to-edges wins the column, but before
     // fullscreen: setFullscreen leaves and restores the maximize-to-edges state.
     // These two also present a window that opens into a scratchpad.
-    if (rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges) {
+    if (placed && rule.defaultMaximizeToEdges && *rule.defaultMaximizeToEdges) {
       setMaximizedToEdges(true);
     }
 
     // Fullscreen after workspace + focus so the view lands in the right place.
-    if (rule.defaultFullscreen && *rule.defaultFullscreen) {
+    if (placed && rule.defaultFullscreen && *rule.defaultFullscreen) {
       setFullscreen(true);
     }
 
-    settleOpeningAloneState();
+    if (placed) {
+      settleOpeningAloneState();
+    }
 
     if (transientParent() != nullptr) {
       raiseToTop();
@@ -495,6 +503,16 @@ namespace umbriel {
     if (m_effectSelectionIdle != nullptr) {
       wl_event_source_remove(m_effectSelectionIdle);
       m_effectSelectionIdle = nullptr;
+    }
+    // Attachments leave before anything below hides or tears down this window's frame, which holds them.
+    releaseAttachments();
+    if (attached()) {
+      const bool heldInput = View::fromSurface(m_server->seat()->wlr()->keyboard_state.focused_surface) == this;
+      View* root = placementRoot();
+      unlinkAttachment();
+      if (heldInput) {
+        m_server->focusView(root, FocusReason::Directional);
+      }
     }
     Workspace* closingWorkspace = m_workspace;
     Cursor* cursor = m_server->cursor();

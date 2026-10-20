@@ -283,6 +283,7 @@ namespace umbriel {
           boolean("xwayland_xsettings", &G::xwaylandXsettings),
           boolean("show_cheatsheet", &G::showCheatsheet),
           boolean("focus_on_activate", &G::focusOnActivate),
+          boolean("attach_modal_dialogs", &G::attachModalDialogs),
           boolean("honor_restored_maximize", &G::honorRestoredMaximize),
           registry::strings("autostart", &G::autostart),
       };

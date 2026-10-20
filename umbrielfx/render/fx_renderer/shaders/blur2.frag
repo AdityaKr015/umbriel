@@ -1,6 +1,3 @@
-#version 100
-// Explicit: some drivers leave GL_FRAGMENT_PRECISION_HIGH undefined in an
-// unversioned shader, and the noise hash below needs highp.
 #define EFFECTS % d
 #define COMPOSITE % d
 #define CORNERS % d
@@ -9,11 +6,7 @@
 #error "Missing shader preamble"
 #endif
 
-#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
-#else
-precision mediump float;
-#endif
 
 varying highp vec2 v_texcoord;
 uniform sampler2D tex;

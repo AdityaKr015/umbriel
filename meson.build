@@ -473,6 +473,12 @@ ext_image_copy_capture_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+ext_foreign_toplevel_list_client_h = custom_target(
+  'ext-foreign-toplevel-list-v1-client-protocol.h',
+  input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1.xml',
+  output: 'ext-foreign-toplevel-list-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
 ext_foreign_toplevel_list_client_c = custom_target(
   'ext-foreign-toplevel-list-v1-protocol.c',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1.xml',

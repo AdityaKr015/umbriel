@@ -42,6 +42,7 @@ umbrielfx_sources = files(
   'types/fx/clipped_region.c',
   'types/linux_drm_syncobj.c',
   'types/output/output.c',
+  'types/scene/capture.c',
   'types/scene/drag_icon.c',
   'types/scene/layer_shell_v1.c',
   'types/scene/linked_node.c',

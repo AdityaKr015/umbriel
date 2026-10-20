@@ -211,7 +211,7 @@ namespace umbriel {
       }
     }
 
-    std::string sessionEnvironmentCommand() {
+    std::string sessionEnvironmentCommand(bool managedReadiness) {
       std::string configuredAssignments;
       for (const auto& [name, value] : config().environment.variables) {
         configuredAssignments += ' ';
@@ -227,12 +227,15 @@ namespace umbriel {
           "if systemctl --user import-environment $variables";
       command += publishConfigured;
       command += "; then systemd_ready=true; else "
-                 "echo 'umbriel: failed to publish the session environment' >&2; fi; fi; "
+                 "echo 'umbriel: failed to publish the session environment' >&2; exit 1; fi; fi; "
                  "if command -v dbus-update-activation-environment >/dev/null 2>&1; then "
-                 "dbus-update-activation-environment $variables || "
-                 "echo 'umbriel: failed to update the D-Bus activation environment' >&2; fi; "
-                 "if $systemd_ready; then systemctl --user start --no-block umbriel-session.target || "
-                 "echo 'umbriel: failed to start the systemd session target' >&2; fi";
+                 "dbus-update-activation-environment $variables || { "
+                 "echo 'umbriel: failed to update the D-Bus activation environment' >&2; exit 1; }; fi; ";
+      if (managedReadiness) {
+        command += "$systemd_ready";
+      } else {
+        command += "if $systemd_ready; then systemctl --user start --no-block umbriel-session.target; fi";
+      }
       return command;
     }
 
@@ -987,6 +990,10 @@ namespace umbriel {
     m_signalSources[0] = wl_event_loop_add_signal(loop, SIGINT, onTerminateSignal, this);
     m_signalSources[1] = wl_event_loop_add_signal(loop, SIGTERM, onTerminateSignal, this);
     m_applicationScopesRequired = !m_nested && isDirectSystemdService(getpid(), std::getenv("SYSTEMD_EXEC_PID"));
+    const char* inheritedNotifySocket = std::getenv("NOTIFY_SOCKET");
+    const std::string notifySocket =
+        m_applicationScopesRequired && inheritedNotifySocket != nullptr ? inheritedNotifySocket : "";
+    unsetenv("NOTIFY_SOCKET");
     if (m_applicationScopesRequired) {
       m_systemdRunExecutable = resolveExecutable("systemd-run");
       m_systemctlExecutable = resolveExecutable("systemctl");
@@ -1052,12 +1059,17 @@ namespace umbriel {
       }
     }
 
-    // Fork session synchronization before applying configured values locally.
-    // Its child keeps the inherited PATH and bus addresses, while the target
-    // receives the explicit configured assignments before it starts.
+    // Wait before applying configured values locally, so the importer keeps
+    // the inherited PATH and bus addresses. Readiness and autostart must not
+    // release session services until these imports have completed.
     if (!m_nested) {
-      const std::string command = sessionEnvironmentCommand();
-      spawnCommand(command.c_str(), "session environment synchronization", false, SpawnClass::SessionHelper);
+      const std::string command = sessionEnvironmentCommand(!notifySocket.empty());
+      if (!runShellCommand(command)) {
+        kLog.error("session environment synchronization failed: {}", std::strerror(errno));
+        if (!notifySocket.empty()) {
+          return false;
+        }
+      }
     }
     applyConfiguredEnvironment();
 
@@ -1073,12 +1085,6 @@ namespace umbriel {
       wl_event_source_timer_update(m_startupRulesTimer, kStartupRuleDurationMs);
     }
 
-    if (startupCmd != nullptr) {
-      spawn(startupCmd);
-    }
-    for (const std::string& command : config().general.autostart) {
-      spawn(command.c_str());
-    }
     m_configWatcher = std::make_unique<ConfigWatcher>(wl_display_get_event_loop(m_display), [this] {
       const ConfigReloadResult result = reloadConfig();
       handleConfigReload(result);
@@ -1091,6 +1097,16 @@ namespace umbriel {
       m_cheatsheet->showOnStartup();
     }
     m_quitConfirm = std::make_unique<QuitConfirm>(*this, m_quitConfirmTree);
+    if (!notifyServiceReady(notifySocket)) {
+      kLog.error("failed to report session readiness: {}", std::strerror(errno));
+      return false;
+    }
+    if (startupCmd != nullptr) {
+      spawn(startupCmd);
+    }
+    for (const std::string& command : config().general.autostart) {
+      spawn(command.c_str());
+    }
     return true;
   }
 
@@ -1286,17 +1302,12 @@ namespace umbriel {
   }
 
   void Server::spawn(const char* command, const char* description, bool withActivationToken) {
-    spawnCommand(command, description, withActivationToken, SpawnClass::Application);
-  }
-
-  void
-  Server::spawnCommand(const char* command, const char* description, bool withActivationToken, SpawnClass spawnClass) {
     if (m_socketName.empty()) {
       wlr_log(WLR_ERROR, "cannot spawn before the Wayland socket exists");
       return;
     }
 
-    const bool scopeRequired = spawnClass == SpawnClass::Application && m_applicationScopesRequired;
+    const bool scopeRequired = m_applicationScopesRequired;
     if (scopeRequired
         && (m_systemdRunExecutable.empty()
             || m_applicationScopePartOfProperty.empty()

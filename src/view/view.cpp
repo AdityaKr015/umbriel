@@ -934,6 +934,9 @@ namespace umbriel {
     if (output == nullptr || rootSurface() == nullptr) {
       return;
     }
+    if (m_captureSource != nullptr) {
+      umbrielfx_scene_capture_source_set_scale(m_captureSource, output->wlr()->scale);
+    }
     forEachSurface(&Output::notifySurfaceScaleIter, output);
     forEachPopupSurface(&Output::notifySurfaceScaleIter, output);
     // Chrome that renders text follows the scale too.

@@ -499,8 +499,6 @@ namespace umbriel {
   private:
     friend class Output;
 
-    enum class SpawnClass { Application, SessionHelper };
-
     bool requestScreenCastCommand(ScreenCastCommandKind kind, std::string value, std::string* error);
 
     static void
@@ -561,8 +559,6 @@ namespace umbriel {
     static void onLayerKeyboardFocusChange(wl_listener* listener, void* data);
     static void onDisplacedRestoreIdle(void* data);
     static void onSuspensionSyncIdle(void* data);
-
-    void spawnCommand(const char* command, const char* description, bool withActivationToken, SpawnClass spawnClass);
 
     void trackActivationToken(wlr_xdg_activation_token_v1* token, bool compositorIssued);
     void assignLaunchOriginFromEnvironment(View& view);

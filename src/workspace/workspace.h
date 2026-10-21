@@ -170,8 +170,10 @@ namespace umbriel {
     [[nodiscard]] std::unique_ptr<Layout> previewArrangedLayout() const;
     void refreshAloneRuleStates();
     void syncViewPresentation(View* view);
-    [[nodiscard]] View* focusAdjacent(int direction) const;
-    [[nodiscard]] View* focusVertical(int direction) const;
+    // Directional queries and moves read the layout's arranged targets, so they
+    // apply a pending arrange first.
+    [[nodiscard]] View* focusAdjacent(int direction);
+    [[nodiscard]] View* focusVertical(int direction);
     [[nodiscard]] View* focusFirstColumn() const;
     [[nodiscard]] View* focusLastColumn() const;
     [[nodiscard]] View* focusReplacementForRemoval(const View* view) const;
@@ -276,8 +278,8 @@ namespace umbriel {
     [[nodiscard]] std::optional<std::array<int, 2>> focusedFloatingAxis(bool width) const;
     // The focused floating window's size as a fraction of the usable axis; nullopt when unavailable.
     [[nodiscard]] std::optional<double> focusedFloatingFraction(bool width) const;
-    [[nodiscard]] View* focusAlongStrip(int direction) const;
-    [[nodiscard]] View* focusWithinLane(int direction) const;
+    [[nodiscard]] View* focusAlongStrip(int direction);
+    [[nodiscard]] View* focusWithinLane(int direction);
     // Directional focus lands on the most recently focused window of the group
     // the move entered (target column, or crossed dwindle subtree). Moves that
     // stay inside one group keep `target`.

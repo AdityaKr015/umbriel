@@ -423,7 +423,67 @@ namespace umbriel {
     }
   }
 
-  void View::toggleFloating() { setFloating(m_tiled); }
+  void View::toggleFloating(bool focus) {
+    if (!m_mapped || !roleInitialized()) {
+      return;
+    }
+    const bool wasTiled = m_tiled;
+    const bool keepMaximized = scheduledMaximized() && !scheduledFullscreen() && !currentFullscreen();
+    const bool keepMaximizedToEdges = keepMaximized && m_maximizedToEdges;
+    const std::optional<wlr_box> floatingRestore =
+        keepMaximized && !wasTiled && m_hasMaximizeRestoreBox ? std::optional{m_maximizeRestoreBox} : std::nullopt;
+    if (floatingRestore
+        && !m_savedScrollingExtent
+        && !m_savedScrollingExtentPx
+        && m_workspace != nullptr
+        && m_workspace->scrollingLayout() != nullptr
+        && !m_workspace->layoutConfig().scrolling.defaultExtentFraction) {
+      // A window first opened floating has no earlier column extent. Seed its new column from the normal floating
+      // size rather than the maximized client buffer; explicit layout defaults still choose their own extent.
+      m_savedScrollingExtentPx = m_workspace->scrollingVertical() ? floatingRestore->height : floatingRestore->width;
+    }
+    if (keepMaximized && wasTiled) {
+      // Recover the ordinary column geometry before detaching. A first-time float restores that size; a window
+      // that has floated before keeps its remembered floating size and position.
+      if (keepMaximizedToEdges) {
+        setMaximizedToEdges(false, false);
+      }
+      setMaximized(false, false);
+      if (!m_floating.size() && m_workspace != nullptr) {
+        m_workspace->flushArrange();
+        const wlr_box normal = m_workspace->layout().targetBox(this);
+        if (normal.width > 0 && normal.height > 0) {
+          const SizeHints hints = sizeHints();
+          m_floating.rememberSize(clampWidth(normal.width, hints), clampHeight(normal.height, hints));
+        }
+      }
+    }
+    setFloating(wasTiled, focus);
+    if (wasTiled == m_tiled) {
+      return;
+    }
+    if (keepMaximized) {
+      if (m_tiled) {
+        // Retiling restores the ordinary column extent. Maximize that column again so only the maximize binding
+        // consumes its restore extent. Keep the maximized float's geometry out of its normal floating memory.
+        if (floatingRestore) {
+          m_floating.rememberSize(floatingRestore->width, floatingRestore->height);
+          m_floating.rememberPositionFraction({.x = floatingRestore->x, .y = floatingRestore->y}, floatingUsableArea());
+        }
+        m_hasMaximizeRestoreBox = false;
+      } else {
+        // The client can still be committing its maximized tile. Record the floating target explicitly so maximize
+        // captures the restore size before the client acknowledges the ordinary-size configure.
+        const auto restore = scheduledSize();
+        requestFloatingSize(restore.width, restore.height);
+      }
+      if (keepMaximizedToEdges) {
+        setMaximizedToEdges(true);
+      } else {
+        setMaximized(true);
+      }
+    }
+  }
 
   void View::restorePinnedSceneParent() {
     if (!m_pinned) {

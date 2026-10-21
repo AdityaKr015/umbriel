@@ -426,7 +426,7 @@ namespace umbriel {
     // places the window itself (an interactive drag drops it at its own target).
     enum class TilePlacement : uint8_t { Layout, Detached };
     void setFloating(bool floating, bool focus = true, TilePlacement placement = TilePlacement::Layout);
-    void toggleFloating();
+    void toggleFloating(bool focus = true);
     void togglePinned();
     // Restore the global pinned scene layer after temporary drag reparenting.
     void restorePinnedSceneParent();

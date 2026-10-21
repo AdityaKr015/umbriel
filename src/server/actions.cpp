@@ -1274,7 +1274,7 @@ namespace umbriel {
           return false;
         }
         View* view = *target;
-        view->setFloating(view->tiled(), false);
+        view->toggleFloating(false);
         return true;
       } else {
 

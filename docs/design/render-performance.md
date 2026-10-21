@@ -48,6 +48,21 @@ process-wide, forces composition. Both are documented in the
 [output guide](../user/outputs.md#direct-scanout) and exist for drivers that
 mispresent scanned-out buffers.
 
+## Output background clearing
+
+The scene background follows `colors.backdrop`, including its alpha. At the
+start of composition, the background draw replaces uncovered damaged pixels
+with `WLR_RENDER_BLEND_MODE_NONE`. It must not blend with the previous frame
+in a reused swapchain buffer: transparent black would leave old window pixels
+intact, and a translucent background would retain faded remnants. Ordinary
+scene nodes still blend over this initialized background, and opaque culling
+still excludes regions that those nodes will overwrite.
+
+The `effects-background-clear` regression moves an opaque rectangle, checks
+that its framebuffer is reused, and verifies that its old location becomes
+the configured background, including alpha. It covers transparent,
+translucent, and opaque backgrounds.
+
 ## What puts a second entry in the render list
 
 Occlusion culling drops nodes beneath a fully opaque one, so a fullscreen client

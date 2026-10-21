@@ -272,6 +272,7 @@ if build_tests
     'renderer-destroy',
     'persistent-scene',
     'occlusion',
+    'background-clear',
     'damage-confinement',
     'whole-box-invalidation',
     'transient-policy',

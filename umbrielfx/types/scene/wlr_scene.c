@@ -6259,7 +6259,9 @@ static bool scene_output_build_state(
     }
   }
 
-  render_background(render_pass, scene_output->scene, buffer, &background, WLR_RENDER_BLEND_MODE_PREMULTIPLIED);
+  // Replace damaged pixels, including alpha, rather than blending with the
+  // previous frame retained in this swapchain buffer.
+  render_background(render_pass, scene_output->scene, buffer, &background, WLR_RENDER_BLEND_MODE_NONE);
   pixman_region32_fini(&background);
 
   // The unfiltered composition, when it runs, emits output_sample; a display

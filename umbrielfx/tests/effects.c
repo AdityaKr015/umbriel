@@ -668,6 +668,76 @@ render_frame(struct wlr_scene_output* scene_output, struct wlr_swapchain* swapch
   return render_frame_pending(scene_output, swapchain, false, state);
 }
 
+// Moving a node must replace its old pixels even when the scene background
+// has alpha. Keep the swapchain alive and verify that the target is reused.
+static bool test_background_clear(struct fixture* fixture) {
+  static const float alphas[] = {0.0f, 0.5f, 1.0f};
+  bool ok = true;
+  for (size_t i = 0; i < sizeof(alphas) / sizeof(alphas[0]); ++i) {
+    struct wlr_swapchain* swapchain = create_swapchain(fixture);
+    struct wlr_scene* scene = wlr_scene_create();
+    if (!check(swapchain != NULL && scene != NULL, "background clear scene and swapchain")) {
+      wlr_swapchain_destroy(swapchain);
+      if (scene != NULL) {
+        wlr_scene_node_destroy(&scene->tree.node);
+      }
+      return false;
+    }
+    const float background[] = {0.0f, 0.0f, 0.0f, alphas[i]};
+    const float red[] = {1.0f, 0.0f, 0.0f, 1.0f};
+    wlr_scene_set_background_color(scene, background);
+    struct wlr_scene_output* scene_output = wlr_scene_output_create(scene, fixture->output);
+    struct wlr_scene_rect* rect = wlr_scene_rect_create(&scene->tree, 4, 4, red);
+    if (!check(scene_output != NULL && rect != NULL, "background clear output and moving rect")) {
+      wlr_swapchain_destroy(swapchain);
+      wlr_scene_node_destroy(&scene->tree.node);
+      return false;
+    }
+    wlr_scene_node_set_position(&rect->node, 2, 2);
+
+    struct wlr_output_state state;
+    struct wlr_buffer* before = render_frame(scene_output, swapchain, &state);
+    uint8_t pixel[4];
+    bool seeded = check(before != NULL, "initial background clear frame renders");
+    if (before != NULL) {
+      seeded &= fixture_read_display_pixel(fixture, before, 3, 3, pixel)
+          && check(pixel[2] > 250 && pixel[0] < 5 && pixel[1] < 5, "old location initially contains the red rect");
+      wlr_buffer_unlock(before);
+    }
+    wlr_output_state_finish(&state);
+    ok &= seeded;
+
+    wlr_scene_node_set_position(&rect->node, 10, 2);
+    struct wlr_buffer* after = render_frame(scene_output, swapchain, &state);
+    ok &= check(after != NULL, "moved background clear frame renders");
+    if (after != NULL) {
+      ok &= check(after == before, "moving the rect reuses the seeded framebuffer");
+      if (seeded && fixture_read_display_pixel(fixture, after, 3, 3, pixel)) {
+        const int alpha = lroundf(alphas[i] * 255.0f);
+        if (!check(
+                pixel[0] < 3 && pixel[1] < 3 && pixel[2] < 3 && abs(pixel[3] - alpha) <= 1,
+                "old location is replaced by the configured background"
+            )) {
+          fprintf(
+              stderr, "  background alpha %.2f: old location BGRA = %u,%u,%u,%u\n", alphas[i], pixel[0], pixel[1],
+              pixel[2], pixel[3]
+          );
+          ok = false;
+        }
+      } else {
+        ok = false;
+      }
+      ok &= fixture_read_display_pixel(fixture, after, 11, 3, pixel)
+          && check(pixel[2] > 250 && pixel[0] < 5 && pixel[1] < 5, "new location contains the moved red rect");
+      wlr_buffer_unlock(after);
+    }
+    wlr_output_state_finish(&state);
+    wlr_swapchain_destroy(swapchain);
+    wlr_scene_node_destroy(&scene->tree.node);
+  }
+  return ok;
+}
+
 // One whole-damage frame per swapchain buffer, so the next frame carries only its own damage.
 static bool warm_up(struct wlr_scene_output* scene_output, struct wlr_swapchain* swapchain) {
   bool ok = true;
@@ -2768,6 +2838,8 @@ int main(int argc, char* argv[]) {
     ok = test_persistent_scene(&fixture);
   } else if (strcmp(argv[1], "occlusion") == 0) {
     ok = test_occlusion(&fixture);
+  } else if (strcmp(argv[1], "background-clear") == 0) {
+    ok = test_background_clear(&fixture);
   } else if (strcmp(argv[1], "damage-confinement") == 0) {
     ok = test_damage_confinement(&fixture);
   } else if (strcmp(argv[1], "whole-box-invalidation") == 0) {

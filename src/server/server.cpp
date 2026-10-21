@@ -229,7 +229,13 @@ namespace umbriel {
       command += publishConfigured;
       command += "; then systemd_ready=true; else "
                  "echo 'umbriel: failed to publish the session environment' >&2; exit 1; fi; fi; "
-                 "if command -v dbus-update-activation-environment >/dev/null 2>&1; then "
+                 // The compositor waits on this script with its event loop stopped. Without a bus address, libdbus
+                 // autolaunches over X11, and DISPLAY names an Xwayland that only that loop can start. Use the
+                 // user bus socket when the address is unset, and skip the update when there is no bus at all.
+                 "if [ -z \"${DBUS_SESSION_BUS_ADDRESS:-}\" ] && [ -S \"${XDG_RUNTIME_DIR:-}/bus\" ]; then "
+                 "export DBUS_SESSION_BUS_ADDRESS=\"unix:path=$XDG_RUNTIME_DIR/bus\"; fi; "
+                 "if [ -n \"${DBUS_SESSION_BUS_ADDRESS:-}\" ] "
+                 "&& command -v dbus-update-activation-environment >/dev/null 2>&1; then "
                  "dbus-update-activation-environment $variables || { "
                  "echo 'umbriel: failed to update the D-Bus activation environment' >&2; exit 1; }; fi; ";
       if (managedReadiness) {

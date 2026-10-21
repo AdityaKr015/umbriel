@@ -39,24 +39,49 @@ be rebuilt.
 
 An activation token created for `spawn:` records the preferred output and its
 active workspace. A trusted client-created token records the workspace of its
-input source. Pinned and visible scratchpad sources record the active workspace
-on the output where they are presented. Umbriel associates that origin with a
-new native toplevel through XDG activation, or through a private inherited token
-for applications that do not use the protocol.
+input source. Pinned sources record the active workspace on the output where
+they are presented. A launch from an active scratchpad, including an empty one,
+also records its name. A trusted token from a scratchpad window records that
+window's pad; a layer-shell launcher records the active pad on its output.
+The workspace remains the return destination for a scratchpad launch.
+Umbriel associates that origin with a new native toplevel through XDG
+activation, or through a private inherited token for applications that do not
+use the protocol.
 
 Launch placement is applied at most once, and only before the toplevel's first
 map. Explicit output, workspace, and scratchpad window rules are resolved
 instead when present. If the pointer-preferred workspace has changed, the
 captured workspace receives the new window without changing focus or switching
 the user back, including when the pointer moved to another output.
+Scratchpad admission uses the captured name even after the pad is hidden or
+replaced. The arriving window takes focus only when that pad is still the
+active launch destination on the preferred output. An enabled pinning rule
+also overrides scratchpad launch placement. Removing the named pad before map
+leaves normal workspace placement available.
 One exception applies to a pointer gesture that creates another toplevel in the
 same Wayland client. If the pointer gesture ends on another output and the
 client redeems its activation token there, the new toplevel opens on the active
 workspace of the drop output. This lets browser tab tear-offs follow their drop
-without changing ordinary application launch placement.
+without changing ordinary application launch placement. A captured scratchpad
+destination stays authoritative across such pointer movement.
 `focus_on_activate` controls the activation decision and does not select the
 recorded launch destination. Redeeming the token against an existing or
 remapping toplevel consumes it without relocation.
+
+Scratchpad visibility and launch context are independent of membership.
+An empty toggle shows the existing backdrop and clears window keyboard focus.
+Closing the last member preserves this state; restoring the last member or
+closing a solo member hides the pad. Explicit workspace focus relinquishes
+launch context on that output without hiding the pad. Admission suppresses the
+floating transition's normal focus step until membership and visibility have
+been established, so a hidden arrival cannot focus its temporary workspace.
+Window-relative actions also recognize an active empty pad and do not fall
+back to its underlying workspace's remembered focus.
+
+The scratchpad launch checks retain restored and pinned windows through
+compositor shutdown. Floating restacking can then scan the registry while its
+views are being destroyed; transient-tree scans skip entries already cleared
+by that destruction.
 
 ### Reconciling configured names
 

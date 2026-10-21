@@ -680,6 +680,7 @@ namespace umbriel {
       bool pointerBacked = false;
       bool launchClaimed = false;
       std::shared_ptr<WorkspaceLaunchAnchor> launchWorkspace;
+      std::string launchScratchpad;
       std::string tokenName;
       std::string launchOutputName;
       std::string launchWorkspaceId;

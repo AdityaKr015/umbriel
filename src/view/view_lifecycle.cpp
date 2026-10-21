@@ -295,7 +295,7 @@ namespace umbriel {
         Output* restoreOutput = restoreWorkspace != nullptr && restoreWorkspace->group() != nullptr
             ? restoreWorkspace->group()->output()
             : currentOutput();
-        assignedScratchpad = scratchpad->assignByWindowRule(
+        assignedScratchpad = scratchpad->assignAutomatic(
             this, *rule.defaultScratchpad, restoreOutput,
             ScratchpadManager::AutomaticAdmission{
                 .restoreOutput = restoreOutput,
@@ -312,6 +312,31 @@ namespace umbriel {
     }
     if (placed && !assignedScratchpad) {
       assignedScratchpad = inheritScratchpadFromParent(restoreTiled);
+    }
+    bool assignedLaunchScratchpad = false;
+    if (placed
+        && !assignedScratchpad
+        && m_launchPlacementPending
+        && !launchRuleOverride
+        && !m_launchScratchpad.empty()
+        && !rule.defaultPinned.value_or(false)) {
+      if (ScratchpadManager* scratchpad = m_server->scratchpadManager()) {
+        Workspace* restoreWorkspace = m_workspace;
+        Output* restoreOutput = restoreWorkspace != nullptr && restoreWorkspace->group() != nullptr
+            ? restoreWorkspace->group()->output()
+            : currentOutput();
+        assignedLaunchScratchpad = scratchpad->assignAutomatic(
+            this, m_launchScratchpad, restoreOutput,
+            ScratchpadManager::AutomaticAdmission{
+                .restoreOutput = restoreOutput,
+                .restoreWorkspace = restoreWorkspace,
+                .focusOrigin = restoreOutput,
+                .restoreTiled = restoreTiled,
+                .updateRestoreLocation = true,
+            }
+        );
+        assignedScratchpad = assignedLaunchScratchpad;
+      }
     }
     if (placed && !assignedScratchpad && rule.defaultPinned && *rule.defaultPinned) {
       setPinned(true, false);
@@ -345,14 +370,16 @@ namespace umbriel {
 
     const bool launchPlacementUsed = m_launchPlacementPending
         && !launchRuleOverride
-        && !assignedScratchpad
-        && m_workspace != nullptr
-        && m_workspace->id() == m_launchWorkspaceId;
+        && (assignedLaunchScratchpad
+            || (!assignedScratchpad && m_workspace != nullptr && m_workspace->id() == m_launchWorkspaceId));
     Output* preferredOutput = m_server->outputFromWlr(m_server->preferredOutput());
     Workspace* preferredWorkspace = preferredOutput != nullptr && preferredOutput->workspaceGroup() != nullptr
         ? preferredOutput->workspaceGroup()->active()
         : nullptr;
-    const bool launchPlacementSilent = launchPlacementUsed && m_workspace != preferredWorkspace;
+    const bool launchPlacementSilent = launchPlacementUsed
+        && (assignedLaunchScratchpad ? m_server->scratchpadManager()->activeOn(preferredOutput)
+                    != m_server->scratchpadManager()->nameFor(this)
+                                     : m_workspace != preferredWorkspace);
     if (m_launchPlacementPending) {
       clearLaunchPlacement(!launchPlacementUsed, !launchPlacementUsed);
     }
@@ -784,9 +811,18 @@ namespace umbriel {
           config(), ruleText(appId()), ruleText(title()), m_xdgTag, m_contentType, openingState, m_server->uptimeMs()
       );
       ScratchpadManager* scratchpadManager = m_server->scratchpadManager();
-      const bool openingInScratchpad = rule.defaultScratchpad
+      const bool launchRuleOverride = m_launchPlacementPending
+          && (rule.defaultOutput.has_value()
+              || rule.defaultWorkspace.has_value()
+              || rule.defaultScratchpad.has_value());
+      const std::string_view openingScratchpad = rule.defaultScratchpad
+          ? std::string_view(*rule.defaultScratchpad)
+          : (m_launchPlacementPending && !launchRuleOverride && !rule.defaultPinned.value_or(false)
+                 ? std::string_view(m_launchScratchpad)
+                 : std::string_view{});
+      const bool openingInScratchpad = !openingScratchpad.empty()
           && scratchpadManager != nullptr
-          && scratchpadManager->hasScratchpad(*rule.defaultScratchpad);
+          && scratchpadManager->hasScratchpad(openingScratchpad);
       const bool wantTiled = !m_server->seat()->toplevelDrags().attached(m_toplevel)
           && !openingInScratchpad
           && !rule.defaultPinned.value_or(false)
@@ -794,10 +830,6 @@ namespace umbriel {
 
       // Resolve the workspace this view will attach to, so the output and layout that will actually arrange it are the
       // ones that size the first configure.
-      const bool launchRuleOverride = m_launchPlacementPending
-          && (rule.defaultOutput.has_value()
-              || rule.defaultWorkspace.has_value()
-              || rule.defaultScratchpad.has_value());
       Workspace* launchWorkspace = m_launchWorkspace != nullptr ? m_launchWorkspace->workspace : nullptr;
       Workspace* target = launchRuleOverride ? nullptr : (m_workspace != nullptr ? m_workspace : launchWorkspace);
       Output* preferred = m_server->outputFromWlr(m_server->preferredOutput());
@@ -851,7 +883,7 @@ namespace umbriel {
 
       Output* targetOutput = targetGroup != nullptr ? targetGroup->output() : preferred;
       if (openingInScratchpad) {
-        targetOutput = scratchpadManager->presentationOutput(*rule.defaultScratchpad, targetOutput);
+        targetOutput = scratchpadManager->presentationOutput(openingScratchpad, targetOutput);
       }
 
       // With prefer_no_csd, floating windows are told they are tiled too, so client decorations drop the rounded

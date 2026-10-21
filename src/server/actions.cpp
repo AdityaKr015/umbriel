@@ -133,7 +133,15 @@ namespace umbriel {
       return view != nullptr && scratchpad != nullptr && scratchpad->contains(view) ? view : nullptr;
     }
 
-    bool scratchpadHoldsFocus(Server& server) { return focusedScratchpadWindow(server) != nullptr; }
+    bool scratchpadHoldsFocus(Server& server) {
+      if (focusedScratchpadWindow(server) != nullptr) {
+        return true;
+      }
+      ScratchpadManager* scratchpad = server.scratchpadManager();
+      return seatFocusedWindow(server) == nullptr
+          && scratchpad != nullptr
+          && !scratchpad->activeOn(server.outputFromWlr(server.preferredOutput())).empty();
+    }
 
     // Layout-relative window actions have no workspace target while a detached
     // scratchpad owns the seat. Explicit workspace and layout actions continue
@@ -145,6 +153,9 @@ namespace umbriel {
     View* focusedWindow(Server& server) {
       if (View* view = seatFocusedWindow(server)) {
         return view;
+      }
+      if (scratchpadHoldsFocus(server)) {
+        return nullptr;
       }
       Workspace* workspace = activeWorkspace(server);
       return workspace != nullptr ? workspace->focusedView() : nullptr;
@@ -195,6 +206,9 @@ namespace umbriel {
       case FocusSource::Scratchpad:
         return root(focusedScratchpadWindow(server));
       case FocusSource::Workspace: {
+        if (seatFocusedWindow(server) == nullptr && scratchpadHoldsFocus(server)) {
+          return nullptr;
+        }
         Workspace* workspace = activeWorkspace(server);
         return workspace != nullptr ? workspace->focusedView() : nullptr;
       }
@@ -1952,7 +1966,7 @@ namespace umbriel {
       }
       View* view = placementTarget(server, {}, FocusSource::Workspace).value_or(nullptr);
       ScratchpadManager* scratchpad = server.scratchpadManager();
-      return scratchpad != nullptr && scratchpad->moveToScratchpad(view, *name, output);
+      return scratchpad != nullptr && (view == nullptr || scratchpad->moveToScratchpad(view, *name, output));
     }
 
     bool actionScratchpadToggle(Server& server, const Keybind& bind, std::string* error) {
@@ -2000,7 +2014,7 @@ namespace umbriel {
         return scratchpad->restoreFocused(*name);
       }
       View* view = placementTarget(server, {}, FocusSource::Workspace).value_or(nullptr);
-      return scratchpad->moveToScratchpad(view, *name, output);
+      return view == nullptr || scratchpad->moveToScratchpad(view, *name, output);
     }
 
     bool actionScratchpadFocusNext(Server& server, const Keybind& bind, std::string* error) {

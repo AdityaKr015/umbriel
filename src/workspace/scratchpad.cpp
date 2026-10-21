@@ -221,20 +221,10 @@ namespace umbriel {
     return admit(view, name, invokingOutput, Admission::Interactive, {});
   }
 
-  bool ScratchpadManager::assignByWindowRule(
+  bool ScratchpadManager::assignAutomatic(
       View* view, std::string_view name, Output* placementOutput, const AutomaticAdmission& options
   ) {
-    if (!admit(view, name, placementOutput, Admission::Automatic, options)) {
-      return false;
-    }
-    Scratchpad* scratchpad = findScratchpad(name);
-    if (scratchpad != nullptr && scratchpad->pendingSpawn) {
-      const PendingSpawn pending = *std::exchange(scratchpad->pendingSpawn, std::nullopt);
-      if (pending.live() && pending.shown) {
-        summon(name, pending.output);
-      }
-    }
-    return true;
+    return admit(view, name, placementOutput, Admission::Automatic, options);
   }
 
   bool ScratchpadManager::assignFromParent(View* view, const View* parent, const AutomaticAdmission& options) {
@@ -366,7 +356,9 @@ namespace umbriel {
     if (view->maximizedToEdges()) {
       view->setMaximizedToEdges(false, false);
     }
-    view->setFloating(true);
+    // Admission owns the final focus decision. A floating transition must not briefly focus the workspace window
+    // before it belongs to the pad, especially when a delayed launch is entering a hidden pad.
+    view->setFloating(true, false);
     view->cancelPositionAnimation();
 
     view->setPosition(view->layoutX(), view->layoutY());
@@ -377,6 +369,7 @@ namespace umbriel {
     }
     view->setSceneParent(m_root);
     view->setInScratchpad(true);
+    scratchpad->pendingSpawn.reset();
     const bool visible = scratchpad->visible;
     // A pad showing one window shows a window the user moves in, in place of the others; a dialog brings the member it
     // belongs to. A dialog that joins with its parent automatically shows alongside it instead.
@@ -428,6 +421,7 @@ namespace umbriel {
     state->visible = visible;
     if (!visible) {
       state->solo = nullptr;
+      state->active = false;
     }
     Output* output = state->output;
     const wlr_box targetArea = usableArea(*m_server, output);
@@ -773,9 +767,6 @@ namespace umbriel {
       if (scratchpad.output == output) {
         stranded.push_back(name);
       }
-      if (scratchpad.pendingSpawn && scratchpad.pendingSpawn->output == output) {
-        scratchpad.pendingSpawn.reset();
-      }
     }
     for (const std::string& name : stranded) {
       moveScratchpad(name, nullptr, nullptr, false);
@@ -830,7 +821,7 @@ namespace umbriel {
 
   bool ScratchpadManager::summon(std::string_view name, Output* invokingOutput, View* member) {
     Scratchpad* scratchpad = findScratchpad(name);
-    if (scratchpad == nullptr || invokingOutput == nullptr || !hasEntries(name) || overviewOpen(*m_server)) {
+    if (scratchpad == nullptr || invokingOutput == nullptr || overviewOpen(*m_server)) {
       return false;
     }
     // A pad showing one window shows the member asked for instead; a dialog shows with the member it belongs to.
@@ -875,24 +866,6 @@ namespace umbriel {
     if (scratchpad == nullptr || invokingOutput == nullptr || overviewOpen(*m_server)) {
       return false;
     }
-    if (!hasEntries(name)) {
-      const auto definition = std::ranges::find(config().scratchpads, name, &ScratchpadConfig::name);
-      if (definition == config().scratchpads.end() || definition->spawnWhenEmpty.empty()) {
-        return false;
-      }
-      if (auto& pending = scratchpad->pendingSpawn; pending && pending->live()) {
-        pending->shown = !pending->shown;
-        pending->output = invokingOutput;
-        return true;
-      }
-      m_server->spawn(definition->spawnWhenEmpty.c_str(), "scratchpad.spawn_when_empty", true);
-      scratchpad->pendingSpawn = PendingSpawn{
-          .output = invokingOutput,
-          .expiresAt = std::chrono::steady_clock::now() + kSpawnTimeout,
-          .shown = true,
-      };
-      return true;
-    }
     if (scratchpad->visible && scratchpad->output == invokingOutput) {
       setVisible(name, false);
       m_server->refocus(invokingOutput);
@@ -902,8 +875,49 @@ namespace umbriel {
     if (!summon(name, invokingOutput)) {
       return false;
     }
+    scratchpad->active = true;
+    refocusActive(invokingOutput);
+    if (!hasEntries(name) && (!scratchpad->pendingSpawn || !scratchpad->pendingSpawn->live())) {
+      const auto definition = std::ranges::find(config().scratchpads, name, &ScratchpadConfig::name);
+      if (definition != config().scratchpads.end() && !definition->spawnWhenEmpty.empty()) {
+        scratchpad->pendingSpawn = PendingSpawn{.expiresAt = std::chrono::steady_clock::now() + kSpawnTimeout};
+        m_server->spawn(definition->spawnWhenEmpty.c_str(), "scratchpad.spawn_when_empty", true);
+      }
+    }
+    return true;
+  }
+
+  std::string_view ScratchpadManager::activeOn(const Output* output) const {
+    for (const auto& [name, scratchpad] : m_scratchpads) {
+      if (output != nullptr && scratchpad.output == output && scratchpad.visible && scratchpad.active) {
+        return name;
+      }
+    }
+    return {};
+  }
+
+  void ScratchpadManager::deactivateOn(const Output* output) {
+    for (auto& [name, scratchpad] : m_scratchpads) {
+      if (scratchpad.output == output) {
+        scratchpad.active = false;
+      }
+    }
+  }
+
+  bool ScratchpadManager::refocusActive(Output* output) {
+    const std::string_view name = activeOn(output);
+    if (name.empty()) {
+      return false;
+    }
+    if (m_server->sessionLocked()) {
+      return true;
+    }
     if (View* view = focused(name)) {
       m_server->focusView(view);
+    } else if (m_server->exclusiveKeyboardLayer() != nullptr) {
+      m_server->refocus();
+    } else {
+      m_server->clearKeyboardFocus();
     }
     return true;
   }
@@ -967,6 +981,9 @@ namespace umbriel {
     m_focusedView = nullptr;
     Entry* entry = findEntry(view);
     if (entry == nullptr) {
+      if (view != nullptr) {
+        deactivateOn(view->currentOutput());
+      }
       return;
     }
     Scratchpad* scratchpad = findScratchpad(entry->scratchpad);
@@ -974,6 +991,7 @@ namespace umbriel {
       return;
     }
     m_focusedView = view;
+    scratchpad->active = true;
     scratchpad->lastFocused = view;
   }
 
@@ -1284,7 +1302,7 @@ namespace umbriel {
     std::erase(m_hidingViews, view);
     m_entries.erase(iterator);
     // Without its shown window, a pad showing one window hides rather than revealing all the others.
-    if (scratchpad != nullptr && (wasSolo || !hasEntries(name)) && scratchpad->visible) {
+    if (scratchpad != nullptr && wasSolo && scratchpad->visible) {
       setVisible(name, false);
     }
   }
@@ -1337,12 +1355,13 @@ namespace umbriel {
         removed.push_back(name);
       }
     }
-    bool restoredAny = false;
+    bool refocusNeeded = false;
     for (const std::string& name : removed) {
       Scratchpad* scratchpad = findScratchpad(name);
       Output* fallback = scratchpad != nullptr ? scratchpad->output : nullptr;
       if (scratchpad != nullptr && scratchpad->visible) {
         setVisible(name, false, false);
+        refocusNeeded = true;
       }
       std::vector<View*> views;
       for (const Entry& entry : m_entries) {
@@ -1358,14 +1377,14 @@ namespace umbriel {
         }
       }
       for (View* view : views) {
-        restoredAny = restoreView(view, fallback, false) || restoredAny;
+        refocusNeeded = restoreView(view, fallback, false) || refocusNeeded;
       }
       m_scratchpads.erase(name);
     }
     for (const std::string& name : desired) {
       m_scratchpads.try_emplace(name);
     }
-    if (restoredAny) {
+    if (refocusNeeded) {
       m_server->refocus();
     }
   }

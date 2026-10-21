@@ -54,8 +54,12 @@ namespace umbriel {
     [[nodiscard]] Output* restoreOutputFor(const View* view) const;
     [[nodiscard]] bool moveToScratchpad(View* view, std::string_view name, Output* invokingOutput);
     [[nodiscard]] bool
-    assignByWindowRule(View* view, std::string_view name, Output* placementOutput, const AutomaticAdmission& options);
+    assignAutomatic(View* view, std::string_view name, Output* placementOutput, const AutomaticAdmission& options);
     [[nodiscard]] bool assignFromParent(View* view, const View* parent, const AutomaticAdmission& options);
+    // Launch context survives an empty pad. Explicit workspace focus relinquishes it on that output.
+    [[nodiscard]] std::string_view activeOn(const Output* output) const;
+    void deactivateOn(const Output* output);
+    bool refocusActive(Output* output);
     // Show a scratchpad on the invoking output without changing keyboard focus. Naming `member` while the pad shows a
     // single window shows that member instead.
     bool summon(std::string_view name, Output* invokingOutput, View* member = nullptr);
@@ -95,9 +99,7 @@ namespace umbriel {
 
   private:
     struct PendingSpawn {
-      Output* output = nullptr;
       std::chrono::steady_clock::time_point expiresAt;
-      bool shown = true;
 
       [[nodiscard]] bool live() const { return std::chrono::steady_clock::now() < expiresAt; }
     };
@@ -105,6 +107,7 @@ namespace umbriel {
     struct Scratchpad {
       Output* output = nullptr;
       bool visible = false;
+      bool active = false;
       View* lastFocused = nullptr;
       // While visible, the one member shown in place of all of them; null when every member shows.
       View* solo = nullptr;

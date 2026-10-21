@@ -493,7 +493,8 @@ namespace umbriel {
   }
 
   bool View::assignLaunchOrigin(
-      std::string_view token, std::shared_ptr<WorkspaceLaunchAnchor> workspace, uint32_t timeoutMsec
+      std::string_view token, std::shared_ptr<WorkspaceLaunchAnchor> workspace, uint32_t timeoutMsec,
+      std::string_view scratchpad
   ) {
     Workspace* target = workspace != nullptr ? workspace->workspace : nullptr;
     if (token.empty()
@@ -515,6 +516,7 @@ namespace umbriel {
       }
     }
     m_launchWorkspace = std::move(workspace);
+    m_launchScratchpad = scratchpad;
     m_launchToken = token;
     m_launchWorkspaceId = target->id();
     m_launchPlacementPending = true;
@@ -550,6 +552,7 @@ namespace umbriel {
       m_launchPlacementTimer = nullptr;
     }
     m_launchWorkspace.reset();
+    m_launchScratchpad.clear();
     m_launchPlacementPending = false;
     m_launchWorkspaceId.clear();
     if (clearToken) {
@@ -748,7 +751,7 @@ namespace umbriel {
     const auto views = m_server->registry().all();
     for (const auto& view : std::views::reverse(views)) {
       View* child = view.get();
-      if (child != this && child->transientParent() == this) {
+      if (child != nullptr && child != this && child->transientParent() == this) {
         child->raiseTransientTree();
       }
     }

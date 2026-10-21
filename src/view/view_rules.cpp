@@ -420,7 +420,7 @@ namespace umbriel {
       }
       if (targetOutput != nullptr) {
         const bool wasActivated = m_activated;
-        assignedScratchpad = scratchpadManager->assignByWindowRule(
+        assignedScratchpad = scratchpadManager->assignAutomatic(
             this, *scratchpadTarget, targetOutput,
             ScratchpadManager::AutomaticAdmission{
                 .restoreOutput = targetOutput,

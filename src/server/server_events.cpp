@@ -1472,7 +1472,11 @@ namespace umbriel {
         Workspace* preferredWorkspace = preferredOutput != nullptr && preferredOutput->workspaceGroup() != nullptr
             ? preferredOutput->workspaceGroup()->active()
             : nullptr;
-        const bool launchAway = launchStartup && entry->workspace() != preferredWorkspace;
+        const bool launchAway = launchStartup
+            && (self->m_scratchpadManager != nullptr && self->m_scratchpadManager->contains(entry.get())
+                    ? self->m_scratchpadManager->activeOn(preferredOutput)
+                        != self->m_scratchpadManager->nameFor(entry.get())
+                    : entry->workspace() != preferredWorkspace);
         const bool alreadyFocused = entry->activated();
         kLog.debug(
             "xdg-activation policy target_app_id='{}' trusted={} compositor_issued={} input_backed={} mapped={} "
@@ -1540,9 +1544,15 @@ namespace umbriel {
     if (compositorIssued) {
       if (Output* output = outputFromWlr(preferredOutput()); output != nullptr && output->workspaceGroup() != nullptr) {
         launchWorkspace = output->workspaceGroup()->active();
+        if (m_scratchpadManager != nullptr) {
+          watch->launchScratchpad = m_scratchpadManager->activeOn(output);
+        }
       }
     } else if (watch->inputBacked) {
       if (View* source = viewForSurface(*this, token->surface); source != nullptr) {
+        if (m_scratchpadManager != nullptr) {
+          watch->launchScratchpad = m_scratchpadManager->nameFor(source);
+        }
         launchWorkspace = source->workspace();
         if (source->pinned() || launchWorkspace == nullptr) {
           if (Output* output = source->currentOutput(); output != nullptr && output->workspaceGroup() != nullptr) {
@@ -1554,6 +1564,9 @@ namespace umbriel {
           source != nullptr && source->output() != nullptr && source->output()->workspaceGroup() != nullptr
       ) {
         launchWorkspace = source->output()->workspaceGroup()->active();
+        if (m_scratchpadManager != nullptr) {
+          watch->launchScratchpad = m_scratchpadManager->activeOn(source->output());
+        }
       }
     }
     if (launchWorkspace != nullptr && launchWorkspace->group() != nullptr) {
@@ -1581,7 +1594,9 @@ namespace umbriel {
     std::string launchOutputName = watch->launchOutputName;
     std::string launchWorkspaceId = watch->launchWorkspaceId;
     bool pointerDrop = false;
-    if (watch->pointerBacked && sameWaylandClient(token->surface, view.rootSurface())) {
+    if (watch->launchScratchpad.empty()
+        && watch->pointerBacked
+        && sameWaylandClient(token->surface, view.rootSurface())) {
       Output* output = outputFromWlr(preferredOutput());
       Workspace* pointerWorkspace =
           output != nullptr && output->workspaceGroup() != nullptr ? output->workspaceGroup()->active() : nullptr;
@@ -1607,7 +1622,7 @@ namespace umbriel {
     }
     const bool assigned = workspace != nullptr
         && tokenName != nullptr
-        && view.assignLaunchOrigin(tokenName, std::move(launchWorkspace), timeoutMsec);
+        && view.assignLaunchOrigin(tokenName, std::move(launchWorkspace), timeoutMsec, watch->launchScratchpad);
     watch->launchWorkspace.reset();
     if (sourceGroup != nullptr && !m_stopping) {
       sourceGroup->reconcileDynamic();
@@ -1616,8 +1631,9 @@ namespace umbriel {
       targetGroup->reconcileDynamic();
     }
     kLog.debug(
-        "launch placement token='{}' output='{}' workspace='{}' target_app_id='{}' pointer_drop={} assigned={}",
-        tokenName != nullptr ? tokenName : "<unknown>", launchOutputName, launchWorkspaceId,
+        "launch placement token='{}' output='{}' workspace='{}' scratchpad='{}' target_app_id='{}' pointer_drop={} "
+        "assigned={}",
+        tokenName != nullptr ? tokenName : "<unknown>", launchOutputName, launchWorkspaceId, watch->launchScratchpad,
         view.appId() != nullptr ? view.appId() : "", pointerDrop, assigned
     );
     return assigned;

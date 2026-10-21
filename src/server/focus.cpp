@@ -381,7 +381,10 @@ namespace umbriel {
       *layer = nullptr;
     }
 
-    wlr_scene_node* node = wlr_scene_node_at(&m_server.scene()->tree.node, lx, ly, sx, sy);
+    const View* carried = m_server.cursor()->toplevelDragView();
+    wlr_scene_node* node = wlr_scene_node_at_excluding(
+        &m_server.scene()->tree.node, lx, ly, sx, sy, carried != nullptr ? &carried->sceneTree()->node : nullptr
+    );
     if (node == nullptr || node->type != WLR_SCENE_NODE_BUFFER) {
       return nullptr;
     }

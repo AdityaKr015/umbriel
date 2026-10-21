@@ -169,6 +169,7 @@ drag_client = executable(
   'drag-client',
   [
     'harness/clients/drag_client.cpp',
+    toplevel_drag_client_h, toplevel_drag_c,
     layer_shell_client_h, layer_shell_client_c,
     xdg_shell_client_h, xdg_shell_client_c,
     xdg_activation_client_h, xdg_activation_client_c,

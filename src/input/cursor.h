@@ -155,6 +155,9 @@ namespace umbriel {
     // Data-device drags can scroll a scrolling workspace while held at its
     // primary-axis edge. Seat owns the drag lifecycle; Cursor owns its pointer
     // position and timer-driven motion.
+    void beginToplevelDrag(View* view, int x, int y, bool tileOnDrop);
+    void finishToplevelDrag(bool place);
+    [[nodiscard]] View* toplevelDragView() const { return m_toplevelDrag ? grabbedView() : nullptr; }
     void handleDataDragStarted();
     void handleDataDragEnded();
     void setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY, wl_client* owner);
@@ -360,6 +363,7 @@ namespace umbriel {
     std::string m_ruleConfinementView;
     uint64_t m_ruleConfinementGeneration = 0;
 
+    bool m_toplevelDrag = false;
     GrabState m_grab;
     // Physical button that owns the current interactive pointer operation.
     uint32_t m_grabButton = 0;

@@ -15,6 +15,7 @@ boundaries, or regression-sensitive behavior.
 - [Live workspace reveal](workspace-reveal.md)
 - [Overview rendering](overview-rendering.md)
 - [Touchpad gestures](touchpad-gestures.md)
+- [Toplevel data drags](toplevel-drag.md)
 - [Border rendering](border-rendering.md)
 - [Render performance](render-performance.md)
 - [Xwayland input stability](xwayland-input-stability.md)

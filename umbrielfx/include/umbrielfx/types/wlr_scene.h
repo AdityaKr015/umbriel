@@ -495,6 +495,10 @@ void wlr_scene_node_for_each_buffer(
  * returned node, or NULL if no node is found at that location.
  */
 struct wlr_scene_node* wlr_scene_node_at(struct wlr_scene_node* node, double lx, double ly, double* nx, double* ny);
+/** Hit-test while ignoring a subtree, without changing scene visibility or damage. */
+struct wlr_scene_node* wlr_scene_node_at_excluding(
+    struct wlr_scene_node* node, double lx, double ly, double* nx, double* ny, const struct wlr_scene_node* excluded
+);
 
 /**
  * Check that every scene helper resolves into umbrielfx rather than libwlroots.

@@ -671,7 +671,7 @@ namespace umbriel {
   void View::setDragPosition(int x, int y) {
     const bool changed = layoutX() != x || layoutY() != y;
     setScenePosition(x, y);
-    if (m_mapped && !m_tiled && changed) {
+    if (m_mapped && (!m_tiled || m_server->cursor()->toplevelDragView() == this) && changed) {
       m_server->scheduleIpcWindowsEvent();
     }
   }

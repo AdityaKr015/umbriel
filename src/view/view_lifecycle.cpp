@@ -4,6 +4,7 @@
 #include "core/tracy.h"
 #include "input/cursor.h"
 #include "input/seat.h"
+#include "input/toplevel_drag.h"
 #include "layer/layer_surface.h"
 #include "layout/scrolling.h"
 #include "output/output.h"
@@ -254,6 +255,10 @@ namespace umbriel {
       m_tiled = !*rule.defaultFloating;
     }
     const bool restoreTiled = m_tiled;
+    const bool draggedToplevel = m_server->seat()->toplevelDrags().attached(m_toplevel);
+    if (draggedToplevel) {
+      m_tiled = false;
+    }
     // Unsettled when any rule uses a title pattern: the first handleSetTitle after map re-applies disruptive effects
     // with the real title, even if the client mapped with a placeholder.
     m_initialTitleRulesSettled = !anyWindowRuleHasTitlePattern(config());
@@ -415,7 +420,10 @@ namespace umbriel {
       raiseToTop();
     }
 
-    if (m_onActiveWorkspace) {
+    if (draggedToplevel) {
+      setFadeAlpha(1.0F);
+      m_fade.snap(1.0);
+    } else if (m_onActiveWorkspace) {
       const auto& animation = config().animation;
       const auto& open = animation.windowsIn;
       const bool customShader = effectRegistry().animationEffect(AnimationEvent::WindowsIn) != nullptr;
@@ -497,9 +505,13 @@ namespace umbriel {
     // Opening rules resolve before default_floating and default_pinned move the window, so the state selectors may
     // pick a different set of dynamic effects than the ones applied above.
     applyDynamicRules();
+    if (draggedToplevel) {
+      m_server->seat()->toplevelDrags().mapped(this, restoreTiled && !assignedScratchpad);
+    }
   }
 
   void View::handleUnmap() {
+    m_server->seat()->toplevelDrags().unmapped(this);
     if (m_effectSelectionIdle != nullptr) {
       wl_event_source_remove(m_effectSelectionIdle);
       m_effectSelectionIdle = nullptr;
@@ -660,7 +672,10 @@ namespace umbriel {
     }
     leaveForeignOutput();
     setForeignActivated(false);
-    if (!m_server->cursor()->isPassthrough()) {
+    // Detaching a browser's last tab can unmap the origin while a different
+    // toplevel is being carried by that same data drag.
+    const View* carried = m_server->cursor()->toplevelDragView();
+    if (!m_server->cursor()->isPassthrough() && (carried == nullptr || carried == this)) {
       m_server->cursor()->resetMode();
     }
     m_initialTitleRulesSettled = false;
@@ -772,7 +787,8 @@ namespace umbriel {
       const bool openingInScratchpad = rule.defaultScratchpad
           && scratchpadManager != nullptr
           && scratchpadManager->hasScratchpad(*rule.defaultScratchpad);
-      const bool wantTiled = !openingInScratchpad
+      const bool wantTiled = !m_server->seat()->toplevelDrags().attached(m_toplevel)
+          && !openingInScratchpad
           && !rule.defaultPinned.value_or(false)
           && (rule.defaultFloating ? !*rule.defaultFloating : looksTiled());
 

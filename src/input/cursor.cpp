@@ -1007,6 +1007,36 @@ namespace umbriel {
     return true;
   }
 
+  void Cursor::beginToplevelDrag(View* view, int x, int y, bool tileOnDrop) {
+    const uint32_t button = m_server->seat()->wlr()->pointer_state.grab_button;
+    if (!beginMove(view, button)) {
+      return;
+    }
+    m_toplevelDrag = true;
+    auto& grab = std::get<MoveGrab>(m_grab);
+    grab.offsetX = x;
+    grab.offsetY = y;
+    if (tileOnDrop && !view->pinned()) {
+      grab.target = DragTarget::Tiled;
+      grab.sourceWorkspace = view->workspace();
+    }
+    if (grab.pending) {
+      beginDrag(grab);
+    }
+    processMotion(monotonicMsec(), m_cursor->x, m_cursor->y, false);
+  }
+
+  void Cursor::finishToplevelDrag(bool place) {
+    if (!m_toplevelDrag) {
+      return;
+    }
+    if (place && !m_server->sessionLocked()) {
+      finishMove();
+    } else {
+      resetMode();
+    }
+  }
+
   bool Cursor::beginResize(View* view, uint32_t edges, uint32_t button) {
     if (view == nullptr || !view->mapped() || button == 0) {
       return false;
@@ -1212,6 +1242,7 @@ namespace umbriel {
     if (std::holds_alternative<FloatingResizeGrab>(m_grab) && view != nullptr) {
       view->finishFloatingResize();
     }
+    m_toplevelDrag = false;
     m_grab = PassthroughGrab{};
     m_grabButton = 0;
     if (restoreDragPresentation && view != nullptr) {
@@ -1907,6 +1938,9 @@ namespace umbriel {
   void Cursor::processMotion(uint32_t timeMsec, double oldX, double oldY, bool allowFocusChange) {
     updateHotCorner();
     forwardEffectPointer();
+    if (const wlr_drag* drag = m_server->seat()->wlr()->drag; drag != nullptr && drag->dropped) {
+      return;
+    }
     if (auto* grab = std::get_if<ScrollDragGrab>(&m_grab)) {
       if (m_server->sessionLocked()) {
         m_server->gestures()->endPointerScroll(true, timeMsec);
@@ -1962,7 +1996,11 @@ namespace umbriel {
         processMove();
         updateDropTarget();
         updateDataDragEdgeScroll();
-        return;
+        // A toplevel drag moves a real window while wlroots keeps delivering
+        // data-device enter and motion to the surfaces underneath it.
+        if (!m_toplevelDrag) {
+          return;
+        }
       }
     }
     if (std::holds_alternative<FloatingResizeGrab>(m_grab)) {
@@ -2812,6 +2850,11 @@ namespace umbriel {
       return;
     }
     wlr_seat* seat = m_server->seat()->wlr();
+    // Drop placement can change the scene before wlroots releases its grab.
+    // Retargeting then would invalidate the offer the recipient must finish.
+    if (seat->drag != nullptr && seat->drag->dropped) {
+      return;
+    }
     if (surface == seat->pointer_state.focused_surface) {
       wlr_seat_pointer_notify_motion(seat, timeMsec, sx, sy);
     } else {
@@ -2857,6 +2900,9 @@ namespace umbriel {
     }
     if (seat->drag != nullptr) {
       updateDataDragEdgeScroll();
+      if (seat->drag->dropped) {
+        return;
+      }
       if (m_server->sessionLocked()) {
         wlr_seat_pointer_notify_clear_focus(seat);
         wlr_seat_pointer_notify_frame(seat);

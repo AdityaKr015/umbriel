@@ -677,8 +677,11 @@ namespace umbriel {
         const wlr_box box = layout->targetBox(v.get());
         entry["x"] = box.x;
         entry["y"] = box.y;
-      } else if (v->floating() && server.cursor()->isDraggingView(v.get())) {
-        // A floating drag moves its scene node before committing the saved target.
+      } else if (
+          (v->floating() && server.cursor()->isDraggingView(v.get())) || server.cursor()->toplevelDragView() == v.get()
+      ) {
+        // Floating and data-device toplevel drags move the scene node before
+        // committing the saved target.
         entry["x"] = v->layoutX();
         entry["y"] = v->layoutY();
       } else {

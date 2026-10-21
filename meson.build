@@ -251,6 +251,26 @@ xdg_shell_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+toplevel_drag_xml = wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'staging/xdg-toplevel-drag/xdg-toplevel-drag-v1.xml'
+toplevel_drag_server_h = custom_target(
+  'xdg-toplevel-drag-v1-server-protocol.h',
+  input: toplevel_drag_xml,
+  output: 'xdg-toplevel-drag-v1-server-protocol.h',
+  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+toplevel_drag_client_h = custom_target(
+  'xdg-toplevel-drag-v1-client-protocol.h',
+  input: toplevel_drag_xml,
+  output: 'xdg-toplevel-drag-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+toplevel_drag_c = custom_target(
+  'xdg-toplevel-drag-v1-protocol.c',
+  input: toplevel_drag_xml,
+  output: 'xdg-toplevel-drag-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 text_input_client_h = custom_target(
   'text-input-unstable-v3-client-protocol.h',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/text-input/text-input-unstable-v3.xml',
@@ -736,6 +756,7 @@ core_sources = files(
   'src/output/output.cpp',
   'src/output/hdr_metadata.cpp',
   'src/input/seat.cpp',
+  'src/input/toplevel_drag.cpp',
   'src/input/keyboard.cpp',
   'src/input/system_keymap.cpp',
   'src/input/text_input.cpp',
@@ -812,6 +833,9 @@ umbriel_core_deps = [
 umbriel_core = static_library(
   'umbriel-core',
   core_sources + [
+    toplevel_drag_server_h,
+    toplevel_drag_c,
+    xdg_shell_client_c,
     color_management_server_h,
     color_management_server_c,
     xdg_output_server_h,

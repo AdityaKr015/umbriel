@@ -67,7 +67,7 @@ namespace umbriel {
     // Security-context clients only receive reviewed, ordinary application
     // protocols. New globals stay unavailable until they are classified here.
     // [[security_context_rule]] widens the set for matching clients.
-    constexpr std::array<std::string_view, 31> kAllowedSecurityContextGlobals{
+    constexpr std::array<std::string_view, 32> kAllowedSecurityContextGlobals{
         "wl_shm",
         "wl_drm",
         "zwp_linux_dmabuf_v1",
@@ -85,6 +85,7 @@ namespace umbriel {
         "wp_color_manager_v1",
         "xdg_wm_base",
         "xdg_toplevel_tag_manager_v1",
+        "xdg_toplevel_drag_manager_v1",
         "zxdg_exporter_v2",
         "xdg_wm_dialog_v1",
         "zxdg_decoration_manager_v1",
@@ -762,6 +763,9 @@ namespace umbriel {
 
   Server::~Server() {
     m_stopping = true;
+    if (m_cursor != nullptr) {
+      m_cursor->finishToplevelDrag(false);
+    }
     if (m_sessionExitResultSource != nullptr) {
       wl_event_source_remove(m_sessionExitResultSource);
     }

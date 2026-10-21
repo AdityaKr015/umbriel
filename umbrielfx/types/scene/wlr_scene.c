@@ -3049,6 +3049,7 @@ void wlr_scene_node_for_each_buffer(
 }
 
 struct node_at_data {
+  const struct wlr_scene_node* excluded;
   double lx, ly;
   double rx, ry;
   struct wlr_scene_node* node;
@@ -3057,6 +3058,14 @@ struct node_at_data {
 static bool
 scene_node_at_iterator(struct wlr_scene_node* node, int lx, int ly, const struct wlr_box* acc_clip, void* data) {
   struct node_at_data* at_data = data;
+  if (at_data->excluded != NULL) {
+    for (const struct wlr_scene_node* parent = node; parent != NULL;
+         parent = parent->parent ? &parent->parent->node : NULL) {
+      if (parent == at_data->excluded) {
+        return false;
+      }
+    }
+  }
 
   if (acc_clip != NULL && !wlr_box_contains_point(acc_clip, at_data->lx, at_data->ly)) {
     // Clipped away: the point falls through to whatever is below.
@@ -3099,9 +3108,15 @@ scene_node_at_iterator(struct wlr_scene_node* node, int lx, int ly, const struct
 }
 
 struct wlr_scene_node* wlr_scene_node_at(struct wlr_scene_node* node, double lx, double ly, double* nx, double* ny) {
+  return wlr_scene_node_at_excluding(node, lx, ly, nx, ny, NULL);
+}
+
+struct wlr_scene_node* wlr_scene_node_at_excluding(
+    struct wlr_scene_node* node, double lx, double ly, double* nx, double* ny, const struct wlr_scene_node* excluded
+) {
   struct wlr_box box = {.x = floor(lx), .y = floor(ly), .width = 1, .height = 1};
 
-  struct node_at_data data = {.lx = lx, .ly = ly};
+  struct node_at_data data = {.excluded = excluded, .lx = lx, .ly = ly};
 
   if (scene_nodes_in_box(node, &box, scene_node_at_iterator, &data)) {
     if (nx) {

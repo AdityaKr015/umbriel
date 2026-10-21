@@ -1412,7 +1412,8 @@ namespace umbriel {
     return outputBox;
   }
 
-  View* Workspace::focusAlongStrip(int direction) const {
+  View* Workspace::focusAlongStrip(int direction) {
+    flushArrange();
     if (const auto horizontal = m_layout->focusHorizontalLeaf(m_focusedView, direction)) {
       return *horizontal;
     }
@@ -1424,7 +1425,8 @@ namespace umbriel {
     return columnEntry(m_layout->columns()[static_cast<size_t>(target)]);
   }
 
-  View* Workspace::focusWithinLane(int direction) const {
+  View* Workspace::focusWithinLane(int direction) {
+    flushArrange();
     if (const auto vertical = m_layout->focusVerticalLeaf(m_focusedView, direction)) {
       return *vertical;
     }
@@ -1464,11 +1466,11 @@ namespace umbriel {
     return target;
   }
 
-  View* Workspace::focusAdjacent(int direction) const {
+  View* Workspace::focusAdjacent(int direction) {
     return preferRecentPeer(scrollingVertical() ? focusWithinLane(direction) : focusAlongStrip(direction));
   }
 
-  View* Workspace::focusVertical(int direction) const {
+  View* Workspace::focusVertical(int direction) {
     return preferRecentPeer(scrollingVertical() ? focusAlongStrip(direction) : focusWithinLane(direction));
   }
 
@@ -1610,6 +1612,7 @@ namespace umbriel {
   }
 
   bool Workspace::swapFocusedInDirection(bool horizontal, int direction) {
+    flushArrange();
     // Geometry only: the focus memory directional focus applies could pick a diagonal tile.
     std::vector<LayoutTarget> targets;
     for (const Column& column : m_layout->columns()) {
@@ -1675,6 +1678,7 @@ namespace umbriel {
   }
 
   bool Workspace::consumeFocused(int direction) {
+    flushArrange();
     if (!m_layout->consume(m_focusedView, direction)) {
       return false;
     }
@@ -1702,6 +1706,7 @@ namespace umbriel {
   }
 
   bool Workspace::moveWithinLane(int direction) {
+    flushArrange();
     if (!m_layout->moveViewVertical(m_focusedView, direction)) {
       return false;
     }

@@ -175,6 +175,8 @@ namespace umbriel {
     // layout, so layout-directed input (wheel scrolling, insert hints) applies
     // to the drag.
     [[nodiscard]] bool isDraggingIntoLayout() const;
+    // Pending presses do not own geometry until they become an actual resize.
+    [[nodiscard]] bool isResizingView(const View* view) const;
     // A tiled resize updates every view in its workspace without size
     // animations trailing the pointer.
     [[nodiscard]] bool isResizingWorkspace(const Workspace* workspace) const;

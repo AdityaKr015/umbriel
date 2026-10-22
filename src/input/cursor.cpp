@@ -958,6 +958,17 @@ namespace umbriel {
     return grab != nullptr && !grab->pending && grab->target == DragTarget::Tiled;
   }
 
+  bool Cursor::isResizingView(const View* view) const {
+    if (view == nullptr) {
+      return false;
+    }
+    if (const auto* grab = std::get_if<FloatingResizeGrab>(&m_grab)) {
+      return grab->view == view;
+    }
+    const auto* grab = std::get_if<TiledResizeGrab>(&m_grab);
+    return grab != nullptr && grab->view == view;
+  }
+
   bool Cursor::isResizingWorkspace(const Workspace* workspace) const {
     const auto* grab = std::get_if<TiledResizeGrab>(&m_grab);
     return workspace != nullptr && grab != nullptr && grab->workspace == workspace;

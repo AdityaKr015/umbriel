@@ -8,6 +8,7 @@
 // the resize stays pending. POINTER_CONSTRAINT_CONTROL accepts l/c/u to lock/confine/unconstrain
 // and p to report pointer position; it also logs relative motion during client locks.
 // SHORTCUTS_INHIBIT_CONTROL accepts i/u to create/destroy a shortcut inhibitor.
+// REDRAW_CONTROL accepts a byte on stdin to commit another frame at the current size.
 
 #include "keyboard-shortcuts-inhibit-unstable-v1-client-protocol.h"
 #include "pointer-constraints-unstable-v1-client-protocol.h"
@@ -51,6 +52,7 @@ namespace {
     zwp_keyboard_shortcuts_inhibit_manager_v1* shortcutsInhibitManager = nullptr;
     zwp_keyboard_shortcuts_inhibitor_v1* shortcutsInhibitor = nullptr;
     bool shortcutsControl = false;
+    bool redrawControl = false;
     zwp_text_input_manager_v3* textInputManager = nullptr;
     zwp_text_input_v3* textInput = nullptr;
     bool constraintControl = false;
@@ -485,6 +487,7 @@ int main(int argc, char** argv) {
   State state;
   state.constraintControl = std::getenv("POINTER_CONSTRAINT_CONTROL") != nullptr;
   state.shortcutsControl = std::getenv("SHORTCUTS_INHIBIT_CONTROL") != nullptr;
+  state.redrawControl = std::getenv("REDRAW_CONTROL") != nullptr;
   state.holdResize = std::getenv("HOLD_RESIZE") != nullptr;
   state.useTextInput = std::getenv("ENABLE_TEXT_INPUT") != nullptr;
   state.logModifiers = std::getenv("LOG_MODIFIERS") != nullptr;
@@ -548,7 +551,9 @@ int main(int argc, char** argv) {
     wl_display_flush(state.display);
     pollfd sources[2] = {
         {.fd = displayFd, .events = POLLIN, .revents = 0},
-        {.fd = (state.holdResize || state.constraintControl || state.shortcutsControl) ? STDIN_FILENO : -1,
+        {.fd = (state.holdResize || state.constraintControl || state.shortcutsControl || state.redrawControl)
+             ? STDIN_FILENO
+             : -1,
          .events = POLLIN,
          .revents = 0},
     };
@@ -567,6 +572,14 @@ int main(int argc, char** argv) {
     if ((sources[1].revents & (POLLIN | POLLHUP)) != 0) {
       char command = 0;
       [[maybe_unused]] const ssize_t bytes = read(STDIN_FILENO, &command, 1);
+      if (state.redrawControl && bytes > 0) {
+        wl_surface_attach(state.surface, state.buffer, 0, 0);
+        wl_surface_damage_buffer(state.surface, 0, 0, state.width, state.height);
+        wl_surface_commit(state.surface);
+        wl_display_roundtrip(state.display);
+        std::println("redrawn");
+        continue;
+      }
       if (state.constraintControl && bytes > 0) {
         constraintCommand(state, command);
         continue;
@@ -576,6 +589,7 @@ int main(int argc, char** argv) {
         continue;
       }
       if (bytes <= 0) {
+        state.redrawControl = false;
         state.constraintControl = false;
         state.shortcutsControl = false;
       }

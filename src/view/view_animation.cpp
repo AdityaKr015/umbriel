@@ -330,12 +330,12 @@ namespace umbriel {
     if (cursor == nullptr) {
       return false;
     }
-    return cursor->grabbedView() == this || cursor->isResizingWorkspace(m_workspace);
+    return cursor->isDraggingView(this) || sizeGrabTracksPointer();
   }
 
   bool View::sizeGrabTracksPointer() const {
     const Cursor* cursor = m_server->cursor();
-    return cursor != nullptr && sizeGrabActive() && !cursor->isDraggingView(this);
+    return cursor != nullptr && (cursor->isResizingView(this) || cursor->isResizingWorkspace(m_workspace));
   }
 
   void View::enterDragPresentation() {

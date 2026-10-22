@@ -134,6 +134,7 @@ namespace umbriel {
         view->setChromeAttachment(std::move(created));
       }
       bar->setModel(model);
+      view->syncSsdFrame();
     }
   }
 
@@ -142,6 +143,7 @@ namespace umbriel {
     if (barOf(view) != nullptr) {
       view->setChromeAttachment(nullptr);
     }
+    view->syncSsdFrame();
   }
 
   bool TabPresenter::barShown(const TabGroup& group) const {

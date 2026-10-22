@@ -18,6 +18,13 @@ namespace umbriel {
     int y = 0;
   };
 
+  [[nodiscard]] constexpr FloatingPoint
+  keepTitleBarReachable(FloatingPoint origin, int titleBarHeight, const wlr_box& usable) {
+    if (titleBarHeight > 0 && origin.y < usable.y + titleBarHeight)
+      origin.y = usable.y + titleBarHeight;
+    return origin;
+  }
+
   // How much of a floating window must stay on screen per axis. A float may hang
   // off an edge, but never so far that there is nothing left to grab it by.
   [[nodiscard]] constexpr int floatingKeepVisible(int size) {

@@ -4454,4 +4454,118 @@ UMBRIEL_TEST(replaceRejectionDoesNotDisturbAnImplicitStore) {
   CHECK_EQ(store.config().layout.gap, 19);
 }
 
+UMBRIEL_TEST(titleBarConfigurationUsesTheDocumentedKeys) {
+  const TempConfig file;
+  file.write(R"(
+[appearance.title_bar]
+mode = "on"
+height = 42
+font = "sans 12"
+button_position = "left"
+[colors.title_bar]
+background = "#FF0000FF"
+background_unfocused = "#00FF00FF"
+text = "#0000FFFF"
+text_unfocused = "#FF00FFFF"
+close = "#FFFF00FF"
+maximize = "#00FFFFFF"
+)");
+  auto& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  CHECK(store.reload().success);
+  CHECK(store.diagnostics().empty());
+  const auto& bar = store.config().appearance.titleBar;
+  CHECK_EQ(bar.mode, umbriel::TitleBarMode::On);
+  CHECK_EQ(bar.height, 42);
+  CHECK_EQ(bar.font, std::string("sans 12"));
+  CHECK_EQ(bar.buttonPosition, umbriel::TitleBarButtonSide::Left);
+  const auto& colors = store.config().colors.titleBar;
+  CHECK_EQ(colors.background[0], 1.0F);
+  CHECK_EQ(colors.backgroundUnfocused[1], 1.0F);
+  CHECK_EQ(colors.text[2], 1.0F);
+  CHECK_EQ(colors.textUnfocused[0], 1.0F);
+  CHECK_EQ(colors.close[1], 1.0F);
+  CHECK_EQ(colors.maximize[2], 1.0F);
+}
+
+UMBRIEL_TEST(titleBarInvalidValuesAreClaimedAndDiagnosed) {
+  const TempConfig file;
+  file.write(R"(
+[appearance.title_bar]
+mode = "always"
+height = 500
+font = 123
+button_position = "middle"
+)");
+  auto& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
+  CHECK_EQ(store.config().appearance.titleBar.height, 128);
+  CHECK_EQ(store.config().appearance.titleBar.buttonPosition, umbriel::TitleBarButtonSide::Right);
+  CHECK(containsDiagnostic(store, "appearance.title_bar.height = 500 out of range, clamped to 128"));
+  CHECK(containsDiagnostic(store, "appearance.title_bar.button_position"));
+  CHECK(containsDiagnostic(store, "appearance.title_bar.mode"));
+  CHECK(containsDiagnostic(store, "expected string"));
+  CHECK(!containsDiagnostic(store, "unknown key"));
+}
+
+UMBRIEL_TEST(titleBarModesReplaceTheEnabledSwitch) {
+  const TempConfig file;
+  auto& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  file.write("");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
+  for (const auto& [name, mode] :
+       {std::pair{"on", umbriel::TitleBarMode::On}, std::pair{"auto", umbriel::TitleBarMode::Auto},
+        std::pair{"off", umbriel::TitleBarMode::Off}}) {
+    file.write(std::string("[appearance.title_bar]\nmode = \"") + name + "\"\n");
+    CHECK(store.reload().success);
+    CHECK(store.diagnostics().empty());
+    CHECK_EQ(store.config().appearance.titleBar.mode, mode);
+  }
+  file.write("[appearance.title_bar]\nmode = true\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
+  CHECK(containsDiagnostic(store, "appearance.title_bar.mode"));
+  CHECK(!containsDiagnostic(store, "unknown key"));
+  file.write("[appearance.title_bar]\nenabled = true\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
+  CHECK(containsDiagnostic(store, "unknown key appearance.title_bar.enabled"));
+}
+
+UMBRIEL_TEST(titleBarRuleChoicesAreStrict) {
+  const TempConfig file;
+  file.write(R"(
+[[window_rule]]
+title_bar = "on"
+[[window_rule]]
+title_bar = "off"
+[[window_rule]]
+title_bar = "auto"
+)");
+  auto& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  CHECK(store.reload().success);
+  CHECK(store.diagnostics().empty());
+  CHECK_EQ(store.config().windowRules.size(), size_t{3});
+  CHECK_EQ(store.config().windowRules[0].titleBar, umbriel::TitleBarMode::On);
+  CHECK_EQ(store.config().windowRules[1].titleBar, umbriel::TitleBarMode::Off);
+  CHECK_EQ(store.config().windowRules[2].titleBar, umbriel::TitleBarMode::Auto);
+  file.write(R"(
+[[window_rule]]
+title_bar = true
+[[window_rule]]
+title_bar = "always"
+)");
+  CHECK(store.reload().success);
+  CHECK(!store.config().windowRules[0].titleBar.has_value());
+  CHECK(!store.config().windowRules[1].titleBar.has_value());
+  CHECK(containsDiagnostic(store, "window_rule[0].title_bar"));
+  CHECK(containsDiagnostic(store, "window_rule[1].title_bar"));
+  CHECK(!containsDiagnostic(store, "unknown key"));
+}
+
 int main() { return RUN_TESTS(); }

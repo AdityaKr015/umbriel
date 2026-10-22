@@ -616,6 +616,7 @@ namespace umbriel {
       entry["xdg_tag"] = v->xdgTag().value_or("");
       entry["content_type"] = contentTypeName(v->contentType());
       entry["floating"] = v->floating();
+      entry["title_bar"] = v->titleBarHeight() > 0;
       entry["fullscreen"] = v->scheduledFullscreen();
       entry["maximized"] = v->scheduledMaximized();
       entry["maximized_to_edges"] = v->maximizedToEdges();
@@ -674,7 +675,7 @@ namespace umbriel {
             layout = entry->second.get();
           }
         }
-        const wlr_box box = layout->targetBox(v.get());
+        const wlr_box box = contentBoxInTile(layout->targetBox(v.get()), v->titleBarHeight());
         entry["x"] = box.x;
         entry["y"] = box.y;
       } else if (

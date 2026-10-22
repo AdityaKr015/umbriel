@@ -1353,4 +1353,27 @@ UMBRIEL_TEST(backgroundRenderLastMatchingRuleWins) {
   CHECK(!*resolve("firefox").backgroundRender);
 }
 
+UMBRIEL_TEST(titleBarAutoResetsAnEarlierOverride) {
+  Config config;
+  const auto resolve = [&] {
+    return umbriel::resolveWindowRules(config, "editor", "file", std::nullopt, ContentType::None, {}, 0);
+  };
+  CHECK(!resolve().titleBar.has_value());
+  WindowRule rule;
+  rule.titleBar = umbriel::TitleBarMode::On;
+  config.windowRules.push_back(rule);
+  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::On);
+  rule.titleBar = umbriel::TitleBarMode::Off;
+  config.windowRules.push_back(rule);
+  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::Off);
+  rule.titleBar = umbriel::TitleBarMode::Auto;
+  config.windowRules.push_back(rule);
+  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::Auto);
+  config.windowRules.emplace_back();
+  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::Auto);
+  WindowRule other = rule;
+  other.titleBar = umbriel::TitleBarMode::On;
+  CHECK(!(rule == other));
+}
+
 int main() { return RUN_TESTS(); }

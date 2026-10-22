@@ -6,6 +6,7 @@
 #include "config/window_position.h"
 #include "core/animation.h"
 #include "layout/layout.h"
+#include "scene/ssd_frame_geometry.h"
 
 #include <algorithm>
 #include <array>
@@ -30,6 +31,8 @@ namespace umbriel {
     Vertical,
     Horizontal,
   };
+
+  enum class TitleBarMode : uint8_t { Auto, On, Off };
 
   enum class ModifierKey {
     Super,
@@ -441,6 +444,7 @@ namespace umbriel {
     std::optional<bool> blurPopups;
     std::optional<double> blurIgnoreAlpha;
     std::optional<bool> blurOptimized;
+    std::optional<TitleBarMode> titleBar;
     // Overrides [colors.border] for windows this rule matches.
     std::optional<std::array<float, 4>> borderColorFocused;
     std::optional<std::array<float, 4>> borderColorUnfocused;
@@ -500,6 +504,7 @@ namespace umbriel {
           && blurPopups == other.blurPopups
           && blurIgnoreAlpha == other.blurIgnoreAlpha
           && blurOptimized == other.blurOptimized
+          && titleBar == other.titleBar
           && borderColorFocused == other.borderColorFocused
           && borderColorUnfocused == other.borderColorUnfocused
           && borderColorOuter == other.borderColorOuter
@@ -545,6 +550,7 @@ namespace umbriel {
     std::optional<bool> blurPopups;
     std::optional<double> blurIgnoreAlpha;
     std::optional<bool> blurOptimized;
+    std::optional<TitleBarMode> titleBar;
     std::optional<std::array<float, 4>> borderColorFocused;
     std::optional<std::array<float, 4>> borderColorUnfocused;
     std::optional<std::array<float, 4>> borderColorOuter;
@@ -615,6 +621,15 @@ namespace umbriel {
     // cheatsheet, the diagnostics banner, the quit confirmation, and overview
     // badge text.
     struct Colors {
+      struct TitleBar {
+        std::array<float, 4> background{0.1607843F, 0.1607843F, 0.2F, 1.0F};
+        std::array<float, 4> backgroundUnfocused{0.1019608F, 0.1019608F, 0.1215686F, 1.0F};
+        std::array<float, 4> text{0.9098039F, 0.9098039F, 0.9176471F, 1.0F};
+        std::array<float, 4> textUnfocused{0.5411765F, 0.5411765F, 0.5725490F, 1.0F};
+        std::array<float, 4> close{1.0F, 0.4196078F, 0.4196078F, 1.0F};
+        std::array<float, 4> maximize{0.4784314F, 0.6392157F, 1.0F, 1.0F};
+        bool operator==(const TitleBar&) const = default;
+      } titleBar;
       std::array<float, 4> background{0.0784314F, 0.0784314F, 0.0980392F, 1.0F};
       std::array<float, 4> textPrimary{0.9098039F, 0.9098039F, 0.9176471F, 1.0F};
       std::array<float, 4> textMuted{0.5411765F, 0.5411765F, 0.5725490F, 1.0F};
@@ -665,6 +680,13 @@ namespace umbriel {
     } colors;
 
     struct Appearance {
+      struct TitleBar {
+        TitleBarMode mode = TitleBarMode::Off;
+        int height = 28;
+        std::string font = "sans 10";
+        TitleBarButtonSide buttonPosition = TitleBarButtonSide::Right;
+        bool operator==(const TitleBar&) const = default;
+      } titleBar;
       int borderWidth = 2;
       int outerBorderWidth = 0;
       int cornerRadius = 10;

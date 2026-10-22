@@ -52,7 +52,7 @@ namespace umbriel {
     if (usable.width <= 0 || usable.height <= 0) {
       return usable;
     }
-    const wlr_box area = m_maximizedToEdges ? usable : floatingMarginArea(usable);
+    const wlr_box area = contentBoxInTile(m_maximizedToEdges ? usable : floatingMarginArea(usable), titleBarHeight());
     // A client whose maximum size is below the area (a fixed-size splash) keeps that size, centered in the area
     // rather than pinned to its corner.
     const SizeHints hints = sizeHints();
@@ -94,8 +94,10 @@ namespace umbriel {
     }
     const wlr_box& geo = geometryBox();
     const wlr_box box{.x = geo.x, .y = geo.y, .width = width, .height = height};
-    const FloatingPoint clamped =
-        resize ? clampFloatingOriginForResize(origin, box, usable) : clampFloatingOrigin(origin, box, usable);
+    const FloatingPoint clamped = keepTitleBarReachable(
+        resize ? clampFloatingOriginForResize(origin, box, usable) : clampFloatingOrigin(origin, box, usable),
+        titleBarHeight(), usable
+    );
     if (clamped.x == origin.x && clamped.y == origin.y) {
       return std::nullopt;
     }
@@ -152,7 +154,8 @@ namespace umbriel {
     if (usable.width <= 0 || usable.height <= 0 || geo.width <= 0 || geo.height <= 0) {
       return false;
     }
-    const FloatingPoint origin = centeredOrigin(usable, geo.width, geo.height);
+    FloatingPoint origin = centeredOrigin(usable, geo.width, geo.height + titleBarHeight());
+    origin.y += titleBarHeight();
     animateTo(origin.x, origin.y);
     m_floating.rememberPositionFraction(origin, usable);
     return true;
@@ -247,7 +250,8 @@ namespace umbriel {
     // Floats keep their own size; only center within the usable area.
     const int width = w;
     const int height = h;
-    FloatingPoint origin = centeredOrigin(usable, width, height);
+    FloatingPoint origin = centeredOrigin(usable, width, height + titleBarHeight());
+    origin.y += titleBarHeight();
     if (position) {
       origin = {.x = usable.x + position->x, .y = usable.y + position->y};
       switch (position->anchor) {
@@ -284,7 +288,7 @@ namespace umbriel {
       }
       origin = clampFloatingOrigin(origin, {.x = 0, .y = 0, .width = width, .height = height}, usable);
     }
-    return origin;
+    return keepTitleBarReachable(origin, titleBarHeight(), usable);
   }
 
   void View::placeInUsableArea(const std::optional<WindowPosition>& position) {
@@ -308,6 +312,7 @@ namespace umbriel {
       const int height = geo.height > 0 ? geo.height : usable.height;
       origin = centeredOverShown(parent->targetBox(), shownIn, width, height);
     }
+    *origin = keepTitleBarReachable(*origin, titleBarHeight(), usable);
     setPosition(origin->x, origin->y);
   }
 

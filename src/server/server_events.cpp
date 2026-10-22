@@ -187,6 +187,8 @@ namespace umbriel {
         return;
       }
       watch->pendingMode = resolvedDecorationMode(watch->decoration);
+      if (View* view = View::fromSurface(surface->surface))
+        view->setXdgDecorationPreference(watch->pendingMode == WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
       // set_mode schedules a configure; that asserts unless the xdg_surface is ready.
       if (surface->initialized) {
         clearDecorationCommit(watch);
@@ -210,10 +212,41 @@ namespace umbriel {
       XdgDecorationWatch* watch;
       watch = wl_container_of(listener, watch, destroy);
       if (watch->decoration != nullptr) {
+        if (watch->decoration->toplevel != nullptr && watch->decoration->toplevel->base != nullptr) {
+          if (View* view = View::fromSurface(watch->decoration->toplevel->base->surface))
+            view->setXdgDecorationPreference(std::nullopt);
+        }
         watch->decoration->data = nullptr;
       }
       wl_list_remove(&watch->requestMode.link);
       clearDecorationCommit(watch);
+      wl_list_remove(&watch->destroy.link);
+      delete watch;
+    }
+
+    struct LegacyDecorationWatch {
+      wlr_server_decoration* decoration = nullptr;
+      wl_listener mode{};
+      wl_listener destroy{};
+    };
+
+    void applyLegacyDecorationMode(wlr_server_decoration* decoration) {
+      if (View* view = View::fromSurface(decoration->surface))
+        view->setLegacyDecorationPreference(decoration->mode == WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+    }
+
+    void onLegacyDecorationMode(wl_listener* listener, void*) {
+      LegacyDecorationWatch* watch;
+      watch = wl_container_of(listener, watch, mode);
+      applyLegacyDecorationMode(watch->decoration);
+    }
+
+    void onLegacyDecorationDestroy(wl_listener* listener, void*) {
+      LegacyDecorationWatch* watch;
+      watch = wl_container_of(listener, watch, destroy);
+      if (View* view = View::fromSurface(watch->decoration->surface))
+        view->setLegacyDecorationPreference(std::nullopt);
+      wl_list_remove(&watch->mode.link);
       wl_list_remove(&watch->destroy.link);
       delete watch;
     }
@@ -1166,7 +1199,14 @@ namespace umbriel {
   void Server::onNewXdgToplevel(wl_listener* listener, void* data) {
     Server* self;
     self = wl_container_of(listener, self, m_newXdgToplevel);
-    self->adoptView(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
+    View& view = self->adoptView(std::make_unique<View>(*self, static_cast<wlr_xdg_toplevel*>(data)));
+    wlr_server_decoration* decoration = nullptr;
+    wl_list_for_each(decoration, &self->m_serverDecorationManager->decorations, link) {
+      if (decoration->surface == view.rootSurface()) {
+        view.setLegacyDecorationPreference(decoration->mode == WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+        break;
+      }
+    }
   }
 
   View& Server::adoptView(std::unique_ptr<View> view) {
@@ -1214,6 +1254,16 @@ namespace umbriel {
     wl_signal_add(&decoration->events.destroy, &watch->destroy);
     applyXdgDecorationMode(watch);
     (void)self;
+  }
+
+  void Server::onNewLegacyDecoration(wl_listener*, void* data) {
+    auto* decoration = static_cast<wlr_server_decoration*>(data);
+    auto* watch = new LegacyDecorationWatch{.decoration = decoration};
+    watch->mode.notify = onLegacyDecorationMode;
+    wl_signal_add(&decoration->events.mode, &watch->mode);
+    watch->destroy.notify = onLegacyDecorationDestroy;
+    wl_signal_add(&decoration->events.destroy, &watch->destroy);
+    applyLegacyDecorationMode(decoration);
   }
 
   void Server::onNewLayerSurface(wl_listener* listener, void* data) {

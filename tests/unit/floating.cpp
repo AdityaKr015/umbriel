@@ -395,4 +395,12 @@ UMBRIEL_TEST(aSizeReadsBackAsTheFractionItCameFrom) {
   CHECK(floatingSizeFraction(192, 1920) == 0.1);
 }
 
+UMBRIEL_TEST(titleBarRemainsReachableWithoutMovingOtherFloats) {
+  const wlr_box usable{-300, 40, 1280, 720};
+  CHECK_EQ(umbriel::keepTitleBarReachable({100, 42}, 28, usable).y, 68);
+  CHECK_EQ(umbriel::keepTitleBarReachable({100, 150}, 28, usable).y, 150);
+  CHECK_EQ(umbriel::keepTitleBarReachable({100, -100}, 0, usable).y, -100);
+  CHECK_EQ(umbriel::keepTitleBarReachable({-500, 42}, 28, usable).x, -500);
+}
+
 int main() { return RUN_TESTS(); }

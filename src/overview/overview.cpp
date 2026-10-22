@@ -23,6 +23,7 @@ extern "C" {
 #include "scene/color.h"
 #include "scene/effect_registry.h"
 #include "scene/hint_rect.h"
+#include "scene/ssd_frame.h"
 #include "scene/text_buffer.h"
 #include "server/color_manager.h"
 #include "server/server.h"
@@ -328,8 +329,16 @@ namespace umbriel {
     if (borderVisible) {
       card.borderPadding = scaledWidth(view->borderEffectPadding());
       applyBorderGeometry(
-          card.border, makeBorderRing(contentW, contentH, outerRadius, innerWidth, outerWidth, card.borderPadding),
+          card.border,
+          makeBorderRing(
+              contentW, contentH + static_cast<int>(std::lround(view->titleBarHeight() * z)), outerRadius, innerWidth,
+              outerWidth, card.borderPadding
+          ),
           innerWidth, outerWidth
+      );
+      wlr_scene_node_set_position(
+          &card.border->node, card.border->node.x,
+          card.border->node.y - static_cast<int>(std::lround(view->titleBarHeight() * z))
       );
       const std::array<float, 4> innerColor = tint(cardBorderColor(card, liveTarget), presentedOpacity);
       const std::array<float, 4> outerColor = tint(view->borderColors().outer, presentedOpacity);
@@ -374,9 +383,13 @@ namespace umbriel {
 
     // Every surface of the card rounds against the card's content box, the same rule the live window uses, so a
     // client that draws its corners from a subsurface keeps them rounded in the thumbnail.
-    const auto roundToCardBox = [surfaceRadius, contentW, contentH](wlr_scene_buffer* buffer) {
+    const auto roundToCardBox = [surfaceRadius, contentW, contentH, view](wlr_scene_buffer* buffer) {
       const wlr_box cornerBox{-buffer->node.x, -buffer->node.y, contentW, contentH};
-      wlr_scene_buffer_set_corner_radii(buffer, corner_radii_all(surfaceRadius));
+      wlr_scene_buffer_set_corner_radii(
+          buffer,
+          view->titleBarHeight() > 0 ? corner_radii_new(0, 0, surfaceRadius, surfaceRadius)
+                                     : corner_radii_all(surfaceRadius)
+      );
       wlr_scene_buffer_set_corner_box(buffer, surfaceRadius > 0 ? &cornerBox : nullptr);
     };
     const double fx = static_cast<double>(contentW) / geometry.width;
@@ -446,31 +459,33 @@ namespace umbriel {
   }
 
   void Overview::layoutCardChrome(Card& card, const wlr_box& world, int borderInset, double zoom, float alpha) const {
-    const ViewChromeAttachment* live = card.view->chromeAttachment();
-    if (live == nullptr) {
-      card.chrome.reset();
-      return;
-    }
-    if (card.chrome == nullptr) {
-      card.chrome = live->makePreview(card.tree);
-      if (card.chrome == nullptr) {
-        return;
-      }
-    }
-    live->syncPreview(*card.chrome);
-    card.chrome->setAlpha(alpha);
-    // The card tree sits at the content origin, and the chrome measures in the view's own units from there.
     const Output* output = card.owner != nullptr ? card.owner->output : nullptr;
-    card.chrome->layout({
+    const ViewChromeGeometry geometry{
         .contentX = 0,
         .contentY = 0,
         .contentWidth = world.width,
         .contentHeight = world.height,
         .borderInset = borderInset,
+        .titleBarHeight = card.view->titleBarHeight(),
         .scale = output != nullptr ? output->wlr()->scale : 1.0F,
         .suppressed = card.view->currentFullscreen() || card.view->maximizedToEdges(),
         .zoom = zoom,
-    });
+    };
+    const auto update = [&](const ViewChromeAttachment* live, std::unique_ptr<ViewChromeAttachment>& preview) {
+      if (live == nullptr) {
+        preview.reset();
+        return;
+      }
+      if (preview == nullptr)
+        preview = live->makePreview(card.tree);
+      if (preview == nullptr)
+        return;
+      live->syncPreview(*preview);
+      preview->setAlpha(alpha);
+      preview->layout(geometry);
+    };
+    update(card.view->chromeAttachment(), card.chrome);
+    update(card.view->ssdFrame(), card.frame);
   }
 
   void Overview::layoutCardShadow(Card& card, double zoom, float alpha) const {
@@ -1248,6 +1263,11 @@ namespace umbriel {
       wlr_scene_node_copy_animations_for_snapshot(&surfaces->node, &card.surfaceTree->node);
     }
 
+    if (const auto* frame = dynamic_cast<const SsdFrame*>(card.frame.get())) {
+      auto* chrome = wlr_scene_tree_create(snapshot);
+      wlr_scene_node_set_position(&chrome->node, card.tree->node.x, card.tree->node.y);
+      frame->snapshot(chrome);
+    }
     std::vector<BorderSnapshot> borders;
     if (card.border != nullptr && card.border->node.enabled) {
       snapshotBorder(
@@ -1291,6 +1311,7 @@ namespace umbriel {
     card->surfaces.clear();
     // The chrome copy's nodes hang under the card tree, so it goes before the tree does.
     card->chrome.reset();
+    card->frame.reset();
     destroyCardShadow(*card);
     if (card->tree != nullptr) {
       wlr_scene_node_destroy(&card->tree->node);

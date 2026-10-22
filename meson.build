@@ -284,6 +284,19 @@ text_input_client_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+legacy_decoration_client_h = custom_target(
+  'server-decoration-client-protocol.h',
+  input: 'protocols/server-decoration.xml',
+  output: 'server-decoration-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+legacy_decoration_client_c = custom_target(
+  'server-decoration-client-protocol.c',
+  input: 'protocols/server-decoration.xml',
+  output: 'server-decoration-client-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 xdg_decoration_client_h = custom_target(
   'xdg-decoration-unstable-v1-client-protocol.h',
   input: wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadir') / 'unstable/xdg-decoration/xdg-decoration-unstable-v1.xml',
@@ -670,6 +683,7 @@ pure_sources = files(
   'src/input/shortcut_keysym.cpp',
   'src/input/xcursor_matcher.cpp',
   'src/layout/layout.cpp',
+  'src/scene/ssd_frame_geometry.cpp',
   'src/layout/layout_motion.cpp',
   'src/layout/scrolling.cpp',
   'src/layout/dwindle.cpp',
@@ -795,6 +809,7 @@ core_sources = files(
   'src/scene/cheatsheet.cpp',
   'src/scene/text_buffer.cpp',
   'src/scene/tab_bar.cpp',
+  'src/scene/ssd_frame.cpp',
   'src/scene/tab_bar_style.cpp',
   'src/scene/tab_label_cache.cpp',
   'src/lock/session_lock.cpp',

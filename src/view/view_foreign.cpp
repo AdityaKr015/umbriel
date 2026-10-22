@@ -95,6 +95,7 @@ namespace umbriel {
   }
 
   void View::handleSetTitle() {
+    syncSsdFrame();
     updateForeignIdentity();
     if (m_workspace != nullptr) {
       m_workspace->tabs().memberChanged(this);

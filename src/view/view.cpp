@@ -10,6 +10,7 @@
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/effect_registry.h"
+#include "scene/ssd_frame.h"
 #include "scene/surface_blur.h"
 #include "server/color_manager.h"
 #include "server/server.h"
@@ -245,6 +246,8 @@ namespace umbriel {
       wl_signal_add(&m_xsurface->events.request_activate, &m_xRequestActivate);
       m_xSetHints.notify = onXwaylandSetHints;
       wl_signal_add(&m_xsurface->events.set_hints, &m_xSetHints);
+      m_setDecorations.notify = onSetDecorations;
+      wl_signal_add(&m_xsurface->events.set_decorations, &m_setDecorations);
     }
 
     if (wlr_foreign_toplevel_manager_v1* manager = m_server->foreignToplevelManager()) {
@@ -311,7 +314,7 @@ namespace umbriel {
     for (wl_listener* listener :
          {&m_map, &m_unmap, &m_commit, &m_destroy, &m_requestMove, &m_requestResize, &m_requestMaximize,
           &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure, &m_xRequestActivate,
-          &m_xSetHints}) {
+          &m_xSetHints, &m_setDecorations}) {
       removeListener(*listener);
     }
     if (m_rootSurfaceDestroy.link.next != nullptr) {
@@ -340,6 +343,7 @@ namespace umbriel {
     if (m_sceneTree != nullptr) {
       // The attachment's nodes hang under the frame: release them first so their owner never destroys a freed node.
       m_chromeAttachment.reset();
+      m_ssdFrame.reset();
       m_decoration.poolShadow(m_sceneTree, nullptr, 0, 0, false);
       wlr_scene_node_destroy(&m_sceneTree->node);
       m_sceneTree = nullptr;

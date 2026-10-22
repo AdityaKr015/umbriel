@@ -420,6 +420,8 @@ wait_for_home legit-scratch ''
 "$UMBRIEL" msg "window-close:$(field_of legit-scratch id)" > /dev/null
 count=$((count - 1))
 wait_for_count "$count"
+# Closing the last member leaves the empty scratchpad open; dismiss it before the next phase.
+"$UMBRIEL" msg "scratchpad-toggle:$SCRATCHPAD" > /dev/null
 "$UMBRIEL" msg "window-close:$(field_of late-float id)" > /dev/null
 count=$((count - 1))
 wait_for_count "$count"

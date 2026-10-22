@@ -76,6 +76,13 @@ files = []
 [appearance.blur]
 radius = 3
 
+# Optional title bar with modifier-free dragging and floating frame resizing.
+# [appearance.title_bar]
+# mode = "auto" # "on" forces bars; "off" hides them. Window rules can override this.
+# height = 28
+# font = "sans 10"
+# button_position = "right" # or "left"
+
 # Choose the background color shown if the lock screen takes too long to appear.
 # [colors]
 # backdrop = "#000000FF"

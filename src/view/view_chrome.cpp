@@ -13,6 +13,9 @@
 extern "C" {
 #include <umbrielfx/render/effect.h>
 }
+#include "scene/ssd_frame.h"
+#include "scene/tab_label_cache.h"
+#include "view/size_hints.h"
 #include "view/view_internal.h"
 // clang-format off
 #include "wlr.h"
@@ -22,6 +25,96 @@ extern "C" {
 #include "xwayland/xwayland.h"
 
 namespace umbriel {
+  int View::titleBarHeight() const {
+    if (!wantsTitleBar(m_titleBarMode.value_or(config().appearance.titleBar.mode))
+        || scheduledFullscreen()
+        || m_maximizedToEdges
+        || (m_tiled && m_workspace != nullptr && m_workspace->inTabGroup(this))) {
+      return 0;
+    }
+    return config().appearance.titleBar.height;
+  }
+
+  bool View::wantsTitleBar(TitleBarMode mode) const {
+    if (mode == TitleBarMode::Off)
+      return false;
+    if (mode == TitleBarMode::On)
+      return true;
+    if (m_xsurface != nullptr)
+      return m_xsurface->decorations == WLR_XWAYLAND_SURFACE_DECORATIONS_ALL;
+    return m_xdgDecorationPreference.value_or(m_legacyDecorationPreference.value_or(true));
+  }
+
+  void View::refreshTitleBar() {
+    if (!m_mapped)
+      return;
+    updateBorderGeometry();
+    applyCornerRadius();
+    updateShadow();
+    refitFloatingMaximized();
+  }
+
+  void View::setXdgDecorationPreference(std::optional<bool> serverSide) {
+    if (m_xdgDecorationPreference == serverSide)
+      return;
+    m_xdgDecorationPreference = serverSide;
+    refreshTitleBar();
+  }
+
+  void View::setLegacyDecorationPreference(std::optional<bool> serverSide) {
+    if (m_legacyDecorationPreference == serverSide)
+      return;
+    m_legacyDecorationPreference = serverSide;
+    refreshTitleBar();
+  }
+
+  void View::onSetDecorations(wl_listener* listener, void*) {
+    View* self = wl_container_of(listener, self, m_setDecorations);
+    self->handleSetDecorations();
+  }
+
+  void View::handleSetDecorations() { refreshTitleBar(); }
+
+  SsdFramePoint View::ssdFramePointAt(double lx, double ly) const {
+    if (m_ssdFrame == nullptr || titleBarHeight() == 0)
+      return {};
+    int x = 0;
+    int y = 0;
+    if (!wlr_scene_node_coords(&m_contentTree->node, &x, &y))
+      return {};
+    return m_ssdFrame->pointAt(lx - x, ly - y);
+  }
+
+  void View::syncSsdFrame() {
+    if (!m_mapped)
+      return;
+    const int previousHeight = m_ssdFrame != nullptr ? m_ssdFrame->titleBarHeight() : 0;
+    if (previousHeight != titleBarHeight()) {
+      if (m_workspace != nullptr)
+        m_workspace->markArrange();
+      m_server->scheduleIpcWindowsEvent();
+    }
+    if (titleBarHeight() > 0 && m_ssdFrame == nullptr) {
+      m_ssdFrame = std::make_unique<SsdFrame>(chromeParent(), TabLabelCache::shared());
+    }
+    if (m_ssdFrame == nullptr)
+      return;
+    const SizeHints hints = sizeHints();
+    const bool fixed = hints.maxWidth > 0
+        && hints.maxWidth == hints.minWidth
+        && hints.maxHeight > 0
+        && hints.maxHeight == hints.minHeight;
+    m_ssdFrame->setTitle(title() != nullptr ? title() : "");
+    m_ssdFrame->setResizable(!m_tiled);
+    m_ssdFrame->setMaximizeEnabled(!fixed);
+    m_ssdFrame->setMaximized(scheduledMaximized() || floatingMaximized());
+    m_ssdFrame->setFocused(m_borderFocusedState);
+    m_ssdFrame->setAlpha(chromeAlpha());
+    const wlr_box content = committedContentBox();
+    layoutChromeAttachment(content.width, content.height);
+    wlr_scene_node_raise_to_top(&m_attachmentTree->node);
+  }
+
   bool View::decorated() const { return m_decoration.bordersVisible(); }
 
   int View::borderInset() const { return decorated() ? m_decoration.totalBorderWidth() : 0; }
@@ -36,6 +129,8 @@ namespace umbriel {
     if (m_chromeAttachment != nullptr) {
       m_chromeAttachment->setFocused(focused);
     }
+    if (m_ssdFrame != nullptr)
+      m_ssdFrame->setFocused(focused);
 
     const auto& animation = config().animation;
     const auto& dim = animation.dimUnfocused;
@@ -145,7 +240,11 @@ namespace umbriel {
               ctx->contentHeight,
           };
           // Always set, zeros included: a window that lost its radius must lose the box with it.
-          wlr_scene_buffer_set_corner_radii(buffer, corner_radii_all(ctx->radius));
+          wlr_scene_buffer_set_corner_radii(
+              buffer,
+              ctx->view->titleBarHeight() > 0 ? corner_radii_new(0, 0, ctx->radius, ctx->radius)
+                                              : corner_radii_all(ctx->radius)
+          );
           wlr_scene_buffer_set_corner_box(buffer, ctx->radius > 0 ? &cornerBox : nullptr);
         },
         &ctx
@@ -188,7 +287,9 @@ namespace umbriel {
   void View::updateShadow(int contentWidth, int contentHeight) {
     UMBRIEL_ZONE("View::updateShadow");
     const int borderTotal = borderInset();
-    m_decoration.updateShadow(contentWidth, contentHeight, borderTotal, decorated() ? m_decoration.cornerRadius() : 0);
+    m_decoration.updateShadow(
+        contentWidth, contentHeight, borderTotal, decorated() ? m_decoration.cornerRadius() : 0, titleBarHeight()
+    );
     m_decoration.setShadowAnimationSource(&m_contentTree->node);
   }
 
@@ -207,7 +308,8 @@ namespace umbriel {
   }
 
   void View::updateBorderGeometry(int contentWidth, int contentHeight) {
-    m_decoration.updateBorderGeometry(contentWidth, contentHeight);
+    syncSsdFrame();
+    m_decoration.updateBorderGeometry(contentWidth, contentHeight, titleBarHeight());
     layoutChromeAttachment(contentWidth, contentHeight);
   }
 
@@ -231,22 +333,30 @@ namespace umbriel {
   void View::layoutChromeAttachment(int contentWidth, int contentHeight) {
     m_chromeContentWidth = contentWidth;
     m_chromeContentHeight = contentHeight;
-    if (m_chromeAttachment == nullptr || m_contentTree == nullptr) {
+    if (m_contentTree == nullptr) {
       return;
     }
     const Output* output = currentOutput();
-    m_chromeAttachment->layout({
+    const ViewChromeGeometry geometry{
         .contentX = m_contentTree->node.x,
         .contentY = m_contentTree->node.y,
         .contentWidth = contentWidth,
         .contentHeight = contentHeight,
         .borderInset = borderInset(),
+        .titleBarHeight = titleBarHeight(),
         .scale = output != nullptr ? output->wlr()->scale : 1.0F,
         .suppressed = !m_mapped || m_maximizedToEdges || scheduledFullscreen() || currentFullscreen(),
-    });
+    };
+    if (m_chromeAttachment != nullptr)
+      m_chromeAttachment->layout(geometry);
+    if (m_ssdFrame != nullptr)
+      m_ssdFrame->layout(geometry);
   }
 
   void View::refreshConfigChrome() {
+    syncSsdFrame();
+    if (m_ssdFrame != nullptr)
+      m_ssdFrame->reloadConfig();
     if (m_chromeAttachment != nullptr) {
       m_chromeAttachment->reloadConfig();
     }

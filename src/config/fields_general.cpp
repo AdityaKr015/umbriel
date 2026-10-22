@@ -25,6 +25,14 @@ namespace umbriel {
     const registry::Fields<Config::Colors>& colorFields() {
       using registry::color;
       using C = Config::Colors;
+      static const registry::Fields<C::TitleBar> titleBar{
+          color("background", &C::TitleBar::background),
+          color("background_unfocused", &C::TitleBar::backgroundUnfocused),
+          color("text", &C::TitleBar::text),
+          color("text_unfocused", &C::TitleBar::textUnfocused),
+          color("close", &C::TitleBar::close),
+          color("maximize", &C::TitleBar::maximize),
+      };
       static const registry::Fields<C::Border> border{
           color("focused", &C::Border::focused),
           color("unfocused", &C::Border::unfocused),
@@ -59,6 +67,7 @@ namespace umbriel {
           registry::table("border", &C::border, border),
           registry::table("overview", &C::overview, overview),
           registry::table("tab_bar", &C::tabBar, tabBar),
+          registry::table("title_bar", &C::titleBar, titleBar),
       };
       return fields;
     }
@@ -68,6 +77,21 @@ namespace umbriel {
       using registry::integer;
       using registry::real;
       using A = Config::Appearance;
+      static const registry::Fields<A::TitleBar> titleBar{
+          registry::choice(
+              "mode", &A::TitleBar::mode,
+              {{"on", TitleBarMode::On}, {"off", TitleBarMode::Off}, {"auto", TitleBarMode::Auto}}
+          ),
+          integer("height", 16, 128, &A::TitleBar::height),
+          registry::text("font", &A::TitleBar::font),
+          registry::choice(
+              "button_position", &A::TitleBar::buttonPosition,
+              {
+                  {.name = "left", .value = TitleBarButtonSide::Left},
+                  {.name = "right", .value = TitleBarButtonSide::Right},
+              }
+          ),
+      };
       static const registry::Fields<A::Blur> blur{
           boolean("enabled", &A::Blur::enabled),          boolean("optimized", &A::Blur::optimized),
           integer("passes", 0, 8, &A::Blur::passes),      integer("radius", 0, 100, &A::Blur::radius),
@@ -132,6 +156,7 @@ namespace umbriel {
           registry::table("blur", &A::blur, blur),
           registry::table("shadow", &A::shadow, shadow),
           registry::table("tab_bar", &A::tabBar, tabBar),
+          registry::table("title_bar", &A::titleBar, titleBar),
       };
       return fields;
     }

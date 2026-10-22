@@ -619,6 +619,8 @@ namespace umbriel {
     wl_signal_add(&m_xdgDecorationManager->events.new_toplevel_decoration, &m_newXdgDecoration);
 
     m_serverDecorationManager = wlr_server_decoration_manager_create(m_display);
+    m_newLegacyDecoration.notify = onNewLegacyDecoration;
+    wl_signal_add(&m_serverDecorationManager->events.new_decoration, &m_newLegacyDecoration);
     wlr_server_decoration_manager_set_default_mode(
         m_serverDecorationManager, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
     );
@@ -802,6 +804,7 @@ namespace umbriel {
     wl_list_remove(&m_newXdgDialog.link);
     wl_list_remove(&m_newXdgPopup.link);
     wl_list_remove(&m_newXdgDecoration.link);
+    wl_list_remove(&m_newLegacyDecoration.link);
     wl_list_remove(&m_newLayerSurface.link);
     wl_list_remove(&m_newSessionLock.link);
     wl_list_remove(&m_newPointerConstraint.link);
@@ -1413,11 +1416,12 @@ namespace umbriel {
   Server::CloseSnapshot::CloseSnapshot(
       Server& server, CloseSnapshotId id, Output* output, wlr_scene_tree* tree, wlr_scene_tree* content,
       std::vector<BorderSnapshot> borders, const wlr_box& box, int durationMs, const AnimationCurve& curve,
-      std::string_view style, double scale, AnimationEvent event, ShadowSnapshot shadow
+      std::string_view style, double scale, AnimationEvent event, ShadowSnapshot shadow, int topExtension
   )
       : m_server(&server), m_id(id), m_tree(tree), m_content(content != nullptr ? content : tree), m_output(output),
         m_captured(box), m_canvasX(tree->node.x), m_canvasY(tree->node.y), m_borders(std::move(borders)),
         m_shadow(shadow) {
+    m_topExtension = topExtension;
     m_event = event;
     m_blurBackground =
         output != nullptr && tree->node.parent == output->layerTree(ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND);
@@ -1437,12 +1441,10 @@ namespace umbriel {
     }
     struct CaptureCtx {
       std::vector<Buffer>* buffers;
-      int originX;
-      int originY;
-    } ctx{&m_buffers, m_content != nullptr ? m_content->node.x : 0, m_content != nullptr ? m_content->node.y : 0};
+    } ctx{&m_buffers};
     wlr_scene_node_for_each_buffer(
-        &m_content->node,
-        [](wlr_scene_buffer* buffer, int sx, int sy, void* data) {
+        &m_tree->node,
+        [](wlr_scene_buffer* buffer, int, int, void* data) {
           auto& ctx = *static_cast<CaptureCtx*>(data);
           int width = buffer->dst_width;
           int height = buffer->dst_height;
@@ -1453,14 +1455,31 @@ namespace umbriel {
           ctx.buffers->push_back({
               .node = buffer,
               .baseOpacity = buffer->opacity,
-              .x = sx - ctx.originX,
-              .y = sy - ctx.originY,
+              .x = buffer->node.x,
+              .y = buffer->node.y,
               .width = width,
               .height = height,
           });
         },
         &ctx
     );
+    const auto captureRects = [&](auto&& visit, wlr_scene_tree* tree) -> void {
+      wlr_scene_node* node;
+      wl_list_for_each(node, &tree->children, link) {
+        if (node->type == WLR_SCENE_NODE_TREE) {
+          visit(visit, wlr_scene_tree_from_node(node));
+        } else if (node->type == WLR_SCENE_NODE_RECT) {
+          auto* rect = wlr_scene_rect_from_node(node);
+          m_rects.push_back(
+              {rect,
+               {rect->color[0], rect->color[1], rect->color[2], rect->color[3]},
+               {node->x, node->y, rect->width, rect->height},
+               rect->corners.top_left}
+          );
+        }
+      }
+    };
+    captureRects(captureRects, m_tree);
     m_alpha.snap(1.0);
     m_alpha.retarget(0.0, durationMs, curve);
 
@@ -1508,9 +1527,13 @@ namespace umbriel {
     const int outerWidth = static_cast<int>(std::lround(captured.outerWidth * ringScale));
     const int radius = static_cast<int>(std::lround(captured.cornerRadius * ringScale));
     const int padding = static_cast<int>(std::lround(captured.padding * ringScale));
-    const BorderRing ring = makeBorderRing(width, height, radius, innerWidth, outerWidth, padding);
+    const int top = m_captured.height > 0
+        ? static_cast<int>(std::lround(static_cast<double>(m_topExtension) * height / m_captured.height))
+        : 0;
+    BorderRing ring = makeBorderRing(width, height + top, radius, innerWidth, outerWidth, padding);
+    ring.box.y -= top;
     const bool ringVisible = innerWidth + outerWidth > 0;
-    wlr_box treeClip = m_borders.empty() || !ringVisible ? wlr_box{0, 0, width, height} : ring.box;
+    wlr_box treeClip = m_borders.empty() || !ringVisible ? wlr_box{0, -top, width, height + top} : ring.box;
     // A frozen drag deformation draws past the box by its slot's expand.
     const int expand = wlr_scene_node_animation_expand(&m_tree->node);
     treeClip = {treeClip.x - expand, treeClip.y - expand, treeClip.width + 2 * expand, treeClip.height + 2 * expand};
@@ -1530,6 +1553,19 @@ namespace umbriel {
             buffer.node, std::max(1, static_cast<int>(std::lround(buffer.width * scaleX))),
             std::max(1, static_cast<int>(std::lround(buffer.height * scaleY)))
         );
+      }
+      for (const Rect& rect : m_rects) {
+        wlr_scene_node_set_position(
+            &rect.node->node, static_cast<int>(std::lround(rect.box.x * scaleX)),
+            static_cast<int>(std::lround(rect.box.y * scaleY))
+        );
+        wlr_scene_rect_set_size(
+            rect.node, std::max(1, static_cast<int>(std::lround(rect.box.width * scaleX))),
+            std::max(1, static_cast<int>(std::lround(rect.box.height * scaleY)))
+        );
+        const int r = static_cast<int>(std::lround(rect.radius * std::min(scaleX, scaleY)));
+        const bool background = rect.box.y == -m_topExtension && rect.box.width == m_captured.width;
+        wlr_scene_rect_set_corner_radii(rect.node, background ? corner_radii_new(r, r, 0, 0) : corner_radii_all(r));
       }
       if (m_content != m_tree) {
         const wlr_box contentClip{0, 0, width, height};
@@ -1620,6 +1656,12 @@ namespace umbriel {
     const float alpha = composited ? 1.0F : (builtInSlide ? std::sqrt(rawAlpha) : rawAlpha);
     for (const Buffer& buffer : m_buffers) {
       wlr_scene_buffer_set_opacity(buffer.node, std::clamp(buffer.baseOpacity * alpha, 0.0F, 1.0F));
+    }
+    for (const Rect& rect : m_rects) {
+      auto color = rect.color;
+      for (float& channel : color)
+        channel *= alpha;
+      wlr_scene_rect_set_color(rect.node, color.data());
     }
     for (auto& border : m_borders) {
       float innerColor[4];
@@ -1839,7 +1881,7 @@ namespace umbriel {
 
   CloseSnapshotId Server::animateCloseSnapshot(
       Output* output, wlr_scene_tree* tree, wlr_scene_tree* content, std::vector<BorderSnapshot> borders,
-      const wlr_box& box, std::optional<CloseSnapshotOverrides> overrides, ShadowSnapshot shadow
+      const wlr_box& box, std::optional<CloseSnapshotOverrides> overrides, ShadowSnapshot shadow, int topExtension
   ) {
     int durationMs = 0;
     AnimationCurve curve{.easing = Easing::Snappy};
@@ -1876,7 +1918,7 @@ namespace umbriel {
     const CloseSnapshotId id = m_nextCloseSnapshotId++;
     auto snapshot = std::make_unique<CloseSnapshot>(
         *this, id, output, tree, content, std::move(borders), box, durationMs, curve, style, scale,
-        overrides ? overrides->event : AnimationEvent::WindowsOut, shadow
+        overrides ? overrides->event : AnimationEvent::WindowsOut, shadow, topExtension
     );
     registerAnimatable(snapshot.get());
     m_closeSnapshots.push_back(std::move(snapshot));

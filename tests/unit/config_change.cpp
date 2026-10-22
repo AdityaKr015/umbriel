@@ -1057,4 +1057,19 @@ UMBRIEL_TEST(effectActionRootsAreUniqueAcrossKeybindsAndCorners) {
   CHECK(umbriel::configuredEffectActionRoots(config) == std::vector<std::string>({"alpha", "zebra"}));
 }
 
+UMBRIEL_TEST(titleBarGeometryReloadRearrangesWorkspaces) {
+  Config before;
+  Config after = before;
+  after.appearance.titleBar.height = 40;
+  CHECK(ConfigEffects::between(before, after).workspaceLayout);
+  CHECK(ConfigEffects::between(before, after).viewChrome);
+  after = before;
+  after.appearance.titleBar.mode = umbriel::TitleBarMode::On;
+  CHECK(ConfigEffects::between(before, after).workspaceLayout);
+  after = before;
+  after.colors.titleBar.close[0] = 0.25F;
+  CHECK(!ConfigEffects::between(before, after).workspaceLayout);
+  CHECK(ConfigEffects::between(before, after).viewChrome);
+}
+
 int main() { return RUN_TESTS(); }

@@ -47,11 +47,12 @@ namespace umbriel {
     // owns both sides, so it owns the lookup; layout/ stays free of view/ and its geometry stays testable.
     LayoutConstraints viewLayoutConstraints(const View* view) {
       const SizeHints hints = view != nullptr ? view->sizeHints() : SizeHints{};
+      const int titleBar = view != nullptr ? view->titleBarHeight() : 0;
       return {
           .minWidth = hints.minWidth,
-          .minHeight = hints.minHeight,
+          .minHeight = hints.minHeight + titleBar,
           .maxWidth = hints.maxWidth,
-          .maxHeight = hints.maxHeight,
+          .maxHeight = hints.maxHeight > 0 ? hints.maxHeight + titleBar : 0,
           .fullscreen = view != nullptr && view->layoutFullscreen(),
           .maximizedToEdges = view != nullptr && view->maximizedToEdges(),
       };
@@ -1363,10 +1364,15 @@ namespace umbriel {
     return m_motion.progress.animating() ? &m_motion.progress : nullptr;
   }
 
+  bool Workspace::inTabGroup(const View* view) const {
+    const int column = m_layout->columnOf(view);
+    return column >= 0 && tabGroupOf(m_layout->columns()[static_cast<size_t>(column)], view) != nullptr;
+  }
+
   wlr_box Workspace::tiledTargetBox(const View* view, const wlr_box& usable) const {
     wlr_box target = m_layout->targetBox(view);
     if (view == nullptr || !view->maximizedToEdges()) {
-      return target;
+      return contentBoxInTile(target, view != nullptr ? view->titleBarHeight() : 0);
     }
     if (scrollingLayout() != nullptr) {
       const bool vertical = scrollingVertical();

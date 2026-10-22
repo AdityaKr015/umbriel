@@ -208,6 +208,10 @@ namespace umbriel {
           color("border_color_focused", &W::borderColorFocused),
           color("border_color_unfocused", &W::borderColorUnfocused),
           color("border_color_outer", &W::borderColorOuter),
+          registry::choice(
+              "title_bar", &W::titleBar,
+              {{"auto", TitleBarMode::Auto}, {"on", TitleBarMode::On}, {"off", TitleBarMode::Off}}
+          ),
           integer("border_width", 0, 100, &W::borderWidth),
           integer("outer_border_width", 0, 100, &W::outerBorderWidth),
           integer("corner_radius", 0, 100, &W::cornerRadius),

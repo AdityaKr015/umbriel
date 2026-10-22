@@ -1,5 +1,6 @@
 #pragma once
 #include "layout/drop_target.h"
+#include "scene/ssd_frame_geometry.h"
 
 #include <cstdint>
 #include <memory>
@@ -181,7 +182,7 @@ namespace umbriel {
     void handleDataDragEnded();
     void setCursorSurface(wlr_surface* surface, int32_t hotspotX, int32_t hotspotY, wl_client* owner);
     void setXcursor(const char* name);
-    bool beginMove(View* view, uint32_t button);
+    bool beginMove(View* view, uint32_t button, bool deferUntilThreshold = false);
     bool beginResize(View* view, uint32_t edges, uint32_t button);
     // A null seat client is an X11 move/resize request, which carries no serial.
     void beginClientMove(View* view, wlr_seat_client* seatClient, uint32_t serial);
@@ -422,6 +423,17 @@ namespace umbriel {
       View* view = nullptr;
     };
     ModRightClick m_lastModRightClick;
+    struct TitleBarClick {
+      uint32_t timeMsec = 0;
+      double x = 0;
+      double y = 0;
+      View* view = nullptr;
+    } m_lastTitleBarClick;
+    struct SsdButtonPress {
+      View* view = nullptr;
+      SsdFramePart part = SsdFramePart::None;
+    } m_ssdButtonPress;
+    View* m_ssdHoverView = nullptr;
     std::vector<std::unique_ptr<TabletToolState>> m_tools;
     bool m_hoverFocusInvalidated = false;
     bool m_compositorOwnsCursor = false;

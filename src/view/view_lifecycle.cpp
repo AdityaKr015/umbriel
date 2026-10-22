@@ -10,6 +10,7 @@
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/effect_registry.h"
+#include "scene/ssd_frame.h"
 #include "scene/surface_blur.h"
 #include "server/server.h"
 #include "view/view.h"
@@ -648,6 +649,7 @@ namespace umbriel {
     m_tiledSizeRequest.reset();
     m_layoutPresentationHeld = false;
     cancelPositionAnimation();
+    m_ssdFrame.reset();
     m_decoration.setBordersEnabled(false);
     m_decoration.hideEffects();
     m_presentation.setBackdropEnabled(false);
@@ -941,6 +943,14 @@ namespace umbriel {
               target != nullptr ? target->focusedView() : nullptr
           );
         }
+        const ResolvedLayoutConfig& openingLayout = target != nullptr ? target->layoutConfig() : globalConfig;
+        const bool opensTabbed = openingLayout.tabs.defaultDisplay == ColumnDisplay::Tabbed
+            || rule.defaultColumnDisplay.value_or(ColumnDisplay::Normal) == ColumnDisplay::Tabbed;
+        if (!wantMaximizeToEdges
+            && wantsTitleBar(rule.titleBar.value_or(config().appearance.titleBar.mode))
+            && !opensTabbed) {
+          initial.height = std::max(1, initial.height - config().appearance.titleBar.height);
+        }
         const SizeHints hints = sizeHints();
         const int width =
             (initial.width > 0 && !wantMaximizeToEdges) ? clampWidth(initial.width, hints) : initial.width;
@@ -988,7 +998,7 @@ namespace umbriel {
     (void)settleTiledSizeRequest();
     if (!sizeAnimating()) {
       const wlr_box& geometry = geometryBox();
-      if (m_decoration.borderGeometryStale(geometry.width, geometry.height)) {
+      if (m_decoration.borderGeometryStale(geometry.width, geometry.height, titleBarHeight())) {
         updateBorderGeometry();
       }
     }
@@ -1097,7 +1107,7 @@ namespace umbriel {
     for (wl_listener* listener :
          {&m_map, &m_unmap, &m_commit, &m_destroy, &m_requestMove, &m_requestResize, &m_requestMaximize,
           &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure, &m_xRequestActivate,
-          &m_xSetHints}) {
+          &m_xSetHints, &m_setDecorations}) {
       removeListener(*listener);
     }
     m_sceneTree->node.data = nullptr;

@@ -8,6 +8,7 @@
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/node.h"
+#include "scene/ssd_frame.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -384,6 +385,37 @@ namespace umbriel {
     // the same teardown as clearKeyboardFocus.
     m_server.cursor()->clearPointerFocusOverridingGrab();
     clearKeyboardFocus();
+  }
+
+  std::optional<SsdFrameHit> FocusManager::ssdFrameAt(double lx, double ly) const {
+    if (m_server.sessionLocked())
+      return std::nullopt;
+    const View* carried = m_server.cursor()->toplevelDragView();
+    double sx = 0;
+    double sy = 0;
+    wlr_scene_node* node = wlr_scene_node_at_excluding(
+        &m_server.scene()->tree.node, lx, ly, &sx, &sy, carried != nullptr ? &carried->sceneTree()->node : nullptr
+    );
+    if (node == nullptr)
+      return std::nullopt;
+    for (wlr_scene_tree* tree = node->parent; tree != nullptr; tree = tree->node.parent) {
+      SceneNode* tag = sceneNodeFrom(tree->node.data);
+      if (tag == nullptr)
+        continue;
+      if (tag->kind != SceneNodeKind::View)
+        return std::nullopt;
+      auto* view = static_cast<View*>(tag);
+      if (!view->mapped()
+          || (!view->pinned() && !view->onActiveWorkspace())
+          || view->ssdFrame() == nullptr
+          || !view->ssdFrame()->contains(node))
+        return std::nullopt;
+      const auto point = view->ssdFramePointAt(lx, ly);
+      if (point.part == SsdFramePart::None)
+        return std::nullopt;
+      return SsdFrameHit{view, point.part, point.edges};
+    }
+    return std::nullopt;
   }
 
   View*

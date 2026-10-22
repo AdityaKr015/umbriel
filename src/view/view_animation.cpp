@@ -7,6 +7,7 @@
 #include "output/output.h"
 #include "overview/overview.h"
 #include "scene/effect_registry.h"
+#include "scene/ssd_frame.h"
 #include "scene/surface_blur.h"
 #include "server/color_manager.h"
 #include "server/server.h"
@@ -84,6 +85,8 @@ namespace umbriel {
     if (m_chromeAttachment != nullptr) {
       m_chromeAttachment->setAlpha(chromeAlpha());
     }
+    if (m_ssdFrame != nullptr)
+      m_ssdFrame->setAlpha(chromeAlpha());
   }
 
   void View::setOverviewOpacity(float opacity) {
@@ -1003,6 +1006,8 @@ namespace umbriel {
 
     std::vector<BorderSnapshot> snapBorders;
     m_decoration.snapshotBorders(snap, m_borderColorAnim.current(), effectiveOpacity(), snapBorders);
+    if (m_ssdFrame != nullptr && titleBarHeight() > 0)
+      m_ssdFrame->snapshot(snap);
 
     // Copy surface buffers.
     struct CopyCtx {
@@ -1068,7 +1073,7 @@ namespace umbriel {
     wlr_scene_node_set_animation(&snap->node, static_cast<unsigned>(AnimationEvent::WindowsMove), nullptr, nullptr);
     const auto shadow = m_decoration.snapshotShadow(output->viewRoot(), &snap->node, m_decoration.shadowPooled());
     const CloseSnapshotId id = m_server->animateCloseSnapshot(
-        output, snap, content, std::move(snapBorders), m_presentedBox, std::nullopt, shadow
+        output, snap, content, std::move(snapBorders), m_presentedBox, std::nullopt, shadow, titleBarHeight()
     );
     wlr_output_schedule_frame(output->wlr());
     return id;

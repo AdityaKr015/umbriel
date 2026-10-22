@@ -43,6 +43,7 @@ struct wlr_xwayland_surface_configure_event;
 namespace umbriel {
 
   class Server;
+  class SsdFrame;
   class ScratchpadManager;
   class ColorManager;
   class Workspace;
@@ -210,6 +211,12 @@ namespace umbriel {
     // Border colors after this window's rule overrides; overview cards draw with the same ones.
     [[nodiscard]] const Config::Colors::Border& borderColors() const { return m_decoration.borderColors(); }
     // Border widths and corner_radius after this window's rule overrides; overview cards draw with the same ones.
+    void setXdgDecorationPreference(std::optional<bool> serverSide);
+    void setLegacyDecorationPreference(std::optional<bool> serverSide);
+    [[nodiscard]] int titleBarHeight() const;
+    void syncSsdFrame();
+    [[nodiscard]] SsdFramePoint ssdFramePointAt(double lx, double ly) const;
+    [[nodiscard]] SsdFrame* ssdFrame() const { return m_ssdFrame.get(); }
     [[nodiscard]] int decorationBorderWidth() const { return m_decoration.borderWidth(); }
     [[nodiscard]] int decorationOuterBorderWidth() const { return m_decoration.outerBorderWidth(); }
     [[nodiscard]] int decorationCornerRadius() const { return m_decoration.cornerRadius(); }
@@ -878,6 +885,12 @@ namespace umbriel {
     wlr_scene* m_captureScene = nullptr;
     ViewDecoration m_decoration;
     std::unique_ptr<ViewChromeAttachment> m_chromeAttachment;
+    std::unique_ptr<SsdFrame> m_ssdFrame;
+    std::optional<bool> m_xdgDecorationPreference;
+    std::optional<bool> m_legacyDecorationPreference;
+    std::optional<TitleBarMode> m_titleBarMode;
+    [[nodiscard]] bool wantsTitleBar(TitleBarMode mode) const;
+    void refreshTitleBar();
     int m_chromeContentWidth = 0;
     int m_chromeContentHeight = 0;
     bool m_tabHidden = false;
@@ -1029,6 +1042,9 @@ namespace umbriel {
     wl_listener m_xRequestConfigure{};
     wl_listener m_xRequestActivate{};
     wl_listener m_xSetHints{};
+    wl_listener m_setDecorations{};
+    static void onSetDecorations(wl_listener* listener, void* data);
+    void handleSetDecorations();
     wl_listener m_dialogSetModal{};
     wl_listener m_dialogDestroy{};
   };

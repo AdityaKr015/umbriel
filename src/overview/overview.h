@@ -192,6 +192,7 @@ namespace umbriel {
       wlr_scene_shadow* shadow = nullptr;
       // Scaled copy of the chrome the view carries beside its borders, such as a tab bar, under `tree`.
       std::unique_ptr<ViewChromeAttachment> chrome;
+      std::unique_ptr<ViewChromeAttachment> frame;
       std::vector<std::unique_ptr<CardSurface>> surfaces;
       wlr_box box{}; // content box in layout coordinates
       wlr_scene_tree* badge = nullptr;

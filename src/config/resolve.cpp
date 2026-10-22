@@ -363,6 +363,9 @@ namespace umbriel {
       if (rule.blurOptimized) {
         resolved.blurOptimized = rule.blurOptimized;
       }
+      if (rule.titleBar) {
+        resolved.titleBar = rule.titleBar;
+      }
       if (rule.borderColorFocused) {
         resolved.borderColorFocused = rule.borderColorFocused;
       }

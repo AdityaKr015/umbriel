@@ -100,21 +100,23 @@ namespace umbriel {
     m_server->scheduleIpcWindowsEvent();
     if (m_toplevel != nullptr) {
       wlr_xdg_toplevel_set_fullscreen(m_toplevel, fullscreen);
-      return;
+    } else {
+      m_xState.fullscreen = fullscreen;
+      m_xFullscreenSize.reset();
+      wlr_xwayland_surface_set_fullscreen(m_xsurface, fullscreen);
     }
-    m_xState.fullscreen = fullscreen;
-    m_xFullscreenSize.reset();
-    wlr_xwayland_surface_set_fullscreen(m_xsurface, fullscreen);
+    syncSsdFrame();
   }
 
   void View::setMaximizedState(bool maximized) {
     m_server->scheduleIpcWindowsEvent();
     if (m_toplevel != nullptr) {
       wlr_xdg_toplevel_set_maximized(m_toplevel, maximized);
-      return;
+    } else {
+      m_xState.maximized = maximized;
+      wlr_xwayland_surface_set_maximized(m_xsurface, maximized, maximized);
     }
-    m_xState.maximized = maximized;
-    wlr_xwayland_surface_set_maximized(m_xsurface, maximized, maximized);
+    syncSsdFrame();
   }
 
   void View::requestClose() {

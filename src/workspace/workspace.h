@@ -106,6 +106,7 @@ namespace umbriel {
     [[nodiscard]] DwindleLayout* dwindleLayout();
     [[nodiscard]] MasterStackLayout* masterLayout();
     [[nodiscard]] const ResolvedLayoutConfig& layoutConfig() const { return m_layoutConfig; }
+    [[nodiscard]] bool inTabGroup(const View* view) const;
     [[nodiscard]] LayoutMode layoutMode() const { return m_layoutMode; }
     // Runtime layout override set by workspace-set-layout. Empty = the configured mode applies. A config reload clears
     // it and reasserts the configured mode; window open/close keeps it (reconcileDynamic re-applies).

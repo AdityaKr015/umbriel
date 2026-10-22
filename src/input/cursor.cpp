@@ -16,6 +16,7 @@
 #include "scene/cheatsheet.h"
 #include "scene/hint_rect.h"
 #include "scene/quit_confirm.h"
+#include "scene/ssd_frame.h"
 #include "server/server.h"
 #include "view/size_hints.h"
 #include "view/view.h"
@@ -44,8 +45,8 @@ namespace umbriel {
     // Mod+right-click pairing and the motion threshold that promotes its
     // deferred resize grab share one boundary: inside it a press may still
     // pair up, so no grab may run and drop the layout's maximize bookkeeping.
-    constexpr uint32_t kModRightDoubleClickMsec = 300;
-    constexpr double kModRightDoubleClickSlop = 8.0;
+    constexpr uint32_t kDoubleClickMsec = 300;
+    constexpr double kDoubleClickSlop = 8.0;
 
     // Panels (top/overlay) keep working inside the overview. Background- and bottom-layer surfaces are part of the
     // inert backdrop behind the filmstrip, so their clicks belong to the overview instead.
@@ -959,7 +960,7 @@ namespace umbriel {
     return workspace != nullptr && grab != nullptr && grab->workspace == workspace;
   }
 
-  bool Cursor::beginMove(View* view, uint32_t button) {
+  bool Cursor::beginMove(View* view, uint32_t button, bool deferUntilThreshold) {
     if (view == nullptr || !view->mapped() || button == 0) {
       return false;
     }
@@ -991,7 +992,7 @@ namespace umbriel {
         .sourceColumn = -1,
         .sourceWidth = std::nullopt,
         .drop = {},
-        .pending = tiled,
+        .pending = tiled || deferUntilThreshold,
         .startX = m_cursor->x,
         .startY = m_cursor->y,
         .lastX = m_cursor->x,
@@ -1396,9 +1397,9 @@ namespace umbriel {
 
   bool Cursor::isModRightDoubleClick(uint32_t timeMsec, const View* view) const {
     return m_lastModRightClick.view == view
-        && timeMsec - m_lastModRightClick.timeMsec <= kModRightDoubleClickMsec
-        && std::abs(m_cursor->x - m_lastModRightClick.x) <= kModRightDoubleClickSlop
-        && std::abs(m_cursor->y - m_lastModRightClick.y) <= kModRightDoubleClickSlop;
+        && timeMsec - m_lastModRightClick.timeMsec <= kDoubleClickMsec
+        && std::abs(m_cursor->x - m_lastModRightClick.x) <= kDoubleClickSlop
+        && std::abs(m_cursor->y - m_lastModRightClick.y) <= kDoubleClickSlop;
   }
 
   void Cursor::recordModRightClick(uint32_t timeMsec, View* view) {
@@ -1414,8 +1415,8 @@ namespace umbriel {
       resetMode();
       return;
     }
-    if (std::abs(nextX - pending->startX) <= kModRightDoubleClickSlop
-        && std::abs(nextY - pending->startY) <= kModRightDoubleClickSlop) {
+    if (std::abs(nextX - pending->startX) <= kDoubleClickSlop
+        && std::abs(nextY - pending->startY) <= kDoubleClickSlop) {
       return;
     }
     const PendingResizeGrab grab = *pending;
@@ -1476,6 +1477,26 @@ namespace umbriel {
         }
         m_swallowedButtons.push_back(button);
         return;
+      }
+    }
+    if (state == WL_POINTER_BUTTON_STATE_RELEASED && button == BTN_LEFT && m_ssdButtonPress.view != nullptr) {
+      const SsdButtonPress press = m_ssdButtonPress;
+      m_ssdButtonPress = {};
+      if (press.view->ssdFrame() != nullptr)
+        press.view->ssdFrame()->setPressed(SsdFramePart::None);
+      const auto hit = m_server->ssdFrameAt(m_cursor->x, m_cursor->y);
+      if (hit
+          && hit->view == press.view
+          && hit->part == press.part
+          && m_server->exclusiveKeyboardLayer() == nullptr
+          && !press.view->blocked()) {
+        if (press.part == SsdFramePart::Close) {
+          press.view->requestClose();
+        } else if (press.part == SsdFramePart::Maximize && press.view->ssdFrame()->maximizeEnabled()) {
+          const bool maximized =
+              press.view->maximizedToEdges() || press.view->scheduledMaximized() || press.view->floatingMaximized();
+          press.view->setMaximizedLikeClientRequest(!maximized);
+        }
       }
     }
     if (state == WL_POINTER_BUTTON_STATE_RELEASED && std::erase(m_swallowedButtons, button) > 0) {
@@ -1622,6 +1643,48 @@ namespace umbriel {
         }
       }
       return;
+    }
+
+    // Scene hit testing lets covered chrome stay covered by windows and panels.
+    if (m_server->exclusiveKeyboardLayer() == nullptr
+        && isPassthrough()
+        && !wlr_seat_pointer_has_grab(m_server->seat()->wlr())) {
+      if (const auto hit = m_server->ssdFrameAt(m_cursor->x, m_cursor->y)) {
+        View* target = hit->view;
+        clearPointerFocus();
+        if (button == BTN_LEFT && hit->part == SsdFramePart::Resize) {
+          m_server->focusView(target, FocusReason::Grab);
+          if (beginResize(target, hit->edges, button))
+            return;
+        } else if (button == BTN_LEFT && hit->part == SsdFramePart::TitleBar) {
+          m_server->focusView(target, FocusReason::PointerPress);
+          const double dx = m_cursor->x - m_lastTitleBarClick.x;
+          const double dy = m_cursor->y - m_lastTitleBarClick.y;
+          if (m_lastTitleBarClick.view == target
+              && timeMsec - m_lastTitleBarClick.timeMsec <= kDoubleClickMsec
+              && dx * dx + dy * dy <= kDoubleClickSlop * kDoubleClickSlop) {
+            m_lastTitleBarClick = {};
+            const bool maximized =
+                target->maximizedToEdges() || target->scheduledMaximized() || target->floatingMaximized();
+            target->setMaximizedLikeClientRequest(!maximized);
+          } else {
+            m_lastTitleBarClick = {timeMsec, m_cursor->x, m_cursor->y, target};
+            if (beginMove(target, button, true))
+              return;
+          }
+        } else if (
+            button == BTN_LEFT
+            && !target->blocked()
+            && (hit->part == SsdFramePart::Close
+                || (hit->part == SsdFramePart::Maximize && target->ssdFrame()->maximizeEnabled()))
+        ) {
+          m_server->focusView(target, FocusReason::PointerPress);
+          m_ssdButtonPress = {target, hit->part};
+          target->ssdFrame()->setPressed(hit->part);
+        }
+        m_swallowedButtons.push_back(button);
+        return;
+      }
     }
 
     // A press on a tab bar is the compositor's: no client sees it or its release. The left button selects the tab and
@@ -2169,6 +2232,21 @@ namespace umbriel {
       );
     }
 
+    const auto frameHit = m_server->ssdFrameAt(m_cursor->x, m_cursor->y);
+    View* frameView = frameHit ? frameHit->view : nullptr;
+    if (m_ssdHoverView != frameView && m_ssdHoverView != nullptr && m_ssdHoverView->ssdFrame() != nullptr) {
+      m_ssdHoverView->ssdFrame()->setHovered(SsdFramePart::None);
+    }
+    m_ssdHoverView = frameView;
+    if (frameView != nullptr)
+      frameView->ssdFrame()->setHovered(frameHit->part);
+    if (m_ssdButtonPress.view != nullptr && m_ssdButtonPress.view->ssdFrame() != nullptr) {
+      m_ssdButtonPress.view->ssdFrame()->setPressed(
+          frameHit && frameView == m_ssdButtonPress.view && frameHit->part == m_ssdButtonPress.part
+              ? m_ssdButtonPress.part
+              : SsdFramePart::None
+      );
+    }
     updateConstraintForSurface(surface);
     updateInteractiveCursor(view);
   }
@@ -2558,6 +2636,19 @@ namespace umbriel {
   }
 
   void Cursor::beginDrag(MoveGrab& grab) {
+    if (grab.target == DragTarget::Floating && grab.view->floatingMaximized()) {
+      View* view = grab.view;
+      const int width = view->floatingSize()[0];
+      const double fraction = width > 0 ? std::clamp((grab.startX - view->layoutX()) / width, 0.0, 1.0) : 0.5;
+      view->restoreMaximizedForMove();
+      const auto restored = view->floatingSize();
+      grab.offsetX = fraction * restored[0];
+      const int h = view->titleBarHeight();
+      if (h > 0)
+        grab.offsetY = std::clamp(grab.offsetY, -static_cast<double>(h), -1.0);
+      view->setDragPosition(m_cursor->x - grab.offsetX, m_cursor->y - grab.offsetY);
+    }
+    m_lastTitleBarClick = {};
     grab.pending = false;
     if (grab.sourceWorkspace != nullptr) {
       grab.sourceWorkspace->layoutDetach(grab.view);
@@ -2701,7 +2792,8 @@ namespace umbriel {
     }
     // Drag presentation moves only the scene node. Commit its final position
     // after any workspace transfer so later restores use the dropped origin.
-    view->setPosition(x, y);
+    const FloatingPoint reachable = keepTitleBarReachable({x, y}, view->titleBarHeight(), view->floatingUsableArea());
+    view->setPosition(reachable.x, reachable.y);
     view->rememberFloatingPosition();
 
     resetMode();
@@ -2846,6 +2938,12 @@ namespace umbriel {
   }
 
   void Cursor::forgetView(const View* view) {
+    if (m_lastTitleBarClick.view == view)
+      m_lastTitleBarClick = {};
+    if (m_ssdButtonPress.view == view)
+      m_ssdButtonPress = {};
+    if (m_ssdHoverView == view)
+      m_ssdHoverView = nullptr;
     // Only the click pair sits outside the grab machinery: the deferred press
     // is a grab and handleUnmap's resetMode() drops it.
     if (m_lastModRightClick.view == view) {
@@ -3127,6 +3225,15 @@ namespace umbriel {
       return;
     }
 
+    if (!modHeld) {
+      if (const auto hit = m_server->ssdFrameAt(m_cursor->x, m_cursor->y)) {
+        const char* name = hit->part == SsdFramePart::Resize
+            ? wlr_xcursor_get_resize_name(static_cast<enum wlr_edges>(hit->edges))
+            : "default";
+        setCompositorCursor(name != nullptr ? name : "default");
+        return;
+      }
+    }
     setCompositorCursor(nullptr);
   }
 

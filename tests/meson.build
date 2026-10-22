@@ -48,6 +48,7 @@ unit_tests = [
   ['cheatsheet-rows', ['unit/cheatsheet_rows.cpp'], []],
   ['shortcut-labels', ['unit/shortcut_labels.cpp'], []],
   ['border-ring', ['unit/border_ring.cpp'], []],
+  ['ssd-frame-geometry', ['unit/ssd_frame_geometry.cpp'], []],
   ['floating', ['unit/floating.cpp'], []],
   ['drag-physics', ['unit/drag_physics.cpp'], []],
   ['preset-cycle', ['unit/preset_cycle.cpp'], []],
@@ -292,6 +293,10 @@ fractional_client = executable(
     viewporter_client_c,
     fractional_scale_client_h,
     fractional_scale_client_c,
+    legacy_decoration_client_h,
+    legacy_decoration_client_c,
+    xdg_decoration_client_h,
+    xdg_decoration_client_c,
   ],
   dependencies: [wayland_client_dep],
 )

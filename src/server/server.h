@@ -392,6 +392,9 @@ namespace umbriel {
     View* viewAt(double lx, double ly, wlr_surface** surface, double* sx, double* sy, LayerSurface** layer = nullptr) {
       return m_focus.viewAt(lx, ly, surface, sx, sy, layer);
     }
+    [[nodiscard]] std::optional<SsdFrameHit> ssdFrameAt(double lx, double ly) const {
+      return m_focus.ssdFrameAt(lx, ly);
+    }
     std::optional<Keybind> handleKeybind(uint32_t keysym, uint32_t rawKeysym, uint32_t modifiers);
     // The bind this press would fire, without running it. Null when nothing
     // matches (locked sessions match nothing, matching handleKeybind).
@@ -488,7 +491,8 @@ namespace umbriel {
     // is dropped.
     [[nodiscard]] CloseSnapshotId animateCloseSnapshot(
         Output* output, wlr_scene_tree* tree, wlr_scene_tree* content, std::vector<BorderSnapshot> borders,
-        const wlr_box& box, std::optional<CloseSnapshotOverrides> overrides = std::nullopt, ShadowSnapshot shadow = {}
+        const wlr_box& box, std::optional<CloseSnapshotOverrides> overrides = std::nullopt, ShadowSnapshot shadow = {},
+        int topExtension = 0
     );
     // Place a snapshot's captured box at a canvas origin in output-root coordinates, or hide it while its workspace
     // is not showing.
@@ -510,6 +514,7 @@ namespace umbriel {
     static void onNewXdgDialog(wl_listener* listener, void* data);
     static void onNewXdgPopup(wl_listener* listener, void* data);
     static void onNewXdgDecoration(wl_listener* listener, void* data);
+    static void onNewLegacyDecoration(wl_listener* listener, void* data);
     static void onNewLayerSurface(wl_listener* listener, void* data);
     static void onNewSessionLock(wl_listener* listener, void* data);
     static void onNewPointerConstraint(wl_listener* listener, void* data);
@@ -778,7 +783,7 @@ namespace umbriel {
       CloseSnapshot(
           Server& server, CloseSnapshotId id, Output* output, wlr_scene_tree* tree, wlr_scene_tree* content,
           std::vector<BorderSnapshot> borders, const wlr_box& box, int durationMs, const AnimationCurve& curve,
-          std::string_view style, double scale, AnimationEvent event, ShadowSnapshot shadow
+          std::string_view style, double scale, AnimationEvent event, ShadowSnapshot shadow, int topExtension
       );
       ~CloseSnapshot() override;
 
@@ -823,6 +828,14 @@ namespace umbriel {
         int height = 0;
       };
       std::vector<Buffer> m_buffers;
+      struct Rect {
+        wlr_scene_rect* node = nullptr;
+        std::array<float, 4> color{};
+        wlr_box box{};
+        int radius = 0;
+      };
+      std::vector<Rect> m_rects;
+      int m_topExtension = 0;
       std::vector<BorderSnapshot> m_borders;
       ShadowSnapshot m_shadow;
       bool m_retainedPersistent = false;
@@ -922,6 +935,7 @@ namespace umbriel {
     wl_listener m_newXdgDialog{};
     wl_listener m_newXdgPopup{};
     wl_listener m_newXdgDecoration{};
+    wl_listener m_newLegacyDecoration{};
     wl_listener m_newLayerSurface{};
     wl_listener m_newSessionLock{};
     wl_listener m_newPointerConstraint{};

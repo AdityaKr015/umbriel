@@ -358,6 +358,9 @@ namespace umbriel {
     // Move first so a simultaneous floating-size rule resolves against the destination output.
     if (!wasInScratchpad && defaultFloatingChanged) {
       const bool wantFloat = *rule.defaultFloating;
+      if (wantFloat && m_layoutFloated) {
+        m_layoutFloated = false;
+      }
       if (wantFloat != !m_tiled) {
         if (wantFloat) {
           if (floatingWidthChanged) {

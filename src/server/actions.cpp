@@ -326,6 +326,12 @@ namespace umbriel {
       if (column.views.empty()) {
         return;
       }
+      if (target.layoutMode() == LayoutMode::Floating) {
+        for (View* view : column.views) {
+          view->moveToWorkspace(&target);
+        }
+        return;
+      }
       View* first = column.views.front();
       first->moveToWorkspace(&target, /*attachToLayout=*/false);
       target.layout().insertView(first, targetIndex);
@@ -1274,6 +1280,9 @@ namespace umbriel {
           return false;
         }
         View* view = *target;
+        if (view->workspace() != nullptr && view->workspace()->layoutMode() == LayoutMode::Floating) {
+          return reject(error, "window-toggle-floating needs a tiling layout");
+        }
         view->toggleFloating(false);
         return true;
       } else {
@@ -1282,6 +1291,9 @@ namespace umbriel {
           return true;
         }
         if (Workspace* workspace = activeWorkspace(server)) {
+          if (workspace->layoutMode() == LayoutMode::Floating) {
+            return reject(error, "window-toggle-floating needs a tiling layout");
+          }
           workspace->toggleFocusedFloating();
         }
       }
@@ -1294,6 +1306,25 @@ namespace umbriel {
       }
       if (View* view = placementTarget(server, {}, FocusSource::Seat).value_or(nullptr)) {
         view->togglePinned();
+      }
+      return true;
+    }
+
+    bool actionWindowSnap(Server& server, const Keybind& bind, std::string* error) {
+      View* view = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr);
+      if (view == nullptr || view->tiled()) {
+        return reject(error, "window-snap needs a floating window");
+      }
+      const auto* arg = payloadIf<SnapRegionArg>(bind);
+      if (arg == nullptr || !view->snapTo(arg->region)) {
+        return reject(error, "window-snap: the window cannot fit that region or its current state prevents snapping");
+      }
+      return true;
+    }
+
+    bool actionWindowUnsnap(Server& server, const Keybind&, std::string*) {
+      if (View* view = placementTarget(server, {}, FocusSource::Layout).value_or(nullptr)) {
+        view->unsnap();
       }
       return true;
     }
@@ -1582,7 +1613,9 @@ namespace umbriel {
       if (arg == nullptr) {
         return true;
       }
-      static constexpr std::array kFullCycle{LayoutMode::Scrolling, LayoutMode::Dwindle, LayoutMode::Master};
+      static constexpr std::array kFullCycle{
+          LayoutMode::Scrolling, LayoutMode::Dwindle, LayoutMode::Master, LayoutMode::Floating
+      };
       const std::span<const LayoutMode> cycle = arg->toggleSequence.empty()
           ? std::span<const LayoutMode>(kFullCycle)
           : std::span<const LayoutMode>(arg->toggleSequence);
@@ -1840,7 +1873,13 @@ namespace umbriel {
       transfer(targetTiles, targetFloats, sourceWs);
 
       const auto rebuild = [](Workspace* dest, const LayoutCapture& tiles, const std::vector<View*>& floats) {
-        if (tiles.snapshot == nullptr || !dest->layout().restoreState(*tiles.snapshot, tiles.members)) {
+        if (dest->layoutMode() == LayoutMode::Floating) {
+          for (const LayoutMember& member : tiles.members) {
+            if (member.view != nullptr) {
+              dest->layoutAttach(member.view);
+            }
+          }
+        } else if (tiles.snapshot == nullptr || !dest->layout().restoreState(*tiles.snapshot, tiles.members)) {
           for (const LayoutMember& member : tiles.members) {
             if (member.view != nullptr) {
               dest->layout().insertView(member.view, static_cast<int>(dest->layout().columns().size()));
@@ -1848,7 +1887,11 @@ namespace umbriel {
           }
         }
         for (View* view : floats) {
-          view->restoreFloatingPosition();
+          if (dest->layoutMode() != LayoutMode::Floating && view->layoutFloated()) {
+            view->setFloating(false, false);
+          } else {
+            view->restoreFloatingPosition();
+          }
         }
       };
       rebuild(targetWs, sourceTiles, sourceFloats);
@@ -2290,6 +2333,8 @@ namespace umbriel {
         &actionScratchpadWindowShowStep<-1>,
         &actionLayoutToggleSplit,
         &actionOutputSdrWhite,
+        &actionWindowSnap,
+        &actionWindowUnsnap,
     };
 
     consteval bool everyActionHasHandler() {

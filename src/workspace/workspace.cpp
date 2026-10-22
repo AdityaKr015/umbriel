@@ -344,8 +344,15 @@ namespace umbriel {
     }
     syncFloatingStack(view);
     applyVisibility();
-    if (attachToLayout) {
+    if (attachToLayout || m_layoutMode == LayoutMode::Floating) {
       layoutAttach(view, std::nullopt, std::nullopt, origin);
+    }
+    if (attachToLayout
+        && m_layoutMode != LayoutMode::Floating
+        && view->layoutFloated()
+        && view->floating()
+        && !view->pinned()) {
+      view->setFloating(false, false);
     }
     // A float joins no layout, so nothing below would mark the workspace for a pass; occupancy questions need one.
     markArrange();
@@ -465,6 +472,17 @@ namespace umbriel {
       View* view, std::optional<double> initialExtent, std::optional<int> initialExtentPx, LayoutAttachOrigin origin
   ) {
     if (view == nullptr || !view->mapped() || !view->tiled() || m_layout->columnOf(view) >= 0) {
+      return;
+    }
+    if (m_layoutMode == LayoutMode::Floating) {
+      if (origin == LayoutAttachOrigin::OpeningView) {
+        view->adoptLayoutFloat();
+      } else {
+        view->floatForLayout();
+      }
+      if (origin == LayoutAttachOrigin::OpeningView || origin == LayoutAttachOrigin::MovedView) {
+        exitFullscreenForIncomingView(view);
+      }
       return;
     }
     if (origin == LayoutAttachOrigin::OpeningView || origin == LayoutAttachOrigin::MovedView) {
@@ -820,6 +838,7 @@ namespace umbriel {
     for (View* view : m_views) {
       if (view != nullptr && !view->tiled()) {
         view->refitFloatingMaximized();
+        view->refitFloatingSnapped();
       }
     }
     // The map-time IPC event can fire before this arrange runs, leaving the previous window positions in the listing.
@@ -935,10 +954,12 @@ namespace umbriel {
         // Fullscreen covers the output and draws no decorations.
         target = {nodeX + m_slideOffsetX, nodeY + m_slideOffsetY, outputBox.width, outputBox.height};
       } else {
-        // Floating views follow committed geometry; tiled ones follow the box
-        // the layout assigned them.
+        // Floating views keep a pending requested size after a drag ends, until the client redraws. Tiled views
+        // follow the box the layout assigned them.
         const bool inLayout = m_layout->columnOf(view) >= 0;
-        const wlr_box sized = inLayout ? tiledTargetBox(view, usable) : view->geometryBox();
+        const auto [floatingWidth, floatingHeight] = view->floatingSize();
+        const wlr_box sized = inLayout ? tiledTargetBox(view, usable)
+                                       : wlr_box{.x = 0, .y = 0, .width = floatingWidth, .height = floatingHeight};
         // A view that just joined the layout has no slot until the pending arrange. Presenting the empty slot would
         // erase the box it still shows, and that arrange would then place it like an opener instead of moving it.
         if (inLayout && (sized.width <= 0 || sized.height <= 0)) {
@@ -1472,11 +1493,54 @@ namespace umbriel {
     return target;
   }
 
+  View* Workspace::floatingFocusTarget(bool horizontal, int direction) const {
+    if (m_focusedView == nullptr || direction == 0) {
+      return nullptr;
+    }
+    std::vector<LayoutTarget> targets;
+    for (View* view : m_floatingStack) {
+      if (view->mapped() && !view->pinned() && !view->currentFullscreen() && !view->scheduledFullscreen()) {
+        const wlr_box& geo = view->geometryBox();
+        targets.push_back({view, view->layoutX(), view->layoutY(), geo.width, geo.height});
+      }
+    }
+    if (View* neighbor = directionalNeighbor(targets, m_focusedView, horizontal, direction)) {
+      return neighbor;
+    }
+    // Cascaded windows overlap. When no edge neighbor exists, use centers to reach overlapping windows too.
+    const auto source =
+        std::ranges::find_if(targets, [this](const auto& target) { return target.view == m_focusedView; });
+    if (source == targets.end()) {
+      return nullptr;
+    }
+    View* best = nullptr;
+    double bestDistance = std::numeric_limits<double>::max();
+    for (const auto& candidate : targets) {
+      const double dx = candidate.x + candidate.width / 2.0 - source->x - source->width / 2.0;
+      const double dy = candidate.y + candidate.height / 2.0 - source->y - source->height / 2.0;
+      if ((horizontal ? dx : dy) * direction <= 0) {
+        continue;
+      }
+      const double distance = dx * dx + dy * dy;
+      if (distance < bestDistance) {
+        best = candidate.view;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
   View* Workspace::focusAdjacent(int direction) {
+    if (m_layoutMode == LayoutMode::Floating) {
+      return floatingFocusTarget(true, direction);
+    }
     return preferRecentPeer(scrollingVertical() ? focusWithinLane(direction) : focusAlongStrip(direction));
   }
 
   View* Workspace::focusVertical(int direction) {
+    if (m_layoutMode == LayoutMode::Floating) {
+      return floatingFocusTarget(false, direction);
+    }
     return preferRecentPeer(scrollingVertical() ? focusAlongStrip(direction) : focusWithinLane(direction));
   }
 
@@ -2284,6 +2348,7 @@ namespace umbriel {
     const bool isMovingFromScroll =
         (m_layoutMode == LayoutMode::Scrolling && layoutConfig.mode != LayoutMode::Scrolling);
     const bool isMovingToScroll = (m_layoutMode != LayoutMode::Scrolling && layoutConfig.mode == LayoutMode::Scrolling);
+    const bool fromFloating = m_layoutMode == LayoutMode::Floating;
     m_layoutConfig = std::move(layoutConfig);
     // The event payload is built when the idle runs, so scheduling here reports the mode this call installs, whether
     // it reconfigures the existing layout or replaces it below.
@@ -2321,8 +2386,17 @@ namespace umbriel {
     std::vector<View*> tiledViews;
     for (View* view : m_views) {
       if (m_layout != nullptr && m_layout->columnOf(view) >= 0) {
-        m_layout->removeView(view);
         tiledViews.push_back(view);
+      }
+    }
+    if (m_layoutConfig.mode == LayoutMode::Floating) {
+      for (View* view : tiledViews) {
+        view->floatForLayout();
+      }
+      tiledViews.clear();
+    } else {
+      for (View* view : tiledViews) {
+        m_layout->removeView(view);
       }
     }
     m_layoutMode = m_layoutConfig.mode;
@@ -2331,6 +2405,14 @@ namespace umbriel {
     m_layout->setConstraints(&viewLayoutConstraints);
     for (View* view : tiledViews) {
       m_layout->insertView(view, static_cast<int>(m_layout->columns().size()));
+    }
+    if (fromFloating) {
+      const auto floats = m_floatingStack;
+      for (View* view : floats) {
+        if (view->layoutFloated() && view->floating() && !view->pinned() && view->mapped()) {
+          view->setFloating(false, false);
+        }
+      }
     }
     // Restore previous extents
     if (isMovingToScroll) {

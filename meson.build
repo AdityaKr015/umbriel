@@ -688,6 +688,7 @@ pure_sources = files(
   'src/layout/scrolling.cpp',
   'src/layout/dwindle.cpp',
   'src/layout/master.cpp',
+  'src/layout/floating.cpp',
   'src/output/direction.cpp',
   'src/output/identity.cpp',
   'src/output/enable_overrides.cpp',
@@ -703,6 +704,7 @@ pure_sources = files(
   'src/view/border_ring.cpp',
   'src/view/effects_rules.cpp',
   'src/view/floating.cpp',
+  'src/view/snap.cpp',
   'src/view/drag_physics.cpp',
   'src/xwayland/xsettings.cpp',
 )
@@ -795,6 +797,7 @@ core_sources = files(
   'src/view/view_attachment.cpp',
   'src/view/view_chrome.cpp',
   'src/view/view_floating.cpp',
+  'src/view/view_snap.cpp',
   'src/view/view_lifecycle.cpp',
   'src/view/view_rules.cpp',
   'src/view/view_state.cpp',

@@ -190,6 +190,9 @@ namespace umbriel {
   }
 
   Cursor::~Cursor() {
+    if (m_snapDwellTimer != nullptr) {
+      wl_event_source_remove(m_snapDwellTimer);
+    }
     if (m_dataDragEdgeScrollTimer != nullptr) {
       wl_event_source_remove(m_dataDragEdgeScrollTimer);
     }
@@ -977,6 +980,9 @@ namespace umbriel {
       tiled = false;
     }
 
+    if (!tiled && (view->snapRegion() || view->floatingMaximized())) {
+      deferUntilThreshold = true;
+    }
     setActiveConstraint(nullptr);
     const bool pinned = !tiled && view->pinned();
     // A pinned window is floating, but it remembers whether it was tiled when
@@ -987,11 +993,19 @@ namespace umbriel {
         .offsetX = m_cursor->x - view->layoutX(),
         .offsetY = m_cursor->y - view->layoutY(),
         .target = tiled ? DragTarget::Tiled : (pinned ? DragTarget::Pinned : DragTarget::Floating),
+        .floatingLayout = !tiled
+            && !pinned
+            && view->workspace() != nullptr
+            && view->workspace()->layoutMode() == LayoutMode::Floating,
         .unpinned = tiledUnderneath ? DragTarget::Tiled : DragTarget::Floating,
         .sourceWorkspace = tiled ? view->workspace() : nullptr,
         .sourceColumn = -1,
         .sourceWidth = std::nullopt,
         .drop = {},
+        .snap = std::nullopt,
+        .preDragX = view->layoutTargetX(),
+        .preDragY = view->layoutTargetY(),
+        .preDragArea = view->floatingUsableArea(),
         .pending = tiled || deferUntilThreshold,
         .startX = m_cursor->x,
         .startY = m_cursor->y,
@@ -1227,6 +1241,7 @@ namespace umbriel {
   }
 
   void Cursor::resetMode() {
+    clearSnapPreview();
     m_server->hideInsertHint();
     cancelDataDragEdgeScroll();
     View* view = grabbedView();
@@ -2151,6 +2166,11 @@ namespace umbriel {
         }
         processMove();
         updateDropTarget();
+        if (config().input.windowSnapping && grab->target == DragTarget::Floating && !m_toplevelDrag) {
+          updateSnapPreview();
+        } else {
+          clearSnapPreview();
+        }
         updateDataDragEdgeScroll();
         // A toplevel drag moves a real window while wlroots keeps delivering
         // data-device enter and motion to the surfaces underneath it.
@@ -2614,7 +2634,8 @@ namespace umbriel {
       return;
     }
     grab->view->setDragPosition(
-        static_cast<int>(m_cursor->x - grab->offsetX), static_cast<int>(m_cursor->y - grab->offsetY)
+        static_cast<int>(m_cursor->x - grab->offsetX), static_cast<int>(m_cursor->y - grab->offsetY),
+        grab->floatingLayout
     );
     if (grab->physics) {
       grab->view->moveDragPhysics(m_cursor->x - grab->lastX, m_cursor->y - grab->lastY);
@@ -2636,17 +2657,20 @@ namespace umbriel {
   }
 
   void Cursor::beginDrag(MoveGrab& grab) {
-    if (grab.target == DragTarget::Floating && grab.view->floatingMaximized()) {
+    if (grab.target == DragTarget::Floating && (grab.view->floatingMaximized() || grab.view->snapRegion())) {
       View* view = grab.view;
       const int width = view->floatingSize()[0];
       const double fraction = width > 0 ? std::clamp((grab.startX - view->layoutX()) / width, 0.0, 1.0) : 0.5;
       view->restoreMaximizedForMove();
+      view->unsnap(false);
+      grab.preDragX = view->layoutTargetX();
+      grab.preDragY = view->layoutTargetY();
       const auto restored = view->floatingSize();
       grab.offsetX = fraction * restored[0];
       const int h = view->titleBarHeight();
       if (h > 0)
         grab.offsetY = std::clamp(grab.offsetY, -static_cast<double>(h), -1.0);
-      view->setDragPosition(m_cursor->x - grab.offsetX, m_cursor->y - grab.offsetY);
+      view->setDragPosition(m_cursor->x - grab.offsetX, m_cursor->y - grab.offsetY, grab.floatingLayout);
     }
     m_lastTitleBarClick = {};
     grab.pending = false;
@@ -2700,6 +2724,102 @@ namespace umbriel {
     grab->view->raiseToTop();
   }
 
+  void Cursor::clearSnapPreview() {
+    if (m_snapDwellTimer != nullptr) {
+      wl_event_source_timer_update(m_snapDwellTimer, 0);
+    }
+    if (auto* grab = std::get_if<MoveGrab>(&m_grab)) {
+      if (grab->snap) {
+        m_server->hideInsertHint();
+      }
+      grab->snap.reset();
+      grab->snapOutput = nullptr;
+      grab->dwellOutput = nullptr;
+      grab->dwellEdges = 0;
+      grab->dwellReady = false;
+    }
+  }
+
+  int Cursor::onSnapDwellTimer(void* data) {
+    auto* self = static_cast<Cursor*>(data);
+    if (auto* grab = std::get_if<MoveGrab>(&self->m_grab)) {
+      grab->dwellReady = true;
+      self->updateSnapPreview();
+    }
+    return 0;
+  }
+
+  void Cursor::updateSnapPreview() {
+    auto* grab = std::get_if<MoveGrab>(&m_grab);
+    if (grab == nullptr
+        || grab->pending
+        || grab->target != DragTarget::Floating
+        || m_toplevelDrag
+        || !config().input.windowSnapping
+        || m_server->seat()->wlr()->drag != nullptr
+        || !grab->view->canSnap()) {
+      clearSnapPreview();
+      return;
+    }
+    Output* output =
+        m_server->outputFromWlr(wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y));
+    if (output == nullptr || output->workspaceGroup() == nullptr) {
+      clearSnapPreview();
+      return;
+    }
+    const wlr_box area = output->layoutBox();
+    uint32_t shared = 0;
+    const auto adjacent = [&](double x, double y) {
+      wlr_output* other = wlr_output_layout_output_at(m_server->outputLayout(), x, y);
+      return other != nullptr && other != output->wlr();
+    };
+    if (m_cursor->x - area.x < kSnapEdge && adjacent(area.x - 1, m_cursor->y))
+      shared |= WLR_EDGE_LEFT;
+    if (area.x + area.width - m_cursor->x <= kSnapEdge && adjacent(area.x + area.width, m_cursor->y))
+      shared |= WLR_EDGE_RIGHT;
+    if (m_cursor->y - area.y < kSnapEdge && adjacent(m_cursor->x, area.y - 1))
+      shared |= WLR_EDGE_TOP;
+    if (area.y + area.height - m_cursor->y <= kSnapEdge && adjacent(m_cursor->x, area.y + area.height))
+      shared |= WLR_EDGE_BOTTOM;
+    if (grab->dwellOutput != output || grab->dwellEdges != shared) {
+      if (m_snapDwellTimer != nullptr)
+        wl_event_source_timer_update(m_snapDwellTimer, 0);
+      grab->dwellOutput = output;
+      grab->dwellEdges = shared;
+      grab->dwellReady = false;
+      if (shared != 0) {
+        if (m_snapDwellTimer == nullptr) {
+          m_snapDwellTimer =
+              wl_event_loop_add_timer(wl_display_get_event_loop(m_server->display()), onSnapDwellTimer, this);
+        }
+        if (m_snapDwellTimer != nullptr)
+          wl_event_source_timer_update(m_snapDwellTimer, kSnapDwellMs);
+      }
+    }
+    const auto hit = snapZoneAt(area, m_cursor->x, m_cursor->y, grab->dwellReady ? 0 : shared);
+    if (!hit) {
+      grab->snap.reset();
+      grab->snapOutput = nullptr;
+      m_server->hideInsertHint();
+      return;
+    }
+    const Workspace* workspace = output->workspaceGroup()->active();
+    const auto* layout = workspace != nullptr ? &workspace->layoutConfig() : nullptr;
+    std::optional<wlr_box> content = grab->view->floatingSnappedBox(*hit, output->usableArea(), layout);
+    if (!content || content->width <= 0 || content->height <= 0) {
+      grab->snap.reset();
+      grab->snapOutput = nullptr;
+      m_server->hideInsertHint();
+      return;
+    }
+    const int bar = grab->view->titleBarHeight();
+    content->y -= bar;
+    content->height += bar;
+    grab->snap = hit;
+    grab->snapOutput = output;
+    m_server->insertHint().show(output, *content, config().appearance.cornerRadius);
+  }
+
   void Cursor::finishMove() {
     auto* grab = std::get_if<MoveGrab>(&m_grab);
     if (grab == nullptr || grab->view == nullptr || !grab->view->mapped()) {
@@ -2718,7 +2838,14 @@ namespace umbriel {
     // State first, placement second: a window that refused the drag's target
     // (a fullscreen window cannot be pinned) is still tiled here and drops back
     // into the layout rather than staying detached.
-    applyDragTarget(*grab);
+    Output* destination =
+        m_server->outputFromWlr(wlr_output_layout_output_at(m_server->outputLayout(), m_cursor->x, m_cursor->y));
+    Workspace* workspace = destination != nullptr ? destination->workspaceGroup()->active() : nullptr;
+    if (grab->target == DragTarget::Tiled && workspace != nullptr && workspace->layoutMode() == LayoutMode::Floating) {
+      view->floatForLayout();
+    } else {
+      applyDragTarget(*grab);
+    }
     if (view->tiled()) {
       finishTileMove();
     } else {
@@ -2773,6 +2900,13 @@ namespace umbriel {
   }
 
   void Cursor::finishFloatMove(int x, int y) {
+    const auto* grab = std::get_if<MoveGrab>(&m_grab);
+    const auto snap = grab != nullptr && config().input.windowSnapping ? grab->snap : std::nullopt;
+    Output* snapOutput = grab != nullptr ? grab->snapOutput : nullptr;
+    const int preDragX = grab != nullptr ? grab->preDragX : x;
+    const int preDragY = grab != nullptr ? grab->preDragY : y;
+    const wlr_box preDragArea = grab != nullptr ? grab->preDragArea : wlr_box{};
+    const bool floatingLayout = grab != nullptr && grab->floatingLayout;
     View* view = grabbedView();
     if (view == nullptr || !view->mapped()) {
       resetMode();
@@ -2790,13 +2924,26 @@ namespace umbriel {
         target->exitFullscreenForIncomingView(view);
       }
     }
-    // Drag presentation moves only the scene node. Commit its final position
-    // after any workspace transfer so later restores use the dropped origin.
+    // Commit the final position after any workspace transfer, including drags whose target was deferred until
+    // release, so later restores use the dropped origin.
     const FloatingPoint reachable = keepTitleBarReachable({x, y}, view->titleBarHeight(), view->floatingUsableArea());
     view->setPosition(reachable.x, reachable.y);
     view->rememberFloatingPosition();
 
     resetMode();
+    if (snap && snapOutput == output && view->canSnap()) {
+      FloatingGeometry normalPosition;
+      normalPosition.rememberPositionFraction({preDragX, preDragY}, preDragArea);
+      const auto restore =
+          normalPosition.restoredOrigin(view->floatingUsableArea()).value_or(FloatingPoint{preDragX, preDragY});
+      if (!floatingLayout) {
+        view->setPosition(restore.x, restore.y);
+      }
+      if (!view->snapTo(*snap, floatingLayout ? std::optional{restore} : std::nullopt)) {
+        // Client constraints can change after the preview was drawn. Keep the free drop when it no longer fits.
+        view->setPosition(reachable.x, reachable.y);
+      }
+    }
     m_server->focusView(view, FocusReason::DragDrop);
   }
 
@@ -2824,6 +2971,7 @@ namespace umbriel {
       beginDrag(*grab);
     }
 
+    clearSnapPreview();
     if (toggle == WindowDragToggle::Pinned) {
       grab->target = grab->target == DragTarget::Pinned ? grab->unpinned : DragTarget::Pinned;
     } else {

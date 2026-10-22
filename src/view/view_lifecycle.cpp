@@ -276,7 +276,7 @@ namespace umbriel {
     if (placed) {
       Workspace* launchWorkspace = m_launchWorkspace != nullptr ? m_launchWorkspace->workspace : nullptr;
       if (!launchRuleOverride && m_workspace == nullptr && launchWorkspace != nullptr) {
-        setWorkspace(launchWorkspace, false);
+        setWorkspace(launchWorkspace, false, LayoutAttachOrigin::OpeningView);
       } else if (launchRuleOverride && m_workspace != nullptr) {
         setWorkspace(nullptr, false);
       }
@@ -593,6 +593,7 @@ namespace umbriel {
     m_floatingMaximized = false;
     m_maximizedToEdges = false;
     m_hasFullscreenRestoreBox = false;
+    clearSnapState();
     m_restorePinnedAfterFullscreen = false;
     m_xCompositorFullscreen = false;
     if (m_pinned) {
@@ -660,6 +661,7 @@ namespace umbriel {
     const bool hadRuntimeEffects = m_effects.slot(EffectKind::Border).runtimeSelector.has_value()
         || m_effects.slot(EffectKind::Window).runtimeSelector.has_value();
     m_mapped = false;
+    m_layoutFloated = false;
     if (m_workspace != nullptr) {
       m_workspace->syncFloatingStack(this);
     }
@@ -828,7 +830,7 @@ namespace umbriel {
       const bool openingInScratchpad = !openingScratchpad.empty()
           && scratchpadManager != nullptr
           && scratchpadManager->hasScratchpad(openingScratchpad);
-      const bool wantTiled = !m_server->seat()->toplevelDrags().attached(m_toplevel)
+      bool wantTiled = !m_server->seat()->toplevelDrags().attached(m_toplevel)
           && !openingInScratchpad
           && !rule.defaultPinned.value_or(false)
           && (rule.defaultFloating ? !*rule.defaultFloating : looksTiled());
@@ -844,6 +846,10 @@ namespace umbriel {
       if (target == nullptr) {
         target = windowRuleWorkspace(targetGroup, rule);
       }
+
+      const bool layoutFloats =
+          (target != nullptr ? target->layoutMode() : resolveGlobalLayout(config()).mode) == LayoutMode::Floating;
+      wantTiled = wantTiled && !layoutFloats;
 
       // A window that opens as the only tiled one on its workspace is configured in its `match.is_alone` state right
       // away, instead of showing one frame at the size its not-alone rules give it. Alone-ness depends on the

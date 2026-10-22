@@ -4568,4 +4568,34 @@ title_bar = "always"
   CHECK(!containsDiagnostic(store, "unknown key"));
 }
 
+UMBRIEL_TEST(floatingLayoutLoadsGloballyAndPerWorkspace) {
+  const TempConfig file;
+  file.write(R"(
+[layout]
+mode = "floating"
+[[workspace]]
+name = "desk"
+layout.mode = "floating"
+)");
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  CHECK(store.reload().success);
+  CHECK(store.config().layout.mode == LayoutMode::Floating);
+  CHECK_EQ(store.config().workspaceRules.size(), size_t{1});
+  CHECK(store.config().workspaceRules[0].layout.mode == LayoutMode::Floating);
+}
+
+UMBRIEL_TEST(windowSnappingIsAnOptInBoolean) {
+  const TempConfig file;
+  file.write("[input]\nwindow_snapping = true\n");
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowSnapping);
+  file.write("[input]\nwindow_snapping = 1\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().input.windowSnapping);
+  CHECK(containsDiagnostic(store, "input.window_snapping"));
+}
+
 int main() { return RUN_TESTS(); }

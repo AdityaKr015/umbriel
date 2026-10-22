@@ -3402,6 +3402,9 @@ namespace umbriel {
       }
     }
 
+    if (target != nullptr && target->layoutMode() == LayoutMode::Floating && view->tiled()) {
+      view->floatForLayout();
+    }
     if (target != nullptr && view->tiled()) {
       applyDrop(
           *m_server, *view, *target, targetDrop, m_dragSourceWidth.has_value() ? &*m_dragSourceWidth : nullptr,
@@ -3410,9 +3413,11 @@ namespace umbriel {
     } else if (target != nullptr && dropState != nullptr && insertedWorkspace) {
       view->rememberFloatingPosition();
       if (view->workspace() != target) {
-        view->moveToWorkspace(target, /*attachToLayout=*/false);
+        view->moveToWorkspace(target);
       }
-      view->restoreFloatingPosition();
+      if (view->floating()) {
+        view->restoreFloatingPosition();
+      }
       m_server->focusView(view, FocusReason::DragDrop);
     } else if (target != nullptr && dropState != nullptr) {
       // Floating: map the card origin back out of the thumbnail.
@@ -3422,17 +3427,21 @@ namespace umbriel {
         const int x = metrics.outputBox.x + static_cast<int>(std::lround((cardBox.x - preview.x) / metrics.zoom));
         const int y = metrics.outputBox.y + static_cast<int>(std::lround((cardBox.y - preview.y) / metrics.zoom));
         if (view->workspace() != target) {
-          view->moveToWorkspace(target, /*attachToLayout=*/false);
+          view->moveToWorkspace(target);
           target->exitFullscreenForIncomingView(view);
         }
-        view->setPosition(x, y);
-        view->rememberFloatingPosition();
+        if (view->floating()) {
+          view->setPosition(x, y);
+          view->rememberFloatingPosition();
+        }
         // Cards are laid out from the presented box, which setPosition does not refresh.
         target->syncViewPresentation(view);
       }
     } else if (m_dragSourceWorkspace != nullptr && view->tiled() && m_dragSourceColumn >= 0) {
       // Cancelled or dropped on nothing: put the tile back where it came from.
-      if (m_dragSourceWidth.has_value()) {
+      if (m_dragSourceWorkspace->layoutMode() == LayoutMode::Floating) {
+        m_dragSourceWorkspace->layoutAttach(view);
+      } else if (m_dragSourceWidth.has_value()) {
         m_dragSourceWorkspace->layout().insertView(view, m_dragSourceColumn);
         const int column = m_dragSourceWorkspace->layout().columnOf(view);
         m_dragSourceWorkspace->layout().setWidthFraction(column, m_dragSourceWidth->fraction);

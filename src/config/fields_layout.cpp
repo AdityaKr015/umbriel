@@ -25,6 +25,7 @@ namespace umbriel {
           {.name = "scrolling", .value = LayoutMode::Scrolling},
           {.name = "dwindle", .value = LayoutMode::Dwindle},
           {.name = "master", .value = LayoutMode::Master},
+          {.name = "floating", .value = LayoutMode::Floating},
       };
       return choices;
     }

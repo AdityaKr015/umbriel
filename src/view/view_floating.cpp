@@ -16,6 +16,7 @@ extern "C" {
 #include "view/view_internal.h"
 // clang-format off
 #include <algorithm>
+#include <ranges>
 #include "wlr.h"
 // clang-format on
 #include "workspace/scratchpad.h"
@@ -35,9 +36,12 @@ namespace umbriel {
     return m_server->usableAreaAt(layoutX(), layoutY());
   }
 
-  wlr_box View::floatingMarginArea(const wlr_box& usable) const {
-    const LayoutStruts& struts = m_workspace != nullptr ? m_workspace->layoutConfig().struts : config().layout.struts;
-    const int pad = m_workspace != nullptr ? m_workspace->layoutConfig().edgePad : config().layoutEdgePad();
+  wlr_box View::floatingMarginArea(const wlr_box& usable, const ResolvedLayoutConfig* layout) const {
+    if (layout == nullptr && m_workspace != nullptr) {
+      layout = &m_workspace->layoutConfig();
+    }
+    const LayoutStruts& struts = layout != nullptr ? layout->struts : config().layout.struts;
+    const int pad = layout != nullptr ? layout->edgePad : config().layoutEdgePad();
     const wlr_box inside = applyLayoutStruts(usable, struts);
     const wlr_box inset{
         .x = inside.x + pad,
@@ -48,11 +52,12 @@ namespace umbriel {
     return inset.width > 0 && inset.height > 0 ? inset : usable;
   }
 
-  wlr_box View::floatingMaximizedBox(const wlr_box& usable) const {
+  wlr_box View::floatingMaximizedBox(const wlr_box& usable, const ResolvedLayoutConfig* layout) const {
     if (usable.width <= 0 || usable.height <= 0) {
       return usable;
     }
-    const wlr_box area = contentBoxInTile(m_maximizedToEdges ? usable : floatingMarginArea(usable), titleBarHeight());
+    const wlr_box area =
+        contentBoxInTile(m_maximizedToEdges ? usable : floatingMarginArea(usable, layout), titleBarHeight());
     // A client whose maximum size is below the area (a fixed-size splash) keeps that size, centered in the area
     // rather than pinned to its corner.
     const SizeHints hints = sizeHints();
@@ -156,6 +161,7 @@ namespace umbriel {
     }
     FloatingPoint origin = centeredOrigin(usable, geo.width, geo.height + titleBarHeight());
     origin.y += titleBarHeight();
+    clearSnapState();
     animateTo(origin.x, origin.y);
     m_floating.rememberPositionFraction(origin, usable);
     return true;
@@ -172,6 +178,7 @@ namespace umbriel {
     if (!floatingPosition) {
       return false;
     }
+    clearSnapState();
     animateTo(floatingPosition->x, floatingPosition->y);
     m_floating.rememberPositionFraction(*floatingPosition, usable);
     return true;
@@ -188,6 +195,7 @@ namespace umbriel {
     }
     FloatingPoint origin = {.x = layoutTargetX() + deltaX, .y = layoutTargetY() + deltaY};
     origin = clampFloatingOrigin(origin, geo, usable);
+    clearSnapState();
     animateTo(origin.x, origin.y);
     m_floating.rememberPositionFraction(origin, usable);
     return true;
@@ -224,6 +232,7 @@ namespace umbriel {
     if (origin.x == current.x && origin.y == current.y) {
       return false;
     }
+    clearSnapState();
     animateTo(origin.x, origin.y);
     m_floating.rememberPositionFraction(origin, usable);
     return true;
@@ -297,7 +306,32 @@ namespace umbriel {
     }
     const wlr_box usable = floatingUsableArea();
 
-    std::optional<FloatingPoint> origin = getFloatingPosition(usable, position);
+    std::optional<std::array<int, 2>> placementSize;
+    const bool automatic = !position
+        && transientParent() == nullptr
+        && m_workspace != nullptr
+        && m_workspace->layoutMode() == LayoutMode::Floating
+        && !m_initialRules.defaultFloatingWidth
+        && !m_initialRules.defaultFloatingWidthPx
+        && !m_initialRules.defaultFloatingHeight
+        && !m_initialRules.defaultFloatingHeightPx
+        && !scheduledFullscreen()
+        && !scheduledMaximized();
+    if (automatic) {
+      const auto [width, height] = floatingSize();
+      const wlr_box area = floatingMarginArea(usable);
+      const int availableHeight = std::max(1, area.height - titleBarHeight());
+      if (width > 0 && height > 0 && (width > area.width || height > availableHeight)) {
+        const double scale =
+            std::min(static_cast<double>(area.width) / width, static_cast<double>(availableHeight) / height);
+        const SizeHints hints = sizeHints();
+        placementSize = std::array{
+            clampWidth(static_cast<int>(width * scale), hints), clampHeight(static_cast<int>(height * scale), hints)
+        };
+        requestFloatingSize((*placementSize)[0], (*placementSize)[1]);
+      }
+    }
+    std::optional<FloatingPoint> origin = getFloatingPosition(usable, position, placementSize);
     if (!origin) {
       return;
     }
@@ -311,6 +345,37 @@ namespace umbriel {
       const int width = geo.width > 0 ? geo.width : usable.width;
       const int height = geo.height > 0 ? geo.height : usable.height;
       origin = centeredOverShown(parent->targetBox(), shownIn, width, height);
+    } else if (m_workspace != nullptr && m_workspace->layoutMode() == LayoutMode::Floating) {
+      const int border = borderInset();
+      const int bar = titleBarHeight();
+      int step = floatingCascadeStep(bar, border);
+      std::vector<wlr_box> taken;
+      const auto& stack = m_workspace->floatingStack();
+      for (const View* other : std::views::reverse(stack)) {
+        if (other != this
+            && other->mapped()
+            && other->floating()
+            && other->positioned()
+            && !other->pinned()
+            && !other->scheduledFullscreen()) {
+          const int otherBorder = other->borderInset();
+          const int otherBar = other->titleBarHeight();
+          const auto [otherWidth, otherHeight] = other->floatingSize();
+          taken.push_back({
+              .x = other->layoutTargetX() - otherBorder,
+              .y = other->layoutTargetY() - otherBar - otherBorder,
+              .width = otherWidth + 2 * otherBorder,
+              .height = otherHeight + otherBar + 2 * otherBorder,
+          });
+          step = std::max(step, floatingCascadeStep(otherBar, otherBorder));
+        }
+      }
+      const auto [width, height] = placementSize.value_or(floatingSize());
+      const FloatingPoint frame = cascadeOrigin(
+          {.x = origin->x - border, .y = origin->y - bar - border}, taken, step, usable, width + 2 * border,
+          height + bar + 2 * border
+      );
+      origin = {.x = frame.x + border, .y = frame.y + bar + border};
     }
     *origin = keepTitleBarReachable(*origin, titleBarHeight(), usable);
     setPosition(origin->x, origin->y);
@@ -372,6 +437,7 @@ namespace umbriel {
     if (width <= 0 || height <= 0) {
       return false;
     }
+    clearSnapState();
     dropMaximizedForResize();
     requestFloatingSize(width, height);
     beginResizeAnimation(width, height);
@@ -408,6 +474,7 @@ namespace umbriel {
   }
 
   void View::beginFloatingResize(uint32_t edges) {
+    clearSnapState();
     const wlr_box& geo = geometryBox();
     m_floating.beginResize(
         {.x = layoutX() + geo.x, .y = layoutY() + geo.y, .width = geo.width, .height = geo.height}, edges
@@ -466,6 +533,7 @@ namespace umbriel {
     const FloatingPoint anchoredOrigin =
         anchoredContentOrigin(anchor, edges, {.x = 0, .y = 0, .width = width, .height = height});
     m_floating.beginResize(anchor, edges);
+    clearSnapState();
     dropMaximizedForResize();
     requestFloatingSize(width, height);
     beginResizeAnimation(width, height);
@@ -497,7 +565,7 @@ namespace umbriel {
   }
 
   void View::adoptFloatingClientSize() {
-    if (m_tiled || !m_mapped || scheduledFullscreen() || scheduledMaximized()) {
+    if (m_tiled || !m_mapped || scheduledFullscreen() || scheduledMaximized() || m_snapRegion) {
       return;
     }
     if (!retireFloatingSizeRequest()) {
@@ -511,7 +579,15 @@ namespace umbriel {
       // Once the latest compositor size request is committed, a floating
       // client owns its size. Direct assignment avoids an echo configure.
       adoptScheduledSize(geo.width, geo.height);
-      clampFloatingPosition();
+      const wlr_box usable = floatingUsableArea();
+      if (m_workspace != nullptr
+          && m_workspace->layoutMode() == LayoutMode::Floating
+          && !m_floating.restoredOrigin(usable)
+          && transientParent() == nullptr) {
+        placeInUsableArea();
+      } else {
+        clampFloatingPosition();
+      }
     }
   }
 

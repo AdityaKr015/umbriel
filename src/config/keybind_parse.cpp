@@ -136,6 +136,9 @@ namespace umbriel {
       if (name == "dwindle") {
         return LayoutMode::Dwindle;
       }
+      if (name == "floating") {
+        return LayoutMode::Floating;
+      }
       if (name == "master") {
         return LayoutMode::Master;
       }
@@ -495,6 +498,9 @@ namespace umbriel {
          KeybindAction::WindowSetPrimaryExtent, ActionArgKind::Fraction},
         {"window-set-secondary-extent", "<fraction>", "Set the focused area's secondary extent fraction",
          KeybindAction::WindowSetSecondaryExtent, ActionArgKind::Fraction},
+        {"window-snap", "<left|right|top|bottom|top_left|top_right|bottom_left|bottom_right>",
+         "Snap the floating window, or restore it when already there", KeybindAction::WindowSnap,
+         ActionArgKind::SnapRegion},
         {"window-swap-down", "", "Swap with the window below", KeybindAction::WindowSwapDown},
         {"window-swap-left", "", "Swap with the window to the left", KeybindAction::WindowSwapLeft},
         {"window-swap-next", "", "Swap with the next window in layout order", KeybindAction::WindowSwapNext},
@@ -512,6 +518,7 @@ namespace umbriel {
         {"window-toggle-pinned", "", "Pin the focused window above other windows", KeybindAction::TogglePinned},
         {"window-toggle-scratchpad", "[<scratchpad>]", "Move the focused window to or from a scratchpad",
          KeybindAction::WindowToggleScratchpad, ActionArgKind::OptionalScratchpad},
+        {"window-unsnap", "", "Restore the floating window's size before snapping", KeybindAction::WindowUnsnap},
         {"workspace-focus-last", "", "Focus the previously active workspace", KeybindAction::WorkspaceFocusLast},
         {"workspace-move-down", "", "Move the focused workspace down the list", KeybindAction::WorkspaceMoveDown},
         {"workspace-move-to-output-down", "", "Move every workspace window to the output below",
@@ -525,7 +532,7 @@ namespace umbriel {
         {"workspace-move-up", "", "Move the focused workspace up the list", KeybindAction::WorkspaceMoveUp},
         {"workspace-next", "", "Switch to the next workspace on this output", KeybindAction::WorkspaceNext},
         {"workspace-previous", "", "Switch to the previous workspace on this output", KeybindAction::WorkspacePrevious},
-        {"workspace-set-layout", "<scrolling|dwindle|master|toggle[:mode1,mode2,...]>",
+        {"workspace-set-layout", "<scrolling|dwindle|master|floating|toggle[:mode1,mode2,...]>",
          "Set the active workspace's layout mode", KeybindAction::WorkspaceSetLayout, ActionArgKind::LayoutMode},
         {"workspace-swap-active-output-down", "", "Swap active workspace windows with the output below",
          KeybindAction::WorkspaceSwapActiveOutputDown},
@@ -800,6 +807,15 @@ namespace umbriel {
           output.action = spec.action;
           output.payload = WindowIdArg{.id = std::string(arg)};
           return true;
+        }
+        break;
+      case ActionArgKind::SnapRegion:
+        if (takeActionArg(value, spec, arg)) {
+          if (const auto region = snapRegionNamed(arg)) {
+            output.action = spec.action;
+            output.payload = SnapRegionArg{.region = *region};
+            return true;
+          }
         }
         break;
       case ActionArgKind::ColumnDisplay:

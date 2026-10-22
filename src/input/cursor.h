@@ -1,6 +1,7 @@
 #pragma once
 #include "layout/drop_target.h"
 #include "scene/ssd_frame_geometry.h"
+#include "view/snap.h"
 
 #include <cstdint>
 #include <memory>
@@ -47,6 +48,8 @@ namespace umbriel {
       double offsetX = 0;
       double offsetY = 0;
       DragTarget target = DragTarget::Tiled;
+      // Floating workspace moves commit each pointer position instead of holding a layout slot until release.
+      bool floatingLayout = false;
       // Where a pin toggle sends the window when it turns pinning off: back to
       // the layout when that is where the window was pinned from, otherwise
       // floating.
@@ -57,6 +60,14 @@ namespace umbriel {
       int sourceColumn = -1;
       std::optional<DropColumnWidth> sourceWidth;
       DropTarget drop;
+      std::optional<SnapRegion> snap;
+      Output* snapOutput = nullptr;
+      int preDragX = 0;
+      int preDragY = 0;
+      wlr_box preDragArea{};
+      Output* dwellOutput = nullptr;
+      uint32_t dwellEdges = 0;
+      bool dwellReady = false;
       // A tiled drag holds the window in the layout until the pointer clears
       // the threshold. A floating drag is detached from the start.
       bool pending = true;
@@ -306,6 +317,9 @@ namespace umbriel {
     // the pointer has committed to the drag.
     void beginDrag(MoveGrab& grab);
     void updateDropTarget();
+    void updateSnapPreview();
+    void clearSnapPreview();
+    static int onSnapDwellTimer(void* data);
     // Present the size the drop will land on, so the drag is already the right
     // shape when it gets there.
     void retargetDragSize(MoveGrab& grab);
@@ -456,6 +470,7 @@ namespace umbriel {
     uint32_t m_clientCursorImageHeight = 0;
     wl_event_source* m_hideTimer = nullptr;
     wl_event_source* m_hotCornerTimer = nullptr;
+    wl_event_source* m_snapDwellTimer = nullptr;
     wl_event_source* m_dataDragEdgeScrollTimer = nullptr;
     Workspace* m_dataDragEdgeScrollWorkspace = nullptr;
     double m_dataDragEdgeScrollSpeed = 0;

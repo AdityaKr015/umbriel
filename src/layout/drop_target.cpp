@@ -418,6 +418,10 @@ namespace umbriel {
       return result;
     }
 
+    if (workspace.layoutMode() == LayoutMode::Floating) {
+      // Floating workspaces offer no tiled drop target or hint.
+      return result;
+    }
     // Layout mode is a genuine policy fork here. Each layout wants different
     // drop targets and hint shapes.
     if (DwindleLayout* dwindle = workspace.dwindleLayout()) {
@@ -515,6 +519,13 @@ namespace umbriel {
       bool animate
   ) {
     if (server.scratchpadManager() != nullptr && server.scratchpadManager()->contains(&view)) {
+      return;
+    }
+    if (target.layoutMode() == LayoutMode::Floating) {
+      view.floatForLayout();
+      view.moveToWorkspace(&target);
+      target.markArrange(animate);
+      server.focusView(&view, FocusReason::DragDrop);
       return;
     }
     const auto restoreSceneParent = [&view, &target]() {

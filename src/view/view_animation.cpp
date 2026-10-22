@@ -268,6 +268,10 @@ namespace umbriel {
   }
 
   void View::syncOwnedPresentation() {
+    if (const Cursor* cursor = m_server->cursor(); cursor != nullptr && cursor->isDraggingView(this)) {
+      applyDragPresentation();
+      return;
+    }
     if (m_attachedTo != nullptr) {
       m_attachedTo->layoutAttachments();
       return;
@@ -283,11 +287,15 @@ namespace umbriel {
   }
 
   void View::applyDragPresentation() {
+    // Restoring a snapped float requests its normal size before the client can redraw. Keep the entire frame at that
+    // requested size throughout the grab, including commits and stationary pointer frames.
+    const auto size =
+        !m_tiled && !sizeAnimating() ? floatingSize() : std::array{m_presentation.width(), m_presentation.height()};
     applyPresentation({
         .x = layoutX(),
         .y = layoutY(),
-        .width = m_presentation.width(),
-        .height = m_presentation.height(),
+        .width = size[0],
+        .height = size[1],
     });
   }
 
@@ -671,7 +679,11 @@ namespace umbriel {
     scheduleFrame();
   }
 
-  void View::setDragPosition(int x, int y) {
+  void View::setDragPosition(int x, int y, bool updateTarget) {
+    if (updateTarget) {
+      setPosition(x, y);
+      return;
+    }
     const bool changed = layoutX() != x || layoutY() != y;
     setScenePosition(x, y);
     if (m_mapped && (!m_tiled || m_server->cursor()->toplevelDragView() == this) && changed) {

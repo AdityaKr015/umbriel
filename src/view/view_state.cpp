@@ -572,7 +572,40 @@ namespace umbriel {
     }
   }
 
+  void View::floatForLayout() {
+    if (m_tiled) {
+      const bool fullscreen = scheduledFullscreen() || currentFullscreen();
+      const auto restore = m_hasFullscreenRestoreBox ? std::optional{m_fullscreenRestoreBox} : std::nullopt;
+      toggleFloating(false);
+      if (fullscreen) {
+        setFullscreen(true);
+        // The internal tiled fullscreen exit discards this box. The layout transition must preserve the floating
+        // episode that started before fullscreen, rather than capture the fullscreen client buffer on re-entry.
+        if (restore) {
+          m_fullscreenRestoreBox = *restore;
+          m_hasFullscreenRestoreBox = true;
+        }
+      }
+    }
+    m_layoutFloated = true;
+  }
+
+  void View::adoptLayoutFloat() {
+    m_tiled = false;
+    m_layoutFloated = true;
+    const bool fullscreen = scheduledFullscreen() || currentFullscreen();
+    setSceneParent(fullscreen ? m_workspace->fullscreenTree() : m_workspace->viewLayer(false));
+    m_workspace->syncFloatingStack(this);
+  }
+
   void View::setFloating(bool floating, bool focus, TilePlacement placement) {
+    if (!floating
+        && placement == TilePlacement::Layout
+        && m_workspace != nullptr
+        && m_workspace->layoutMode() == LayoutMode::Floating) {
+      m_layoutFloated = true;
+      return;
+    }
     assert(!attached());
     if (!m_mapped || !roleInitialized()) {
       return;
@@ -589,6 +622,10 @@ namespace umbriel {
     const bool wantTiled = !floating;
     if (m_tiled == wantTiled) {
       return;
+    }
+    m_layoutFloated = false;
+    if (!floating) {
+      clearSnapState();
     }
     if (m_maximizedToEdges) {
       setMaximizedToEdges(false, false);
@@ -804,15 +841,16 @@ namespace umbriel {
       setMaximizedToEdges(false, false);
       m_restoreMaximizedToEdges = true;
     }
-    if (fullscreen && !m_tiled && !currentFullscreen()) {
-      const wlr_box& geometry = geometryBox();
+    if (fullscreen && !m_tiled && !scheduledFullscreen() && !currentFullscreen()) {
+      // A requested resize or move may still be awaiting its client buffer or animation. Restore its target geometry.
+      const auto [width, height] = floatingSize();
       m_fullscreenRestoreBox = {
-          .x = layoutX(),
-          .y = layoutY(),
-          .width = geometry.width,
-          .height = geometry.height,
+          .x = layoutTargetX(),
+          .y = layoutTargetY(),
+          .width = width,
+          .height = height,
       };
-      m_hasFullscreenRestoreBox = geometry.width > 0 && geometry.height > 0;
+      m_hasFullscreenRestoreBox = width > 0 && height > 0;
     }
     const bool restoreFloating = !fullscreen && !m_tiled && m_hasFullscreenRestoreBox;
     // Any leave-fullscreen invalidates a pending float-toggle restore: the

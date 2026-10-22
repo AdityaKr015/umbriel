@@ -5,10 +5,12 @@ extern "C" {
 #include <wlr/util/edges.h>
 }
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace umbriel {
@@ -23,6 +25,62 @@ namespace umbriel {
     if (titleBarHeight > 0 && origin.y < usable.y + titleBarHeight)
       origin.y = usable.y + titleBarHeight;
     return origin;
+  }
+
+  [[nodiscard]] constexpr int floatingCascadeStep(int titleBarHeight, int borderInset) {
+    return std::max(32, titleBarHeight + borderInset + 5);
+  }
+
+  // Coordinates describe complete frames. Taken frames are ordered from front to back, so a hidden corner does not
+  // displace a new window merely because it covers an already obscured window.
+  [[nodiscard]] inline FloatingPoint cascadeOrigin(
+      FloatingPoint start, std::span<const wlr_box> taken, int step, const wlr_box& usable, int width, int height
+  ) {
+    const auto coveredFrame = [&](FloatingPoint candidate) -> const wlr_box* {
+      for (size_t i = 0; i < taken.size(); ++i) {
+        const wlr_box& other = taken[i];
+        const bool sameOrigin = std::abs(candidate.x - other.x) <= 4 && std::abs(candidate.y - other.y) <= 4;
+        const bool contains = other.width > 0
+            && other.height > 0
+            && candidate.x <= other.x
+            && candidate.y <= other.y
+            && candidate.x + width >= other.x + other.width
+            && candidate.y + height >= other.y + other.height;
+        const bool hidden = std::ranges::any_of(taken.first(i), [&](const wlr_box& above) {
+          return other.x >= above.x
+              && other.y >= above.y
+              && other.x < above.x + above.width
+              && other.y < above.y + above.height;
+        });
+        if (sameOrigin || (contains && !hidden)) {
+          return &other;
+        }
+      }
+      return nullptr;
+    };
+    if (step <= 0) {
+      return start;
+    }
+    const int maxX = usable.x + std::max(0, usable.width - width);
+    const int maxY = usable.y + std::max(0, usable.height - height);
+    int wraps = 0;
+    for (size_t attempt = 0; attempt <= taken.size(); ++attempt) {
+      if (start.x < usable.x || start.y < usable.y || start.x > maxX || start.y > maxY) {
+        // A new diagonal starts farther right each time. Check wrapped positions too, since a burst can fill them.
+        const int columns = std::max(1, (maxX - usable.x) / step);
+        start = {
+            usable.x + std::min(maxX - usable.x, step * (1 + wraps % columns)),
+            usable.y + std::min(maxY - usable.y, step)
+        };
+        ++wraps;
+      }
+      const wlr_box* other = coveredFrame(start);
+      if (other == nullptr) {
+        return start;
+      }
+      start = {.x = other->x + step, .y = other->y + step};
+    }
+    return {std::clamp(start.x, usable.x, maxX), std::clamp(start.y, usable.y, maxY)};
   }
 
   // How much of a floating window must stay on screen per axis. A float may hang

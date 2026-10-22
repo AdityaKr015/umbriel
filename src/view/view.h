@@ -9,6 +9,7 @@
 #include "view/effects.h"
 #include "view/floating.h"
 #include "view/presentation.h"
+#include "view/snap.h"
 
 #include <algorithm>
 #include <array>
@@ -154,6 +155,7 @@ namespace umbriel {
     }
     [[nodiscard]] bool tiled() const { return m_tiled; }
     [[nodiscard]] bool floating() const { return !m_tiled; }
+    [[nodiscard]] bool layoutFloated() const { return m_layoutFloated; }
     [[nodiscard]] bool isAloneInLayout() const;
     [[nodiscard]] bool isOnlyWindowOnWorkspace() const;
     [[nodiscard]] const std::optional<std::string>& namedScrollingColumnName() const {
@@ -337,9 +339,9 @@ namespace umbriel {
     // area when maximized to edges, else its own position at the size it is resizing to. Valid ahead of the animation
     // that carries the node there and of the client's resize, and settles a pending arrange to get there.
     [[nodiscard]] wlr_box targetBox() const;
-    // Move the scene nodes without touching the position animation: an
-    // interactive drag tracks the pointer 1:1 and owns the position itself.
-    void setDragPosition(int x, int y);
+    // Track the pointer directly. Floating workspace moves also update the authoritative position; other drags keep
+    // their layout target until release.
+    void setDragPosition(int x, int y, bool updateTarget);
     // Keep at least clamp(size / 4, 10, 75) pixels per axis on-screen.
     void clampFloatingPosition();
     // clampFloatingPosition for a requested but uncommitted size, snapping an axis the size fills to the usable edge.
@@ -370,12 +372,22 @@ namespace umbriel {
     [[nodiscard]] wlr_box floatingUsableArea() const;
     // `usable` less the margin a maximized tile keeps (struts, then gap and border), so the border stays on screen.
     // A client capped below that box by its maximum size keeps the capped size, centered in it.
-    [[nodiscard]] wlr_box floatingMaximizedBox(const wlr_box& usable) const;
+    [[nodiscard]] wlr_box
+    floatingMaximizedBox(const wlr_box& usable, const ResolvedLayoutConfig* layout = nullptr) const;
     // The usable area inside the layout struts and the gap plus border margin; `usable` when that leaves nothing.
-    [[nodiscard]] wlr_box floatingMarginArea(const wlr_box& usable) const;
+    [[nodiscard]] wlr_box floatingMarginArea(const wlr_box& usable, const ResolvedLayoutConfig* layout = nullptr) const;
     // Put a maximized float back in the box its settings give it now, after a layout, border, strut, or usable area
     // change. Does nothing unless that box moved, so every arrange can ask.
     void refitFloatingMaximized();
+    [[nodiscard]] std::optional<SnapRegion> snapRegion() const { return m_snapRegion; }
+    [[nodiscard]] std::optional<wlr_box>
+    floatingSnappedBox(SnapRegion region, const wlr_box& usable, const ResolvedLayoutConfig* layout = nullptr) const;
+    [[nodiscard]] bool canSnap() const;
+    // A pointer drop can preserve its normal restore origin without moving the frame away from the release point.
+    bool snapTo(SnapRegion region, std::optional<FloatingPoint> restoreOrigin = std::nullopt);
+    void unsnap(bool animate = true);
+    void clearSnapState();
+    void refitFloatingSnapped();
     // The usable area an opening window is sized against: the target output's,
     // then its full layout box, then whatever sits under the cursor. A hotplug
     // race can leave an output with no usable area computed yet.
@@ -443,6 +455,8 @@ namespace umbriel {
     enum class TilePlacement : uint8_t { Layout, Detached };
     void setFloating(bool floating, bool focus = true, TilePlacement placement = TilePlacement::Layout);
     void toggleFloating(bool focus = true);
+    void floatForLayout();
+    void adoptLayoutFloat();
     void togglePinned();
     // Restore the global pinned scene layer after temporary drag reparenting.
     void restorePinnedSceneParent();
@@ -963,9 +977,15 @@ namespace umbriel {
     double m_openingScale = 1.0;
     int m_openingSlide = 0;
     bool m_tiled = false;
+    // Floating because its workspace floats every window; tiles again when moved to a tiling layout.
+    bool m_layoutFloated = false;
     bool m_floatingMaximized = false;
     bool m_maximizedToEdges = false;
     bool m_restoreMaximizedToEdges = false;
+    std::optional<SnapRegion> m_snapRegion;
+    wlr_box m_snapRestoreBox{};
+    bool m_hasSnapRestoreBox = false;
+    wlr_box m_snappedBox{};
     wlr_box m_fullscreenRestoreBox{};
     bool m_hasFullscreenRestoreBox = false;
     bool m_pinned = false;

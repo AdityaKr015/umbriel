@@ -20,6 +20,7 @@
 #include "xdg-shell-client-protocol.h"
 
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <poll.h>
@@ -259,6 +260,18 @@ namespace {
     } else if (command.starts_with("legacy ") && state.legacyDecoration != nullptr) {
       const uint32_t mode = command == "legacy server" ? 2 : (command == "legacy none" ? 0 : 1);
       org_kde_kwin_server_decoration_request_mode(state.legacyDecoration, mode);
+    } else if (command.starts_with("resize ")) {
+      int width = 0;
+      int height = 0;
+      if (std::sscanf(std::string(command.substr(7)).c_str(), "%d %d", &width, &height) != 2
+          || width <= 0
+          || height <= 0) {
+        state.running = false;
+        return;
+      }
+      state.logicalWidth = width;
+      state.logicalHeight = height;
+      present(state);
     } else if (command.starts_with("title ")) {
       xdg_toplevel_set_title(state.toplevel, std::string(command.substr(6)).c_str());
     } else {

@@ -403,4 +403,56 @@ UMBRIEL_TEST(titleBarRemainsReachableWithoutMovingOtherFloats) {
   CHECK_EQ(umbriel::keepTitleBarReachable({-500, 42}, 28, usable).x, -500);
 }
 
+UMBRIEL_TEST(cascadeKeepsAnUnoccupiedOrigin) {
+  const auto point = umbriel::cascadeOrigin({400, 210}, {}, 32, {0, 0, 1280, 720}, 480, 300);
+  CHECK_EQ(point.x, 400);
+  CHECK_EQ(point.y, 210);
+}
+
+UMBRIEL_TEST(cascadeAdvancesPastNearbyOrigins) {
+  const wlr_box taken[]{{403, 208, 480, 300}, {435, 240, 480, 300}};
+  const auto point = umbriel::cascadeOrigin({400, 210}, taken, 32, {0, 0, 1280, 720}, 480, 300);
+  CHECK_EQ(point.x, 467);
+  CHECK_EQ(point.y, 272);
+}
+
+UMBRIEL_TEST(cascadeWrapsWithinLogicalUsableArea) {
+  const wlr_box taken[]{{-500, 200, 480, 300}};
+  const auto point = umbriel::cascadeOrigin({-500, 200}, taken, 32, {-800, 100, 800, 400}, 480, 300);
+  CHECK_EQ(point.x, -768);
+  CHECK_EQ(point.y, 132);
+}
+
+UMBRIEL_TEST(cascadeChecksWrappedOriginsAndFillsFurtherDiagonals) {
+  std::vector<wlr_box> taken;
+  const wlr_box area{0, 28, 1280, 692};
+  for (int i = 0; i < 40; ++i) {
+    const auto point = umbriel::cascadeOrigin({400, 224}, taken, 32, area, 480, 300);
+    CHECK(std::ranges::none_of(taken, [&](const auto& other) { return point.x == other.x && point.y == other.y; }));
+    CHECK(point.x >= area.x && point.x + 480 <= area.x + area.width);
+    CHECK(point.y >= area.y && point.y + 300 <= area.y + area.height);
+    taken.push_back({point.x, point.y, 480, 300});
+  }
+}
+
+UMBRIEL_TEST(cascadePreservesAnExposedFrameOfADifferentSize) {
+  const wlr_box taken[]{{558, 294, 164, 132}};
+  const auto point = umbriel::cascadeOrigin({478, 254}, taken, 35, {0, 0, 1280, 720}, 324, 212);
+  CHECK_EQ(point.x, 593);
+  CHECK_EQ(point.y, 329);
+}
+
+UMBRIEL_TEST(cascadeIgnoresCoveredCornersAndPartialOverlap) {
+  const wlr_box taken[]{{550, 280, 300, 220}, {558, 294, 164, 132}};
+  const auto point = umbriel::cascadeOrigin({478, 254}, taken, 35, {0, 0, 1280, 720}, 324, 212);
+  CHECK_EQ(point.x, 478);
+  CHECK_EQ(point.y, 254);
+}
+
+UMBRIEL_TEST(cascadeStepClearsTheDecoratedTitleBar) {
+  CHECK_EQ(umbriel::floatingCascadeStep(28, 2), 35);
+  CHECK_EQ(umbriel::floatingCascadeStep(60, 2), 67);
+  CHECK_EQ(umbriel::floatingCascadeStep(0, 2), 32);
+}
+
 int main() { return RUN_TESTS(); }

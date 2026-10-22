@@ -110,7 +110,8 @@ namespace umbriel {
     m_ssdFrame->setMaximized(scheduledMaximized() || floatingMaximized());
     m_ssdFrame->setFocused(m_borderFocusedState);
     m_ssdFrame->setAlpha(chromeAlpha());
-    const wlr_box content = committedContentBox();
+    const wlr_box content =
+        m_presentedBox.width > 0 && m_presentedBox.height > 0 ? m_presentedBox : committedContentBox();
     layoutChromeAttachment(content.width, content.height);
     wlr_scene_node_raise_to_top(&m_attachmentTree->node);
   }
@@ -200,11 +201,13 @@ namespace umbriel {
     // lands on the window's corners whichever surface (main or subsurface) draws them. Popups are excluded: their
     // surface is its own root.
     const int radius = surfaceRadius();
-    // A tiled target and an active resize animation can both lead committed geometry, so the box follows the presented
-    // size in either case.
+    // Layout targets, resize animations, and pending floating restores can lead committed geometry. Round the
+    // presented frame while the client redraws.
     const wlr_box& geometry = geometryBox();
     const bool usePresentedSize =
-        (m_tiled || sizeAnimating()) && m_presentation.width() > 0 && m_presentation.height() > 0;
+        (m_tiled || sizeAnimating() || sizeGrabActive() || m_floating.pendingSize().has_value())
+        && m_presentation.width() > 0
+        && m_presentation.height() > 0;
     struct Ctx {
       View* view;
       int radius;
@@ -273,11 +276,12 @@ namespace umbriel {
       m_decoration.hideShadow();
       return;
     }
-    // Tiled targets and active resize animations can lead committed geometry,
-    // so their shadows must follow the presented size.
+    // Shadows follow the presented frame through layout changes, animations, and pending floating restores.
     const wlr_box& geometry = geometryBox();
     const bool usePresentedSize =
-        (m_tiled || sizeAnimating()) && m_presentation.width() > 0 && m_presentation.height() > 0;
+        (m_tiled || sizeAnimating() || sizeGrabActive() || m_floating.pendingSize().has_value())
+        && m_presentation.width() > 0
+        && m_presentation.height() > 0;
     updateShadow(
         usePresentedSize ? m_presentation.width() : geometry.width,
         usePresentedSize ? m_presentation.height() : geometry.height

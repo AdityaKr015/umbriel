@@ -104,6 +104,8 @@ namespace umbriel {
         return "dwindle";
       case LayoutMode::Master:
         return "master";
+      case LayoutMode::Floating:
+        return "floating";
       }
       return "unknown";
     }
@@ -651,6 +653,7 @@ namespace umbriel {
       entry["tabbed"] = tabIndex >= 0;
       entry["tab_index"] = tabIndex;
       entry["tab_hidden"] = v->tabHidden();
+      entry["snap"] = v->snapRegion() ? nlohmann::json(snapRegionName(*v->snapRegion())) : nlohmann::json(nullptr);
       entry["border_effect"] = effectSlotJson(v->effectSlot(EffectKind::Border), true);
       entry["window_effect"] = effectSlotJson(v->effectSlot(EffectKind::Window));
       // Workspace-local remembered focus. Seat-global activation is reported

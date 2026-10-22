@@ -123,6 +123,9 @@ radius = 3
 # Enable NumLock when a physical keyboard connects.
 # https://docs.noctalia.dev/umbriel/input/
 #
+# [input]
+# window_snapping = false # Drag floating windows to edges or corners for snap previews.
+#
 [input.keyboard]
 numlock_toggle = true
 
@@ -234,6 +237,7 @@ numlock_toggle = true
 # their most recently focused row when focus leaves and later returns.
 # https://docs.noctalia.dev/umbriel/layout/
 [layout]
+# mode = "scrolling" # "scrolling", "dwindle", "master", or "floating".
 extent_presets = [0.333, 0.5, 0.667]
 
 # What a tiled window's own maximize button does: "column" fills the column,

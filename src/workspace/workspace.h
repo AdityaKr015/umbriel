@@ -246,6 +246,8 @@ namespace umbriel {
     void rename(std::string name, size_t index, bool named);
 
     [[nodiscard]] const std::vector<View*>& allViews() const noexcept { return m_views; }
+    // Floating frames from back to front, matching their workspace stacking order.
+    [[nodiscard]] const std::vector<View*>& floatingStack() const noexcept { return m_floatingStack; }
     [[nodiscard]] bool hasViews() const { return !m_views.empty(); }
     // Pull the scroll offset back into [0, maxScroll]. For removals and restored offsets only: a touchpad swipe
     // overscrolls on purpose.
@@ -280,6 +282,7 @@ namespace umbriel {
     // The focused floating window's size as a fraction of the usable axis; nullopt when unavailable.
     [[nodiscard]] std::optional<double> focusedFloatingFraction(bool width) const;
     [[nodiscard]] View* focusAlongStrip(int direction);
+    [[nodiscard]] View* floatingFocusTarget(bool horizontal, int direction) const;
     [[nodiscard]] View* focusWithinLane(int direction);
     // Directional focus lands on the most recently focused window of the group
     // the move entered (target column, or crossed dwindle subtree). Moves that

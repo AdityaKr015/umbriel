@@ -488,7 +488,7 @@ namespace umbriel {
     if (target == nullptr) {
       return false;
     }
-    setWorkspace(target, false);
+    setWorkspace(target, false, origin);
     if (m_workspace != target) {
       return false;
     }

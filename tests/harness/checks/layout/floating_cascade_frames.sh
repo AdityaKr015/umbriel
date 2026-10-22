@@ -15,7 +15,7 @@ corner_radius = 0
 [appearance.shadow]
 enabled = false
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 height = 28
 [[window_rule]]
 match.title = "^cascade-explicit$"

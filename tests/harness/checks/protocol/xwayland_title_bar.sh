@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # harness: xwayland=true
-# Xwayland decoration hints hide or restore the auto title bar; rules can override them.
+# Xwayland decoration hints hide or restore the negotiated title bar; rules can override them.
 set -euo pipefail
 source "$(dirname "$UMBRIEL_HARNESS_LIB")/title_bar.sh"
 title_bar_config
@@ -42,10 +42,10 @@ CONFIG
 "$UMBRIEL" msg config-reload > /dev/null
 title_bar_wait_field ssd-x11 title_bar false
 printf 'decorations off\n' >&"$control"
-sed -i 's/title_bar = "off"/title_bar = "on"/' "$UMBRIEL_CONFIG"
+sed -i 's/title_bar = "off"/title_bar = "forced"/' "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 title_bar_wait_field ssd-x11 title_bar true
-sed -i 's/title_bar = "on"/title_bar = "auto"/' "$UMBRIEL_CONFIG"
+sed -i 's/title_bar = "forced"/title_bar = "on"/' "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 title_bar_wait_field ssd-x11 title_bar false
 printf 'decorations on\n' >&"$control"

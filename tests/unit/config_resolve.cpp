@@ -1360,19 +1360,19 @@ UMBRIEL_TEST(titleBarAutoResetsAnEarlierOverride) {
   };
   CHECK(!resolve().titleBar.has_value());
   WindowRule rule;
-  rule.titleBar = umbriel::TitleBarMode::On;
+  rule.titleBar = umbriel::TitleBarMode::Forced;
   config.windowRules.push_back(rule);
-  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::On);
+  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::Forced);
   rule.titleBar = umbriel::TitleBarMode::Off;
   config.windowRules.push_back(rule);
   CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::Off);
-  rule.titleBar = umbriel::TitleBarMode::Auto;
+  rule.titleBar = umbriel::TitleBarMode::On;
   config.windowRules.push_back(rule);
-  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::Auto);
+  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::On);
   config.windowRules.emplace_back();
-  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::Auto);
+  CHECK_EQ(resolve().titleBar, umbriel::TitleBarMode::On);
   WindowRule other = rule;
-  other.titleBar = umbriel::TitleBarMode::On;
+  other.titleBar = umbriel::TitleBarMode::Forced;
   CHECK(!(rule == other));
 }
 

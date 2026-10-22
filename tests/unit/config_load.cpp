@@ -4458,7 +4458,7 @@ UMBRIEL_TEST(titleBarConfigurationUsesTheDocumentedKeys) {
   const TempConfig file;
   file.write(R"(
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 height = 42
 font = "sans 12"
 button_position = "left"
@@ -4475,7 +4475,7 @@ maximize = "#00FFFFFF"
   CHECK(store.reload().success);
   CHECK(store.diagnostics().empty());
   const auto& bar = store.config().appearance.titleBar;
-  CHECK_EQ(bar.mode, umbriel::TitleBarMode::On);
+  CHECK_EQ(bar.mode, umbriel::TitleBarMode::Forced);
   CHECK_EQ(bar.height, 42);
   CHECK_EQ(bar.font, std::string("sans 12"));
   CHECK_EQ(bar.buttonPosition, umbriel::TitleBarButtonSide::Left);
@@ -4510,7 +4510,7 @@ button_position = "middle"
   CHECK(!containsDiagnostic(store, "unknown key"));
 }
 
-UMBRIEL_TEST(titleBarModesReplaceTheEnabledSwitch) {
+UMBRIEL_TEST(titleBarModesUseStrictVocabulary) {
   const TempConfig file;
   auto& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
@@ -4518,12 +4518,19 @@ UMBRIEL_TEST(titleBarModesReplaceTheEnabledSwitch) {
   CHECK(store.reload().success);
   CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
   for (const auto& [name, mode] :
-       {std::pair{"on", umbriel::TitleBarMode::On}, std::pair{"auto", umbriel::TitleBarMode::Auto},
+       {std::pair{"forced", umbriel::TitleBarMode::Forced}, std::pair{"on", umbriel::TitleBarMode::On},
         std::pair{"off", umbriel::TitleBarMode::Off}}) {
     file.write(std::string("[appearance.title_bar]\nmode = \"") + name + "\"\n");
     CHECK(store.reload().success);
     CHECK(store.diagnostics().empty());
     CHECK_EQ(store.config().appearance.titleBar.mode, mode);
+  }
+  for (const auto name : {"auto", "force"}) {
+    file.write(std::string("[appearance.title_bar]\nmode = \"") + name + "\"\n");
+    CHECK(store.reload().success);
+    CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
+    CHECK(containsDiagnostic(store, "appearance.title_bar.mode"));
+    CHECK(!containsDiagnostic(store, "unknown key"));
   }
   file.write("[appearance.title_bar]\nmode = true\n");
   CHECK(store.reload().success);
@@ -4540,31 +4547,39 @@ UMBRIEL_TEST(titleBarRuleChoicesAreStrict) {
   const TempConfig file;
   file.write(R"(
 [[window_rule]]
-title_bar = "on"
+title_bar = "forced"
 [[window_rule]]
 title_bar = "off"
 [[window_rule]]
-title_bar = "auto"
+title_bar = "on"
 )");
   auto& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
   CHECK(store.reload().success);
   CHECK(store.diagnostics().empty());
   CHECK_EQ(store.config().windowRules.size(), size_t{3});
-  CHECK_EQ(store.config().windowRules[0].titleBar, umbriel::TitleBarMode::On);
+  CHECK_EQ(store.config().windowRules[0].titleBar, umbriel::TitleBarMode::Forced);
   CHECK_EQ(store.config().windowRules[1].titleBar, umbriel::TitleBarMode::Off);
-  CHECK_EQ(store.config().windowRules[2].titleBar, umbriel::TitleBarMode::Auto);
+  CHECK_EQ(store.config().windowRules[2].titleBar, umbriel::TitleBarMode::On);
   file.write(R"(
 [[window_rule]]
 title_bar = true
 [[window_rule]]
 title_bar = "always"
+[[window_rule]]
+title_bar = "auto"
+[[window_rule]]
+title_bar = "force"
 )");
   CHECK(store.reload().success);
   CHECK(!store.config().windowRules[0].titleBar.has_value());
   CHECK(!store.config().windowRules[1].titleBar.has_value());
+  CHECK(!store.config().windowRules[2].titleBar.has_value());
+  CHECK(!store.config().windowRules[3].titleBar.has_value());
   CHECK(containsDiagnostic(store, "window_rule[0].title_bar"));
   CHECK(containsDiagnostic(store, "window_rule[1].title_bar"));
+  CHECK(containsDiagnostic(store, "window_rule[2].title_bar"));
+  CHECK(containsDiagnostic(store, "window_rule[3].title_bar"));
   CHECK(!containsDiagnostic(store, "unknown key"));
 }
 

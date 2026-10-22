@@ -7,7 +7,7 @@ cat >> "$UMBRIEL_CONFIG" <<'CONFIG'
 [animation]
 enabled = false
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 [colors]
 insert_hint = "#FF00FFFF"
 CONFIG

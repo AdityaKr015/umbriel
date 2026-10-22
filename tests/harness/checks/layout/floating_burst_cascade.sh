@@ -6,7 +6,7 @@ cat >> "$UMBRIEL_CONFIG" <<'CONFIG'
 [layout]
 mode = "floating"
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 height = 28
 CONFIG
 "$UMBRIEL" msg config-reload > /dev/null

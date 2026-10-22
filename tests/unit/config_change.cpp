@@ -1064,7 +1064,7 @@ UMBRIEL_TEST(titleBarGeometryReloadRearrangesWorkspaces) {
   CHECK(ConfigEffects::between(before, after).workspaceLayout);
   CHECK(ConfigEffects::between(before, after).viewChrome);
   after = before;
-  after.appearance.titleBar.mode = umbriel::TitleBarMode::On;
+  after.appearance.titleBar.mode = umbriel::TitleBarMode::Forced;
   CHECK(ConfigEffects::between(before, after).workspaceLayout);
   after = before;
   after.colors.titleBar.close[0] = 0.25F;

@@ -6,7 +6,7 @@ cat >> "$UMBRIEL_CONFIG" <<'CONFIG'
 [animation]
 enabled = false
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 [output.HEADLESS-1]
 workspaces = 5
 [[workspace]]

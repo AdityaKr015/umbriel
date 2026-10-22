@@ -12,7 +12,7 @@ corner_radius = 0
 [appearance.shadow]
 enabled = false
 [appearance.title_bar]
-mode = "auto"
+mode = "on"
 height = 28
 [colors.title_bar]
 background = "#FF00FFFF"

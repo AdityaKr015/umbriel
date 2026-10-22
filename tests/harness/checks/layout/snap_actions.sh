@@ -40,7 +40,7 @@ title_bar_wait_box snap-action 628x348+644+364
 "$UMBRIEL" msg window-unsnap > /dev/null
 title_bar_wait_box snap-action 480x300+173+109
 # Maximize-to-edges suppresses the title bar, but snapping must restore it before computing the region.
-sed -i 's/mode = "off"/mode = "on"/' "$UMBRIEL_CONFIG"
+sed -i 's/mode = "off"/mode = "forced"/' "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 "$UMBRIEL" msg window-toggle-maximize-to-edges > /dev/null
 snap top_left

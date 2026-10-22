@@ -14,7 +14,7 @@ outer_border_width = 0
 corner_radius = 0
 drag_opacity = 0.25
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 [appearance.shadow]
 enabled = false
 [colors.title_bar]

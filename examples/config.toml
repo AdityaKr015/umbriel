@@ -78,7 +78,8 @@ radius = 3
 
 # Optional title bar with modifier-free dragging and floating frame resizing.
 # [appearance.title_bar]
-# mode = "auto" # "on" forces bars; "off" hides them. Window rules can override this.
+# mode = "on" # Follow client decoration preferences.
+# Use "forced" to always show bars, or "off" to hide them. Window rules can override this.
 # height = 28
 # font = "sans 10"
 # button_position = "right" # or "left"

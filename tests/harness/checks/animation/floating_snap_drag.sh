@@ -15,7 +15,7 @@ border_width = 0
 outer_border_width = 0
 corner_radius = 0
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 [appearance.shadow]
 enabled = false
 [colors.title_bar]

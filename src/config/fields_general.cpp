@@ -80,7 +80,7 @@ namespace umbriel {
       static const registry::Fields<A::TitleBar> titleBar{
           registry::choice(
               "mode", &A::TitleBar::mode,
-              {{"on", TitleBarMode::On}, {"off", TitleBarMode::Off}, {"auto", TitleBarMode::Auto}}
+              {{"forced", TitleBarMode::Forced}, {"off", TitleBarMode::Off}, {"on", TitleBarMode::On}}
           ),
           integer("height", 16, 128, &A::TitleBar::height),
           registry::text("font", &A::TitleBar::font),

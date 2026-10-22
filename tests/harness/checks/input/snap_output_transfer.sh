@@ -12,7 +12,7 @@ enabled = false
 border_width = 0
 outer_border_width = 0
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 height = 28
 [output.HEADLESS-1]
 position = [0, 0]

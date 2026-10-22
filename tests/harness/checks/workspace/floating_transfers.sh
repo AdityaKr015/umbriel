@@ -7,7 +7,7 @@ cat >> "$UMBRIEL_CONFIG" <<'CONFIG'
 [animation]
 enabled = false
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 [[window_rule]]
 match.title = "^explicit$"
 default_floating = true

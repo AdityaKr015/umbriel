@@ -38,7 +38,7 @@ namespace umbriel {
   bool View::wantsTitleBar(TitleBarMode mode) const {
     if (mode == TitleBarMode::Off)
       return false;
-    if (mode == TitleBarMode::On)
+    if (mode == TitleBarMode::Forced)
       return true;
     if (m_xsurface != nullptr)
       return m_xsurface->decorations == WLR_XWAYLAND_SURFACE_DECORATIONS_ALL;

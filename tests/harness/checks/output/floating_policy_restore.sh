@@ -7,7 +7,7 @@ cat >> "$UMBRIEL_CONFIG" <<'CONFIG'
 [animation]
 enabled = false
 [appearance.title_bar]
-mode = "on"
+mode = "forced"
 height = 28
 [output.HEADLESS-1]
 scale = 1.25

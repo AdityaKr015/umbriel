@@ -30,7 +30,7 @@ title_bar_wait_field ssd-no-protocol title_bar true
 on=$(title_bar_window ssd-tile-render)
 on_h=$(jq -r '.h' <<< "$on")
 on_y=$(jq -r '.y' <<< "$on")
-sed -i '/^\[appearance.title_bar\]$/ { n; s/mode = "auto"/mode = "off"/; }' "$UMBRIEL_CONFIG"
+sed -i '/^\[appearance.title_bar\]$/ { n; s/mode = "on"/mode = "off"/; }' "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 title_bar_wait_field ssd-tile-render title_bar false
 title_bar_wait_field ssd-csd-render title_bar false
@@ -39,7 +39,7 @@ title_bar_wait_field ssd-no-protocol title_bar false
 off=$(title_bar_window ssd-tile-render)
 [[ $(jq -r '.h' <<< "$off") == "$((on_h + 28))" ]]
 [[ $(jq -r '.y' <<< "$off") == "$((on_y - 28))" ]]
-sed -i '/^\[appearance.title_bar\]$/ { n; s/mode = "off"/mode = "auto"/; }' "$UMBRIEL_CONFIG"
+sed -i '/^\[appearance.title_bar\]$/ { n; s/mode = "off"/mode = "on"/; }' "$UMBRIEL_CONFIG"
 "$UMBRIEL" msg config-reload > /dev/null
 title_bar_wait_field ssd-tile-render title_bar true
 "$UMBRIEL" settle > /dev/null
